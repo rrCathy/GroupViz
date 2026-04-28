@@ -1,5 +1,11 @@
 import type { Group, GroupElement, Generator } from '../types'
 
+const SUBSCRIPT_DIGITS = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉']
+
+function numToSubscript(n: number): string {
+  return n.toString().split('').map(d => SUBSCRIPT_DIGITS[parseInt(d)]).join('')
+}
+
 export function createCyclicGroup(n: number): Group {
   if (n < 1) throw new Error('Order must be positive')
 
@@ -48,8 +54,8 @@ export function createCyclicGroup(n: number): Group {
   }
 
   return {
-    name: `Cyclic Group Z${n}`,
-    symbol: `Z${n}`,
+    name: `Cyclic Group C${numToSubscript(n)}`,
+    symbol: `C${numToSubscript(n)}`,
     order: n,
     elements,
     generators,

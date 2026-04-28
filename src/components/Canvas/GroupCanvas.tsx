@@ -1,172 +1,116 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import { useGroup } from '../../context/GroupContext'
+import { useGroup } from '../../context/useGroup'
+import { useTranslation } from '../../i18n/useTranslation'
 import { SetView } from './SetView'
 import { CycleView } from './CycleView'
 import { TableView } from './TableView'
-
-interface SelectionBox {
-  active: boolean
-  startX: number
-  startY: number
-  endX: number
-  endY: number
-  shape: 'circle' | 'rect'
-}
+import { Cayley3DView } from './Cayley3DView'
+import { SymmetryView } from './SymmetryView'
+import { SubgroupLatticeView } from './SubgroupLatticeView'
+import { isTooLarge } from '../../core/viewBox'
+import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
+import { texify, renderTex } from '../../utils/texify'
+import type { CayleyEdgeData } from '../../core/types'
 
 interface DragState {
   isDragging: boolean
   startX: number
   startY: number
+  initialTransformX: number
+  initialTransformY: number
 }
 
 export function GroupCanvas() {
   const containerRef = useRef<HTMLDivElement>(null)
-  const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
+  const dragStateRef = useRef<DragState>({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    initialTransformX: 0,
+    initialTransformY: 0
+  })
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     startX: 0,
-    startY: 0
+    startY: 0,
+    initialTransformX: 0,
+    initialTransformY: 0
   })
   
+  const { t } = useTranslation()
   const {
     currentView,
-    lassoMode,
-    lassoShape,
     canvasTransform,
     operationHistory,
-    nodePositions,
-    selectElement,
     setCanvasTransform,
-    checkSubsetProperty,
     currentGroup,
-    hintMessage
+    hintMessage,
+    viewBoxSize,
+    forceShowLargeGroup,
+    setForceShowLargeGroup
   } = useGroup()
-
-  const getCanvasCoords = useCallback((e: React.MouseEvent) => {
-    const svg = e.currentTarget.closest('svg')
-    if (!svg) return { x: 0, y: 0 }
-    
-    const rect = svg.getBoundingClientRect()
-    const viewBoxWidth = 800
-    const viewBoxHeight = 560
-    
-    const scaleX = viewBoxWidth / rect.width
-    const scaleY = viewBoxHeight / rect.height
-    
-    const rawX = (e.clientX - rect.left) * scaleX
-    const rawY = (e.clientY - rect.top) * scaleY
-    
-    return {
-      x: (rawX - canvasTransform.x) / canvasTransform.scale,
-      y: (rawY - canvasTransform.y) / canvasTransform.scale
-    }
-  }, [canvasTransform])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!containerRef.current) return
-    
-    const coords = getCanvasCoords(e)
-    
-    if (lassoMode) {
-      setSelectionBox({
-        active: true,
-        startX: coords.x,
-        startY: coords.y,
-        endX: coords.x,
-        endY: coords.y,
-        shape: lassoShape
-      })
-      return
-    }
-    
     setDragState({
       isDragging: true,
       startX: e.clientX,
-      startY: e.clientY
+      startY: e.clientY,
+      initialTransformX: canvasTransform.x,
+      initialTransformY: canvasTransform.y
     })
-  }, [canvasTransform, lassoMode, lassoShape, getCanvasCoords])
+    dragStateRef.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialTransformX: canvasTransform.x,
+      initialTransformY: canvasTransform.y
+    }
+  }, [canvasTransform.x, canvasTransform.y])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!containerRef.current) return
     
-    const coords = getCanvasCoords(e)
-    
-    if (selectionBox && selectionBox.active) {
-      setSelectionBox(prev => prev ? { ...prev, endX: coords.x, endY: coords.y } : null)
-      return
-    }
-    
-    if (dragState.isDragging) {
-      const dx = e.clientX - dragState.startX
-      const dy = e.clientY - dragState.startY
+    if (dragStateRef.current.isDragging) {
+      const dx = e.clientX - dragStateRef.current.startX
+      const dy = e.clientY - dragStateRef.current.startY
       
       setCanvasTransform({
-        x: canvasTransform.x + dx,
-        y: canvasTransform.y + dy
+        x: dragStateRef.current.initialTransformX + dx,
+        y: dragStateRef.current.initialTransformY + dy
       })
-      setDragState(prev => ({
-        ...prev,
-        startX: e.clientX,
-        startY: e.clientY
-      }))
     }
-  }, [canvasTransform, selectionBox, dragState, getCanvasCoords, setCanvasTransform])
+  }, [setCanvasTransform])
 
   const handleMouseUp = useCallback(() => {
-    if (selectionBox && selectionBox.active && currentGroup) {
-      const positions = nodePositions.get(currentView)
-      if (positions) {
-        const selectedIds: string[] = []
-        
-        if (selectionBox.shape === 'rect') {
-          const minX = Math.min(selectionBox.startX, selectionBox.endX)
-          const maxX = Math.max(selectionBox.startX, selectionBox.endX)
-          const minY = Math.min(selectionBox.startY, selectionBox.endY)
-          const maxY = Math.max(selectionBox.startY, selectionBox.endY)
-          
-          positions.forEach((pos, id) => {
-            if (pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY) {
-              selectedIds.push(id)
-            }
-          })
-        } else {
-          const cx = selectionBox.startX
-          const cy = selectionBox.startY
-          const r = Math.sqrt(
-            Math.pow(selectionBox.endX - cx, 2) + 
-            Math.pow(selectionBox.endY - cy, 2)
-          )
-          
-          positions.forEach((pos, id) => {
-            const dist = Math.sqrt(Math.pow(pos.x - cx, 2) + Math.pow(pos.y - cy, 2))
-            if (dist <= r) {
-              selectedIds.push(id)
-            }
-          })
-        }
-        
-        if (selectedIds.length > 0) {
-          selectedIds.forEach(id => selectElement(id, true))
-          checkSubsetProperty(selectedIds)
-        }
-      }
+    dragStateRef.current = {
+      isDragging: false,
+      startX: 0,
+      startY: 0,
+      initialTransformX: 0,
+      initialTransformY: 0
     }
-    
-    setSelectionBox(null)
     setDragState({
       isDragging: false,
       startX: 0,
-      startY: 0
+      startY: 0,
+      initialTransformX: 0,
+      initialTransformY: 0
     })
-  }, [selectionBox, currentGroup, nodePositions, currentView, selectElement, checkSubsetProperty])
+  }, [])
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
     
     if (!containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
-    const mouseX = e.clientX - rect.left
-    const mouseY = e.clientY - rect.top
+    const vw = viewBoxSize.width
+    const vh = viewBoxSize.height
+    
+    const scaleX = vw / rect.width
+    const scaleY = vh / rect.height
+    const mouseX = (e.clientX - rect.left) * scaleX
+    const mouseY = (e.clientY - rect.top) * scaleY
     
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
     const newScale = Math.max(0.25, Math.min(4, canvasTransform.scale * scaleFactor))
@@ -180,20 +124,31 @@ export function GroupCanvas() {
       y: newY,
       scale: newScale
     })
-  }, [canvasTransform, setCanvasTransform])
+  }, [canvasTransform, setCanvasTransform, viewBoxSize])
 
   useEffect(() => {
     const handleGlobalMouseUp = () => {
-      if (selectionBox || dragState.isDragging) {
+      if (dragStateRef.current.isDragging) {
         handleMouseUp()
       }
     }
     
     window.addEventListener('mouseup', handleGlobalMouseUp)
     return () => window.removeEventListener('mouseup', handleGlobalMouseUp)
-  }, [selectionBox, dragState.isDragging, handleMouseUp])
+  }, [handleMouseUp])
 
   const renderView = () => {
+    if (currentGroup && isTooLarge(currentGroup.order, currentView) && !forceShowLargeGroup) {
+      return (
+        <div className="large-group-warning">
+          <p>{t('canvas.orderTooLarge', { n: currentGroup.order })}</p>
+          <button className="panel-btn" onClick={() => setForceShowLargeGroup(true)}>
+            {t('canvas.show')}
+          </button>
+        </div>
+      )
+    }
+
     switch (currentView) {
       case 'set':
         return <SetView />
@@ -204,63 +159,13 @@ export function GroupCanvas() {
       case 'table':
         return <TableView />
       case '3d':
-        return <div className="view-empty"><p>3D视图 - 开发中</p></div>
+        return <Cayley3DView />
+      case 'symmetry':
+        return <SymmetryView />
+      case 'sublattice':
+        return <SubgroupLatticeView />
       default:
         return <SetView />
-    }
-  }
-
-  const renderSelectionBox = () => {
-    if (!selectionBox || !selectionBox.active) return null
-    
-    const { x: tx, y: ty, scale } = canvasTransform
-    
-    if (selectionBox.shape === 'rect') {
-      const sx = Math.min(selectionBox.startX, selectionBox.endX)
-      const sy = Math.min(selectionBox.startY, selectionBox.endY)
-      const sw = Math.abs(selectionBox.endX - selectionBox.startX)
-      const sh = Math.abs(selectionBox.endY - selectionBox.startY)
-      
-      const screenX = sx * scale + tx
-      const screenY = sy * scale + ty
-      const screenW = sw * scale
-      const screenH = sh * scale
-      
-      return (
-        <g style={{ pointerEvents: 'none' }}>
-          <rect
-            x={screenX}
-            y={screenY}
-            width={screenW}
-            height={screenH}
-            fill="rgba(78, 205, 196, 0.2)"
-            stroke="#4ecdc4"
-            strokeWidth={2}
-            strokeDasharray="6"
-          />
-        </g>
-      )
-    } else {
-      const cx = selectionBox.startX * scale + tx
-      const cy = selectionBox.startY * scale + ty
-      const r = Math.sqrt(
-        Math.pow(selectionBox.endX - selectionBox.startX, 2) + 
-        Math.pow(selectionBox.endY - selectionBox.startY, 2)
-      ) * scale
-      
-      return (
-        <g style={{ pointerEvents: 'none' }}>
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="rgba(78, 205, 196, 0.15)"
-            stroke="#4ecdc4"
-            strokeWidth={2}
-            strokeDasharray="6"
-          />
-        </g>
-      )
     }
   }
 
@@ -271,27 +176,28 @@ export function GroupCanvas() {
         className="canvas-viewport"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onWheel={handleWheel}
         style={{ 
-          cursor: dragState.isDragging ? 'grabbing' : lassoMode ? 'crosshair' : 'grab',
+          cursor: dragState.isDragging ? 'grabbing' : 'grab',
           overflow: 'hidden',
           position: 'relative'
         }}
       >
         {renderView()}
-        <svg viewBox="0 0 800 560" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-          {renderSelectionBox()}
-        </svg>
       </div>
       
       {hintMessage && (
         <div className="hint-box">
-          {hintMessage}
+          <div className="hint-box-header">
+            <span>{`💡 ${t('canvas.hintBox')}`}</span>
+          </div>
+          <div className="hint-box-body" dangerouslySetInnerHTML={{ __html: hintMessage }} />
         </div>
       )}
       
       <div className="history-panel">
-        <h4>操作历史</h4>
+        <h4>{t('canvas.history')}</h4>
         <div className="history-list">
           {operationHistory.slice(-5).map((op, i) => (
             <div key={i} className="history-item">{op}</div>
@@ -303,99 +209,161 @@ export function GroupCanvas() {
 }
 
 function CayleyGraphView() {
-  const { currentGroup, selectedElements, canvasTransform, selectElement, setHoverElement, getNodePosition, setNodePosition } = useGroup()
+  const { currentGroup, selectedElements, canvasTransform, selectElement, setHoverElement, getNodePosition, setNodePosition, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets, selfInverseElementId } = useGroup()
+  const { t } = useTranslation()
 
   if (!currentGroup) {
     return (
       <div className="view-empty">
-        <p>请先选择一个群</p>
+        <p>{t('canvas.noGroup')}</p>
       </div>
     )
   }
 
   const nodeRadius = 28
+  const cx = viewBoxSize.width / 2
+  const cy = viewBoxSize.height / 2
+  const graphRadius = Math.min(viewBoxSize.width * 0.3, 180 + currentGroup.order * 10)
 
   const getNodePos = (elId: string, index: number) => {
+    // 计算六边形默认位置（S3 专用）
+    if ((currentGroup.symbol === 'S3' || currentGroup.symbol === 'S₃') && currentGroup.order === 6) {
+      const hexagonOrder = [
+        [1,2,3], // e
+        [2,1,3], // (12)
+        [3,1,2], // (132)
+        [3,2,1], // (13)
+        [2,3,1], // (123)
+        [1,3,2]  // (23)
+      ]
+      const el = currentGroup.elements.find(e => e.id === elId)
+      if (el) {
+        const perm = el.value
+        const hexIndex = hexagonOrder.findIndex(h =>
+          h.length === perm.length && h.every((v, i) => v === perm[i])
+        )
+        if (hexIndex !== -1) {
+          const angle = (hexIndex * 2 * Math.PI / 6) - Math.PI / 2
+          const defaultPos = {
+            x: cx + graphRadius * Math.cos(angle),
+            y: cy + graphRadius * Math.sin(angle)
+          }
+          // 检查是否有用户拖拽过的位置
+          const saved = getNodePosition(elId)
+          if (saved && (Math.abs(saved.x - defaultPos.x) > 0.5 || Math.abs(saved.y - defaultPos.y) > 0.5)) {
+            return saved
+          }
+          return defaultPos
+        }
+      }
+    }
+
     const saved = getNodePosition(elId)
     if (saved) return saved
-    
+
     const angle = (index * 2 * Math.PI / currentGroup.order) - Math.PI / 2
     return {
-      x: 400 + 180 * Math.cos(angle),
-      y: 280 + 180 * Math.sin(angle)
+      x: cx + graphRadius * Math.cos(angle),
+      y: cy + graphRadius * Math.sin(angle)
     }
   }
 
-  const edges = currentGroup.elements.flatMap((fromEl, fromIdx) => {
-    const pos = getNodePos(fromEl.id, fromIdx)
-    return currentGroup.generators.map((gen) => {
-      const toEl = gen.apply(fromEl)
-      const toIdx = currentGroup.elements.findIndex(e => e.id === toEl.id)
-      const toPos = getNodePos(toEl.id, toIdx)
-      
-      return { fromEl, toEl, gen, fromPos: pos, toPos }
-    })
+  const edges = computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType)
+
+  const nodePositionsCache = new Map<string, { x: number; y: number }>()
+  currentGroup.elements.forEach((el, i) => {
+    nodePositionsCache.set(el.id, getNodePos(el.id, i))
   })
 
+
+
+  const edgeElements = edges.map((edge: CayleyEdgeData) => {
+    const fromPos = nodePositionsCache.get(edge.fromId)!
+    const toPos = nodePositionsCache.get(edge.toId)!
+    if (!fromPos || !toPos) return null
+
+    const dx = toPos.x - fromPos.x
+    const dy = toPos.y - fromPos.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    
+    const isHighlighted = selectedElements.has(edge.fromId) || selectedElements.has(edge.toId)
+    const baseColor = edge.color
+    const color = isHighlighted ? baseColor : `${baseColor}66`
+
+    if (edge.isSelfLoop) {
+      const scx = fromPos.x
+      const scy = fromPos.y - nodeRadius - 20
+      return (
+        <g key={`${edge.fromId}-${edge.actionElementId}`}>
+          <ellipse cx={scx} cy={scy} rx={14} ry={12} fill="none" stroke={color} strokeWidth={isHighlighted ? 3 : 2} />
+          <polygon points={`${scx-5},${scy-2} ${scx+5},${scy-2} ${scx},${scy-14}`} fill={baseColor} />
+        </g>
+      )
+    }
+    
+    const midX = (fromPos.x + toPos.x) / 2
+    const midY = (fromPos.y + toPos.y) / 2
+    const nx = -dy / dist
+    const ny = dx / dist
+    
+    const curvature = 35
+    const ctrlX = midX + nx * curvature
+    const ctrlY = midY + ny * curvature
+    
+    const startX = fromPos.x + (dx / dist) * nodeRadius
+    const startY = fromPos.y + (dy / dist) * nodeRadius
+    const endX = toPos.x - (dx / dist) * nodeRadius
+    const endY = toPos.y - (dy / dist) * nodeRadius
+    
+    const actionIdx = cayleyActions.findIndex(a => a.elementId === edge.actionElementId)
+    const markerId = `arrow-${actionIdx}`
+
+    return (
+      <path
+        key={`${edge.fromId}-${edge.toId}-${edge.actionElementId}`}
+        d={`M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`}
+        stroke={color}
+        strokeWidth={isHighlighted ? 3 : 2}
+        fill="none"
+        markerEnd={edge.isBidirectional ? undefined : `url(#${markerId})`}
+        opacity={0.7}
+      />
+    )
+  })
+
+  const enabledActions = cayleyActions.filter(a => a.enabled)
+
   return (
-    <svg viewBox="0 0 800 560" className="view-svg" style={{ userSelect: 'none' }}>
+    <svg viewBox={`0 0 ${viewBoxSize.width} ${viewBoxSize.height}`} className="view-svg" style={{ userSelect: 'none' }}>
       <defs>
-        <marker id="arrow" markerWidth={10} markerHeight={10} refX={9} refY={3} orient="auto" markerUnits="strokeWidth">
-          <path d="M0,0 L0,6 L9,3 z" fill="#888" />
-        </marker>
+        {enabledActions.map((action, idx) => (
+          <marker key={idx} id={`arrow-${idx}`} markerWidth={10} markerHeight={10} refX={9} refY={3} orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill={action.color} />
+          </marker>
+        ))}
       </defs>
       
       <g transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale})`}>
-        {edges.map(({ fromEl, toEl, gen, fromPos, toPos }) => {
-          const dx = toPos.x - fromPos.x
-          const dy = toPos.y - fromPos.y
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          
-          const midX = (fromPos.x + toPos.x) / 2
-          const midY = (fromPos.y + toPos.y) / 2
-          const len = Math.sqrt(midX * midX + midY * midY)
-          const nx = len > 0 ? -midY / len : 0
-          const ny = len > 0 ? midX / len : 0
-          
-          const curvature = 35
-          const ctrlX = midX + nx * curvature
-          const ctrlY = midY + ny * curvature
-          
-          const startX = fromPos.x + (dx / dist) * nodeRadius
-          const startY = fromPos.y + (dy / dist) * nodeRadius
-          const endX = toPos.x - (dx / dist) * nodeRadius
-          const endY = toPos.y - (dy / dist) * nodeRadius
-          
-          const isHighlighted = selectedElements.has(fromEl.id) || selectedElements.has(toEl.id)
-          const isSelfLoop = fromEl.id === toEl.id
-          
-          if (isSelfLoop) {
-            const cx = fromPos.x
-            const cy = fromPos.y - nodeRadius - 20
-            return (
-              <g key={`${fromEl.id}-${gen.name}`}>
-                <ellipse cx={cx} cy={cy} rx={14} ry={12} fill="none" stroke={isHighlighted ? gen.color : `${gen.color}66`} strokeWidth={isHighlighted ? 3 : 2} />
-                <polygon points={`${cx-5},${cy-2} ${cx+5},${cy-2} ${cx},${cy-14}`} fill={gen.color} />
-              </g>
-            )
-          }
-          
-          return (
-            <path
-              key={`${fromEl.id}-${gen.name}`}
-              d={`M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`}
-              stroke={isHighlighted ? gen.color : `${gen.color}66`}
-              strokeWidth={isHighlighted ? 3 : 2}
-              fill="none"
-              markerEnd="url(#arrow)"
-              opacity={0.7}
-            />
-          )
-        })}
+        {edgeElements}
         
         {currentGroup.elements.map((el, i) => {
           const pos = getNodePos(el.id, i)
           const isSelected = selectedElements.has(el.id)
+          const parentSubset = subsets.find(s => s.elementIds.includes(el.id))
+          
+          let fillColor = '#1a1a2e'
+          let strokeColor = 'white'
+          let strokeWidth = 2
+          
+          if (isSelected) {
+            fillColor = '#2d2d4a'
+            strokeColor = '#ffd93d'
+            strokeWidth = 3
+          } else if (parentSubset) {
+            fillColor = parentSubset.color + '33'
+            strokeColor = parentSubset.color
+            strokeWidth = 2.5
+          }
           
           return (
             <g
@@ -411,8 +379,8 @@ function CayleyGraphView() {
                   const svg = e.currentTarget.closest('svg')
                   if (!svg) return
                   const svgRect = svg.getBoundingClientRect()
-                  const viewBoxWidth = 800
-                  const viewBoxHeight = 560
+                  const viewBoxWidth = viewBoxSize.width
+                  const viewBoxHeight = viewBoxSize.height
                   const scaleX = viewBoxWidth / svgRect.width
                   const scaleY = viewBoxHeight / svgRect.height
                   
@@ -443,38 +411,53 @@ function CayleyGraphView() {
               onMouseLeave={() => setHoverElement(null)}
               style={{ cursor: 'grab' }}
             >
-              <circle
+               <circle
                 r={nodeRadius}
-                fill={isSelected ? '#2d2d4a' : '#1a1a2e'}
-                stroke={isSelected ? '#ffd93d' : 'white'}
-                strokeWidth={isSelected ? 3 : 2}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={strokeWidth}
               />
-              <text
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill="white"
-                fontSize={14}
-                fontFamily="serif"
-                style={{ userSelect: 'none', pointerEvents: 'none' }}
-              >
-                {el.label}
-              </text>
+              {parentSubset && (
+                <circle
+                  r={nodeRadius}
+                  fill={`${parentSubset.color}22`}
+                  stroke="none"
+                />
+              )}
+              <foreignObject
+                 x={-nodeRadius}
+                 y={-16}
+                 width={nodeRadius * 2}
+                 height={32}
+                 style={{ pointerEvents: 'none', userSelect: 'none' }}
+               >
+                 <div
+                   style={{
+                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                     width: '100%', height: '100%', color: 'white', fontSize: '15px'
+                   }}
+                   dangerouslySetInnerHTML={{
+                     __html: renderTex(texify(el.label))
+                   }}
+                 />
+               </foreignObject>
+               {selfInverseElementId === el.id && (
+                 <g>
+                   <circle r={nodeRadius + 6} fill="none" stroke="#ffd93d" strokeWidth={2.5} strokeDasharray="6 3" opacity={0.85}>
+                     <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="0.8s" repeatCount="indefinite" />
+                   </circle>
+                   <path
+                     d={`M ${nodeRadius + 3},-8 L ${nodeRadius + 14},-5 L ${nodeRadius + 10},-1`}
+                     fill="#ffd93d"
+                     opacity={0.85}
+                   />
+                 </g>
+               )}
             </g>
           )
         })}
       </g>
       
-      <g transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale})`} style={{ pointerEvents: 'none' }}>
-        <g transform={`translate(30, 530)`}>
-          {currentGroup.generators.map((gen, i) => (
-            <g key={gen.name} transform={`translate(${i * 80}, 0)`}>
-              <line x1={0} y1={0} x2={30} y2={0} stroke={gen.color} strokeWidth={2} />
-              <polygon points="30,0 24,-4 24,4" fill={gen.color} />
-              <text x={35} y={4} fill={gen.color} fontSize={12} fontFamily="serif">{gen.symbol}</text>
-            </g>
-          ))}
-        </g>
-      </g>
     </svg>
   )
 }

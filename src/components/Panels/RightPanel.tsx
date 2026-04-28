@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react'
-import { useGroup } from '../../context/GroupContext'
+import { useGroup } from '../../context/useGroup'
+import { useTranslation } from '../../i18n/useTranslation'
 import { findAllSubgroups, getConjugacyClasses, isSimpleGroup } from '../../core/algebra/subgroups'
+import { getPrecomputed } from '../../core/groups/SmallGroups'
+import { texify, renderTex } from '../../utils/texify'
 
 function AccordionSection({ title, defaultOpen = false, children }: { title: string, defaultOpen?: boolean, children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
@@ -39,93 +42,98 @@ export function RightPanel() {
     selectElement,
     clearSelection
   } = useGroup()
+  const { t } = useTranslation()
   
   const selectedElement = selectedElements.size === 1 
     ? currentGroup?.elements.find(e => e.id === Array.from(selectedElements)[0]) 
     : null
   
+  const precomputed = useMemo(() => {
+    if (!currentGroup) return null
+    return getPrecomputed(currentGroup)
+  }, [currentGroup])
+
   const subgroups = useMemo(() => {
     if (!currentGroup) return []
+    if (precomputed) return precomputed.subgroups
     return findAllSubgroups(currentGroup)
-  }, [currentGroup])
+  }, [currentGroup, precomputed])
   
   const conjugacyClasses = useMemo(() => {
     if (!currentGroup) return []
+    if (precomputed) return precomputed.conjugacyClasses
     return getConjugacyClasses(currentGroup)
-  }, [currentGroup])
+  }, [currentGroup, precomputed])
   
   const simpleGroup = useMemo(() => {
     if (!currentGroup) return false
+    if (precomputed) return precomputed.isSimple
     return isSimpleGroup(currentGroup)
-  }, [currentGroup])
+  }, [currentGroup, precomputed])
 
   return (
     <div className="right-panel">
       <div className="panel-section">
-        <h3>元素属性</h3>
+        <h3>{t('right.elementProps')}</h3>
         {selectedElement ? (
           <>
             <div className="info-row">
-              <span className="info-label">当前元素</span>
-              <span className="info-value highlight">{selectedElement.label}</span>
+              <span className="info-label">{t('right.currentElement')}</span>
+              <span className="info-value highlight" dangerouslySetInnerHTML={{ __html: renderTex(texify(selectedElement.label)) }} />
             </div>
             <div className="info-row">
-              <span className="info-label">逆元</span>
-              <span className="info-value">
-                {currentGroup?.inverse(selectedElement)?.label}
-              </span>
+              <span className="info-label">{t('right.inverse')}</span>
+              <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup?.inverse(selectedElement)?.label || '')) }} />
             </div>
             <div className="info-row">
-              <span className="info-label">ID</span>
+              <span className="info-label">{t('right.id')}</span>
               <span className="info-value">{selectedElement.id}</span>
             </div>
           </>
         ) : (
-          <p className="info-placeholder">在画布上选择元素查看属性</p>
+          <p className="info-placeholder">{t('right.selectHint')}</p>
         )}
       </div>
       
       <div className="panel-section">
-        <h3>群信息</h3>
+        <h3>{t('right.groupInfo')}</h3>
         {currentGroup ? (
           <>
             <div className="info-row">
-              <span className="info-label">群名</span>
-              <span className="info-value">{currentGroup.name}</span>
+              <span className="info-label">{t('right.groupName')}</span>
+              <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.name)) }} />
             </div>
             <div className="info-row">
-              <span className="info-label">符号</span>
-              <span className="info-value">{currentGroup.symbol}</span>
+              <span className="info-label">{t('right.symbol')}</span>
+              <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.symbol)) }} />
             </div>
             <div className="info-row">
-              <span className="info-label">阶</span>
+              <span className="info-label">{t('right.order')}</span>
               <span className="info-value">{currentGroup.order}</span>
             </div>
             <div className="info-row">
-              <span className="info-label">生成元</span>
-              <span className="info-value">
-                {currentGroup.generators.map(g => g.symbol).join(', ')}
-              </span>
+              <span className="info-label">{t('right.generators')}</span>
+              <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.generators.map(g => g.symbol).join(', '))) }} />
             </div>
             <div className="info-row">
-              <span className="info-label">阿贝尔</span>
+              <span className="info-label">{t('right.abelian')}</span>
               <span className="info-value">
-                {currentGroup.isAbelian ? '是' : '否'}
+                {currentGroup.isAbelian ? t('right.yes') : t('right.no')}
               </span>
             </div>
           </>
         ) : (
-          <p className="info-placeholder">请先选择一个群</p>
+          <p className="info-placeholder">{t('right.noGroup')}</p>
         )}
       </div>
       
       {simpleGroup && currentGroup && (
         <div className="simple-group-badge">
-          <span>单群 Simple Group</span>
+          <span>{t('right.simpleGroup')}</span>
         </div>
       )}
       
-      <AccordionSection title={`子群 (${subgroups.length})`} defaultOpen={false}>
+      <AccordionSection title={t('right.subgroups', { n: subgroups.length })} defaultOpen={false}>
         {subgroups.length > 0 ? (
           <div className="subgroup-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
             {subgroups.map((sg, i) => (
@@ -139,46 +147,49 @@ export function RightPanel() {
                 }}
               >
                 <span className="sg-order">{sg.order}</span>
-                <span className="sg-info">
-                  {sg.elements.map(e => e.label).join(', ')}
-                </span>
-                {sg.isNormal && <span className="sg-badge">正规</span>}
+                <span className="sg-info" dangerouslySetInnerHTML={{ __html: renderTex(texify(sg.elements.map(e => e.label).join(', '))) }} />
+                {sg.isNormal && <span className="sg-badge">{t('badge.normal')}</span>}
               </div>
             ))}
           </div>
         ) : (
-          <p className="info-placeholder">无子群</p>
+          <p className="info-placeholder">{t('right.noSubgroups')}</p>
         )}
       </AccordionSection>
       
-      <AccordionSection title={`共轭类 (${conjugacyClasses.length})`} defaultOpen={false}>
+      <AccordionSection title={t('right.conjugacyClasses', { n: conjugacyClasses.length })} defaultOpen={false}>
         {conjugacyClasses.length > 0 ? (
           <div className="class-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
             {conjugacyClasses.map((cls, i) => (
-              <div key={i} className="class-item">
+              <div
+                key={i}
+                className="class-item"
+                onClick={() => {
+                  clearSelection()
+                  cls.forEach(e => selectElement(e.id, true))
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                 <span className="class-size">|{cls.length}|</span>
-                <span className="class-elements">
-                  {cls.map(e => e.label).join(', ')}
-                </span>
+                <span className="class-elements" dangerouslySetInnerHTML={{ __html: renderTex(texify(cls.map(e => e.label).join(', '))) }} />
               </div>
             ))}
           </div>
         ) : (
-          <p className="info-placeholder">无共轭类</p>
+          <p className="info-placeholder">{t('right.noClasses')}</p>
         )}
       </AccordionSection>
       
       <div className="panel-section elements-list">
-        <h3>元素列表 ({currentGroup?.elements.length || 0})</h3>
+        <h3>{t('right.elementList', { n: currentGroup?.elements.length || 0 })}</h3>
         <div className="elements-grid">
           {currentGroup?.elements.map(el => (
-            <button
-              key={el.id}
-              className={`element-chip ${selectedElements.has(el.id) ? 'selected' : ''}`}
-              onClick={() => selectElement(el.id, true)}
-            >
-              {el.label}
-            </button>
+              <button
+                key={el.id}
+                className={`element-chip ${selectedElements.has(el.id) ? 'selected' : ''}`}
+                onClick={() => selectElement(el.id, true)}
+                dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }}
+              />
           ))}
         </div>
       </div>

@@ -9,18 +9,21 @@
 - **群结构可视化**：子群、陪集、正规子群、商群、中心、共轭类
 - **群运算可视化**：Cayley表、乘法表、运算律验证
 - **定理与结论可视化**：Lagrange定理、Cayley定理、同构定理、轨道-稳定子定理
-- **Cayley图可视化**：以图形方式展示有限群的生成元与元素之间的关系
+- **Cayley图可视化**：以图形方式展示有限群的群元素作用关系
 - **群操作交互**：支持拖拽、缩放、动画演示群的运算过程
-- **多群支持**：支持循环群、二面群、对称群等多种典型群
+- **多群支持**：支持循环群、二面群、对称群、直积群等多种典型群
 
 ### 当前状态
 
 - ✅ S₃ 对称群完整实现
-- ✅ 循环群 Zₙ 实现 (n=2,3,4,5,6,8)
-- ✅ 二面群 Dₙ 实现 (n=3,4,5,6)
+- ✅ 循环群 Zₙ 实现 (n=1..20)
+- ✅ 二面群 Dₙ 实现 (n=3..8)
+- ✅ 交错群 Aₙ 实现 (n=3..5)
+- ✅ 特殊群 V₄、Q₈
+- ✅ 直积群 Z₄×Z₂、Z₂³、Z₃×Z₃
 - ✅ 三栏布局 UI（左侧工具栏、中间画布、右侧属性面板）
-- ✅ 手风琴式工具面板（生成群、群操作、视图切换）
-- ✅ 5种视图模式：集合视图、凯莱图、圆圈图、乘法表、3D视图
+- ✅ 手风琴式工具面板（创建群、群操作、视图切换、凯莱图设置）
+- ✅ 6种视图模式：集合视图、凯莱图(2D)、圆圈图、乘法表、3D凯莱图、对称性视图
 - ✅ SVG画布交互（平移、缩放、选中、框选、套选）
 - ✅ 键盘导航（← → 切换元素）
 - ✅ 操作历史面板（右上角悬浮）
@@ -28,6 +31,13 @@
 - ✅ 子群列表与点击选择
 - ✅ 共轭类分析
 - ✅ 圆圈图极大循环子群筛选
+- ✅ KaTeX 数学渲染（所有数学符号统一用 TeX 显示）
+- ✅ Cayley图重构：基于群元素作用（非生成元），支持右乘/左乘切换
+- ✅ 2D Cayley图力导向布局 + 节点拖拽
+- ✅ 3D Cayley图按群性质选择形状模板，节点位置预计算（不可拖拽）
+- ✅ 直积群晶格(lattice)布局
+- ✅ 对称性视图：多面体几何体 + 元素操作动画 + 旋转轴与交点标记
+- ✅ 对称性视图轴方向从几何数据运行时计算（A4/A5轴修正，二面体反射轴修正）
 - ⏳ 陪集分析开发中
 
 ---
@@ -49,10 +59,15 @@
 | React Three Fiber | ^9.6.0 | React Three.js绑定 |
 | Mafs | ^0.21.0 | 数学函数绘图 |
 
+### 数学渲染
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| KaTeX | ^0.16+ | TeX数学公式渲染（全应用） |
+
 ### 状态管理
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Zustand | ^5.x | 轻量级状态管理 |
+| React Context | useState + useCallback | 轻量级状态管理 |
 
 ---
 
@@ -61,71 +76,49 @@
 ```
 GroupViz/
 ├── src/
-│   ├── components/          # UI组件
-│   │   ├── Canvas/         # 画布视图组件
-│   │   │   ├── GroupCanvas.tsx  # 主画布
-│   │   │   ├── SetView.tsx     # 集合视图
-│   │   │   ├── CycleView.tsx   # 圆圈图
-│   │   │   └── TableView.tsx    # 乘法表
-│   │   └── Panels/        # 侧边栏组件
-│   │       ├── LeftPanel.tsx    # 左侧工具栏
-│   │       └── RightPanel.tsx  # 右侧属性面板
-│   ├── context/            # React Context
-│   │   └── GroupContext.tsx  # 群状态管理
-│   ├── core/               # 核心算法
-│   │   ├── types.ts        # 类型定义
-│   │   ├── groups/        # 群实现
-│   │   │   ├── SymmetricGroup.ts   # 对称群 S₃
+│   ├── components/
+│   │   ├── Canvas/
+│   │   │   ├── GroupCanvas.tsx    # 主画布 + 2D Cayley图
+│   │   │   ├── SetView.tsx        # 集合视图
+│   │   │   ├── CycleView.tsx      # 圆圈图
+│   │   │   ├── TableView.tsx      # 乘法表
+│   │   │   ├── Cayley3DView.tsx   # 3D Cayley图
+│   │   │   └── SymmetryView.tsx   # 对称性视图（多面体几何 + 元素操作动画）
+│   │   ├── Panels/
+│   │   │   ├── LeftPanel.tsx      # 左侧工具栏
+│   │   │   └── RightPanel.tsx     # 右侧属性面板
+│   │   └── Tex.tsx                # KaTeX渲染组件
+│   ├── core/
+│   │   ├── types.ts               # 核心类型定义
+│   │   ├── groups/
+│   │   │   ├── SymmetricGroup.ts   # 对称群 Sₙ
 │   │   │   ├── CyclicGroup.ts     # 循环群 Zₙ
-│   │   │   └── DihedralGroup.ts   # 二面群 Dₙ
-│   │   └── algebra/        # 抽象代数算法
-│   │       └── subgroups.ts    # 子群、共轭类计算
-│   ├── App.tsx           # 主应用
-│   ├── App.css           # 全局样式
-│   └── main.tsx          # 入口
-├── public/              # 静态资源
+│   │   │   ├── DihedralGroup.ts   # 二面群 Dₙ
+│   │   │   ├── AlternatingGroup.ts # 交错群 Aₙ
+│   │   │   ├── SpecialGroup.ts    # V₄, Q₈
+│   │   │   └── SmallGroups.ts     # 直积群 + 预计算注册表
+│   │   ├── algebra/
+│   │   │   ├── subgroups.ts       # 子群、正规子群、共轭类、陪集
+│   │   │   └── forceLayout.ts     # 力导向布局 + Cayley边计算
+│   │   ├── polyhedra.ts           # 多面体顶点生成
+│   │   ├── elementRotation.ts     # 群元素→几何旋转变换映射
+│   │   └── viewBox.ts             # SVG视口尺寸计算
+│   ├── context/
+│   │   ├── GroupContext.tsx        # 全局状态管理
+│   │   └── useGroup.ts            # Context Hook
+│   ├── utils/
+│   │   └── texify.ts              # Unicode→TeX转换 + KaTeX渲染
+│   ├── styles/
+│   ├── App.tsx                    # 主应用
+│   ├── App.css                    # 全局样式
+│   └── main.tsx                   # 入口
+├── public/
 ├── index.html
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
-├── AGENTS.md            # 开发框架文档
-└── VISUALIZATION.md      # 可视化策略文档
-```
-GroupViz/
-├── src/
-│   ├── components/          # UI组件
-│   │   ├── CayleyGraph/   # Cayley图组件
-│   │   ├── CayleyTable/   # Cayley乘法表
-│   │   ├── Toolbar/      # 工具栏
-│   │   ├── GroupSelector/ # 群选择器
-│   │   └── controls/    # 可视化控制组件
-│   ├── core/            # 核心算法
-│   │   ├── groups/      # 群论算法实现
-│   │   │   ├── SymmetricGroup.ts  # 对称群 S_n
-│   │   │   └── types.ts       # 类型定义
-│   │   ├── algebra/    # 抽象代数算法
-│   │   │   ├── subgroups.ts     # 子群计算
-│   │   │   ├── cosets.ts        # 陪集与Lagrange定理
-│   │   │   ├── normalSubgroups.ts # 正规子群
-│   │   │   ├── quotient.ts    # 商群
-│   │   │   ├── center.ts      # 群的中心
-│   │   │   ├── conjugacy.ts   # 共轭类
-│   │   │   └── homomorphisms.ts # 同态与同构
-│   │   └── types.ts   # 类型定义
-│   ├── store/           # 状态管理
-│   │   └── useGroupStore.ts
-│   ├── hooks/           # 自定义Hook
-│   ├── utils/           # 工具函数
-│   ├── styles/         # 全局样式
-│   ├── App.tsx        # 主应用
-│   └── main.tsx       # 入口
-├── public/             # 静态资源
-├── index.html
-├── package.json
-├── vite.config.ts
-├── tsconfig.json
-├── AGENTS.md           # 开发框架文档
-└── VISUALIZATION.md     # 可视化策略文档
+├── AGENTS.md                      # 本文档
+└── VISUALIZATION.md               # 可视化策略文档
 ```
 
 ---
@@ -137,8 +130,8 @@ GroupViz/
 ```typescript
 interface GroupElement {
   id: string
-  label: string
-  value: number[]  // 置换表示，如 [1,2,3] 表示恒等置换
+  label: string        // 如 "(12)"、"r²"、"σ₁₂"、"0"
+  value: number[]      // 编码，如置换 [2,1,3]、循环 [5]、直积 [a,b]
 }
 
 interface Generator {
@@ -150,16 +143,16 @@ interface Generator {
 }
 
 interface Group {
-  name: string
-  symbol: string      // 数学符号显示，如 "S₃"
+  name: string         // 如 "Symmetric Group S₃"
+  symbol: string       // 数学符号，如 "S₃"
   order: number
   elements: GroupElement[]
   generators: Generator[]
   multiply(a: GroupElement, b: GroupElement): GroupElement
   inverse(element: GroupElement): GroupElement
   identity: GroupElement
-  exponent?: number   // 群的指数
-  isAbelian: boolean // 是否阿贝尔群
+  exponent?: number
+  isAbelian: boolean
 }
 ```
 
@@ -167,218 +160,243 @@ interface Group {
 
 | 群 | 符号 | 阶 | 生成元 | 状态 |
 |----|------|-----|--------|------|
-| 对称群 S₃ | S₃ | 6 | σ₁₂, σ₂₃ | ✅ 已完成 |
-| 循环群 Zₙ | Zₙ | n | 1 | ✅ 已完成 |
-| 二面群 Dₙ | Dₙ | 2n | r, s | ✅ 已完成 |
-| Klein四群 | V₄ | 4 | a, b | ⏳ 计划中 |
+| 对称群 S₃ | S₃ | 6 | σ₁₂, σ₂₃ | ✅ |
+| 对称群 S₄ | S₄ | 24 | (12), (1234) | ✅ |
+| 循环群 Zₙ | Zₙ | n | 1 | ✅ |
+| 二面体群 Dₙ | Dₙ | 2n | r, s | ✅ |
+| 交错群 Aₙ | Aₙ | n!/2 | (123), (12)(34) 等 | ✅ |
+| Klein四群 V₄ | V₄ | 4 | a, b | ✅ |
+| 四元数群 Q₈ | Q₈ | 8 | i, j | ✅ |
+| Z₄×Z₂ | Z₄×Z₂ | 8 | a, b | ✅ |
+| Z₂³ | Z₂³ | 8 | a, b, c | ✅ |
+| Z₃×Z₃ | Z₃×Z₃ | 9 | a, b | ✅ |
 
 ---
 
-## 5. 群结构可视化
+## 5. Cayley图系统（重构后）
 
-### 5.1 子群分析 (Subgroup Analysis)
+### 5.1 核心概念
+
+Cayley图的**边**不再局限于生成元，而是由**任意群元素作用**定义：
+
+```
+定义：对于节点 a,b 和群元素 c：
+  - 右乘模式：如果 a·c = b，则存在从 a 到 b 的边
+  - 左乘模式：如果 c·a = b，则存在从 a 到 b 的边
+  - 如果 a·c = b 且 b·c = a（双向），则为无向边（不画箭头）
+  - 如果 a·c = b 但 b·c ≠ a，则为有向边（画箭头）
+```
+
+### 5.2 类型定义
 
 ```typescript
-interface SubgroupAnalysis {
-  subgroups: Subgroup[]           // 所有子群
-  lattice: SubgroupLattice         // 子群格
-  cyclicSubgroups: Subgroup[]      // 循环子群
-  generatedSubgroup: (elements: GroupElement[]) => Subgroup // 由元素生成的子群
+type MultiplyType = 'right' | 'left'
+
+interface GroupAction {
+  elementId: string   // 作用元素的ID
+  enabled: boolean    // 是否显示该作用的边
+  color: string       // 该作用对应的边颜色
 }
 
-interface Subgroup {
-  elements: GroupElement[]
-  order: number
-  index: number            // [G:H]
-  generators: GroupElement[]
-  isNormal: boolean
-  isCyclic: boolean
+interface CayleyEdgeData {
+  fromIdx: number        // 起点元素索引
+  toIdx: number          // 终点元素索引
+  fromId: string
+  toId: string
+  actionElementId: string // 作用元素ID
+  color: string          // 边颜色
+  isBidirectional: boolean // 是否无向边
+  isSelfLoop: boolean
 }
 ```
 
-**可视化功能**：
-- 列出所有子群及其阶
-- 显示子群格图（Hasse图）
-- 高亮选中子群在乘法表中的位置
-- 展示子群的生成元
+### 5.3 2D Cayley图 (GroupCanvas.tsx)
 
-### 5.2 陪集与Lagrange定理 (Cosets & Lagrange's Theorem)
+- 节点：SVG圆 (r=28)，可拖拽移动
+- 边：二次贝塞尔曲线 + 箭头标记
+- 自环：上方小椭圆 + 箭头
+- 不同群元素作用 → 不同颜色（16色调色板）
+- 支持力导向布局 (`runForceLayout`)
+- 图标使用KaTeX渲染（SVG `foreignObject`）
 
-```typescript
-interface CosetAnalysis {
-  subgroup: Subgroup
-  leftCosets: GroupElement[][]    // 左陪集
-  rightCosets: GroupElement[][]   // 右陪集
-  index: number                   // 指数 [G:H]
-  cosetTable: Map<string, GroupElement[]>  // 陪集映射
-}
-```
+### 5.4 3D Cayley图 (Cayley3DView.tsx)
 
-**可视化功能**：
-- 展示任意子群的左右陪集分解
-- 验证 |G| = |H| × [G:H]
-- 对比左右陪集是否相同（检验正规性）
-- 动画演示陪集划分过程
+- 节点：Three.js 球体 (r=0.42~0.62)，**不可拖拽**，位置预计算
+- 边：圆柱体 + 锥形箭头（有向）或仅圆柱体（无向）
+- 自环：上方环形
+- 节点标签：`Html` 组件 + KaTeX 渲染
+- 支持 OrbitControls（旋转、缩放、平移）
 
-### 5.3 正规子群与商群 (Normal Subgroups & Quotient Groups)
+### 5.5 3D形状模板
 
-```typescript
-interface NormalSubgroupAnalysis {
-  normalSubgroups: Subgroup[]
-  center: Subgroup                // 中心 Z(G)
-  commutatorSubgroup: Subgroup    // 换位子群 [G,G]
-  derivedSeries: Subgroup[]       // 导群列
-  quotientGroups: Map<Subgroup, Group>  // 商群
-}
-```
+形状按**群的性质**分配，而非硬编码群符号：
 
-**可视化功能**：
-- 标记所有正规子群
-- 展示商群 G/N 的元素与运算
-- 显示中心 Z(G) 和换位子群 [G,G]
-- 展示正规群列与合成群列
+| 形状 | 适用群性质 | 布局描述 |
+|------|-----------|---------|
+| `spherical` | 所有群（兜底） | Fibonacci球面分布 |
+| `circular` | 循环群Zₙ、阿贝尔群 | xz平面圆环 |
+| `dihedral` | 二面体群Dₙ | 上下两平行环 |
+| `hexagon` | S₃（非阿贝尔阶6） | 平面六边形 |
+| `tetrahedron` | V₄（阿贝尔阶4） | 正四面体顶点 + 多余球面散布 |
+| `cube` | Q₈（非阿贝尔阶8） | 立方体顶点 + 多余球面散布 |
+| `lattice` | 直积群(Z₄×Z₂, Z₃×Z₃, Z₂³) | 晶格/网络布局，元素按 value 坐标映射 |
 
-### 5.4 共轭类与类方程 (Conjugacy Classes & Class Equation)
+**检测函数**：
+- `isGroupCyclic(group)` — 符号以Z开头，不含 ×/²/³
+- `isGroupDihedral(group)` — 符号以D开头
+- `isGroupDirectProduct(group)` — 符号含 ×/²/³/⁴
 
-```typescript
-interface ConjugacyAnalysis {
-  conjugacyClasses: GroupElement[][]
-  classSizes: number[]
-  classEquation: string           // |G| = ∑|cl(a)|
-  centerElements: GroupElement[] // 中心元素（1阶类）
-  actionOnSubgroups: Subgroup[][] // 子群共轭作用
-}
-```
+### 5.6 凯莱图设置面板 (LeftPanel)
 
-**可视化功能**：
-- 展示元素的共轭类
-- 显示类方程
-- 可视化共轭作用
-- 类方程可视化
+在 `cayley` 或 `3d` 视图时显示：
+
+- **乘法类型**：右乘 `a·c` / 左乘 `c·a` 切换
+- **3D图形状**：下拉选择（仅3D视图）
+- **力导向布局**：按钮（仅2D视图）
+- **添加所有元素 / 清除所有**：批量管理群元素作用
+- **群元素作用列表**：复选框 + 颜色条 + KaTeX标签
 
 ---
 
-## 6. 群运算可视化
+## 6. 对称性视图系统
 
-### 6.1 Cayley乘法表 (Cayley Table)
+### 6.1 概述
+
+对称性视图 (`SymmetryView.tsx`) 将群元素映射为多面体上的几何对称变换，展示元素对几何体的旋转/反射作用。
+
+**支持的多面体：**
+
+| 群 | 几何体 | 顶点数 | 面数 |
+|---|--------|-------|------|
+| Cₙ | 正n边形 | n | - |
+| Dₙ | 正n边形 | n | - |
+| A₄ | 正四面体 | 4 | 4△ |
+| S₄ | 正方体 / 正八面体(切换) | 8/6 | 6□/8△ |
+| A₅ | 正二十面体 / 正十二面体(切换) | 12/20 | 20△/12⬠ |
+| V₄ | 长方形 | 4 | - |
+
+### 6.2 元素→几何旋转变换架构
+
+**双层映射**：`computeGeometricRotation()` (SymmetryView.tsx) 调用 `computeElementRotation()` (elementRotation.ts) 获取旋转类型和角度，再根据实际几何数据计算正确的轴方向。
+
+```
+computeElementRotation(group, element) → { angleRad, label }  (旋转类型)
+        ↓
+getElementRotationKind(symbol, cycleType) → 'vertex' | 'face' | 'edge'  (轴类型)
+        ↓
+getGeometryAxes(data, symmetryType) → { vertexAxes, faceAxes, edgeAxes }  (从几何数据计算轴池)
+        ↓
+computeGeometricRotation() → { axis: [x,y,z], angleRad, label }  (最终结果)
+```
+
+### 6.3 几何轴计算 (getGeometryAxes)
+
+**运行时从实际多面体数据计算**，不依赖硬编码：
+
+| 多面体 | vertexAxes | faceAxes | edgeAxes |
+|--------|-----------|----------|----------|
+| 四面体 | 4个顶点方向 | - | 3个坐标轴（对边中点） |
+| 立方体 | 4个体对角线 | 3个坐标轴 | 6个棱中点方向 |
+| 二十面体 | 6个顶点方向 | 10个面心方向 | 15个棱中点方向 |
+| 十二面体 | 12个面心方向 * | 20个顶点方向 * | 15个棱中点方向 |
+
+> *十二面体和二十面体互为对偶，5阶轴和3阶轴类型交换
+
+所有轴经 `addAxis()` 精确保留1e-6精度，通过四舍五入坐标去重对向。
+
+### 6.4 轴线渲染
+
+使用实体 3D 圆柱体 + 锥体替代不可靠的 WebGL 线渲染：
+
+- **轴体**：圆柱体 (radius=0.12)，从 `axisNeg` 延伸到 `axisTo`
+- **箭头**：锥体 (radius=0.28, height=0.7)，位于 `axisTo`端
+- **方向**：通过 `setFromUnitVectors` 将默认Y轴对齐到实际轴方向
+- **材质**：红色自发光 `#ff3333`，emissiveIntensity=1.0
+
+### 6.5 轴-几何体交点标记
+
+显示旋转轴与多面体的交点位置，用彩色球体标记：
+
+| 标记类型 | 颜色 | 位置计算 |
+|---------|------|---------|
+| 顶点交点 | 黄 `#ffd93d` | 顶点投影到轴线 (阈值0.25) |
+| 棱中点交点 | 青 `#4ecdc4` | 棱中点投影到轴线 (阈值0.25) |
+| 面心交点 | 绿 `#84cc16` | 面心投影到轴线 (阈值0.25) |
+
+面心通过 `computeFaceCenters()` 统一计算：
+- 三角面 (四面体/八面体/二十面体)：通过 `computeTriangularFaces()` 检测
+- 立方体面：硬编码6个面心 `(±s,0,0), (0,±s,0), (0,0,±s)`
+- 十二面体五边形面：通过图遍历查找5-cycle
+
+### 6.6 动画系统
+
+`useAnimatedRotation` hook 控制三阶段动画：
+1. **复位** (t=0→0.5)：几何体从当前旋转回到恒等
+2. **旋转** (t=0.5→1.0)：几何体从恒等 slerp 到目标旋转
+3. **静止** (t>1.0)：几何体保持目标旋转，轴线和交点标记持续可见
+
+OrbitControls 在动画期间禁用旋转/平移，防止干扰。
+
+### 6.7 状态管理
+
+对称性视图相关状态（在 `GroupContext` 中）：
 
 ```typescript
-interface CayleyTable {
-  group: Group
-  table: GroupElement[][]     // 运算表
-  identityRow: number          // 单位元行
-  inverseMap: Map<GroupElement, GroupElement>  // 逆元映射
-}
+symmetryShowAction: boolean        // 是否启用"显示元素操作"
+symmetryRotateSpeed: number        // 旋转速度倍率 (0.2~5.0)
+symmetryActionElementId: string | null  // 当前选中的元素ID
 ```
 
-**可视化功能**：
-- 交互式乘法表
-- 高亮行列查看运算结果
-- 标记单位元、逆元
-- 验证结合律 (a·b)·c = a·(b·c)
+### 6.8 关键修复历史
 
-### 6.2 运算律验证
-
-- **结合律验证**：动画演示 (ab)c = a(bc)
-- **交换律验证**：对称性分析（仅阿贝尔群）
-- **分配律验证**：若有额外运算（如环）
+| 修复 | 问题 | 解决方案 |
+|------|------|---------|
+| 轴向量归一化 | 非单位轴导致几何体缩放扭曲 | 所有轴常量归一化为单位向量 |
+| 二面体反射轴 | 所有反射用同一X轴 | 按 k·π/n 计算XZ平面内的独立反射轴 |
+| 四面体棱轴 | 对角方向 `[0,1/√2,1/√2]` | 改为坐标轴（对边中点方向） |
+| A5轴方向 | 使用立方体轴（不匹配二十面体） | 从几何数据运行时计算 |
+| 十二面体轴交换 | 5阶/3阶轴与二十面体互换 | 检测顶点数≥20时交换vertexAxes/faceAxes |
+| 负角度轴不显示 | `angleRad > 0` 过滤掉负数旋转角 | 改为 `Math.abs(angleRad) > 0` |
+| WebGL线宽不支持 | `Line`组件线宽>1在多数平台无效 | 改用实体圆柱体+锥体mesh |
+| 棱交点误判 | 投影落在棱段内但距离远 | 仅用棱中点投影到轴线距离判断 |
 
 ---
 
-## 7. 定理与结论可视化
+## 7. KaTeX数学渲染
 
-### 7.1 Lagrange定理
+### 7.1 技术方案
 
-```
-定理：若 H 是有限群 G 的子群，则 |H| 整除 |G|，且 [G:H] = |G|/|H|
-```
+所有数学符号通过 KaTeX 渲染，替代之前的 Unicode 纯文本。
 
-**可视化**：
-- 选择任意子群 H
-- 显示陪集划分
-- 动态展示 |G| = |H| × [G:H]
+- `src/utils/texify.ts` — Unicode→TeX 转换：
+  - 下标：`₀₋₉` → `_{0..9}`
+  - 上标：`⁰⁻⁹` → `^{0..9}`
+  - 希腊字母：`σ` → `\sigma`
+  - 特殊符号：`×` → `\times`，`ℤ` → `\mathbb{Z}`
+- `src/components/Tex.tsx` — `<Tex math="..." />` React 组件
+- `renderTex()` — 直接返回 KaTeX HTML 字符串
 
-### 7.2 Cayley定理
+### 7.2 渲染位置
 
-```
-定理：任意群 G 同���于 S(G) 的一个子群（正则作用）
-```
-
-**可视化**：
-- 展示 G 在自身上的左正则作用
-- 构造并展示嵌入映射 φ: G → S(G)
-- 验证同构（比较Cayley图）
-
-### 7.3 同构定理
-
-**第一同构定理**：
-```
-若 φ: G → H 是群同态，则 G/ker(φ) ≅ im(φ)
-```
-
-**第二同构定理**：
-```
-若 H ≤ G, N ⊲ G，则 H/(H∩N) ≅ HN/N
-```
-
-**可视化**：
-- 展示同态核与像
-- 商群构造动画
-- 同构映射验证
-
-### 7.4 轨道-稳定子定理 (Orbit-Stabilizer Theorem)
-
-```
-|G| = |Orb(x)| · |Stab(x)|
-```
-
-**可视化**（群作用场景）：
-- S_n 在集合 {1,...,n} 上的作用
-- D_n 在正n边形顶点上的作用
-- 共轭作用下的轨道
-
-### 7.5 Sylow定理（可选扩展）
-
-- p-子群与Sylow p-子群
-- Sylow定理的可视化验证
+| 位置 | 方式 |
+|------|------|
+| 2D/集合/圆圈图节点 | SVG `foreignObject` + `dangerouslySetInnerHTML` |
+| 3D图节点/图例 | `Html` 组件 + `dangerouslySetInnerHTML` |
+| 右侧面板（群信息、元素属性、子群、共轭类、元素芯片） | `dangerouslySetInnerHTML` |
+| 左侧面板（凯莱图设置元素列表） | `dangerouslySetInnerHTML` |
+| 3D图覆盖层（群符号） | `dangerouslySetInnerHTML` |
+| 乘法表 | 保持 SVG `<text>`（单元格过多，`foreignObject` 开销大）|
 
 ---
 
-## 8. Cayley图算法
-
-```typescript
-interface CayleyEdge {
-  from: number      // 起点元素索引
-  to: number        // 终点元素索引
-  generator: Generator
-}
-
-interface CayleyGraph {
-  nodes: GroupElement[]
-  edges: { from: number; to: number; generator: Generator }[]
-  layout: Point[]    // 节点坐标
-}
-```
-
-**当前布局**：
-- 圆形布局：元素沿圆周均匀分布
-
-**可视化功能**：
-- 节点：群元素
-- 边：生成元的作用，带箭头曲线
-- 颜色编码：每个生成元对应不同颜色
-- 布局：圆形布局/力导向布局
-
----
-
-## 9. 状态管理
+## 8. 状态管理
 
 使用 React Context (`GroupContext`) 进行状态管理：
 
 ```typescript
 interface GroupContextState {
   currentGroup: Group | null
-  currentView: ViewMode
+  currentView: ViewMode           // 'set'|'cayley'|'cycle'|'table'|'3d'
   selectedElements: Set<string>
   lassoMode: boolean
   lassoShape: 'circle' | 'rect'
@@ -391,49 +409,61 @@ interface GroupContextState {
   isSimpleGroup: boolean
   showMaximalCycles: boolean
   hintMessage: string
+  lassoEntityData / lassoElementsData / checkResultData / lassoHoverElements
+  forceShowLargeGroup: boolean
+  viewBoxSize: ViewBoxSize
+  // KaTeX相关
+  cayleyMultiplyType: MultiplyType          // 'right' | 'left'
+  cayleyActions: GroupAction[]              // 已启用的群元素作用
+  cayleyShape3D: Layout3D                   // 当前3D形状
+  cayleyAvailableShapes3D: Layout3D[]       // 可选3D形状
+  // 对称性视图
+  symmetryShowAction: boolean               // 是否启用"显示元素操作"
+  symmetryRotateSpeed: number               // 旋转速度倍率
+  symmetryActionElementId: string | null    // 当前选中元素的ID
 }
 ```
 
 **使用 Hook**：
 ```typescript
 const { 
-  currentGroup, 
-  selectElement, 
-  setCurrentView,
-  setHintMessage,
+  currentGroup, selectElement, setCurrentView,
+  cayleyActions, toggleCayleyAction,
+  cayleyMultiplyType, setCayleyMultiplyType,
+  cayleyShape3D, setCayleyShape3D,
   // ...
 } = useGroup()
 ```
 
 ---
 
-## 10. 开发规范
+## 9. 开发规范
 
-### 10.1 代码规范
+### 9.1 代码规范
 
 - 使用ESLint + TypeScript进行代码检查
 - 组件采用函数式组件 + Hooks
 - 遵循React 19最佳实践
 
-### 10.2 命名规范
+### 9.2 命名规范
 
 | 类型 | 规则 | 示例 |
 |------|------|------|
-| 组件 | PascalCase | `CayleyGraph.tsx` |
+| 组件 | PascalCase | `Cayley3DView.tsx` |
 | Hooks | camelCase + use前缀 | `useGroup.ts` |
 | 类型/接口 | PascalCase | `GroupElement` |
-| 常量 | UPPER_SNAKE_CASE | `MAX_ELEMENTS` |
+| 常量 | UPPER_SNAKE_CASE | `COLOR_PALETTE` |
 | 群论函数 | camelCase | `getSubgroups`, `getCosets` |
 
-### 10.3 数学符号显示
+### 9.3 数学符号 — KaTeX
 
-- 使用下标：Z₆, D₄, S₃, A₄
-- 使用上标：V⁴, Q⁸
-- 特殊符号：∈, ⊲, ≅, →, ×
+- 不再使用 Unicode 上下标作为显示，所有数学符号通过 `texify()` + `renderTex()` 渲染
+- 列表项如子群元素用逗号分隔后整体传入 KaTeX
+- 字符串模板（如 hint message）中仍可使用 Unicode，由 KaTeX CSS 自动匹配字体
 
 ---
 
-## 11. 运行命令
+## 10. 运行命令
 
 ```bash
 # 开发启动
@@ -451,34 +481,24 @@ npm run preview
 
 ---
 
-## 12. 数学参考
+## 11. 数学参考
 
-### 12.1 Cayley图定义
+### 11.1 Cayley图定义（重构后）
 
-设G是一个群，S是G的生成元集合。G的Cayley图是一个有向图：
+设G是一个群，C是任意群元素的集合。G的Cayley图是一个有向图：
 - 顶点：G的元素
-- 边：对每个s∈S，从g到gs有条有向边
+- 边：对每个c∈C，从g到g·c（右乘）或c·g（左乘）有有向边
+- 若g·c=h 且 h·c=g，则该边为无向边
 
-### 12.2 颜色编码规则
+### 11.2 颜色编码
 
-每个生成元分配唯一颜色：
-- 生成元 a → 红色 (#ff6b6b)
-- 生成元 b → 青色 (#4ecdc4)
-- 生成元 c → 黄色 (#ffd93d)
-- 以此类推
+16色调色板 (`COLOR_PALETTE`)，按群元素作用添加顺序分配：
+- #ff6b6b (红), #4ecdc4 (青), #ffd93d (黄), #a78bfa (紫),
+- #f97316 (橙), #06b6d4 (天蓝), #84cc16 (绿), #f43f5e (玫红),
+- #38bdf8 (浅蓝), #a855f7 (深紫), #14b8a6 (墨绿), #eab308 (金),
+- #6366f1 (靛蓝), #ec4899 (粉), #0ea5e9 (蓝), #22c55e (翠绿)
 
-### 12.3 S₃ 元素参考
-
-| 元素 | 置换 | 性质 |
-|------|------|------|
-| e | (1)(2)(3) | 单位元 |
-| (12) | 交换1,2 | 2-换位 |
-| (13) | 交换1,3 | 2-换位 |
-| (23) | 交换2,3 | 2-换位 |
-| (123) | 循环1→2→3 | 3-循环 |
-| (132) | 循环1→3→2 | 3-循环 |
-
-### 12.4 关键定理速查
+### 11.3 关键定理速查
 
 | 定理 | 内容 | 可视化重点 |
 |------|------|-----------|
@@ -489,24 +509,29 @@ npm run preview
 
 ---
 
-## 13. 扩展计划
+## 12. 扩展计划
 
 ### 短期目标
 - [x] 实现S₃对称群完整分析
-- [x] Cayley图交互
+- [x] Cayley图交互（边、节点拖拽）
 - [x] 乘法表交互
 - [x] 键盘导航
-- [x] 实现循环群Z_n
+- [x] 实现循环群Zₙ
 - [x] 实现二面群Dₙ
 - [x] 子群列表展示与选择
 - [x] 共轭类分析
 - [x] 圆圈图极大循环筛选
+- [x] 力导向布局
+- [x] Cayley图重构：群元素作用边 + 右乘/左乘切换
+- [x] 3D Cayley图按群性质形状模板 + 晶格布局
+- [x] KaTeX全应用数学渲染
+- [x] 对称性视图：多面体几何 + 元素操作动画 + 轴与交点标记
+- [x] 对称性视图轴方向运行时计算修复（A4/A5轴修正）
 
 ### 中期目标
+- [ ] S₄/A₄/A₅ 3D Cayley图形状重新设计
 - [ ] 陪集分解可视化
 - [ ] Lagrange定理验证动画
-- [ ] 实现对称群S₄可视化
-- [ ] 套选功能重新设计
 
 ### 长期目标
 - [ ] 任意有限群的输入与计算
@@ -517,26 +542,5 @@ npm run preview
 
 ---
 
-## 14. 已创建文件列表
-
-```
-src/core/types.ts                 - 类型定义
-src/core/groups/SymmetricGroup.ts   - S₃群实现
-src/core/groups/CyclicGroup.ts   - 循环群 Zₙ 实现
-src/core/groups/DihedralGroup.ts - 二面群 Dₙ 实现
-src/core/algebra/subgroups.ts   - 子群、共轭类算法
-src/context/GroupContext.tsx   - 状态管理 (React Context)
-src/components/Canvas/GroupCanvas.tsx - 主画布
-src/components/Canvas/SetView.tsx - 集合视图
-src/components/Canvas/CycleView.tsx - 圆圈图
-src/components/Canvas/TableView.tsx - 乘法表
-src/components/Panels/LeftPanel.tsx - 左侧工具栏
-src/components/Panels/RightPanel.tsx - 右侧属性面板
-src/App.tsx                    - 主应用
-src/App.css                    - 样式
-```
-
----
-
-*文档版本: 2.2.0*
-*最后更新: 2026-04-21*
+*文档版本: 3.0.0*
+*最后更新: 2026-04-27*

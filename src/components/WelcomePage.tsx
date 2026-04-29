@@ -32,6 +32,12 @@ const FLOATING_SYMBOLS = ['G', '∀', '∃', '→', '≅', '≤', '⊲', '×', '
 const PREVIEW_STYLES = ['ring', 'generators', 'orders'] as const
 type PreviewStyle = typeof PREVIEW_STYLES[number]
 
+interface PopupData {
+  group: Group
+  style: PreviewStyle
+  chipRect: { top: number; left: number; width: number; height: number }
+}
+
 function randomStyle(): PreviewStyle {
   return PREVIEW_STYLES[Math.floor(Math.random() * PREVIEW_STYLES.length)]
 }
@@ -139,10 +145,10 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
   const showOrders = style === 'orders'
 
   const elementOrders = showOrders
-    ? new Map(group.elements.map(el => [el.id, computeElementOrder(group, el)]))
+    ? new Map(group.elements.map((el: GroupElement) => [el.id, computeElementOrder(group, el)]))
     : null
 
-  const positions = new Map(group.elements.map((el, i) =>
+  const positions: Map<string, { x: number; y: number }> = new Map(group.elements.map((el: GroupElement, i: number) =>
     [el.id, circularPosition(i, n, RING_RADIUS, CX, CY)]
   ))
 
@@ -200,7 +206,7 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
               )
             })}
 
-            {group.elements.map((el) => {
+            {group.elements.map((el: GroupElement) => {
               const pos = positions.get(el.id)
               if (!pos) return null
               const isIdentity = el.id === identityId

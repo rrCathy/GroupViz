@@ -78,6 +78,12 @@ const zh: TranslationMap = {
   'panel.clearAllSubsets': '清除所有子集',
   'panel.inverse': '求逆元',
   'panel.clearCanvas': '清空画布',
+  'panel.exportPng': '导出 PNG',
+  'panel.exportSvg': '导出 SVG',
+  'panel.exportGif': '导出 GIF',
+  'panel.exportView': '导出视图',
+  'panel.exporting': '导出中...',
+  'panel.selectElementFirst': '请先在画布上选中一个元素',
 
   /* Left Panel — Badges */
   'badge.normal': '正规',
@@ -271,6 +277,12 @@ const en: TranslationMap = {
   'panel.clearAllSubsets': 'Clear All Subsets',
   'panel.inverse': 'Inverse',
   'panel.clearCanvas': 'Clear Canvas',
+  'panel.exportPng': 'Export PNG',
+  'panel.exportSvg': 'Export SVG',
+  'panel.exportGif': 'Export GIF',
+  'panel.exportView': 'Export View',
+  'panel.exporting': 'Exporting...',
+  'panel.selectElementFirst': 'Please select an element on the canvas first',
 
   /* Left Panel — Badges */
   'badge.normal': 'Normal',

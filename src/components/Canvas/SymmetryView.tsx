@@ -363,7 +363,7 @@ function SymmetryViewInner({ group, symmetryType }: { group: Group; symmetryType
 
   return (
     <div style={{ width: '100%', height: '100%', background: '#0a0a1a' }}>
-      <Canvas camera={{ position: [0, 3, 10], fov: 50, near: 0.1, far: 100 }} gl={{ antialias: true, alpha: false }}>
+      <Canvas camera={{ position: [0, 3, 10], fov: 50, near: 0.1, far: 100 }} gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}>
         <color attach="background" args={['#0a0a1a']} />
         <SymmetryScene
           group={group}

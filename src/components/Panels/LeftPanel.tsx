@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useGroup } from '../../context/useGroup'
 import type { ViewMode, Layout3D } from '../../core/types'
 import { texify, renderTex } from '../../utils/texify'
+import { exportView, exportSymmetryAsGif } from '../../utils/export'
 import { createSymmetricGroup } from '../../core/groups/SymmetricGroup'
 import { createCyclicGroup } from '../../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../../core/groups/DihedralGroup'
@@ -83,6 +84,8 @@ export function LeftPanel() {
     symmetryRotateSpeed,
     setSymmetryShowAction,
     setSymmetryRotateSpeed,
+    symmetryActionElementId,
+    setSymmetryActionElementId,
   } = useGroup()
 
   const { t } = useTranslation()
@@ -433,6 +436,51 @@ export function LeftPanel() {
           >
             {t('panel.forceLayout')}
           </button>
+        </div>
+
+        {/* Export */}
+        <div className="export-section" style={{ marginTop: '8px' }}>
+          <div className="subset-section-header">{t('panel.exportView')}</div>
+          <button
+            className="panel-btn"
+            onClick={() => {
+              const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+              const viewName = currentView === '3d' ? '3d_cayley' : currentView
+              const is3d = currentView === '3d' || currentView === 'symmetry'
+              const ext = is3d ? 'png' : 'svg'
+              exportView(currentView, `groupviz_${viewName}_${ts}.${ext}`)
+            }}
+            disabled={!currentGroup}
+            style={{ width: '100%' }}
+          >
+            {currentView === '3d' || currentView === 'symmetry' ? t('panel.exportPng') : t('panel.exportSvg')}
+          </button>
+          {currentView === 'symmetry' && (
+            <button
+              className="panel-btn"
+              onClick={() => {
+                const elId = symmetryActionElementId
+                if (!currentGroup || !elId) {
+                  alert(t('panel.selectElementFirst'))
+                  return
+                }
+                const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+                // Clear to reset geometry, then set back to trigger fresh animation
+                setSymmetryActionElementId(null)
+                setTimeout(() => {
+                  setSymmetryActionElementId(elId)
+                  // Start capturing after React re-renders and animation begins
+                  setTimeout(() => {
+                    exportSymmetryAsGif(`groupviz_symmetry_${ts}.gif`, 2000, 20)
+                  }, 80)
+                }, 120)
+              }}
+              disabled={!currentGroup || !symmetryShowAction || !symmetryActionElementId}
+              style={{ width: '100%', marginTop: '4px' }}
+            >
+              {t('panel.exportGif')}
+            </button>
+          )}
         </div>
 
         {/* Subset management */}

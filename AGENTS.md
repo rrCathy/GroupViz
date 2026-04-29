@@ -23,7 +23,7 @@
 - ✅ 直积群 Z₄×Z₂、Z₂³、Z₃×Z₃
 - ✅ 三栏布局 UI（左侧工具栏、中间画布、右侧属性面板）
 - ✅ 手风琴式工具面板（创建群、群操作、视图切换、凯莱图设置）
-- ✅ 6种视图模式：集合视图、凯莱图(2D)、圆圈图、乘法表、3D凯莱图、对称性视图
+- ✅ 7种视图模式：集合视图、凯莱图(2D)、圆圈图、乘法表、3D凯莱图、对称性视图、子群格图
 - ✅ SVG画布交互（平移、缩放、选中、框选、套选）
 - ✅ 键盘导航（← → 切换元素）
 - ✅ 操作历史面板（右上角悬浮）
@@ -38,7 +38,16 @@
 - ✅ 直积群晶格(lattice)布局
 - ✅ 对称性视图：多面体几何体 + 元素操作动画 + 旋转轴与交点标记
 - ✅ 对称性视图轴方向从几何数据运行时计算（A4/A5轴修正，二面体反射轴修正）
-- ⏳ 陪集分析开发中
+- ✅ 子群格(Hasse图)视图：节点按层级排列，正规子群高亮，边表示包含关系
+- ✅ 多视图模式：支持浮动窗口，可同时打开多个视图对比分析
+- ✅ 子集保存与分析：选中元素集合自动检测是否为子群/正规子群
+- ✅ 自逆元素检测：计算逆元时自动标记并高亮自身为逆元的元素
+- ✅ 国际化的UI界面（中文/English）
+- ✅ 小群预计算注册表（阶<12所有群自动索引，含预计算子群/共轭类/中心数据）
+- ✅ S₄/A₄/A₅ 群专属3D形状模板 + 预设Cayley边配置
+- ✅ 视图导出：SVG视图导出SVG矢量图，3D视图导出PNG，对称性视图支持GIF动图导出
+- ✅ 欢迎页群预览：点击群记号弹出倒水滴形圆窗，随机展示 ring/generators/orders 三种预览风格
+- ⏳ 陪集分解UI可视化开发中（底层计算已完成）
 
 ---
 
@@ -64,6 +73,11 @@
 |------|------|------|
 | KaTeX | ^0.16+ | TeX数学公式渲染（全应用） |
 
+### 导出
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| gifenc | ^1.0.3 | GIF动图编码（对称性视图导出） |
+
 ### 状态管理
 | 技术 | 版本 | 用途 |
 |------|------|------|
@@ -78,16 +92,19 @@ GroupViz/
 ├── src/
 │   ├── components/
 │   │   ├── Canvas/
-│   │   │   ├── GroupCanvas.tsx    # 主画布 + 2D Cayley图
-│   │   │   ├── SetView.tsx        # 集合视图
-│   │   │   ├── CycleView.tsx      # 圆圈图
-│   │   │   ├── TableView.tsx      # 乘法表
-│   │   │   ├── Cayley3DView.tsx   # 3D Cayley图
-│   │   │   └── SymmetryView.tsx   # 对称性视图（多面体几何 + 元素操作动画）
+│   │   │   ├── GroupCanvas.tsx         # 主画布 + 2D Cayley图
+│   │   │   ├── SetView.tsx             # 集合视图
+│   │   │   ├── CycleView.tsx           # 圆圈图
+│   │   │   ├── TableView.tsx           # 乘法表
+│   │   │   ├── Cayley3DView.tsx        # 3D Cayley图
+│   │   │   ├── SymmetryView.tsx        # 对称性视图（多面体几何 + 元素操作动画）
+│   │   │   ├── SubgroupLatticeView.tsx # 子群格(Hasse)视图
+│   │   │   └── FloatingViewWindow.tsx  # 浮动多视图窗口
 │   │   ├── Panels/
-│   │   │   ├── LeftPanel.tsx      # 左侧工具栏
-│   │   │   └── RightPanel.tsx     # 右侧属性面板
-│   │   └── Tex.tsx                # KaTeX渲染组件
+│   │   │   ├── LeftPanel.tsx           # 左侧工具栏
+│   │   │   └── RightPanel.tsx          # 右侧属性面板
+│   │   ├── Tex.tsx                     # KaTeX渲染组件
+│   │   └── WelcomePage.tsx             # 欢迎页（浮动数学符号动画 + 群记号倒水滴预览弹窗）
 │   ├── core/
 │   │   ├── types.ts               # 核心类型定义
 │   │   ├── groups/
@@ -96,22 +113,29 @@ GroupViz/
 │   │   │   ├── DihedralGroup.ts   # 二面群 Dₙ
 │   │   │   ├── AlternatingGroup.ts # 交错群 Aₙ
 │   │   │   ├── SpecialGroup.ts    # V₄, Q₈
-│   │   │   └── SmallGroups.ts     # 直积群 + 预计算注册表
+│   │   │   └── SmallGroups.ts     # 直积群 + 小群预计算注册表
 │   │   ├── algebra/
-│   │   │   ├── subgroups.ts       # 子群、正规子群、共轭类、陪集
-│   │   │   └── forceLayout.ts     # 力导向布局 + Cayley边计算
-│   │   ├── polyhedra.ts           # 多面体顶点生成
+│   │   │   ├── subgroups.ts       # 子群、正规子群、共轭类、陪集、子群格
+│   │   │   └── forceLayout.ts     # 力导向布局 + Cayley边计算 + 圆圈图布局
+│   │   ├── polyhedra.ts           # 多面体顶点生成（截角四面体/立方体/二十面体等）
 │   │   ├── elementRotation.ts     # 群元素→几何旋转变换映射
 │   │   └── viewBox.ts             # SVG视口尺寸计算
 │   ├── context/
-│   │   ├── GroupContext.tsx        # 全局状态管理
+│   │   ├── GroupContext.tsx        # 全局状态管理 + 所有action（820行）
 │   │   └── useGroup.ts            # Context Hook
 │   ├── utils/
-│   │   └── texify.ts              # Unicode→TeX转换 + KaTeX渲染
-│   ├── styles/
-│   ├── App.tsx                    # 主应用
+│   │   ├── texify.ts              # Unicode→TeX转换 + KaTeX渲染
+│   │   └── export.ts              # 视图导出（SVG/PNG/GIF）
+│   ├── i18n/
+│   │   ├── I18nContext.tsx        # 国际化Provider
+│   │   ├── useTranslation.ts      # useTranslation Hook
+│   │   └── translations.ts        # 翻译字典（中文/English）
+│   ├── hooks/
+│   ├── assets/
+│   ├── App.tsx                    # 主应用（欢迎页 + 三栏布局 + 键盘事件）
 │   ├── App.css                    # 全局样式
-│   └── main.tsx                   # 入口
+│   ├── index.css                  # 基础全局样式
+│   └── main.tsx                   # 入口（React Root + KaTeX CSS导入）
 ├── public/
 ├── index.html
 ├── package.json
@@ -229,7 +253,7 @@ interface CayleyEdgeData {
 
 ### 5.5 3D形状模板
 
-形状按**群的性质**分配，而非硬编码群符号：
+形状按**群的性质**分配，而非硬编码群符号。支持15种形状模板：
 
 | 形状 | 适用群性质 | 布局描述 |
 |------|-----------|---------|
@@ -237,9 +261,19 @@ interface CayleyEdgeData {
 | `circular` | 循环群Zₙ、阿贝尔群 | xz平面圆环 |
 | `dihedral` | 二面体群Dₙ | 上下两平行环 |
 | `hexagon` | S₃（非阿贝尔阶6） | 平面六边形 |
-| `tetrahedron` | V₄（阿贝尔阶4） | 正四面体顶点 + 多余球面散布 |
 | `cube` | Q₈（非阿贝尔阶8） | 立方体顶点 + 多余球面散布 |
+| `tetrahedron` | V₄（阿贝尔阶4） | 正四面体顶点 + 多余球面散布 |
 | `lattice` | 直积群(Z₄×Z₂, Z₃×Z₃, Z₂³) | 晶格/网络布局，元素按 value 坐标映射 |
+| `truncatedTetrahedron` | A₄（阶12） | 截角四面体顶点分布 |
+| `truncatedCube` | S₄（阶24，默认） | 截角立方体顶点分布 |
+| `truncatedOctahedron2` | S₄（阶24，备选） | 截角八面体变体2 |
+| `truncatedOctahedron3` | S₄（阶24，备选） | 截角八面体变体3 |
+| `rhombicuboctahedron` | S₄（阶24，备选） | 菱形截角八面体顶点分布 |
+| `truncatedIcosahedron` | A₅（阶60，默认） | 截角二十面体顶点分布 |
+| `truncatedDodecahedron` | A₅（阶60，备选） | 截角十二面体顶点分布 |
+| `cuboctahedron` | 通用 | 截角立方八面体（球面+立方混合） |
+
+> S₄/A₄/A₅ 群在切换3D形状时会自动切换预设的Cayley边配置，以适配不同多面体对称性。
 
 **检测函数**：
 - `isGroupCyclic(group)` — 符号以Z开头，不含 ×/²/³
@@ -396,10 +430,8 @@ symmetryActionElementId: string | null  // 当前选中的元素ID
 ```typescript
 interface GroupContextState {
   currentGroup: Group | null
-  currentView: ViewMode           // 'set'|'cayley'|'cycle'|'table'|'3d'
+  currentView: ViewMode           // 'set'|'cayley'|'cycle'|'table'|'3d'|'symmetry'|'sublattice'
   selectedElements: Set<string>
-  lassoMode: boolean
-  lassoShape: 'circle' | 'rect'
   canvasTransform: { x: number; y: number; scale: number }
   operationHistory: string[]
   nodePositions: Map<ViewMode, Map<string, { x: number; y: number }>>
@@ -409,18 +441,20 @@ interface GroupContextState {
   isSimpleGroup: boolean
   showMaximalCycles: boolean
   hintMessage: string
-  lassoEntityData / lassoElementsData / checkResultData / lassoHoverElements
   forceShowLargeGroup: boolean
   viewBoxSize: ViewBoxSize
-  // KaTeX相关
-  cayleyMultiplyType: MultiplyType          // 'right' | 'left'
-  cayleyActions: GroupAction[]              // 已启用的群元素作用
-  cayleyShape3D: Layout3D                   // 当前3D形状
-  cayleyAvailableShapes3D: Layout3D[]       // 可选3D形状
-  // 对称性视图
-  symmetryShowAction: boolean               // 是否启用"显示元素操作"
-  symmetryRotateSpeed: number               // 旋转速度倍率
-  symmetryActionElementId: string | null    // 当前选中元素的ID
+  isPending: boolean                    // useTransition 过渡状态
+  cayleyMultiplyType: MultiplyType      // 'right' | 'left'
+  cayleyActions: GroupAction[]          // 已启用的群元素作用
+  cayleyShape3D: Layout3D               // 当前3D形状
+  cayleyAvailableShapes3D: Layout3D[]   // 可选3D形状
+  subsets: Subset[]                     // 保存的子集分析
+  multiViewMode: boolean                // 多视图模式开关
+  floatingViews: FloatingView[]         // 打开的浮动视图窗口
+  symmetryShowAction: boolean           // 是否启用"显示元素操作"
+  symmetryRotateSpeed: number           // 旋转速度倍率
+  symmetryActionElementId: string | null // 当前选中的对称性视图元素ID
+  selfInverseElementId: string | null   // 自逆元素ID（2.5秒后自动清除）
 }
 ```
 
@@ -431,9 +465,106 @@ const {
   cayleyActions, toggleCayleyAction,
   cayleyMultiplyType, setCayleyMultiplyType,
   cayleyShape3D, setCayleyShape3D,
+  subsets, saveSubset, removeSubset,
+  multiViewMode, toggleMultiViewMode,
+  openFloatingView, closeFloatingView,
+  symmetryShowAction, setSymmetryShowAction,
   // ...
 } = useGroup()
 ```
+
+### 8.1 多视图模式
+
+通过 `toggleMultiViewMode()` 开启多视图模式后，可以打开**浮动窗口**显示任意视图：
+
+- `openFloatingView(view)` — 打开指定视图的浮动窗口
+- `closeFloatingView(id)` — 关闭指定浮动窗口
+- 浮动窗口可拖拽、调整大小
+- 所有窗口共享同一 `currentGroup` 状态
+- 主画布和浮动窗口可同时对比不同视图的分析结果
+
+### 8.2 子集保存与分析
+
+选中一组元素后，可通过 `saveSubset()` 保存为子集：
+
+- 自动检测子集是否为**子群**（乘法封闭性检验）
+- 如果是子群，进一步检测是否为**正规子群**（共轭封闭性检验）
+- 支持多个子集同时保存，使用 8 色区分
+- `removeSubset(id)` 删除单个子集，`clearAllSubsets()` 清除全部
+- 子集在画布中以不同颜色高亮显示
+
+### 8.3 自逆元素检测
+
+当选中单个元素并调用 `computeInverse()` 时：
+
+- 计算该元素的逆元并添加到选中集
+- 如果逆元是自身（`g⁻¹ = g`），自动标记为自逆元素
+- `selfInverseElementId` 被设置，触发画布高亮
+- 2.5秒后自动清除标记，恢复正常显示
+
+### 8.4 小群预计算注册表
+
+`SmallGroups.ts` 中维护了一个**懒加载预计算注册表**，包含所有阶<12的群（共19个）：
+
+| 阶 | 群 |
+|----|-----|
+| 1 | C₁ |
+| 2 | C₂ |
+| 3 | C₃ |
+| 4 | C₄, V₄ |
+| 5 | C₅ |
+| 6 | C₆, S₃ |
+| 7 | C₇ |
+| 8 | C₈, Z₄×Z₂, Z₂³, D₄, Q₈ |
+| 9 | C₉, Z₃×Z₃ |
+| 10 | C₁₀, D₅ |
+| 11 | C₁₁ |
+
+每个注册表条目 (`SmallGroupEntry`) 包含：
+- `group: Group` — 群对象
+- `precomputed: PrecomputedData` — 预计算数据（子群、正规子群、共轭类、中心、是否单群）
+
+API：
+- `getAllSmallGroups()` — 获取所有预注册群
+- `getSmallGroup(order, index)` — 按阶和编号查找
+- `getSmallGroupBySymbol(symbol)` — 按符号查找
+- `getPrecomputed(group)` — 获取群的预计算数据
+
+### 8.5 国际化 (i18n)
+
+`src/i18n/` 目录实现完整的中英文切换：
+
+- `I18nProvider` — 语言状态管理，默认根据浏览器语言自动选择
+- `useTranslation()` — 获取翻译函数 `t(key)` 和当前语言
+- `translations.ts` — 翻译字典，支持中文(zh)和英文(en)
+- 语言偏好存储在 `localStorage`，刷新后保持
+
+### 8.6 视图导出
+
+`src/utils/export.ts` 提供三个导出函数，通过左侧面板「操作与子集」区域的按钮触发：
+
+| 函数 | 按钮 | 适用视图 | 输出格式 | 说明 |
+|------|------|---------|---------|------|
+| `exportView()` | 导出 SVG / 导出 PNG | 所有视图 | `.svg` / `.png` | SVG视图导出矢量图，3D视图导出PNG截图 |
+| `exportSymmetryAsGif()` | 导出 GIF | 对称性视图 | `.gif` | 录制几何体旋转动画为循环动图 |
+
+**SVG 导出** (`serializeSvg`):
+- 克隆 SVG 元素，内联所有样式表 CSS
+- 通过 `XMLSerializer` 序列化 → `Blob` → 下载 `.svg`
+- 保留 KaTeX 渲染内容（`foreignObject` 无法转 PNG，故直接导出 SVG）
+
+**PNG 导出**（3D/对称性视图）:
+- 通过 `canvas.toDataURL('image/png')` 同步捕获当前帧
+- 解码 → `ArrayBuffer` → `Blob` → 下载 `.png`
+- 依赖 `preserveDrawingBuffer: true`（已在 `Cayley3DView` 和 `SymmetryView` 的 R3F Canvas 中设置）
+
+**GIF 导出**（对称性视图专用）:
+- 使用 `gifenc` 库编码 GIF
+- 流程：清除当前选中元素（复位几何体）→ 重新设置元素（触发全新动画）→ 以 20fps 录制 2 秒
+- 每帧通过 `requestAnimationFrame` 同步，`drawImage` 捕获 WebGL 画布到离屏 2D canvas
+- 帧数据经 `quantize` + `applyPalette` 降色后写入 GIF
+- GIF 设为无限循环 (`repeat: 0`)
+- 按钮在未勾选「显示元素操作」或未选中元素时禁用
 
 ---
 
@@ -527,11 +658,20 @@ npm run preview
 - [x] KaTeX全应用数学渲染
 - [x] 对称性视图：多面体几何 + 元素操作动画 + 轴与交点标记
 - [x] 对称性视图轴方向运行时计算修复（A4/A5轴修正）
+- [x] 子群格(Hasse图)视图
+- [x] 多视图浮动窗口模式
+- [x] 子集保存与自动检测（子群/正规子群）
+- [x] 自逆元素检测与高亮
+- [x] 国际化 (i18n) 中英文切换
+- [x] 小群预计算注册表（阶<12）
+- [x] 视图导出：SVG/PNG/GIF
+- [x] 欢迎页群预览：点击群记号弹出倒水滴形圆窗，随机展示 ring/generators/orders 预览
 
 ### 中期目标
 - [ ] S₄/A₄/A₅ 3D Cayley图形状重新设计
-- [ ] 陪集分解可视化
+- [ ] 陪集分解UI可视化
 - [ ] Lagrange定理验证动画
+- [ ] 群运算律验证动画（结合律、交换律）
 
 ### 长期目标
 - [ ] 任意有限群的输入与计算
@@ -542,5 +682,5 @@ npm run preview
 
 ---
 
-*文档版本: 3.0.0*
-*最后更新: 2026-04-27*
+*文档版本: 3.2.1*
+*最后更新: 2026-04-29*

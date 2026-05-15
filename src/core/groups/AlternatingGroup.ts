@@ -39,14 +39,19 @@ function permutationParity(p: number[]): number {
 }
 
 function findPermIndex(elements: GroupElement[], perm: number[]): number {
-  return elements.findIndex(el =>
+  const idx = elements.findIndex(el =>
     el.value.every((v, i) => v === perm[i])
   )
+  if (idx === -1) {
+    console.warn('findPermIndex: permutation not found, falling back to identity')
+    return 0
+  }
+  return idx
 }
 
 export function createAlternatingGroup(n: number): Group {
-  if (n < 2) throw new Error('n must be at least 2')
-  if (n > 5) throw new Error('Aₙ for n > 5 is too large')
+  if (n < 3) throw new Error('n must be at least 3')
+  if (n > 5) throw new Error('A_{n} for n > 5 is too large')
 
   const allPerms: number[][] = []
 
@@ -88,7 +93,7 @@ export function createAlternatingGroup(n: number): Group {
       inverse: null as unknown as Generator
     }
     gen.inverse = {
-      name: `${name}⁻¹`, symbol: `${symbol}⁻¹`, color,
+      name: `${name}^{-1}`, symbol: `${symbol}^{-1}`, color,
       apply: (el: GroupElement) => {
         const inverse = perm.map((_, i) => perm.indexOf(i + 1) + 1)
         const result = applyPermutation(el.value, inverse)
@@ -105,14 +110,14 @@ export function createAlternatingGroup(n: number): Group {
     const perm = Array.from({ length: n }, (_, j) => j + 1); [perm[0], perm[1], perm[2]] = [perm[1], perm[2], perm[0]]
     generators.push(getGenerator('c1', '(123)', '#ff6b6b', perm))
   } else if (n === 4) {
-    // A₄: a=(12)(34) order 2, b=(234) order 3 → 12 vertices, 18 edges = truncated tetrahedron
+    // A4: a=(12)(34) order 2, b=(234) order 3 -> 12 vertices, 18 edges = truncated tetrahedron
     const a = Array.from({ length: n }, (_, j) => j + 1); [a[0], a[1], a[2], a[3]] = [a[1], a[0], a[3], a[2]]
     const b = Array.from({ length: n }, (_, j) => j + 1)
     const tmp = b[1]; b[1] = b[2]; b[2] = b[3]; b[3] = tmp
     generators.push(getGenerator('a', '(12)(34)', '#ff6b6b', a))
     generators.push(getGenerator('b', '(234)', '#4ecdc4', b))
   } else if (n === 5) {
-    // A₅: a=(12)(34) order 2, b=(135) order 3, ab order 5 → each vertex degree 3, 60*3/2=90 edges = truncated icosahedron
+    // A5: a=(12)(34) order 2, b=(135) order 3, ab order 5 -> each vertex degree 3, 60*3/2=90 edges = truncated icosahedron
     const a = Array.from({ length: n }, (_, j) => j + 1); [a[0], a[1], a[2], a[3]] = [a[1], a[0], a[3], a[2]]
     const b = Array.from({ length: n }, (_, j) => j + 1)
     const b0 = b[0]; b[0] = b[2]; b[2] = b[4]; b[4] = b0
@@ -137,8 +142,8 @@ export function createAlternatingGroup(n: number): Group {
   )!
 
   return {
-    name: `Alternating Group A${n}`,
-    symbol: `A${n}`,
+    name: `Alternating Group A_{${n}}`,
+    symbol: `A_{${n}}`,
     order: elements.length,
     elements,
     generators,

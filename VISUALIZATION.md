@@ -343,15 +343,22 @@
 ┌─────────────────────────────────────────────────────┐
 │  子群边界        → 实线蓝色 #3498db                │
 │  正规子群边界    → 虚线紫色 #9b59b6                │
-│  陪集1           → 淡红 #ffcccc                    │
-│  陪集2           → 淡青 #ccffff                    │
-│  陪集3           → 淡黄 #ffffcc                    │
+│  陪集1~16        → 16色调色盘                      │
+│  子集1~8         → 8色调色盘                       │
 │  共轭类1         → 红色系渐变                      │
 │  共轭类2         → 蓝色系渐变                      │
 │  单位元          → 金色边框 #f1c40f                │
 │  逆元            → 虚线边框                         │
 │  选中元素        → 脉冲发光效果                     │
 └─────────────────────────────────────────────────────┘
+
+子集8色调色盘：
+- #ff6b6b (红), #4ecdc4 (青), #84cc16 (绿), #a78bfa (紫)
+- #f97316 (橙), #38bdf8 (浅蓝), #f43f5e (玫红), #eab308 (金)
+
+陪集16色调色盘：
+- #ff6b6b, #4ecdc4, #ffd93d, #84cc16, #a78bfa, #f97316, #38bdf8, #f43f5e
+- #eab308, #6366f1, #ec4899, #14b8a6, #0ea5e9, #22c55e, #a855f7, #06b6d4
 ```
 
 ### 5.3 状态颜色
@@ -506,8 +513,9 @@ KaTeX 渲染覆盖所有位置：2D/3D节点标签、面板内容、图例、提
 
 ### 10.2 计算优化
 
-- **缓存**：子群、陪集等计算结果缓存
-- **Web Worker**：复杂计算移至后台线程
+- **缓存**：子群、陪集、直积乘法等计算结果缓存
+- **主线程计算**：所有计算均在主线程执行（无Web Worker），通过 `useTransition` 保持UI响应
+- **性能守卫**：子群/共轭类/中心计算 cutoff 降至 60（order>60 返回占位结果）
 - **渐进计算**：先显示占位符，后填充结果
 
 ---
@@ -550,10 +558,12 @@ KaTeX 渲染覆盖所有位置：2D/3D节点标签、面板内容、图例、提
 - 循环群 Zₙ (n=1..20)：圆形布局
 - 二面群 Dₙ (n=3..8)：双环布局
 - 交错群 Aₙ (n=3..5)：力导向布局
-- S₄ (24阶)：截角立方体/菱形截角八面体等多形状3D模板
+- S₄ (24阶)：截角立方体/菱形截角八面体/截角八面体变体等多形状3D模板
 - A₅ (60阶)：截角二十面体/截角十二面体3D模板
+- S₅ (120阶)：支持（通过群工厂/会话恢复）
 - V₄ (Klein四群)、Q₈ (四元数群)
-- 直积群：Z₄×Z₂、Z₂³、Z₃×Z₃ (晶格布局)
+- 直积群：Z₄×Z₂、Z₂³、Z₃×Z₃、Z₆×Z₂ (晶格布局)
+- 任意G×H直积构建（最大阶144，三种构建模式）
 
 ### 12.3 子群格视图 (SubgroupLatticeView)
 
@@ -597,7 +607,253 @@ KaTeX 渲染覆盖所有位置：2D/3D节点标签、面板内容、图例、提
 - 预计算子群、正规子群、共轭类、中心数据
 - 懒加载机制，首次访问时计算
 
+### 12.9 陪集分解可视化
+
+- 左/右陪集切换显示（左乘/右乘模式）
+- 选中子群后自动计算陪集分解
+- 显示全部陪集验证 Lagrange 定理（|G| = |H| × [G:H]）
+- 乘法表内陪集单元格彩色矩形条纹高亮
+- 16色调色盘区分不同陪集
+
+### 12.10 直积群构建系统
+
+- 支持任意两群的直积 G×H（最大阶144）
+- 三种构建模式：cayley（基于Cayley表）、table（基于乘法表）、direct（直接群运算）
+- 源群/目标群选择器，支持导入当前群
+- 直积群符号列表 localStorage 持久化，刷新后自动恢复
+- 智能3D形状选择：全循环因子→lattice、一循环→cylinder、无循环→torus
+
+### 12.11 2D Cayley图多形状布局
+
+- 三种节点排列形状：circular（圆形）、grid（网格，仅直积群）、spherical（球面投影）
+- 通过左侧面板下拉菜单切换
+- 节点位置优先级：用户拖拽 > grid/spherical布局 > circular兜底
+- 初始化位置与运行时 viewBox 一致，避免大阶群偏移
+
+### 12.12 欢迎页群预览弹窗
+
+- 点击群记号弹出圆形预览（210px固定SVG）
+- 三种随机预览风格：ring（环形排列）、generators（生成元箭头）、orders（按阶染色）
+- ORDER_COLORS 映射：1(黄) 2(红) 3(青) 4(紫) 5(橙) 6(绿) 8(蓝) 10(金) 12(粉)
+- 弹性入场动画，再次点击或点击背景关闭
+
+### 12.13 深色/浅色主题切换
+
+- 右上角切换按钮，CSS自定义属性驱动
+- 支持系统偏好检测（prefers-color-scheme）
+- localStorage 记忆用户选择
+
+### 12.14 会话保存与恢复
+
+- 当前群和视图自动存入 localStorage
+- 刷新页面后自动恢复上次状态
+- 点击左上角标题返回欢迎页，同时清除已保存会话
+
+### 12.15 视图导出
+
+- SVG视图导出SVG矢量图（serializeSvg内联CSS）
+- 3D视图导出PNG截图（canvas.toDataURL）
+- 对称性视图支持GIF动图导出（gifenc库，20fps录制2秒）
+- 通过左侧面板「操作与子集」区域按钮触发
+
+### 12.16 性能守卫与大阶群支持
+
+- 子群/共轭类/中心计算 cutoff 降至 60（order>60 返回占位结果）
+- Cayley边预算同步限流
+- 直积乘法缓存（pipe分隔DP的multiply/inverse结果Map缓存）
+- 所有计算在主线程执行，useTransition 保持UI响应
+
 ---
 
 *本文档将持续更新，记录更多可视化策略和最佳实践*
-*最后更新: 2026-04-28*
+
+## 13. 布局路由与后端 FastAPI 规范
+
+本节定义针对直积/大阶群布局的工程化路由策略、预计算数据格式与后端 API 规范（FastAPI）。目标是：
+- 对小阶群使用静态表（precomputed），直接读取布局数据；
+- 对中阶群在浏览器计算（frontend），尽量利用现有的 torus/fiber/layered 算法；
+- 对大阶群或复杂生成元走后端（backend）计算，支持异步队列、缓存与谱/Kronecker 优化。
+
+13.1 路由判定（阈值与启发式）
+
+默认阈值（可配置）：
+
+- PRECOMPUTED_MAX_N = 128
+- FRONTEND_MAX_N = 800
+
+启发式判定按两个维度：节点数（order）与复杂度评分（complexityScore）。复杂度考虑因子类型与是否存在跨因子生成元。示例评分规则：
+
+- 循环因子 Z_n: 1
+- 二面因子 D_n: 2
+- 对称/交错 S_n/A_n: 6
+- 四元数/特殊 Q_8/V_4: 5
+- 其它任意/未知: 3
+
+若存在混合（mixed）生成元（生成元同时改变多个因子坐标）则将 score 乘以 2。总评分低于阈值且节点数在 FRONTEND_MAX_N 范围内时优先前端计算。
+
+示例 TypeScript 判定函数：
+
+```ts
+// src/utils/layoutRouting.ts (建议路径)
+export const PRECOMPUTED_MAX = 128;
+export const FRONTEND_MAX = 800;
+
+function factorScore(symbol: string) {
+  if (/^Z/.test(symbol)) return 1;
+  if (/^D/.test(symbol)) return 2;
+  if (/^S\d+/.test(symbol) || /^A\d+/.test(symbol)) return 6;
+  if (/Q|V4/.test(symbol)) return 5;
+  return 3;
+}
+
+export function computeComplexityScore(factors: string[], mixed = false) {
+  let s = factors.reduce((acc, f) => acc + factorScore(f), 0);
+  if (mixed) s *= 2;
+  return s;
+}
+
+export function chooseRoutingMode(group): 'precomputed'|'frontend'|'backend' {
+  const N = group.order;
+  const factors = inferFactorsFromSymbol(group.symbol); // 尝试解析 Z4xS3 等
+  const mixed = detectMixedGenerators(group.generators);
+  const score = computeComplexityScore(factors, mixed);
+
+  if (N <= PRECOMPUTED_MAX && hasPrecomputed(group)) return 'precomputed';
+  if (N <= FRONTEND_MAX && score <= 20 && !mixed) return 'frontend';
+  return 'backend';
+}
+```
+
+13.2 预计算数据格式与存放位置
+
+建议把预计算的布局 JSON 放在 public/precomputed_layouts/，命名按照规范化 groupKey，例如 `S4xZ5.json`。仅需存储节点位置（positions），边可在客户端根据当前 multiplyType 与启用的 actions 动态重建（通常 cheap）。示例 JSON：
+
+```json
+{
+  "groupKey": "S4xZ5",
+  "symbol": "S_4 \\times Z_5",
+  "order": 120,
+  "layoutMode": "fiber",
+  "positions2d": {
+    "e": [0, 0],
+    "(12)": [1.2, 0.1],
+    "(1234)": [-0.5, 1.1]
+  },
+  "positions3d": null,
+  "meta": {
+    "computedAt": "2026-05-04T08:00:00Z",
+    "method": "fiber-compose"
+  }
+}
+```
+
+13.3 后端 API 设计（FastAPI）
+
+基本路由：
+
+- POST /api/v1/layout/product
+  - 请求 body:
+    - groupKey?: string (优先) 或 完整 group 描述 { elements, generators, symbol }
+    - mode?: 'auto'|'torus'|'fiber'|'layered'|'spectral'
+    - multiplyType?: 'right'|'left'
+    - options?: { dim?: 2|3, spectralK?: number, eps?: number }
+  - 返回：
+    - 200 OK (立即返回布局)
+      ```json
+      {
+        "status": "done",
+        "layoutMode": "fiber",
+        "positions": { "id1": [x,y], ... },
+        "meta": { "method": "kronecker-spectral", "timeMs": 1234 }
+      }
+      ```
+    - 202 Accepted (已排队)
+      ```json
+      { "status": "queued", "jobId": "uuid", "eta": 12 }
+      ```
+
+- GET /api/v1/layout/jobs/{jobId}
+  - 查询任务状态（queued|running|done|failed），done 时返回结果；支持取消（DELETE）以释放资源。
+
+- GET /api/v1/layout/precomputed/{groupKey}
+  - 直接读取预计算 JSON（可用于调试/浏览器快速加载）。
+
+可选：WebSocket / SSE 用于实时进度与增量结果（先返回 coarse positions，再返回细化结果）。
+
+13.4 后端实现建议（技术栈与优化）
+
+- 框架：FastAPI + uvicorn（原型可同步实现），队列：Celery / RQ / Dramatiq + Redis（异步/扩展）。
+- 数值库：SciPy (sparse.linalg.eigsh / lobpcg)、NumPy、NetworkX（备用）。
+- Kronecker 优化：当生成元可分离且 Cayley graph 为 Cartesian product 时，利用因子图的谱（特征向量）通过 Kronecker 组合快速构建低维嵌入，避免对完整 N×N 矩阵做特征分解。
+- 缓存：请求 body 的哈希作为 key（Redis 或文件系统）。对重复请求直接命中缓存并返回。
+- 资源控制：每个 job 设置超时、最大内存与节点数限制，拒绝或降级超大请求。
+
+13.5 前端集成点（代码位置建议）
+
+- src/utils/layoutRouting.ts — 路由判定函数（chooseRoutingMode）
+- src/utils/precomputedLoader.ts — 从 public/precomputed_layouts 加载 JSON
+- src/utils/backendLayout.ts — 封装 backend API 客户端（POST/轮询/取消）
+- src/core/algebra/forceLayout.ts — 增加 computeProductLayout(elements, factors, mode, options)
+- src/context/GroupContext.tsx — 新增配置：cayleyLayoutSource (auto|precomputed|frontend|backend) 与 productLayoutParams
+- src/components/Panels/LeftPanel.tsx — 展示布局来源、强制覆盖选项、后端 job 状态指示
+
+示例前端调用（简洁）：
+
+```ts
+// src/utils/backendLayout.ts (建议)
+export async function requestServerLayout(payload) {
+  const res = await fetch('/api/v1/layout/product', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 200) return res.json();
+  if (res.status === 202) {
+    const { jobId } = await res.json();
+    // 简单轮询（可替换为 SSE/WS）
+    while (true) {
+      await new Promise(r => setTimeout(r, 1000));
+      const j = await fetch(`/api/v1/layout/jobs/${jobId}`).then(r=>r.json());
+      if (j.status === 'done') return j.result;
+      if (j.status === 'failed') throw new Error('layout failed');
+    }
+  }
+  throw new Error('server error ' + res.status);
+}
+```
+
+13.6 UX 与降级策略
+
+- 请求发出前：先走 chooseRoutingMode 做本地决定；若选择 backend，UI 显示队列/进度并允许取消。
+- 后端失败或超时：自动回退到前端力导向布局（runForceLayout），并在提示中说明原因。
+- 大图（N>5000）：默认聚合/抽样视图，提供“展开细节”按钮触发后端任务或按切片逐步渲染。
+
+13.7 推荐实施步骤（最小可行路径）
+
+1. 实现路由判定 + 预计算 Loader（public/precomputed_layouts）并集成到现有布局入口（2–5 小时）。
+2. 前端实现 torus/fiber/layered 布局并作为 frontend 分支（6–12 小时）。
+3. 后端 FastAPI 原型（同步实现 + 文件缓存），支持 POST /api/v1/layout/product（1 天内可做最小可用版本）。
+4. 后端扩展：队列、Kronecker 优化、缓存、SSE（1–2 天）。
+
+13.8 最小测试用例（示例）
+
+- 预计算文件： Z12xZ8.json（torus/grid，12×8）
+- 中阶前端： S4xZ5（fiber，S4 基底每点 5 个小环）
+- 后端示例： S_5 × S_4（若阶数过大，走后端谱分解）
+
+---
+
+## 持续更新记录
+
+| 版本 | 更新内容 | 日期 |
+|------|----------|------|
+| 1.0 | 初始版本，涵盖基本可视化原则和策略 | 2026-04-20 |
+| 1.1 | 新增已实现功能的可视化细节 | 2026-04-20 |
+| 1.2 | KaTeX渲染、子群格视图、多视图模式、子集分析、i18n | 2026-04-28 |
+| 1.3 | 布局路由与后端 FastAPI API 规范 | 2026-05-04 |
+| 1.4 | 陪集分解可视化、直积群构建系统、2D凯莱图多形状、深色/浅色主题、会话保存恢复、视图导出(SVG/PNG/GIF)、欢迎页群预览弹窗、赞助链接、3D直积群智能形状选择、大阶群性能守卫、直积乘法缓存 | 2026-05-15 |
+
+---
+
+*本文档将持续更新，记录更多可视化策略和最佳实践*
+*最后更新: 2026-05-15*

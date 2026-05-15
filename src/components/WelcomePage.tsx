@@ -1,12 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from '../i18n/useTranslation'
-
-const SPONSOR_LINKS = [
-  { label: 'PayPal', url: 'https://paypal.me/rrCathy314', color: '#f6c23e' },
-  { label: 'Ko-fi', url: 'https://ko-fi.com/rrcathy314', color: '#ff5e5b' },
-  { label: '爱发电', url: 'https://afdian.com/a/rrCathy314', color: '#946ce6' },
-]
-import { renderTex } from '../utils/texify'
+import { useTheme } from '../theme/useTheme'
+import { renderTex, texify } from '../utils/texify'
 import { createS3 } from '../core/groups/SymmetricGroup'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
@@ -14,7 +9,12 @@ import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../core/groups/SpecialGroup'
 import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3 } from '../core/groups/SmallGroups'
 import type { Group, GroupElement } from '../core/types'
-import { texify } from '../utils/texify'
+
+const SPONSOR_LINKS = [
+  { label: 'PayPal', url: 'https://paypal.me/rrCathy314', color: '#f6c23e' },
+  { label: 'Ko-fi', url: 'https://ko-fi.com/rrcathy314', color: '#ff5e5b' },
+  { label: '爱发电', url: 'https://afdian.com/a/rrCathy314', color: '#946ce6' },
+]
 
 const FEATURES = [
   { icon: 'G', tex: '|H| \\mid |G|', key: 'welcome.feature.subgroups' },
@@ -25,7 +25,7 @@ const FEATURES = [
   { icon: 'P', tex: '\\text{Tetrahedron}', key: 'welcome.feature.symmetry' },
 ]
 
-const GROUPS = ['S₃', 'Zₙ', 'Dₙ', 'Aₙ', 'V₄', 'Q₈', 'Z₄×Z₂', 'Z₂³', 'Z₃×Z₃']
+const GROUPS = ['S_{3}', 'Z_{n}', 'D_{n}', 'A_{n}', 'V_{4}', 'Q_{8}', 'Z_{4}\\times Z_{2}', 'Z_{2}^{3}', 'Z_{3}^{2}']
 
 const FLOATING_SYMBOLS = ['G', '∀', '∃', '→', '≅', '≤', '⊲', '×', '∗', 'ℤ', '∘', '↻']
 
@@ -44,15 +44,15 @@ function randomStyle(): PreviewStyle {
 
 function createGroupBySymbol(symbol: string): Group | null {
   switch (symbol) {
-    case 'S₃': return createS3()
-    case 'Zₙ': return createCyclicGroup(3)
-    case 'Dₙ': return createDihedralGroup(4)
-    case 'Aₙ': return createAlternatingGroup(4)
-    case 'V₄': return createKleinFour()
-    case 'Q₈': return createQuaternion()
-    case 'Z₄×Z₂': return createZ4xZ2()
-    case 'Z₂³': return createZ2xZ2xZ2()
-    case 'Z₃×Z₃': return createZ3xZ3()
+    case 'S_{3}': return createS3()
+    case 'Z_{n}': return createCyclicGroup(3)
+    case 'D_{n}': return createDihedralGroup(4)
+    case 'A_{n}': return createAlternatingGroup(4)
+    case 'V_{4}': return createKleinFour()
+    case 'Q_{8}': return createQuaternion()
+    case 'Z_{4}\\times Z_{2}': return createZ4xZ2()
+    case 'Z_{2}^{3}': return createZ2xZ2xZ2()
+    case 'Z_{3}\\times Z_{3}': case 'Z_{3}^{2}': return createZ3xZ3()
     default: return null
   }
 }
@@ -132,6 +132,7 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
   const popupRef = useRef<HTMLDivElement>(null)
   const [animating, setAnimating] = useState(true)
   const identityId = group.identity.id
+  const { theme } = useTheme()
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimating(false), 220)
@@ -152,6 +153,15 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
     [el.id, circularPosition(i, n, RING_RADIUS, CX, CY)]
   ))
 
+  const isLight = theme === 'light'
+  const gradCenter = isLight ? '#f0f1f6' : '#1e2040'
+  const gradEdge = isLight ? '#fafbfe' : '#0c0c1a'
+  const nodeFill = isLight ? '#d4d7de' : '#1a1a2e'
+  const nodeStroke = isLight ? '#c5c8d2' : '#4a4a7a'
+  const identityFill = isLight ? '#eaedd4' : '#2a2a1a'
+  const textColor = isLight ? '#4a4a5e' : '#d0d0f0'
+  const footerColor = isLight ? '#8e8ea0' : '#666'
+
   const getOrderColor = (order: number): string => {
     return ORDER_COLORS[order] ?? '#888'
   }
@@ -168,8 +178,8 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
           <svg viewBox={`0 0 ${POPUP_SIZE} ${POPUP_SIZE}`} width={POPUP_SIZE} height={POPUP_SIZE}>
             <defs>
               <radialGradient id="preview-bg-grad" cx="50%" cy="45%" r="55%">
-                <stop offset="0%" stopColor="#1e2040" />
-                <stop offset="100%" stopColor="#0c0c1a" />
+                <stop offset="0%" stopColor={gradCenter} />
+                <stop offset="100%" stopColor={gradEdge} />
               </radialGradient>
               {genArrows.map((a, i) => (
                 <marker key={`gm-${i}`} id={`gen-arrow-${i}`} markerWidth={7} markerHeight={6} refX={6} refY={3} orient="auto">
@@ -214,16 +224,16 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
               const order = elementOrders?.get(el.id) ?? 0
               const orderColor = getOrderColor(order)
 
-              let fill = '#1a1a2e'
-              let stroke = '#4a4a7a'
+              let fill = nodeFill
+              let stroke = nodeStroke
               let strokeWidth = 1.2
 
               if (showOrders) {
-                fill = isIdentity ? '#2a2a1a' : `${orderColor}18`
+                fill = isIdentity ? identityFill : `${orderColor}18`
                 stroke = orderColor
                 strokeWidth = isIdentity ? 2 : 1.5
               } else if (isIdentity) {
-                fill = '#2a2a1a'
+                fill = identityFill
                 stroke = '#ffd93d'
                 strokeWidth = 2
               }
@@ -244,7 +254,7 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
                     <div
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        width: '100%', height: '100%', color: '#d0d0f0', fontSize: '10px',
+                        width: '100%', height: '100%', color: textColor, fontSize: '10px',
                       }}
                       dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }}
                     />
@@ -254,16 +264,18 @@ function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () =
             })}
 
             {style === 'orders' && (
-              <text x={CX} y={CY - 4} textAnchor="middle" fill="#a78bfa" fontSize="14" fontWeight="bold" opacity="0.8">
-                {group.symbol}
-              </text>
+              <foreignObject x={CX - 40} y={CY - 14} width={80} height={28}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}
+                  dangerouslySetInnerHTML={{ __html: renderTex(texify(group.symbol)) }} />
+              </foreignObject>
             )}
             {style !== 'orders' && (
-              <text x={CX} y={CY - 4} textAnchor="middle" fill="#a78bfa" fontSize="18" fontWeight="bold" opacity="0.9">
-                {group.symbol}
-              </text>
+              <foreignObject x={CX - 50} y={CY - 14} width={100} height={28}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}
+                  dangerouslySetInnerHTML={{ __html: renderTex(texify(group.symbol)) }} />
+              </foreignObject>
             )}
-            <text x={CX} y={CY + 14} textAnchor="middle" fill="#666" fontSize="11" opacity="0.6">
+            <text x={CX} y={CY + 14} textAnchor="middle" fill={footerColor} fontSize="11" opacity="0.7">
               |G| = {group.order}
             </text>
           </svg>
@@ -282,6 +294,7 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
   const [visible, setVisible] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const { t, lang, setLang } = useTranslation()
+  const { theme, toggleTheme } = useTheme()
   const [activeChip, setActiveChip] = useState<string | null>(null)
   const [popupData, setPopupData] = useState<PopupData | null>(null)
   const [sponsorOpen, setSponsorOpen] = useState(false)
@@ -339,6 +352,14 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
       >
         {lang === 'zh' ? 'English' : '简体中文'}
+      </button>
+
+      <button
+        className="welcome-theme-toggle"
+        onClick={toggleTheme}
+        title={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
+      >
+        {theme === 'dark' ? '\u2600' : '\u263E'}
       </button>
 
       <a
@@ -428,9 +449,8 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
               onClick={(e) => handleGroupClick(g, e)}
               role="button"
               tabIndex={0}
-            >
-              {g}
-            </span>
+              dangerouslySetInnerHTML={{ __html: renderTex(g) }}
+            />
           ))}
         </div>
 

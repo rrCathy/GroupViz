@@ -4,6 +4,7 @@ import { OrbitControls, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
+import { useTheme } from '../../theme/useTheme'
 import { texify, renderTex } from '../../utils/texify'
 import { computeElementRotation } from '../../core/elementRotation'
 import type { Group, GroupElement } from '../../core/types'
@@ -14,11 +15,11 @@ function getSymmetryType(group: Group): SymmetryType {
   const sym = group.symbol
   if (sym.startsWith('C')) return 'cyclic'
   if (sym.startsWith('D')) return 'dihedral'
-  if (sym === 'A₄' || sym === 'A4') return 'tetrahedron'
-  if (sym === 'S₄' || sym === 'S4') return 'cube'
-  if (sym === 'A₅' || sym === 'A5') return 'icosahedron'
-  if (sym === 'V₄' || sym === 'V4') return 'rectangle'
-  if (sym.includes('×') || sym.includes('²') || sym.includes('³') || sym.includes('⁴')) return 'unsupported'
+  if (sym === 'A_{4}') return 'tetrahedron'
+  if (sym === 'S_{4}') return 'cube'
+  if (sym === 'A_{5}') return 'icosahedron'
+  if (sym === 'V_{4}') return 'rectangle'
+  if (sym.includes('\\times') || sym.includes('^{')) return 'unsupported'
   if (sym.startsWith('S') || sym.startsWith('A')) return 'unsupported'
   return 'unsupported'
 }
@@ -96,6 +97,13 @@ function getIcosahedron(radius: number): SymmetryData {
   return { vertices, edges }
 }
 
+const TRIANGULAR_FACE_CACHE = new Map<string, [number, number, number][]>()
+const AXIS_CACHE = new Map<string, { vertexAxes: [number,number,number][]; faceAxes: [number,number,number][]; edgeAxes: [number,number,number][] }>()
+
+function cacheKeyForData(data: SymmetryData, symmetryType: SymmetryType) {
+  return `${symmetryType}:${data.vertices.map(v => `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`).join('|')}:${data.edges.map(e => e.join('-')).join('|')}`
+}
+
 function getRectangle(radius: number): SymmetryData {
   const hw = radius * 1.0, hh = radius * 0.55
   const vertices = [new THREE.Vector3(-hw,0,-hh),new THREE.Vector3(hw,0,-hh),new THREE.Vector3(hw,0,hh),new THREE.Vector3(-hw,0,hh)]
@@ -135,6 +143,9 @@ function getVertexColor(index: number, total: number): string {
 }
 
 function computeTriangularFaces(data: SymmetryData): [number, number, number][] {
+  const key = `${data.vertices.length}:${data.edges.map(e => e.join('-')).join('|')}`
+  const cached = TRIANGULAR_FACE_CACHE.get(key)
+  if (cached) return cached
   const adj = new Map<number, number[]>()
   for (let i = 0; i < data.vertices.length; i++) adj.set(i, [])
   for (const [a, b] of data.edges) { adj.get(a)!.push(b); adj.get(b)!.push(a) }
@@ -164,6 +175,7 @@ function computeTriangularFaces(data: SymmetryData): [number, number, number][] 
       }
     }
   }
+  TRIANGULAR_FACE_CACHE.set(key, faces)
   return faces
 }
 
@@ -224,6 +236,9 @@ function computeFaceCenters(data: SymmetryData, triangularFaces: [number, number
 
 function getGeometryAxes(data: SymmetryData, symmetryType: SymmetryType):
   { vertexAxes: [number,number,number][]; faceAxes: [number,number,number][]; edgeAxes: [number,number,number][] } {
+  const key = cacheKeyForData(data, symmetryType)
+  const cached = AXIS_CACHE.get(key)
+  if (cached) return cached
   const result = { vertexAxes: [] as [number,number,number][], faceAxes: [] as [number,number,number][], edgeAxes: [] as [number,number,number][] }
 
   const seen = new Set<string>()
@@ -268,6 +283,7 @@ function getGeometryAxes(data: SymmetryData, symmetryType: SymmetryType):
     }
   }
 
+  AXIS_CACHE.set(key, result)
   return result
 }
 
@@ -277,16 +293,16 @@ function getElementRotationKind(groupSymbol: string, cycleType: string): Element
   if (cycleType === '1') return 'identity'
   if (groupSymbol.startsWith('C')) return 'face'
   if (groupSymbol.startsWith('D')) return cycleType === '1-1' || cycleType === '1' ? null : 'vertex'
-  if (groupSymbol === 'S4' || groupSymbol === 'S₄') {
+  if (groupSymbol === 'S_{4}') {
     if (cycleType === '4' || cycleType === '2-2') return 'face'
     if (cycleType === '3') return 'vertex'
     if (cycleType === '2') return 'edge'
   }
-  if (groupSymbol === 'A4' || groupSymbol === 'A₄') {
+  if (groupSymbol === 'A_{4}') {
     if (cycleType === '3') return 'vertex'
     if (cycleType === '2-2') return 'edge'
   }
-  if (groupSymbol === 'A5' || groupSymbol === 'A₅') {
+  if (groupSymbol === 'A_{5}') {
     if (cycleType === '5') return 'vertex'
     if (cycleType === '3') return 'face'
     if (cycleType === '2-2') return 'edge'
@@ -347,6 +363,8 @@ function computeGeometricRotation(group: Group, element: GroupElement, data: Sym
 function SymmetryViewInner({ group, symmetryType }: { group: Group; symmetryType: SymmetryType }) {
   const [variant, setVariant] = useState(false)
   const { symmetryShowAction, symmetryRotateSpeed, symmetryActionElementId } = useGroup()
+  const { theme } = useTheme()
+  const bgColor = theme === 'dark' ? '#0a0a1a' : '#f4f4f7'
 
   const data = useMemo((): SymmetryData => {
     const radius = 4
@@ -362,9 +380,9 @@ function SymmetryViewInner({ group, symmetryType }: { group: Group; symmetryType
   }, [group, symmetryType, variant])
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0a0a1a' }}>
+    <div style={{ width: '100%', height: '100%', background: bgColor }}>
       <Canvas camera={{ position: [0, 3, 10], fov: 50, near: 0.1, far: 100 }} gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}>
-        <color attach="background" args={['#0a0a1a']} />
+        <color attach="background" args={[bgColor]} />
         <SymmetryScene
           group={group}
           symmetryType={symmetryType}
@@ -559,6 +577,7 @@ function SymmetryScene({
 }) {
   const { setHintMessage } = useGroup()
   const { t } = useTranslation()
+  const { theme } = useTheme()
   const [animPhase, setAnimPhase] = useState<'rest' | 'reset' | 'rotating'>('rest')
 
   const animInfo = useMemo(() => {
@@ -594,8 +613,8 @@ function SymmetryScene({
   const hasData = !!data
   const isDirected = data?.directed === true
   const canToggle = symmetryType === 'cube' || symmetryType === 'icosahedron'
-  const topY = data ? data.vertices.reduce((max, v) => Math.max(max, v.y), -Infinity) : 0
-  const dataRadius = data ? data.vertices[0].length() : 4
+  const topY = useMemo(() => data ? data.vertices.reduce((max, v) => Math.max(max, v.y), -Infinity) : 0, [data])
+  const dataRadius = useMemo(() => data ? data.vertices[0].length() : 4, [data])
 
   const showAxis = animInfo && Math.abs(animInfo.angleRad) > 1e-10
   const axisLen = dataRadius * 1.4
@@ -664,19 +683,19 @@ function SymmetryScene({
       <pointLight position={[0, 5, 0]} intensity={0.5} />
 
       <Html position={[0, topY + 1.5, 0]} center>
-        <div style={{ color: '#fff', fontSize: '20px', fontWeight: 'bold', textShadow: '0 0 10px rgba(0,0,0,0.8)', whiteSpace: 'nowrap', userSelect: 'none' }}
+        <div style={{ color: theme === 'dark' ? '#fff' : '#1a1a2e', fontSize: '20px', fontWeight: 'bold', textShadow: theme === 'dark' ? '0 0 10px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none' }}
           dangerouslySetInnerHTML={{ __html: renderTex(texify(group.name)) }} />
       </Html>
 
       <Html position={[0, topY + 2.2, 0]} center>
-        <div style={{ color: '#aaa', fontSize: '13px', textShadow: '0 0 8px rgba(0,0,0,0.8)', whiteSpace: 'nowrap', userSelect: 'none' }}>
-          {symmetryType === 'cyclic' && t('symmetry.geo.cyclic', { n: group.order })}
-          {symmetryType === 'dihedral' && t('symmetry.geo.dihedral', { n: group.order/2 })}
-          {symmetryType === 'tetrahedron' && t('symmetry.geo.tetrahedron')}
-          {symmetryType === 'cube' && (variant ? t('symmetry.geo.octahedron') : t('symmetry.geo.cube'))}
-          {symmetryType === 'icosahedron' && (variant ? t('symmetry.geo.dodecahedron') : t('symmetry.geo.icosahedron'))}
-          {symmetryType === 'rectangle' && t('symmetry.geo.rectangle')}
-        </div>
+        <div style={{ color: theme === 'dark' ? '#aaa' : '#555566', fontSize: '13px', textShadow: theme === 'dark' ? '0 0 8px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none' }}
+          dangerouslySetInnerHTML={{ __html: renderTex(
+            symmetryType === 'cyclic' ? `C_{{${group.order}}} \\cdot ` + t('symmetry.geo.cyclicText', { n: group.order }) :
+            symmetryType === 'dihedral' ? `D_{{${group.order/2}}} \\cdot ` + t('symmetry.geo.dihedralText', { n: group.order/2 }) :
+            symmetryType === 'cube' ? (variant ? t('symmetry.geo.octahedron') : t('symmetry.geo.cube')) :
+            symmetryType === 'icosahedron' ? (variant ? t('symmetry.geo.dodecahedron') : t('symmetry.geo.icosahedron')) :
+            t('symmetry.geo.' + symmetryType)
+          ) }} />
       </Html>
 
       {canToggle && (
@@ -728,10 +747,10 @@ function SymmetryScene({
 function UnsupportedOverlay({ group }: { group: Group }) {
   const { t } = useTranslation()
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0a0a1a', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
+    <div style={{ width: '100%', height: '100%', background: 'var(--bg-canvas)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
       <p style={{ fontSize: '18px', marginBottom: '8px' }}><span dangerouslySetInnerHTML={{ __html: renderTex(texify(group.name)) }} /></p>
-      <p style={{ fontSize: '14px', color: '#666' }}>{t('symmetry.unsupported')}</p>
-      <p style={{ fontSize: '12px', color: '#555', marginTop: '12px' }}>{t('symmetry.supported')}</p>
+      <p style={{ fontSize: '14px', color: 'var(--text-subtle)' }}>{t('symmetry.unsupported')}</p>
+      <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '12px' }}>{t('symmetry.supported')}</p>
     </div>
   )
 }

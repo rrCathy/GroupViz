@@ -32,9 +32,14 @@ function permToString(p: number[]): string {
 }
 
 function findPermIndex(elements: GroupElement[], perm: number[]): number {
-  return elements.findIndex(el => 
+  const idx = elements.findIndex(el => 
     el.value.every((v, i) => v === perm[i])
   )
+  if (idx === -1) {
+    console.warn('findPermIndex: permutation not found, falling back to identity')
+    return 0
+  }
+  return idx
 }
 
 export function createSymmetricGroup(n: number): Group {
@@ -79,8 +84,8 @@ export function createSymmetricGroup(n: number): Group {
     }
     
     gen.inverse = {
-      name: `${name}⁻¹`,
-      symbol: `${symbol}⁻¹`,
+      name: `${name}^{-1}`,
+      symbol: `${symbol}^{-1}`,
       color,
       apply: (el: GroupElement) => {
         const inverse = perm.map((_, i) => perm.indexOf(i + 1) + 1)
@@ -100,22 +105,22 @@ export function createSymmetricGroup(n: number): Group {
   const generators: Generator[] = []
   
   if (n >= 2) {
-    generators.push(getGenerator('s12', 'σ₁₂', '#ff6b6b', swap12))
+    generators.push(getGenerator('s12', '\\sigma_{12}', '#ff6b6b', swap12))
   }
   if (n === 3) {
-    generators.push(getGenerator('s23', 'σ₂₃', '#4ecdc4', swap23))
+    generators.push(getGenerator('s23', '\\sigma_{23}', '#4ecdc4', swap23))
   }
   if (n === 4) {
-    // S₄: a=(12) order 2, b=(234) order 3 → 24 vertices, 36 edges = truncated cube
+    // S4: a=(12) order 2, b=(234) order 3
     const bPerm = Array.from({ length: n }, (_, j) => j + 1)
     const tmp = bPerm[1]; bPerm[1] = bPerm[2]; bPerm[2] = bPerm[3]; bPerm[3] = tmp
     generators.push(getGenerator('b', '(234)', '#4ecdc4', bPerm))
   }
   if (n >= 5) {
-    // Sₙ with 2 generators: (12) and n-cycle (12...n)
+    // Sn with 2 generators: (12) and n-cycle (12...n)
     const nCycle = Array.from({ length: n }, (_, i) => i + 2)
     nCycle[n - 1] = 1
-    generators.push(getGenerator('c', `σ₁₂···${n}`, '#4ecdc4', nCycle))
+    generators.push(getGenerator('c', `\\sigma_{12\\cdots${n}}`, '#4ecdc4', nCycle))
   }
   
   function multiply(a: GroupElement, b: GroupElement): GroupElement {
@@ -135,8 +140,8 @@ export function createSymmetricGroup(n: number): Group {
   )!
   
   return {
-    name: `Symmetric Group S${n}`,
-    symbol: `S${n}`,
+    name: `Symmetric Group S_{${n}}`,
+    symbol: `S_{${n}}`,
     order: elements.length,
     elements,
     generators,
@@ -181,8 +186,8 @@ export function createS3(): Group {
   
   return {
     ...group,
-    name: 'Symmetric Group S₃',
-    symbol: 'S₃',
+    name: 'Symmetric Group S_{3}',
+    symbol: 'S_{3}',
     order: elements.length,
     elements,
     generators: group.generators,

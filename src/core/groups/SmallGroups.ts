@@ -4,6 +4,7 @@ import type { Subgroup } from '../algebra/subgroups'
 import { createCyclicGroup } from './CyclicGroup'
 import { createSymmetricGroup } from './SymmetricGroup'
 import { createDihedralGroup } from './DihedralGroup'
+import { createAlternatingGroup } from './AlternatingGroup'
 import { createKleinFour, createQuaternion } from './SpecialGroup'
 
 // ─── Precomputed Data Interface ────────────────────────────────────────────
@@ -25,7 +26,7 @@ export interface SmallGroupEntry {
   precomputed: PrecomputedData
 }
 
-// ─── Direct Product Z₄ × Z₂ (order 8, abelian) ────────────────────────────
+// Direct Product Z4 x Z2 (order 8, abelian)
 
 export function createZ4xZ2(): Group {
   const nA = 4, nB = 2
@@ -66,8 +67,8 @@ export function createZ4xZ2(): Group {
   genB.inverse = genB
 
   return {
-    name: 'Z₄ × Z₂',
-    symbol: 'Z₄×Z₂',
+    name: 'Z_{4} \\times Z_{2}',
+    symbol: 'Z_{4}\\times Z_{2}',
     order: 8,
     elements,
     generators: [genA, genB],
@@ -79,7 +80,7 @@ export function createZ4xZ2(): Group {
   }
 }
 
-// ─── Direct Product Z₂ × Z₂ × Z₂ (order 8, abelian) ───────────────────────
+// Direct Product Z2 x Z2 x Z2 (order 8, abelian)
 
 export function createZ2xZ2xZ2(): Group {
   const elements: GroupElement[] = []
@@ -116,8 +117,8 @@ export function createZ2xZ2xZ2(): Group {
   }
 
   return {
-    name: 'Z₂ × Z₂ × Z₂',
-    symbol: 'Z₂³',
+    name: 'Z_{2} \\times Z_{2} \\times Z_{2}',
+    symbol: 'Z_{2}^{3}',
     order: 8,
     elements,
     generators: [makeGen('a', 'a', '#ff6b6b', 2), makeGen('b', 'b', '#4ecdc4', 1), makeGen('c', 'c', '#ffd93d', 0)],
@@ -129,7 +130,7 @@ export function createZ2xZ2xZ2(): Group {
   }
 }
 
-// ─── Direct Product Z₃ × Z₃ (order 9, abelian) ────────────────────────────
+// Direct Product Z3 x Z3 (order 9, abelian)
 
 export function createZ3xZ3(): Group {
   const n = 3
@@ -161,19 +162,19 @@ export function createZ3xZ3(): Group {
     inverse: null as unknown as Generator
   }
   genA.inverse = {
-    name: 'a⁻¹', symbol: 'a⁻¹', color: '#ff6b6b',
+    name: 'a^{-1}', symbol: 'a^{-1}', color: '#ff6b6b',
     apply: (el: GroupElement) => elements[((el.value[0] - 1 + n) % n) * n + el.value[1]],
     inverse: genA
   }
   genB.inverse = {
-    name: 'b⁻¹', symbol: 'b⁻¹', color: '#4ecdc4',
+    name: 'b^{-1}', symbol: 'b^{-1}', color: '#4ecdc4',
     apply: (el: GroupElement) => elements[el.value[0] * n + ((el.value[1] - 1 + n) % n)],
     inverse: genB
   }
 
   return {
-    name: 'Z₃ × Z₃',
-    symbol: 'Z₃×Z₃',
+    name: 'Z_{3}^{2}',
+    symbol: 'Z_{3}^{2}',
     order: 9,
     elements,
     generators: [genA, genB],
@@ -185,7 +186,65 @@ export function createZ3xZ3(): Group {
   }
 }
 
-// ─── Registry: All Groups of Order < 12 ────────────────────────────────────
+// Direct Product Z6 x Z2 (order 12, abelian, non-cyclic)
+
+export function createZ6xZ2(): Group {
+  const nA = 6, nB = 2
+  const elements: GroupElement[] = []
+  for (let b = 0; b < nB; b++) {
+    for (let a = 0; a < nA; a++) {
+      elements.push({
+        id: `e${a}${b}`,
+        label: `(${a},${b})`,
+        value: [a, b]
+      })
+    }
+  }
+
+  function mul(x: GroupElement, y: GroupElement): GroupElement {
+    const a = (x.value[0] + y.value[0]) % nA
+    const b = (x.value[1] + y.value[1]) % nB
+    return elements[a + b * nA]
+  }
+
+  function inv(el: GroupElement): GroupElement {
+    return elements[((-el.value[0] + nA) % nA) + el.value[1] * nA]
+  }
+
+  const identity = elements[0]
+
+  const genA: Generator = {
+    name: 'a', symbol: 'a', color: '#ff6b6b',
+    apply: (el: GroupElement) => elements[((el.value[0] + 1) % nA) + el.value[1] * nA],
+    inverse: null as unknown as Generator
+  }
+  const genB: Generator = {
+    name: 'b', symbol: 'b', color: '#4ecdc4',
+    apply: (el: GroupElement) => elements[el.value[0] + ((el.value[1] + 1) % nB) * nA],
+    inverse: null as unknown as Generator
+  }
+  genA.inverse = {
+    name: 'a^{-1}', symbol: 'a^{-1}', color: '#ff6b6b',
+    apply: (el: GroupElement) => elements[((el.value[0] - 1 + nA) % nA) + el.value[1] * nA],
+    inverse: genA
+  }
+  genB.inverse = genB
+
+  return {
+    name: 'Z_{6} \\times Z_{2}',
+    symbol: 'Z_{6}\\times Z_{2}',
+    order: 12,
+    elements,
+    generators: [genA, genB],
+    multiply: mul,
+    inverse: inv,
+    identity,
+    isAbelian: true,
+    exponent: 6
+  }
+}
+
+// ─── Registry: All Groups of Order < 16 ────────────────────────────────────
 
 function compile(group: Group): PrecomputedData {
   return {
@@ -219,6 +278,14 @@ const FACTORIES: { order: number; index: number; factory: GroupFactory }[] = [
   { order: 10, index: 0, factory: () => createCyclicGroup(10) },
   { order: 10, index: 1, factory: () => createDihedralGroup(5) },
   { order: 11, index: 0, factory: () => createCyclicGroup(11) },
+  { order: 12, index: 0, factory: () => createCyclicGroup(12) },
+  { order: 12, index: 1, factory: createZ6xZ2 },
+  { order: 12, index: 2, factory: () => createDihedralGroup(6) },
+  { order: 12, index: 3, factory: () => createAlternatingGroup(4) },
+  { order: 13, index: 0, factory: () => createCyclicGroup(13) },
+  { order: 14, index: 0, factory: () => createCyclicGroup(14) },
+  { order: 14, index: 1, factory: () => createDihedralGroup(7) },
+  { order: 15, index: 0, factory: () => createCyclicGroup(15) },
 ]
 
 // ─── Lazy-Initialized Table ────────────────────────────────────────────────

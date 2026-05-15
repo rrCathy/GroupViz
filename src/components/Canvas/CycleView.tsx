@@ -5,7 +5,7 @@ import { planarCycleLayout } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 
 export function CycleView() {
-  const { currentGroup, selectedElements, selectElement, setHoverElement, getNodePosition, setNodePosition, canvasTransform, showMaximalCycles, viewBoxSize, subsets, selfInverseElementId } = useGroup()
+  const { currentGroup, selectedElements, selectElement, setHoverElement, getNodePosition, setNodePosition, canvasTransform, showMaximalCycles, viewBoxSize, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors } = useGroup()
   const { t } = useTranslation()
 
   const cycles = useMemo(() => {
@@ -71,6 +71,22 @@ export function CycleView() {
     )
   }, [currentGroup, showMaximalCycles, cycles, viewBoxSize.width, viewBoxSize.height, getNodePosition])
 
+  const subsetDetailMap = useMemo(() => {
+    const m = new Map<string, typeof subsets[0]>()
+    subsets.forEach(s => s.elementIds.forEach(id => { if (!m.has(id)) m.set(id, s) }))
+    return m
+  }, [subsets])
+
+  const isLarge = currentGroup ? currentGroup.order > 60 : false
+  const isNodeOnScreen = (px: number, py: number) => {
+    if (!isLarge) return true
+    const sx = px * canvasTransform.scale + canvasTransform.x
+    const sy = py * canvasTransform.scale + canvasTransform.y
+    const m = 24 * canvasTransform.scale * 1.5
+    return sx + m > 0 && sx - m < viewBoxSize.width &&
+           sy + m > 0 && sy - m < viewBoxSize.height
+  }
+
   if (!currentGroup) {
     return (
       <div className="view-empty">
@@ -103,6 +119,13 @@ export function CycleView() {
 
   return (
     <svg viewBox={`0 0 ${viewBoxSize.width} ${viewBoxSize.height}`} className="view-svg" style={{ userSelect: 'none' }}>
+      {!isLarge && (
+        <defs>
+          <filter id="node-shadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
+          </filter>
+        </defs>
+      )}
       <g transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale})`}>
         {cycles.map((cycle, cycleIdx) => {
           const color = colors[cycleIdx % colors.length]
@@ -135,16 +158,23 @@ export function CycleView() {
         
         {currentGroup.elements.map((el) => {
           const pos = getPos(el.id)
+          if (!isNodeOnScreen(pos.x, pos.y)) return null
           const isSelected = selectedElements.has(el.id)
-          const parentSubset = subsets.find(s => s.elementIds.includes(el.id))
+          const parentSubset = subsetDetailMap.get(el.id)
+          const cosetIdx = cosetElementMap.get(el.id)
+          const isInHighlightedCoset = cosetIdx !== undefined && cosetHighlightSet.has(cosetIdx)
           
-          let fillColor = '#1a1a2e'
-          let strokeColor = 'white'
-          let strokeWidth = 2
+          let fillColor = 'var(--node-fill)'
+          let strokeColor = 'var(--node-stroke)'
+          let strokeWidth = 2.5
           
           if (isSelected) {
-            fillColor = '#2d2d4a'
+            fillColor = 'var(--node-fill-selected)'
             strokeColor = '#ffd93d'
+            strokeWidth = 3
+          } else if (isInHighlightedCoset && cosetIdx !== undefined) {
+            fillColor = cosetColors[cosetIdx] + '33'
+            strokeColor = cosetColors[cosetIdx]
             strokeWidth = 3
           } else if (parentSubset) {
             fillColor = parentSubset.color + '33'
@@ -200,6 +230,7 @@ export function CycleView() {
                 fill={fillColor}
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
+                filter={currentGroup.order > 60 ? undefined : "url(#node-shadow)"}
               />
               {parentSubset && (
                 <circle
@@ -208,23 +239,32 @@ export function CycleView() {
                   stroke="none"
                 />
               )}
-              <foreignObject
-                 x={-24}
-                 y={-15}
-                 width={48}
-                 height={30}
-                 style={{ pointerEvents: 'none', userSelect: 'none' }}
-               >
-                 <div
-                   style={{
-                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                     width: '100%', height: '100%', color: 'white', fontSize: '14px'
-                   }}
-                   dangerouslySetInnerHTML={{
-                     __html: renderTex(texify(el.label))
-                   }}
-                 />
-               </foreignObject>
+              {isInHighlightedCoset && cosetIdx !== undefined && (
+                <circle
+                  r={24}
+                  fill={`${cosetColors[cosetIdx]}22`}
+                  stroke="none"
+                />
+              )}
+              {(currentGroup.order <= 60 || isSelected || selectedElements.size === 0) && (
+                <foreignObject
+                   x={-24}
+                   y={-15}
+                   width={48}
+                   height={30}
+                   style={{ pointerEvents: 'none', userSelect: 'none' }}
+                 >
+                   <div
+                     style={{
+                       display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        width: '100%', height: '100%', color: 'var(--node-text)', fontSize: currentGroup.order > 60 ? '10px' : '14px'
+                     }}
+                     dangerouslySetInnerHTML={{
+                       __html: renderTex(texify(el.label))
+                     }}
+                   />
+                 </foreignObject>
+               )}
                {selfInverseElementId === el.id && (
                  <g>
                    <circle r={30} fill="none" stroke="#ffd93d" strokeWidth={2.5} strokeDasharray="6 3" opacity={0.85}>

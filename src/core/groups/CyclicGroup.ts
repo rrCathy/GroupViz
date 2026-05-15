@@ -1,11 +1,5 @@
 import type { Group, GroupElement, Generator } from '../types'
 
-const SUBSCRIPT_DIGITS = ['₀','₁','₂','₃','₄','₅','₆','₇','₈','₉']
-
-function numToSubscript(n: number): string {
-  return n.toString().split('').map(d => SUBSCRIPT_DIGITS[parseInt(d)]).join('')
-}
-
 export function createCyclicGroup(n: number): Group {
   if (n < 1) throw new Error('Order must be positive')
 
@@ -33,8 +27,8 @@ export function createCyclicGroup(n: number): Group {
   }]
   
   generators[0].inverse = {
-    name: 'a⁻¹',
-    symbol: '1⁻¹',
+    name: 'a^{-1}',
+    symbol: '1^{-1}',
     color: '#ff6b6b',
     apply: (el: GroupElement) => {
       const prev = (el.value[0] - 1 + n) % n
@@ -54,8 +48,8 @@ export function createCyclicGroup(n: number): Group {
   }
 
   return {
-    name: `Cyclic Group C${numToSubscript(n)}`,
-    symbol: `C${numToSubscript(n)}`,
+    name: `Cyclic Group C_{${n}}`,
+    symbol: `C_{${n}}`,
     order: n,
     elements,
     generators,

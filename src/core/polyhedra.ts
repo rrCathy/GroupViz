@@ -1,9 +1,21 @@
 type Vec3 = [number, number, number]
 
+const POLYHEDRON_CACHE = new Map<string, Vec3[]>()
+const EDGE_CACHE = new Map<string, [number, number][]>()
+
 function scaleVerts(verts: Vec3[], radius: number): Vec3[] {
   const maxCoord = Math.max(...verts.flatMap(v => v.map(Math.abs)))
   const s = radius / maxCoord
   return verts.map(v => [v[0] * s, v[1] * s, v[2] * s])
+}
+
+function cachePolyhedron(key: string, radius: number, build: () => Vec3[]): Vec3[] {
+  const cacheKey = `${key}:${radius}`
+  const cached = POLYHEDRON_CACHE.get(cacheKey)
+  if (cached) return cached.map(v => [v[0], v[1], v[2]])
+  const verts = build()
+  POLYHEDRON_CACHE.set(cacheKey, verts)
+  return verts.map(v => [v[0], v[1], v[2]])
 }
 
 // ============================================================
@@ -72,23 +84,25 @@ export function truncatedOctahedron(radius = 5): Vec3[] {
 // Even permutations of 3 sets: φ = (1+√5)/2
 // ============================================================
 export function truncatedIcosahedron(radius = 5): Vec3[] {
-  const φ = (1 + Math.sqrt(5)) / 2
-  const raw: Vec3[] = []
-  const sets: Vec3[] = [
-    [0, 1, 3 * φ],
-    [1, 2 + φ, 2 * φ],
-    [φ, 2, 1 + 2 * φ],
-  ]
-  for (const [a, b, c] of sets) {
-    const evenPerms: Vec3[] = [[a, b, c], [c, a, b], [b, c, a]]
-    for (const [x, y, z] of evenPerms) {
-      for (const sx of x !== 0 ? [-1, 1] : [1])
-        for (const sy of y !== 0 ? [-1, 1] : [1])
-          for (const sz of z !== 0 ? [-1, 1] : [1])
-            raw.push([x * sx, y * sy, z * sz])
+  return cachePolyhedron('truncatedIcosahedron', radius, () => {
+    const φ = (1 + Math.sqrt(5)) / 2
+    const raw: Vec3[] = []
+    const sets: Vec3[] = [
+      [0, 1, 3 * φ],
+      [1, 2 + φ, 2 * φ],
+      [φ, 2, 1 + 2 * φ],
+    ]
+    for (const [a, b, c] of sets) {
+      const evenPerms: Vec3[] = [[a, b, c], [c, a, b], [b, c, a]]
+      for (const [x, y, z] of evenPerms) {
+        for (const sx of x !== 0 ? [-1, 1] : [1])
+          for (const sy of y !== 0 ? [-1, 1] : [1])
+            for (const sz of z !== 0 ? [-1, 1] : [1])
+              raw.push([x * sx, y * sy, z * sz])
+      }
     }
-  }
-  return scaleVerts(raw, radius)
+    return scaleVerts(raw, radius)
+  })
 }
 
 // ============================================================
@@ -96,23 +110,25 @@ export function truncatedIcosahedron(radius = 5): Vec3[] {
 // Even permutations of 3 sets: φ = (1+√5)/2
 // ============================================================
 export function truncatedDodecahedron(radius = 5): Vec3[] {
-  const φ = (1 + Math.sqrt(5)) / 2
-  const raw: Vec3[] = []
-  const sets: Vec3[] = [
-    [0, 1 / φ, 2 + φ],
-    [1 / φ, 1, 2 * φ],
-    [1 / φ, φ, 1 + 2 * φ],
-  ]
-  for (const [a, b, c] of sets) {
-    const evenPerms: Vec3[] = [[a, b, c], [c, a, b], [b, c, a]]
-    for (const [x, y, z] of evenPerms) {
-      for (const sx of x !== 0 ? [-1, 1] : [1])
-        for (const sy of y !== 0 ? [-1, 1] : [1])
-          for (const sz of z !== 0 ? [-1, 1] : [1])
-            raw.push([x * sx, y * sy, z * sz])
+  return cachePolyhedron('truncatedDodecahedron', radius, () => {
+    const φ = (1 + Math.sqrt(5)) / 2
+    const raw: Vec3[] = []
+    const sets: Vec3[] = [
+      [0, 1 / φ, 2 + φ],
+      [1 / φ, 1, 2 * φ],
+      [1 / φ, φ, 1 + 2 * φ],
+    ]
+    for (const [a, b, c] of sets) {
+      const evenPerms: Vec3[] = [[a, b, c], [c, a, b], [b, c, a]]
+      for (const [x, y, z] of evenPerms) {
+        for (const sx of x !== 0 ? [-1, 1] : [1])
+          for (const sy of y !== 0 ? [-1, 1] : [1])
+            for (const sz of z !== 0 ? [-1, 1] : [1])
+              raw.push([x * sx, y * sy, z * sz])
+      }
     }
-  }
-  return scaleVerts(raw, radius)
+    return scaleVerts(raw, radius)
+  })
 }
 
 export type PolyhedronType =
@@ -126,6 +142,9 @@ export type PolyhedronType =
 // Compute polyhedron skeleton edges (wireframe) from vertex positions
 // Finds the most common inter-vertex distance (= edge length for uniform solids)
 export function computeSkeletonEdges(verts: Vec3[]): [number, number][] {
+  const cacheKey = verts.map(v => v.join(',')).join('|')
+  const cached = EDGE_CACHE.get(cacheKey)
+  if (cached) return cached
   const n = verts.length
   const bins = new Map<number, number>()
 
@@ -158,16 +177,6 @@ export function computeSkeletonEdges(verts: Vec3[]): [number, number][] {
       if (Math.abs(dist - edgeDist) < tol) edges.push([i, j])
     }
   }
+  EDGE_CACHE.set(cacheKey, edges)
   return edges
-}
-
-export function getPolyhedronVerts(type: PolyhedronType, radius = 5): Vec3[] {
-  switch (type) {
-    case 'truncatedTetrahedron': return truncatedTetrahedron(radius)
-    case 'truncatedCube': return truncatedCube(radius)
-    case 'rhombicuboctahedron': return rhombicuboctahedron(radius)
-    case 'truncatedOctahedron': return truncatedOctahedron(radius)
-    case 'truncatedIcosahedron': return truncatedIcosahedron(radius)
-    case 'truncatedDodecahedron': return truncatedDodecahedron(radius)
-  }
 }

@@ -47,7 +47,23 @@
 - ✅ S₄/A₄/A₅ 群专属3D形状模板 + 预设Cayley边配置
 - ✅ 视图导出：SVG视图导出SVG矢量图，3D视图导出PNG，对称性视图支持GIF动图导出
 - ✅ 欢迎页群预览：点击群记号弹出倒水滴形圆窗，随机展示 ring/generators/orders 三种预览风格
-- ⏳ 陪集分解UI可视化开发中（底层计算已完成）
+- ✅ 深色/浅色主题切换：右上角按钮，CSS自定义属性驱动，支持系统偏好检测与记忆
+- ✅ 集合视图网格布局：元素按 ⌈√n⌉ 列密堆积排列，替代原来的圆圈排列
+- ✅ 会话保存与恢复：群和视图自动存入 localStorage，刷新页面后可回到上次状态
+- ✅ 标题返回欢迎页：点击左上角标题回到欢迎页，同时清除已保存会话
+- ✅ 画布缩放上限提升：主画布与悬浮窗最大缩放从 4x→8x，乘法表 5x→10x
+- ✅ Cayley图边/节点视觉优化：边透明度 0.7→0.9、颜色α 40%→60%、描边加宽，节点添加投影与丰富色彩
+- ✅ 陪集分解可视化：左/右陪集切换，选中元素显示对应陪集，显示全部陪集验证Lagrange定理，乘法表矩形条纹
+- ✅ 2D Cayley图多形状布局：圆形(circular)、网格(grid)、球面投影(spherical)三种节点排列
+- ✅ 直积群构建系统：支持任意两群的直积，三种构建模式（cayley/table/direct），localStorage持久化
+- ✅ 欢迎页群预览弹窗：点击群记号弹出圆形预览，随机展示 ring/generators/orders 三种风格，含元素阶染色
+- ✅ 欢迎页赞助链接（PayPal/Ko-fi/爱发电）+ GitHub项目链接
+- ✅ 集合视图 + 圆圈图：支持2D Cayley形状选择
+- ✅ 3D直积群智能形状：全循环因子→lattice、一循环→cylinder、无循环→torus，支持多因子嵌套
+- ✅ 大阶群性能守卫：子群/共轭类/中心计算 cutoff 降至60，Cayley边预算同步限流
+- ✅ 直积群乘法缓存：pipe分隔DP的multiply/inverse结果Map缓存
+- ✅ 直积群localStorage持久化修复：新建直积群刷新后不再消失
+- ✅ 2D Cayley图初始化居中修复：position init与运行时viewBox space一致
 
 ---
 
@@ -90,6 +106,9 @@
 ```
 GroupViz/
 ├── src/
+│   ├── __tests__/
+│   │   ├── groups.test.ts             # 群创建与运算测试
+│   │   └── subgroups.test.ts          # 子群/陪集/共轭类测试
 │   ├── components/
 │   │   ├── Canvas/
 │   │   │   ├── GroupCanvas.tsx         # 主画布 + 2D Cayley图
@@ -99,21 +118,30 @@ GroupViz/
 │   │   │   ├── Cayley3DView.tsx        # 3D Cayley图
 │   │   │   ├── SymmetryView.tsx        # 对称性视图（多面体几何 + 元素操作动画）
 │   │   │   ├── SubgroupLatticeView.tsx # 子群格(Hasse)视图
-│   │   │   └── FloatingViewWindow.tsx  # 浮动多视图窗口
+│   │   │   ├── FloatingViewWindow.tsx  # 浮动多视图窗口
+│   │   │   └── DirectProductView.tsx   # 直积群可视化画布（1299行）
 │   │   ├── Panels/
-│   │   │   ├── LeftPanel.tsx           # 左侧工具栏
-│   │   │   └── RightPanel.tsx          # 右侧属性面板
+│   │   │   ├── LeftPanel.tsx           # 左侧工具栏（集成各子面板）
+│   │   │   ├── RightPanel.tsx          # 右侧属性面板
+│   │   │   ├── AccordionSection.tsx    # 手风琴折叠面板组件
+│   │   │   ├── CayleySettingsPanel.tsx # 凯莱图设置面板
+│   │   │   ├── constants.ts            # 面板配置常量（群类型、视图模式、阶分组）
+│   │   │   ├── DirectProductPanel.tsx  # 直积群构建面板
+│   │   │   ├── GroupCreationPanel.tsx  # 群创建面板
+│   │   │   ├── OperationsPanel.tsx     # 操作与子集面板
+│   │   │   └── ViewModePanel.tsx       # 视图切换面板
 │   │   ├── Tex.tsx                     # KaTeX渲染组件
 │   │   └── WelcomePage.tsx             # 欢迎页（浮动数学符号动画 + 群记号倒水滴预览弹窗）
 │   ├── core/
-│   │   ├── types.ts               # 核心类型定义
+│   │   ├── types.ts               # 核心类型定义 + 3D形状选择函数（278行）
 │   │   ├── groups/
 │   │   │   ├── SymmetricGroup.ts   # 对称群 Sₙ
 │   │   │   ├── CyclicGroup.ts     # 循环群 Zₙ
 │   │   │   ├── DihedralGroup.ts   # 二面群 Dₙ
 │   │   │   ├── AlternatingGroup.ts # 交错群 Aₙ
 │   │   │   ├── SpecialGroup.ts    # V₄, Q₈
-│   │   │   └── SmallGroups.ts     # 直积群 + 小群预计算注册表
+│   │   │   ├── SmallGroups.ts     # 直积群 + 小群预计算注册表
+│   │   │   └── DirectProduct.ts   # 任意两群直积 G×H
 │   │   ├── algebra/
 │   │   │   ├── subgroups.ts       # 子群、正规子群、共轭类、陪集、子群格
 │   │   │   └── forceLayout.ts     # 力导向布局 + Cayley边计算 + 圆圈图布局
@@ -121,17 +149,30 @@ GroupViz/
 │   │   ├── elementRotation.ts     # 群元素→几何旋转变换映射
 │   │   └── viewBox.ts             # SVG视口尺寸计算
 │   ├── context/
-│   │   ├── GroupContext.tsx        # 全局状态管理 + 所有action（820行）
-│   │   └── useGroup.ts            # Context Hook
+│   │   ├── GroupContext.tsx        # 全局状态管理 + actions（868行）
+│   │   ├── useGroup.ts            # Context Hook
+│   │   ├── cayleyActions.ts       # 凯莱图action逻辑（116行）
+│   │   ├── cosetActions.ts        # 陪集action逻辑（84行）
+│   │   ├── directProductActions.ts # 直积action逻辑（54行）
+│   │   └── positionUtils.ts       # 节点位置初始化（109行）
 │   ├── utils/
 │   │   ├── texify.ts              # Unicode→TeX转换 + KaTeX渲染
-│   │   └── export.ts              # 视图导出（SVG/PNG/GIF）
+│   │   ├── export.ts              # 视图导出（SVG/PNG/GIF）
+│   │   └── groupFactory.ts        # 群符号→群对象工厂（会话恢复用）
+│   ├── theme/
+│   │   ├── ThemeContext.tsx        # 深色/浅色主题Provider + localStorage持久化
+│   │   └── useTheme.ts            # useTheme Hook
 │   ├── i18n/
 │   │   ├── I18nContext.tsx        # 国际化Provider
 │   │   ├── useTranslation.ts      # useTranslation Hook
 │   │   └── translations.ts        # 翻译字典（中文/English）
-│   ├── hooks/
+│   ├── types/
+│   │   └── gifenc.d.ts            # gifenc库类型声明
+│   ├── hooks/                      # 自定义Hooks（当前为空）
 │   ├── assets/
+│   │   ├── hero.png                # 欢迎页背景图片
+│   │   ├── react.svg
+│   │   └── vite.svg
 │   ├── App.tsx                    # 主应用（欢迎页 + 三栏布局 + 键盘事件）
 │   ├── App.css                    # 全局样式
 │   ├── index.css                  # 基础全局样式
@@ -194,6 +235,8 @@ interface Group {
 | Z₄×Z₂ | Z₄×Z₂ | 8 | a, b | ✅ |
 | Z₂³ | Z₂³ | 8 | a, b, c | ✅ |
 | Z₃×Z₃ | Z₃×Z₃ | 9 | a, b | ✅ |
+| Z₆×Z₂ | Z₆×Z₂ | 12 | a, b | ✅ |
+| G×H (任意) | G×H | \|G\|·\|H\| | g₁,...,h₁,... | ✅ |
 
 ---
 
@@ -201,7 +244,12 @@ interface Group {
 
 ### 5.1 核心概念
 
-Cayley图的**边**不再局限于生成元，而是由**任意群元素作用**定义：
+GroupViz实现了**广义Cayley图**（Generalized Cayley Graph），其中边可以由任意群元素定义，而不仅限于生成元：
+
+> **标准Cayley图**：边标签取自群的生成集S ⊆ G
+> **广义Cayley图**（本项目使用）：边标签取自群G的任意元素子集
+
+这种广义化允许用户探索不同群元素子集如何定义连通模式。当仅启用生成元时，结果与标准Cayley图一致。
 
 ```
 定义：对于节点 a,b 和群元素 c：
@@ -253,7 +301,7 @@ interface CayleyEdgeData {
 
 ### 5.5 3D形状模板
 
-形状按**群的性质**分配，而非硬编码群符号。支持15种形状模板：
+形状按**群的性质**分配，而非硬编码群符号。支持17种形状模板：
 
 | 形状 | 适用群性质 | 布局描述 |
 |------|-----------|---------|
@@ -263,7 +311,9 @@ interface CayleyEdgeData {
 | `hexagon` | S₃（非阿贝尔阶6） | 平面六边形 |
 | `cube` | Q₈（非阿贝尔阶8） | 立方体顶点 + 多余球面散布 |
 | `tetrahedron` | V₄（阿贝尔阶4） | 正四面体顶点 + 多余球面散布 |
-| `lattice` | 直积群(Z₄×Z₂, Z₃×Z₃, Z₂³) | 晶格/网络布局，元素按 value 坐标映射 |
+| `lattice` | 全循环因子直积群（兜底） | 晶格/网络布局，因子按贪心算法分配到XYZ轴组 |
+| `cylinder` | 2因子直积群，恰好一个循环因子 | 循环因子沿Y轴分层，非循环因子在每层排列成环 |
+| `torus` | 2因子直积群，无循环因子 | 两个非循环因子分别在环面主/次方向排列 |
 | `truncatedTetrahedron` | A₄（阶12） | 截角四面体顶点分布 |
 | `truncatedCube` | S₄（阶24，默认） | 截角立方体顶点分布 |
 | `truncatedOctahedron2` | S₄（阶24，备选） | 截角八面体变体2 |
@@ -271,14 +321,18 @@ interface CayleyEdgeData {
 | `rhombicuboctahedron` | S₄（阶24，备选） | 菱形截角八面体顶点分布 |
 | `truncatedIcosahedron` | A₅（阶60，默认） | 截角二十面体顶点分布 |
 | `truncatedDodecahedron` | A₅（阶60，备选） | 截角十二面体顶点分布 |
-| `cuboctahedron` | 通用 | 截角立方八面体（球面+立方混合） |
+| `cuboctahedron` | 通用 | 截角立方八面体（球面+立方混合）（类型中定义但未在UI中暴露） |
 
 > S₄/A₄/A₅ 群在切换3D形状时会自动切换预设的Cayley边配置，以适配不同多面体对称性。
+>
+> 直积群默认3D形状由 `analyzeDPFactors(group)` 智能选择：全循环因子→lattice、2因子+1循环→cylinder、2因子+无循环→torus、多因子→lattice兜底。
 
-**检测函数**：
-- `isGroupCyclic(group)` — 符号以Z开头，不含 ×/²/³
+**检测函数**（types.ts）：
+- `isGroupCyclic(group)` — 符号以C开头
 - `isGroupDihedral(group)` — 符号以D开头
-- `isGroupDirectProduct(group)` — 符号含 ×/²/³/⁴
+- `isGroupDirectProduct(group)` — 符号含\times/^{}/元素ID含|
+- `analyzeDPFactors(group)` — 返回 `{totalFactors, cyclicCount, allCyclic, symbolParts, isPipeProduct}`，解析直积群符号判断各因子循环性（`C` 和 `Z_` 前缀均视为循环因子）
+- `getDefaultLayout3D(group)` — 按优先级：DP群 → 二面群 → 循环群 → 阿贝尔群 → 特定群 → spherical
 
 ### 5.6 凯莱图设置面板 (LeftPanel)
 
@@ -289,6 +343,74 @@ interface CayleyEdgeData {
 - **力导向布局**：按钮（仅2D视图）
 - **添加所有元素 / 清除所有**：批量管理群元素作用
 - **群元素作用列表**：复选框 + 颜色条 + KaTeX标签
+- **2D图形状**：下拉选择（仅2D Cayley视图），支持 `grid`/`circular`/`spherical`
+
+### 5.7 2D Cayley图形状系统
+
+2D Cayley图支持三种节点布局形状，通过 LeftPanel 下拉菜单切换：
+
+| 形状 | 布局函数 | 适用群 | 描述 |
+|------|---------|--------|------|
+| `circular` | 圆形排列 | 所有群（默认） | 节点均匀分布在圆周上 |
+| `grid` | `directProductGridLayout2D()` | 直积群 | m×n网格布局，支持行列交换优化 |
+| `spherical` | `fibonacci2DLayout()` | 所有群 | Fibonacci球面分布的2D投影，均匀散布 |
+
+**布局函数（forceLayout.ts）：**
+
+| 函数 | 说明 |
+|------|------|
+| `fibonacci2DLayout(group, w, h)` | Fibonacci螺旋2D布局，φ=π(3-√5)，38%画布半径 |
+| `directProductGridLayout2D(group, w, h)` | 直积群网格布局，因子均为循环群时 → matrix grid，否则 → nested factor layout |
+| `nestedFactorLayout2D(group, w, h)` | 非循环直积群布局：外层环（G因子）+ 内层环（H元素）|
+| `matrixGridLayout(rows, cols, w, h)` | 标准矩阵网格，行列自动交换优化 |
+| `parseProductFactors(group)` | 解析直积群因子 → `{colSize, rowSize, getCol, getRow}` |
+| `cayleyRingKeys(keys)` | Cayley环键排序（S3 Hamiltonian循环 / Z2ᵏ Gray码）|
+
+**类型定义（types.ts）：**
+```typescript
+type CayleyShape2D = 'grid' | 'circular' | 'spherical'
+
+// 按视图分配可用形状
+function getAvailableShapesForView(group, view) → CayleyShape2D[]
+// 按群性质判断默认形状
+function getDefaultShape2D(group) → CayleyShape2D
+// 检测因子键是否为循环序列
+function isCyclicFactorKeys(keys) → boolean
+```
+
+**节点位置优先级**（GroupCanvas.tsx）：
+1. 用户拖拽保存的位置（~1px容差）
+2. `gridPositions`（grid/spherical布局）
+3. `circlePositions`（circular兜底）
+
+**初始化居中修复**：`initializeNodePositions` 与运行时 `viewBoxSize` 使用相同的 force 标志（默认false），避免 order≥38 的群因 viewBox 空间不匹配导致节点偏移到画面外。
+
+### 5.8 直积群构建系统
+
+在左侧工具面板「直积群」区域，支持任意两群的直积 G×H：
+
+**三种构建模式：**
+| 模式 | 说明 |
+|------|------|
+| `cayley` | 基于Cayley表构建直积，支持任意群 |
+| `table` | 基于乘法表构建直积 |
+| `direct` | 直接群运算构建直积，最快 |
+
+**功能按钮：**
+- **进入/退出模式**：切换直积群面板显示
+- **源群(G) / 目标群(H)选择器**：从现有群列表选择，或「导入当前群」
+- **创建按钮**：执行直积运算，限制最大阶144
+- **存储当前群**：将当前加载的群加入直积群列表
+- **导入全部**：批量导入 V₄, Z₄×Z₂, Z₂³, Z₃×Z₃, Z₆×Z₂
+- **直积群列表**：管理保存的直积群（点击加载 / 删除）
+
+**持久化：** 直积群符号列表自动保存到 `localStorage`（key: `groupviz-dp-groups`），页面刷新后自动恢复。
+
+**核心实现（DirectProduct.ts）：**
+- `createDirectProduct(groupA, groupB)` — 创建任意 G×H 直积
+- Pipe分隔元素ID：`"a_id|b_id"`
+- 元素标签：`"(a_label, b_label)"` 
+- 紧凑符号构建：如 C₃×C₃ → `C_{3}^{2}`
 
 ---
 
@@ -393,6 +515,14 @@ symmetryActionElementId: string | null  // 当前选中的元素ID
 | 负角度轴不显示 | `angleRad > 0` 过滤掉负数旋转角 | 改为 `Math.abs(angleRad) > 0` |
 | WebGL线宽不支持 | `Line`组件线宽>1在多数平台无效 | 改用实体圆柱体+锥体mesh |
 | 棱交点误判 | 投影落在棱段内但距离远 | 仅用棱中点投影到轴线距离判断 |
+| 3D lattice分组不均衡 | 等大因子全部分到X轴 | `<` 改为 `<=` + id tie-breaker，等积时轮询分配 |
+| 循环因子键排序 | C_n因子n≥10时字典序错乱 | `ringOrder`/`cayleyRingKeys`/tokenMaps 全部改用数字感知排序 |
+| 大阶群共轭类无守卫 | getConjugacyClasses无order限制 | 添加 order>60 守卫，返回每个元素单独成类 |
+| 子群计算守卫过低 | findAllSubgroups 100→60 | 与 DP 群最大阶144同步，避免 pair-join 闭包组合爆炸 |
+| DP乘法无缓存 | 每次multiply都split+递归 | 添加 `multiplyCache`/`inverseCache` Map |
+| DP群3D可选形状错误 | `isGroupCyclic`误匹配`Z_{`前缀 | 还原isGroupCyclic→只匹配C，DP分支提至循环/二面之前优先判断 |
+| DP群默认3D形状 | 所有DP群统一lattice | 新增 `analyzeDPFactors()`：全循环→lattice，一循环→cylinder，无循环→torus |
+| 2D Cayley图初始化居中 | force=true写死，与运行时viewBox不一致 | 全部改为 `force=false`，force切换时重新计算位置 |
 
 ---
 
@@ -434,20 +564,22 @@ interface GroupContextState {
   selectedElements: Set<string>
   canvasTransform: { x: number; y: number; scale: number }
   operationHistory: string[]
-  nodePositions: Map<ViewMode, Map<string, { x: number; y: number }>>
+  nodePositions: NodePositionsMap    // Map<string, Map<string, { x: number; y: number }>>
   viewTabs: { id: string; view: ViewMode; label: string }[]
   activeTabId: string
   hoverElement: GroupElement | null
   isSimpleGroup: boolean
   showMaximalCycles: boolean
   hintMessage: string
-  forceShowLargeGroup: boolean
+  forceShowLargeGroupViews: Set<ViewMode>
   viewBoxSize: ViewBoxSize
   isPending: boolean                    // useTransition 过渡状态
   cayleyMultiplyType: MultiplyType      // 'right' | 'left'
   cayleyActions: GroupAction[]          // 已启用的群元素作用
   cayleyShape3D: Layout3D               // 当前3D形状
   cayleyAvailableShapes3D: Layout3D[]   // 可选3D形状
+  cayleyShape2D: CayleyShape2D           // 当前2D Cayley图形状
+  cayleyAvailableShapes2D: CayleyShape2D[] // 可选2D形状
   subsets: Subset[]                     // 保存的子集分析
   multiViewMode: boolean                // 多视图模式开关
   floatingViews: FloatingView[]         // 打开的浮动视图窗口
@@ -455,6 +587,18 @@ interface GroupContextState {
   symmetryRotateSpeed: number           // 旋转速度倍率
   symmetryActionElementId: string | null // 当前选中的对称性视图元素ID
   selfInverseElementId: string | null   // 自逆元素ID（2.5秒后自动清除）
+  cosetSubsetId: string | null          // 陪集展示的子群ID
+  cosetType: 'left' | 'right'           // 左/右陪集
+  showAllCosets: boolean                // 显示全部陪集
+  cosetData: CosetInfo | null
+  cosetElementMap: Map<string, number>
+  cosetHighlightSet: Set<number>
+  cosetColors: string[]
+  isDirectProductMode: boolean          // 直积群构建模式
+  directProductSource: Group | null
+  directProductTarget: Group | null
+  directProductCreationMode: 'cayley' | 'table' | 'direct'
+  directProductGroups: Group[]          // 已保存的直积群
 }
 ```
 
@@ -566,6 +710,74 @@ API：
 - GIF 设为无限循环 (`repeat: 0`)
 - 按钮在未勾选「显示元素操作」或未选中元素时禁用
 
+### 8.7 陪集可视化
+
+在画布和乘法表中显示陪集分解，验证 Lagrange 定理：
+
+**状态变量（GroupContext）：**
+- `cosetSubsetId`：当前用于陪集展示的子群子集 ID（null 表示未激活）
+- `cosetType`：左陪集 `'left'` 或右陪集 `'right'`
+- `showAllCosets`：是否显示全部陪集（false 时仅高亮选中元素所属陪集）
+- `cosetData`：Memorized `CosetInfo`，包含陪集索引、颜色、计数
+- `cosetElementMap`：元素 ID → 陪集编号映射
+- `cosetHighlightSet`：需要高亮的陪集编号集合
+- `cosetColors`：16 色彩色陪集调色盘
+
+**操作（LeftPanel）：**
+- `showCosetsForSubset(subsetId)`：选中子集 → 显示陪集分解
+- `hideCosets()`：关闭陪集显示
+- `setCosetType(type)`：切换左/右陪集
+- `toggleShowAllCosets()`：切换显示全部陪集 / 仅选中
+
+**乘法表可视化：** 同一陪集内的单元格以彩色矩形条纹高亮标记。
+
+### 8.8 欢迎页群预览弹窗
+
+点击欢迎页群记号（如 S₃, Dₙ, V₄ 等）弹出圆形预览弹窗，随机展示三种风格：
+
+| 风格 | 内容 |
+|------|------|
+| `ring` | 元素环形排列 + 群符号 + 阶数 |
+| `generators` | 标识元素（黄色中心点）+ 生成元箭头（彩色有向线段） |
+| `orders` | 元素按阶染色（共9种阶颜色映射）+ 群符号叠加 |
+
+**技术实现（WelcomePage.tsx）：**
+- `WelcomePreviewPopup` 组件：210px 固定 SVG 预览 + 倒水滴形指针
+- `randomStyle()` 随机选择预览风格
+- `computeElementOrder()` 计算每个元素的阶
+- `ORDER_COLORS` 映射：1(黄), 2(红), 3(青), 4(紫), 5(橙), 6(绿), 8(蓝), 10(金), 12(粉)
+- `createGroupBySymbol()` 工厂函数将 TeX 记号映射到群对象
+- 弹窗入场动画：`previewPopupIn` 弹性缓出（0.22s）
+- 再次点击同一记号或点击背景关闭弹窗
+
+### 8.9 赞助与项目链接
+
+**欢迎页右上角：**
+- GitHub 项目链接按钮（靛蓝色图标），链接到 `https://github.com/rrCathy/GroupViz`
+
+**欢迎页右下角：**
+- 赞助按钮（爱心图标），点击展开下拉菜单，含三条赞助渠道：
+  - **PayPal**：`https://paypal.me/rrCathy314`
+  - **Ko-fi**：`https://ko-fi.com/rrcathy314`
+  - **爱发电 (Afdian)**：`https://afdian.com/a/rrCathy314`
+- 各链接以彩色左边框标识
+
+### 8.10 群工厂与会话恢复
+
+`src/utils/groupFactory.ts` 提供从符号字符串重建群对象的能力：
+
+- **`createGroupFromSymbol(symbol)`** — 解析 TeX/Unicode 符号 → `Group | null`
+- 支持递归直积：识别 `\times` 或 `×` 分隔符
+- 支持幂记号：`C_{3}^{2}`、`Z_{2}^{3}` 等
+- 支持范围：C₁–C₃₀, D₃–D₁₂, S₂–S₆, A₃–A₅
+- 用于：会话恢复、直积群持久化
+
+**便捷工厂函数：**
+- `createS3()` — 对称群 S₃ 快速创建
+- `createZ6xZ2()` — Z₆×Z₂ 直积群（阶12）
+
+> 注：`createGroupFromSymbol` 支持 S₂–S₆，但 UI 群创建面板的下拉菜单上限为 S₅（阶120），欢迎页「按阶浏览」区域也仅显示 S₃–S₅。S₆ 仅通过工厂直接创建或会话恢复可用。
+
 ---
 
 ## 9. 开发规范
@@ -616,10 +828,14 @@ npm run preview
 
 ### 11.1 Cayley图定义（重构后）
 
-设G是一个群，C是任意群元素的集合。G的Cayley图是一个有向图：
+**标准Cayley图**：设G是一个群，S是G的生成集。G关于S的Cayley图是一个有向图：
 - 顶点：G的元素
-- 边：对每个c∈C，从g到g·c（右乘）或c·g（左乘）有有向边
-- 若g·c=h 且 h·c=g，则该边为无向边
+- 边：对每个s∈S，从g到g·s（右乘）或s·g（左乘）有有向边
+- 若g·s=h 且 h·s=g，则该边为无向边
+
+**广义Cayley图**（GroupViz使用）：设G是一个群，C是任意群元素的集合（不限于生成集）。G关于C的广义Cayley图定义同上，但C可以是G的任意子集。
+
+> 注：当C是G的生成集时，广义Cayley图退化为标准Cayley图。广义化允许用户探索不同元素子集定义的连通模式。
 
 ### 11.2 颜色编码
 
@@ -666,12 +882,23 @@ npm run preview
 - [x] 小群预计算注册表（阶<12）
 - [x] 视图导出：SVG/PNG/GIF
 - [x] 欢迎页群预览：点击群记号弹出倒水滴形圆窗，随机展示 ring/generators/orders 预览
+- [x] 深色/浅色主题切换
+- [x] 集合视图网格布局
+- [x] 会话保存与恢复
+- [x] 陪集分解可视化
+- [x] 2D Cayley图多形状布局（circular/grid/spherical）
+- [x] 直积群构建系统（任意两群直积 + localStorage持久化）
+- [x] 欢迎页赞助链接 + GitHub项目链接
+- [x] 3D Cayley图直积群智能形状选择（全循环→lattice/单循环→cylinder/无循环→torus）
+- [x] 大阶群性能守卫（子群/共轭类/中心计算cutoff降至60，DP乘法缓存）
+- [x] 直积群localStorage持久化修复
 
 ### 中期目标
 - [ ] S₄/A₄/A₅ 3D Cayley图形状重新设计
-- [ ] 陪集分解UI可视化
 - [ ] Lagrange定理验证动画
 - [ ] 群运算律验证动画（结合律、交换律）
+- [ ] 商群结构可视化
+- [ ] 群作用与轨道-稳定子可视化
 
 ### 长期目标
 - [ ] 任意有限群的输入与计算
@@ -682,5 +909,5 @@ npm run preview
 
 ---
 
-*文档版本: 3.2.1*
-*最后更新: 2026-04-29*
+*文档版本: 4.1.1*
+*最后更新: 2026-05-15*

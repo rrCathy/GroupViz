@@ -51,8 +51,8 @@ export function createDihedralGroup(n: number): Group {
   }]
   
   generators[0].inverse = {
-    name: 'r⁻¹',
-    symbol: 'r⁻¹',
+    name: 'r^{-1}',
+    symbol: 'r^{-1}',
     color: '#ff6b6b',
     apply: (el: GroupElement) => {
       const [r, s] = el.value
@@ -63,8 +63,8 @@ export function createDihedralGroup(n: number): Group {
   }
   
   generators[1].inverse = {
-    name: 's⁻¹',
-    symbol: 's⁻¹',
+    name: 's^{-1}',
+    symbol: 's^{-1}',
     color: '#4ecdc4',
     apply: applyS,
     inverse: generators[1]
@@ -100,15 +100,15 @@ export function createDihedralGroup(n: number): Group {
   }
 
   return {
-    name: `Dihedral Group D${n}`,
-    symbol: `D${n}`,
+    name: `Dihedral Group D_{${n}}`,
+    symbol: `D_{${n}}`,
     order: 2 * n,
     elements,
     generators,
     multiply,
     inverse,
     identity,
-    isAbelian: n === 2,
+    isAbelian: false,
     exponent: n % 2 === 0 ? n : 2 * n
   }
 }

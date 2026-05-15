@@ -40,10 +40,13 @@ export function getViewBoxSize(order: number, view: ViewMode, force = false): Vi
 
 export function isTooLarge(order: number, view: ViewMode): boolean {
   if (view === 'table') {
-    return order > 12
+    return order > 100
   }
   if (view === 'symmetry' || view === 'sublattice') {
     return order > 120
   }
-  return order > 30
+  if (view === '3d') {
+    return order > 100
+  }
+  return order > 100
 }

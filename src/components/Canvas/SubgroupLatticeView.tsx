@@ -169,7 +169,7 @@ export function SubgroupLatticeView() {
         y1={fromPos.y + nodeRy}
         x2={toPos.x}
         y2={toPos.y - nodeRy}
-        stroke={onPath ? '#ffd93d' : '#3a3a5a'}
+        stroke={onPath ? '#ffd93d' : 'var(--border-primary)'}
         strokeWidth={onPath ? 4 : 2}
         opacity={onPath ? 1 : 0.45}
       />

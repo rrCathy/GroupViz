@@ -39,8 +39,8 @@ export function createKleinFour(): Group {
   genB.inverse = genB
 
   return {
-    name: 'Klein Four-Group V₄',
-    symbol: 'V₄',
+    name: 'Klein Four-Group V_{4}',
+    symbol: 'V_{4}',
     order: 4,
     elements,
     generators: [genA, genB],
@@ -89,8 +89,8 @@ export function createQuaternion(): Group {
   genJ.inverse = genJ
 
   return {
-    name: 'Quaternion Group Q₈',
-    symbol: 'Q₈',
+    name: 'Quaternion Group Q_{8}',
+    symbol: 'Q_{8}',
     order: 8,
     elements,
     generators: [genI, genJ],

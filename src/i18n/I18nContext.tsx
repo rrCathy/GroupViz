@@ -7,6 +7,7 @@ interface I18nContextValue {
   t: (key: string, params?: Record<string, string | number>) => string
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const I18nContext = createContext<I18nContextValue>({
   lang: 'zh',
   setLang: () => { },
@@ -33,7 +34,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
     if (params) {
       for (const [k, v] of Object.entries(params)) {
-        text = text.replace(`{${k}}`, String(v))
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
       }
     }
     return text

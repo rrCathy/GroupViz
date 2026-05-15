@@ -1,15 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { I18nProvider } from './i18n/I18nContext'
 import { useTranslation } from './i18n/useTranslation'
+import { ThemeProvider, useTheme } from './theme/useTheme'
 import { GroupProvider } from './context/GroupContext'
 import { useGroup } from './context/useGroup'
-import { createS3 } from './core/groups/SymmetricGroup'
 import { LeftPanel } from './components/Panels/LeftPanel'
 import { RightPanel } from './components/Panels/RightPanel'
 import { GroupCanvas } from './components/Canvas/GroupCanvas'
+import { DirectProductView } from './components/Canvas/DirectProductView'
 import { FloatingViewWindow } from './components/Canvas/FloatingViewWindow'
 import { WelcomePage } from './components/WelcomePage'
+import { createGroupFromSymbol } from './utils/groupFactory'
+import { createS3 } from './core/groups/SymmetricGroup'
+import type { ViewMode } from './core/types'
 import './App.css'
+
+const STORAGE_KEY = 'groupviz-session'
+
+interface SavedSession {
+  symbol: string
+  view: ViewMode
+}
+
+function saveSession(symbol: string, view: ViewMode) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ symbol, view }))
+  } catch { /* ignore */ }
+}
+
+function loadSession(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed.symbol && parsed.view) return parsed
+  } catch { /* ignore */ }
+  return null
+}
 
 function LanguageToggle() {
   const { lang, setLang, t } = useTranslation()
@@ -24,12 +51,52 @@ function LanguageToggle() {
   )
 }
 
-function AppContent() {
-  const { setCurrentGroup, selectNextElement, selectPrevElement, floatingViews } = useGroup()
+function ThemeToggle({ className }: { className?: string }) {
+  const { theme, toggleTheme } = useTheme()
+  return (
+    <button
+      className={className || 'theme-toggle'}
+      onClick={toggleTheme}
+      title={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'}
+    >
+      {theme === 'dark' ? '\u2600' : '\u263E'}
+    </button>
+  )
+}
 
+function AppContent() {
+  const { currentGroup, currentView, setCurrentGroup, setCurrentView, selectNextElement, selectPrevElement, floatingViews, isDirectProductMode } = useGroup()
+  const restoreViewRef = useRef<ViewMode | null>(null)
+
+  // Auto-save session whenever group or view changes
   useEffect(() => {
+    if (currentGroup) {
+      saveSession(currentGroup.symbol, currentView)
+    }
+  }, [currentGroup, currentView])
+
+  // Restore session on first mount
+  useEffect(() => {
+    const saved = loadSession()
+    if (saved) {
+      const group = createGroupFromSymbol(saved.symbol)
+      if (group) {
+        restoreViewRef.current = saved.view
+        setCurrentGroup(group)
+        return
+      }
+    }
+    // No saved session — load default group
     setCurrentGroup(createS3())
   }, [setCurrentGroup])
+
+  // Restore view after group is set
+  useEffect(() => {
+    if (currentGroup && restoreViewRef.current) {
+      setCurrentView(restoreViewRef.current)
+      restoreViewRef.current = null
+    }
+  }, [currentGroup, setCurrentView])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -53,7 +120,7 @@ function AppContent() {
       </aside>
 
       <main className="main-canvas">
-        <GroupCanvas />
+        {isDirectProductMode ? <DirectProductView /> : <GroupCanvas />}
       </main>
 
       <aside className="right-sidebar">
@@ -76,15 +143,26 @@ function App() {
   const [showMain, setShowMain] = useState(false)
   const { t } = useTranslation()
 
+  const handleEnter = useCallback(() => setShowMain(true), [])
+  const handleBackToWelcome = useCallback(() => {
+    try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
+    setShowMain(false)
+  }, [])
+
   return (
     <>
-      {!showMain && <WelcomePage onEnter={() => setShowMain(true)} />}
+      {!showMain && <WelcomePage onEnter={handleEnter} />}
       {showMain && (
         <GroupProvider>
           <div className="app">
             <header className="app-header">
-              <h1>{t('app.header')}</h1>
-              <LanguageToggle />
+              <h1 onClick={handleBackToWelcome}>
+                {t('app.header')}
+              </h1>
+              <div className="header-right-group">
+                <ThemeToggle />
+                <LanguageToggle />
+              </div>
             </header>
             <AppContent />
           </div>
@@ -97,7 +175,9 @@ function App() {
 export default function AppWrapper() {
   return (
     <I18nProvider>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </I18nProvider>
   )
 }

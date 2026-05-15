@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { GroupContext } from '../../context/GroupContext'
 import type { GroupContextType } from '../../context/GroupContext'
 import { useGroup } from '../../context/useGroup'
@@ -9,13 +9,83 @@ import { CycleView } from './CycleView'
 import { TableView } from './TableView'
 import { Cayley3DView } from './Cayley3DView'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
-import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
+import { computeCayleyActionEdges, ringOrder } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
 
 function CayleyGraphViewLocal() {
   const { currentGroup, selectedElements, selectElement, setHoverElement, getNodePosition, setNodePosition, canvasTransform, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets } = useGroup()
   const { t } = useTranslation()
+
+  const nodeRadius = 28
+  const cx = currentGroup ? viewBoxSize.width / 2 : 0
+  const cy = currentGroup ? viewBoxSize.height / 2 : 0
+  const graphRadius = currentGroup ? Math.min(viewBoxSize.width * 0.3, 180 + currentGroup.order * 10) : 0
+  const n = currentGroup ? currentGroup.order : 0
+
+  const circlePositions = useMemo(() => {
+    const m = new Map<number, { x: number; y: number }>()
+    if (!currentGroup) return m
+    for (let i = 0; i < n; i++) {
+      const angle = (i * 2 * Math.PI / n) - Math.PI / 2
+      m.set(i, {
+        x: cx + graphRadius * Math.cos(angle),
+        y: cy + graphRadius * Math.sin(angle)
+      })
+    }
+    return m
+  }, [cx, cy, graphRadius, n, currentGroup])
+
+  const indexMap = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!currentGroup) return m
+    const isPipe = currentGroup.elements.length > 0 && currentGroup.elements[0]?.id.includes('|')
+    if (isPipe) {
+      const numFactors = currentGroup.elements[0].id.split('|').length
+      const factorOrders: Map<string, number>[] = []
+      for (let col = 0; col < numFactors; col++) {
+        const keys = Array.from(new Set(currentGroup.elements.map(el => {
+          const parts = el.id.split('|')
+          return parts[col] ?? ''
+        })))
+        const ordered = ringOrder(keys)
+        factorOrders[col] = new Map(ordered.map((k, i) => [k, i]))
+      }
+      const sorted = [...currentGroup.elements].sort((a, b) => {
+        const pa = a.id.split('|')
+        const pb = b.id.split('|')
+        for (let col = 0; col < numFactors; col++) {
+          const ai = factorOrders[col].get(pa[col] ?? '') ?? 0
+          const bi = factorOrders[col].get(pb[col] ?? '') ?? 0
+          if (ai !== bi) return ai - bi
+        }
+        return 0
+      })
+      sorted.forEach((el, i) => m.set(el.id, i))
+    } else {
+      const keys = currentGroup.elements.map(e => e.id)
+      const order = ringOrder(keys)
+      order.forEach((key, i) => m.set(key, i))
+    }
+    return m
+  }, [currentGroup])
+
+  const edges = useMemo(() => currentGroup ? computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType) : [], [currentGroup, cayleyActions, cayleyMultiplyType])
+
+  const isLargeGraph = n > 100
+
+  const subsetDetailMap = useMemo(() => {
+    const m = new Map<string, typeof subsets[0]>()
+    subsets.forEach(s => s.elementIds.forEach(id => { if (!m.has(id)) m.set(id, s) }))
+    return m
+  }, [subsets])
+
+  const enabledActions = cayleyActions.filter(a => a.enabled)
+  const enabledActionIndexMap = useMemo(() => {
+    const m = new Map<string, number>()
+    enabledActions.forEach((a, idx) => m.set(a.elementId, idx))
+    return m
+  }, [enabledActions])
 
   if (!currentGroup) {
     return (
@@ -25,59 +95,28 @@ function CayleyGraphViewLocal() {
     )
   }
 
-  const nodeRadius = 28
-  const cx = viewBoxSize.width / 2
-  const cy = viewBoxSize.height / 2
-  const graphRadius = Math.min(viewBoxSize.width * 0.3, 180 + currentGroup.order * 10)
-
-  const getNodePos = (elId: string, index: number) => {
-    if ((currentGroup.symbol === 'S3' || currentGroup.symbol === 'S\u2083') && currentGroup.order === 6) {
-      const hexagonOrder = [
-        [1,2,3], [2,1,3], [3,1,2], [3,2,1], [2,3,1], [1,3,2]
-      ]
-      const el = currentGroup.elements.find(e => e.id === elId)
-      if (el) {
-        const perm = el.value
-        const hexIndex = hexagonOrder.findIndex(h =>
-          h.length === perm.length && h.every((v, i) => v === perm[i])
-        )
-        if (hexIndex !== -1) {
-          const angle = (hexIndex * 2 * Math.PI / 6) - Math.PI / 2
-          const defaultPos = {
-            x: cx + graphRadius * Math.cos(angle),
-            y: cy + graphRadius * Math.sin(angle)
-          }
-          const saved = getNodePosition(elId)
-          if (saved && (Math.abs(saved.x - defaultPos.x) > 0.5 || Math.abs(saved.y - defaultPos.y) > 0.5)) {
-            return saved
-          }
-          return defaultPos
-        }
-      }
-    }
-
+  const getNodePos = (elId: string) => {
+    const idx = indexMap.get(elId)
+    if (idx === undefined) return { x: cx, y: cy }
+    const defPos = circlePositions.get(idx)!
     const saved = getNodePosition(elId)
-    if (saved) return saved
-
-    const angle = (index * 2 * Math.PI / currentGroup.order) - Math.PI / 2
-    return {
-      x: cx + graphRadius * Math.cos(angle),
-      y: cy + graphRadius * Math.sin(angle)
+    if (saved && (Math.abs(saved.x - defPos.x) > 1 || Math.abs(saved.y - defPos.y) > 1)) {
+      return saved
     }
+    return defPos
   }
 
-  const edges = computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType)
-
   const nodePositionsCache = new Map<string, { x: number; y: number }>()
-  currentGroup.elements.forEach((el, i) => {
-    nodePositionsCache.set(el.id, getNodePos(el.id, i))
+  currentGroup.elements.forEach((el) => {
+    nodePositionsCache.set(el.id, getNodePos(el.id))
   })
 
-  const enabledActions = cayleyActions.filter(a => a.enabled)
-
   return (
-    <svg viewBox={`0 0 ${viewBoxSize.width} ${viewBoxSize.height}`} style={{ width: '100%', height: '100%', userSelect: 'none', background: '#0f0f1a' }}>
+    <svg viewBox={`0 0 ${viewBoxSize.width} ${viewBoxSize.height}`} style={{ width: '100%', height: '100%', userSelect: 'none', background: 'var(--bg-primary)' }}>
       <defs>
+        <filter id="node-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000000" floodOpacity="0.25" />
+        </filter>
         {enabledActions.map((action, idx) => (
           <marker key={idx} id={`fv-arrow-${idx}`} markerWidth={10} markerHeight={10} refX={9} refY={3} orient="auto" markerUnits="strokeWidth">
             <path d="M0,0 L0,6 L9,3 z" fill={action.color} />
@@ -87,8 +126,8 @@ function CayleyGraphViewLocal() {
       
       <g transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale})`}>
         {edges.map((edge: CayleyEdgeData) => {
-          const fromPos = nodePositionsCache.get(edge.fromId)!
-          const toPos = nodePositionsCache.get(edge.toId)!
+          const fromPos = nodePositionsCache.get(edge.fromId)
+          const toPos = nodePositionsCache.get(edge.toId)
           if (!fromPos || !toPos) return null
 
           const dx = toPos.x - fromPos.x
@@ -97,14 +136,14 @@ function CayleyGraphViewLocal() {
           
           const isHighlighted = selectedElements.has(edge.fromId) || selectedElements.has(edge.toId)
           const baseColor = edge.color
-          const color = isHighlighted ? baseColor : `${baseColor}66`
+          const color = isHighlighted ? baseColor : `${baseColor}99`
 
           if (edge.isSelfLoop) {
             const scx = fromPos.x
             const scy = fromPos.y - nodeRadius - 20
             return (
               <g key={`${edge.fromId}-${edge.actionElementId}`}>
-                <ellipse cx={scx} cy={scy} rx={14} ry={12} fill="none" stroke={color} strokeWidth={isHighlighted ? 3 : 2} />
+                <ellipse cx={scx} cy={scy} rx={14} ry={12} fill="none" stroke={color} strokeWidth={isHighlighted ? 3.5 : 2.5} />
                 <polygon points={`${scx-5},${scy-2} ${scx+5},${scy-2} ${scx},${scy-14}`} fill={baseColor} />
               </g>
             )
@@ -124,7 +163,7 @@ function CayleyGraphViewLocal() {
           const endX = toPos.x - (dx / dist) * nodeRadius
           const endY = toPos.y - (dy / dist) * nodeRadius
           
-          const actionIdx = cayleyActions.findIndex(a => a.elementId === edge.actionElementId)
+          const actionIdx = enabledActionIndexMap.get(edge.actionElementId) ?? 0
           const markerId = `fv-arrow-${actionIdx}`
 
           return (
@@ -132,25 +171,25 @@ function CayleyGraphViewLocal() {
               key={`${edge.fromId}-${edge.toId}-${edge.actionElementId}`}
               d={`M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`}
               stroke={color}
-              strokeWidth={isHighlighted ? 3 : 2}
+              strokeWidth={isHighlighted ? 3.5 : 2.5}
               fill="none"
               markerEnd={edge.isBidirectional ? undefined : `url(#${markerId})`}
-              opacity={0.7}
+              opacity={0.9}
             />
           )
         })}
         
-        {currentGroup.elements.map((el, i) => {
-          const pos = getNodePos(el.id, i)
+        {currentGroup.elements.map((el) => {
+          const pos = getNodePos(el.id)
           const isSelected = selectedElements.has(el.id)
-          const parentSubset = subsets.find(s => s.elementIds.includes(el.id))
+          const parentSubset = subsetDetailMap.get(el.id)
           
-          let fillColor = '#1a1a2e'
-          let strokeColor = 'white'
-          let strokeWidth = 2
+          let fillColor = 'var(--node-fill)'
+          let strokeColor = 'var(--node-stroke)'
+          let strokeWidth = 2.5
           
           if (isSelected) {
-            fillColor = '#2d2d4a'
+            fillColor = 'var(--node-fill-selected)'
             strokeColor = '#ffd93d'
             strokeWidth = 3
           } else if (parentSubset) {
@@ -180,7 +219,7 @@ function CayleyGraphViewLocal() {
                   
                   const startX2 = (e.clientX - svgRect.left) * scaleX
                   const startY2 = (e.clientY - svgRect.top) * scaleY
-                  const startPos = getNodePos(el.id, i)
+                  const startPos = getNodePos(el.id)
                   const initialOffsetX = startPos.x
                   const initialOffsetY = startPos.y
                   
@@ -210,6 +249,7 @@ function CayleyGraphViewLocal() {
                 fill={fillColor}
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
+                filter="url(#node-shadow)"
               />
               {parentSubset && (
                 <circle
@@ -218,23 +258,25 @@ function CayleyGraphViewLocal() {
                   stroke="none"
                 />
               )}
-              <foreignObject
-                x={-nodeRadius}
-                y={-16}
-                width={nodeRadius * 2}
-                height={32}
-                style={{ pointerEvents: 'none', userSelect: 'none' }}
-              >
-                <div
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    width: '100%', height: '100%', color: 'white', fontSize: '15px'
-                  }}
-                  dangerouslySetInnerHTML={{
-                    __html: renderTex(texify(el.label))
-                  }}
-                />
-              </foreignObject>
+              {(!isLargeGraph || isSelected || selectedElements.size === 0) && (
+                <foreignObject
+                  x={-nodeRadius}
+                  y={-16}
+                  width={nodeRadius * 2}
+                  height={32}
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                       width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLargeGraph ? '10px' : '15px'
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: renderTex(texify(el.label))
+                    }}
+                  />
+                </foreignObject>
+              )}
             </g>
           )
         })}
@@ -252,7 +294,7 @@ function TableZoomable({ children }: { children: React.ReactNode }) {
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault()
     const factor = e.deltaY > 0 ? 0.9 : 1.1
-    setTableZoom(prev => Math.max(0.25, Math.min(5, prev * factor)))
+    setTableZoom(prev => Math.max(0.25, Math.min(10, prev * factor)))
   }, [])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -310,7 +352,7 @@ function SvgPanZoom({ children }: { children: React.ReactNode }) {
     const mouseX = (e.clientX - rect.left) * scaleX
     const mouseY = (e.clientY - rect.top) * scaleY
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
-    const newScale = Math.max(0.25, Math.min(4, canvasTransform.scale * scaleFactor))
+    const newScale = Math.max(0.25, Math.min(8, canvasTransform.scale * scaleFactor))
     const scaleChange = newScale / canvasTransform.scale
     const newX = mouseX - (mouseX - canvasTransform.x) * scaleChange
     const newY = mouseY - (mouseY - canvasTransform.y) * scaleChange
@@ -483,9 +525,9 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
           flexDirection: 'column',
           borderRadius: '8px',
           overflow: 'hidden',
-          border: '1px solid #333',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-          background: '#111',
+          border: '1px solid var(--border-primary)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+          background: 'var(--bg-primary)',
           cursor: isDragging ? 'grabbing' : 'default',
         }}
         onMouseDown={bringToFront}
@@ -500,11 +542,11 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '4px 10px',
-            background: '#1a1a2e',
-            borderBottom: '1px solid #333',
+            background: 'var(--bg-interactive)',
+            borderBottom: '1px solid var(--border-primary)',
             cursor: 'grab',
             fontSize: '13px',
-            color: '#ccc',
+            color: 'var(--text-secondary)',
             userSelect: 'none',
             flexShrink: 0,
           }}
@@ -516,7 +558,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
             style={{
               background: 'none',
               border: 'none',
-              color: '#888',
+              color: 'var(--text-dim)',
               cursor: 'pointer',
               fontSize: '16px',
               padding: '0 4px',
@@ -524,7 +566,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
               transition: 'color 0.2s',
             }}
             onMouseEnter={e => ((e.target as HTMLElement).style.color = '#f44')}
-            onMouseLeave={e => ((e.target as HTMLElement).style.color = '#888')}
+            onMouseLeave={e => ((e.target as HTMLElement).style.color = 'var(--text-dim)')}
           >
             ×
           </button>

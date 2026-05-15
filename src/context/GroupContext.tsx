@@ -1,14 +1,25 @@
-import { createContext, useState, useCallback, useMemo, useTransition, useRef, useEffect, type ReactNode } from 'react'
-import type { Group, GroupElement, ViewMode, CanvasTransform, NodePosition, SubgroupCheckResult, Subset, FloatingView, MultiplyType, GroupAction, Layout3D } from '../core/types'
-import { COLOR_PALETTE, SUBSET_COLORS, getAvailableShapes3D, getDefaultLayout3D } from '../core/types'
+import { createContext, useState, useCallback, useMemo, useTransition, useRef, type ReactNode } from 'react'
+import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResult, Subset, FloatingView, MultiplyType, GroupAction, Layout3D } from '../core/types'
+import { isGroupDirectProduct, getDefaultShape2D, type CayleyShape2D } from '../core/types'
 import { getViewBoxSize, type ViewBoxSize } from '../core/viewBox'
-import { isSimpleGroup as checkSimpleGroup } from '../core/algebra/subgroups'
-import { forceLayout, planarCycleLayout, computeCycleSubgroups, computeMaximalCycles } from '../core/algebra/forceLayout'
+import { isSimpleGroup as checkSimpleGroup, type CosetInfo } from '../core/algebra/subgroups'
+import { forceLayout, forceLayoutAsync, planarCycleLayout, computeCycleSubgroups, computeMaximalCycles, directProductGridLayout2D, fibonacci2DLayout } from '../core/algebra/forceLayout'
 import { useTranslation } from '../i18n/useTranslation'
 
-let subsetIdCounter = 0
-
-type NodePositionsMap = Map<string, Map<string, { x: number; y: number }>>
+import { initializeNodePositions, type NodePositionsMap } from './positionUtils'
+import {
+  getInitialCayleyActions, getCayleyShapeConfig, getSpecialCayleyActions,
+  toggleCayleyActionReducer, addAllCayleyActionsHelper
+} from './cayleyActions'
+import {
+  computeCosetData, computeCosetElementMap, computeCosetColors,
+  computeCosetHighlightSet, createSubset
+} from './cosetActions'
+import {
+  loadDirectProductGroupsFromStorage,
+  saveDirectProductGroupsToStorage,
+  executeDirectProductHelper
+} from './directProductActions'
 
 interface GroupContextState {
   currentGroup: Group | null
@@ -23,13 +34,15 @@ interface GroupContextState {
   isSimpleGroup: boolean
   showMaximalCycles: boolean
   hintMessage: string
-  forceShowLargeGroup: boolean
+  forceShowLargeGroupViews: Set<ViewMode>
   viewBoxSize: ViewBoxSize
   isPending: boolean
   cayleyMultiplyType: MultiplyType
   cayleyActions: GroupAction[]
   cayleyShape3D: Layout3D
   cayleyAvailableShapes3D: Layout3D[]
+  cayleyShape2D: CayleyShape2D
+  cayleyAvailableShapes2D: CayleyShape2D[]
   subsets: Subset[]
   multiViewMode: boolean
   floatingViews: FloatingView[]
@@ -37,6 +50,18 @@ interface GroupContextState {
   symmetryRotateSpeed: number
   symmetryActionElementId: string | null
   selfInverseElementId: string | null
+  cosetSubsetId: string | null
+  cosetType: 'left' | 'right'
+  showAllCosets: boolean
+  cosetData: CosetInfo | null
+  cosetElementMap: Map<string, number>
+  cosetHighlightSet: Set<number>
+  cosetColors: string[]
+  isDirectProductMode: boolean
+  directProductSource: Group | null
+  directProductTarget: Group | null
+  directProductCreationMode: 'cayley' | 'table' | 'direct'
+  directProductGroups: Group[]
 }
 
 interface GroupContextActions {
@@ -64,10 +89,11 @@ interface GroupContextActions {
   selectPrevElement: () => void
   setShowMaximalCycles: (show: boolean) => void
   setHintMessage: (msg: string) => void
-  setForceShowLargeGroup: (show: boolean) => void
+  setForceShowLargeGroupForView: (view: ViewMode, allow: boolean) => void
   setCayleyMultiplyType: (type: MultiplyType) => void
   setCayleyActions: (actions: GroupAction[]) => void
   setCayleyShape3D: (shape: Layout3D) => void
+  setCayleyShape2D: (shape: CayleyShape2D) => void
   toggleCayleyAction: (elementId: string) => void
   addAllCayleyActions: () => void
   clearCayleyActions: () => void
@@ -81,58 +107,23 @@ interface GroupContextActions {
   setSymmetryRotateSpeed: (speed: number) => void
   setSymmetryActionElementId: (id: string | null) => void
   setSelfInverseElementId: (id: string | null) => void
+  showCosetsForSubset: (subsetId: string) => void
+  hideCosets: () => void
+  setCosetType: (type: 'left' | 'right') => void
+  toggleShowAllCosets: () => void
+  toggleDirectProductMode: () => void
+  setDirectProductSource: (group: Group | null) => void
+  setDirectProductTarget: (group: Group | null) => void
+  setDirectProductCreationMode: (mode: 'cayley' | 'table' | 'direct') => void
+  executeDirectProduct: () => Group | null
+  storeDirectProductGroup: (group: Group) => void
+  removeDirectProductGroup: (symbol: string) => void
+  loadDirectProductGroup: (symbol: string) => void
 }
 
 export type GroupContextType = GroupContextState & GroupContextActions
 
 const GroupContext = createContext<GroupContextType | null>(null)
-
-function initializeNodePositions(group: Group, view: ViewMode): Map<string, { x: number; y: number }> {
-  const positions = new Map<string, { x: number; y: number }>()
-  const n = group.elements.length
-  
-  const vbs = getViewBoxSize(n, view, true)
-  const centerX = vbs.width / 2
-  const centerY = vbs.height / 2
-  
-  let radius: number
-  if (view === 'cycle') {
-    radius = Math.min(vbs.width * 0.28, 50 + n * 20)
-  } else {
-    radius = Math.min(vbs.width * 0.3, 150 + n * 18)
-  }
-  
-  let ordered: GroupElement[]
-  if (view === 'cayley' && n === 6 && (group.symbol === 'S3' || group.symbol === 'S\u2083')) {
-    // 六边形循环顺序：e → (12) → (132) → (13) → (123) → (23) → e
-    const idOrder = ['1,2,3', '2,1,3', '3,1,2', '3,2,1', '2,3,1', '1,3,2']
-    const map = new Map(group.elements.map(e => [e.id, e]))
-    ordered = idOrder.map(id => map.get(id)!).filter(Boolean)
-  } else {
-    ordered = group.elements
-  }
-  
-  ordered.forEach((element, i) => {
-    const angle = (i * 2 * Math.PI / n) - Math.PI / 2
-    positions.set(element.id, {
-      x: centerX + radius * Math.cos(angle),
-      y: centerY + radius * Math.sin(angle)
-    })
-  })
-  
-  return positions
-}
-
-function getInitialCayleyActions(group: Group): GroupAction[] {
-  return group.generators.map((gen, i) => {
-    const targetEl = gen.apply(group.identity)
-    return {
-      elementId: targetEl?.id || group.elements[0].id,
-      enabled: true,
-      color: COLOR_PALETTE[i % COLOR_PALETTE.length]
-    }
-  })
-}
 
 export function GroupProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
@@ -146,22 +137,34 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     }
     return t(keyMap[view])
   }, [t])
+
+  // Core state
   const [currentGroup, setCurrentGroupState] = useState<Group | null>(null)
   const [currentView, setCurrentViewState] = useState<ViewMode>('set')
   const [selectedElements, setSelectedElements] = useState<Set<string>>(new Set())
   const [canvasTransform, setCanvasTransformState] = useState<CanvasTransform>({ x: 0, y: 0, scale: 1 })
   const [operationHistory, setOperationHistory] = useState<string[]>([])
   const [nodePositions, setNodePositions] = useState<NodePositionsMap>(new Map())
-  const [viewTabs, setViewTabs] = useState<{ id: string; view: ViewMode; label: string }[]>(() => [])
+  const [viewTabsBase, setViewTabsBase] = useState<{ id: string; view: ViewMode }[]>(() => [{ id: 'tab-1', view: 'set' }])
+  const viewTabs = useMemo(() =>
+    viewTabsBase.map(tab => ({ ...tab, label: getViewLabel(tab.view) })),
+    [viewTabsBase, getViewLabel]
+  )
   const [activeTabId, setActiveTabId] = useState('tab-1')
   const [hoverElement, setHoverElementState] = useState<GroupElement | null>(null)
   const [showMaximalCycles, setShowMaximalCycles] = useState(false)
   const [hintMessage, setHintMessage] = useState('')
-  const [forceShowLargeGroup, setForceShowLargeGroupState] = useState(false)
+  const [forceShowLargeGroupViews, setForceShowLargeGroupViewsState] = useState<Set<ViewMode>>(new Set())
+
+  // Cayley state
   const [cayleyMultiplyType, setCayleyMultiplyTypeState] = useState<MultiplyType>('right')
   const [cayleyActions, setCayleyActionsState] = useState<GroupAction[]>([])
   const [cayleyShape3D, setCayleyShape3DState] = useState<Layout3D>('spherical')
   const [cayleyAvailableShapes3D, setCayleyAvailableShapes3D] = useState<Layout3D[]>(['spherical', 'circular'])
+  const [cayleyShape2D, setCayleyShape2DState] = useState<CayleyShape2D>('circular')
+  const [cayleyAvailableShapes2D, setCayleyAvailableShapes2D] = useState<CayleyShape2D[]>(['circular', 'grid'])
+
+  // Subset/Coset state
   const [subsets, setSubsets] = useState<Subset[]>([])
   const [multiViewMode, setMultiViewMode] = useState(false)
   const [floatingViews, setFloatingViews] = useState<FloatingView[]>([])
@@ -170,29 +173,38 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   const [symmetryActionElementId, setSymmetryActionElementId] = useState<string | null>(null)
   const [selfInverseElementId, setSelfInverseElementId] = useState<string | null>(null)
   const selfInverseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [cosetSubsetId, setCosetSubsetId] = useState<string | null>(null)
+  const [cosetType, setCosetTypeState] = useState<'left' | 'right'>('left')
+  const [showAllCosets, setShowAllCosets] = useState(false)
 
-  useEffect(() => {
-    setViewTabs(prev => {
-      if (prev.length === 0) {
-        return [{ id: 'tab-1', view: 'set' as ViewMode, label: getViewLabel('set') }]
-      }
-      return prev.map(tab => ({ ...tab, label: getViewLabel(tab.view) }))
-    })
-  }, [getViewLabel])
+  // Direct product state
+  const [isDirectProductMode, setIsDirectProductMode] = useState(false)
+  const [directProductSource, setDirectProductSource] = useState<Group | null>(null)
+  const [directProductTarget, setDirectProductTarget] = useState<Group | null>(null)
+  const [directProductCreationMode, setDirectProductCreationMode] = useState<'cayley' | 'table' | 'direct'>('cayley')
+  const [directProductGroups, setDirectProductGroups] = useState<Group[]>(loadDirectProductGroupsFromStorage)
 
+  // Derived state
   const viewBoxSize = useMemo(() => {
     if (!currentGroup) return { width: 800, height: 560 }
-    return getViewBoxSize(currentGroup.order, currentView, forceShowLargeGroup)
-  }, [currentGroup, currentView, forceShowLargeGroup])
+    const force = forceShowLargeGroupViews.has(currentView)
+    return getViewBoxSize(currentGroup.order, currentView, force)
+  }, [currentGroup, currentView, forceShowLargeGroupViews])
 
   const isSimpleGroup = useMemo(() => {
     if (!currentGroup) return false
     return checkSimpleGroup(currentGroup)
   }, [currentGroup])
 
+  const cosetData = useMemo(() => computeCosetData(currentGroup, cosetSubsetId, subsets), [currentGroup, subsets, cosetSubsetId])
+  const cosetElementMap = useMemo(() => computeCosetElementMap(cosetData, cosetType), [cosetData, cosetType])
+  const cosetColors = useMemo(() => computeCosetColors(cosetData, cosetType), [cosetData, cosetType])
+  const cosetHighlightSet = useMemo(() => computeCosetHighlightSet(cosetData, cosetType, showAllCosets, selectedElements, cosetElementMap), [cosetData, cosetType, showAllCosets, selectedElements, cosetElementMap])
+
+  // Actions
   const addOperationHistory = useCallback((op: string) => {
     setOperationHistory(prev => [...prev.slice(-19), op])
-  }, [setOperationHistory])
+  }, [])
 
   const setCurrentGroup = useCallback((group: Group) => {
     startTransition(() => {
@@ -200,65 +212,46 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       setSelectedElements(new Set())
       setOperationHistory([])
       setCanvasTransformState({ x: 0, y: 0, scale: 1 })
-      setForceShowLargeGroupState(false)
+      setForceShowLargeGroupViewsState(new Set())
       setHintMessage(t('hint.groupSelected', { name: group.name, order: group.order }).replace(group.name, `<span class="hint-highlight">${group.name}</span>`))
       setSelfInverseElementId(null)
-      
+      setCosetSubsetId(null)
+      setShowAllCosets(false)
+
+      // Initialize Cayley settings
       const actions = getInitialCayleyActions(group)
       setCayleyActionsState(actions)
       setCayleyMultiplyTypeState('right')
-      const defaultShape = getDefaultLayout3D(group)
-      setCayleyShape3DState(defaultShape)
-      setCayleyAvailableShapes3D(getAvailableShapes3D(group))
 
-      if (group.symbol === 'S4') {
-        if (defaultShape === 'rhombicuboctahedron') {
-          setCayleyActionsState([
-            { elementId: '4,1,2,3', enabled: true, color: COLOR_PALETTE[0] },
-            { elementId: '3,1,2,4', enabled: true, color: COLOR_PALETTE[1] },
-          ])
-        } else if (defaultShape === 'truncatedOctahedron2') {
-          setCayleyActionsState([
-            { elementId: '2,3,4,1', enabled: true, color: COLOR_PALETTE[0] },
-            { elementId: '2,1,3,4', enabled: true, color: COLOR_PALETTE[1] },
-          ])
-        } else if (defaultShape === 'truncatedOctahedron3') {
-          setCayleyActionsState([
-            { elementId: '2,1,3,4', enabled: true, color: COLOR_PALETTE[0] },
-            { elementId: '1,3,2,4', enabled: true, color: COLOR_PALETTE[1] },
-            { elementId: '1,2,4,3', enabled: true, color: COLOR_PALETTE[2] },
-          ])
-        }
+      const shapeConfig = getCayleyShapeConfig(group)
+      setCayleyShape3DState(shapeConfig.defaultShape3D)
+      setCayleyAvailableShapes3D(shapeConfig.availableShapes3D)
+      setCayleyAvailableShapes2D(shapeConfig.availableShapes2D)
+      setCayleyShape2DState(shapeConfig.defaultShape2D)
+
+      // Apply special Cayley actions for S4/A5
+      const specialActions = getSpecialCayleyActions(group, shapeConfig.defaultShape3D)
+      if (specialActions) {
+        setCayleyActionsState(specialActions)
       }
-      if (group.symbol === 'A5') {
-        if (defaultShape === 'truncatedIcosahedron') {
-          setCayleyActionsState([
-            { elementId: '2,3,4,5,1', enabled: true, color: COLOR_PALETTE[0] },
-            { elementId: '2,1,4,3,5', enabled: true, color: COLOR_PALETTE[1] },
-          ])
-        } else if (defaultShape === 'truncatedDodecahedron') {
-          setCayleyActionsState([
-            { elementId: '2,3,1,4,5', enabled: true, color: COLOR_PALETTE[0] },
-            { elementId: '1,5,4,3,2', enabled: true, color: COLOR_PALETTE[1] },
-          ])
-        }
-      }
-      
+
+      // Initialize node positions
       const positions: NodePositionsMap = new Map()
       ;(['set', 'cayley', 'cycle', 'table'] as ViewMode[]).forEach(view => {
-        positions.set(view, initializeNodePositions(group, view))
+        const shape2D = view === 'cayley' ? getDefaultShape2D(group) : undefined
+        positions.set(view, initializeNodePositions(group, view, shape2D))
       })
       setNodePositions(positions)
-      
+
       setSubsets([])
       addOperationHistory(t('op.loadGroup', { name: group.name, order: group.order }))
     })
-  }, [addOperationHistory, startTransition])
+  }, [addOperationHistory, startTransition, t])
 
   const setCurrentView = useCallback((view: ViewMode) => {
     setCurrentViewState(view)
     setCanvasTransformState({ x: 0, y: 0, scale: 1 })
-    
+
     if (view === 'cayley' && currentGroup) {
       const count = cayleyActions.filter(a => a.enabled).length
       setHintMessage(t('hint.cayley', { count, type: cayleyMultiplyType === 'right' ? t('cayley3d.multiplyRight') : t('cayley3d.multiplyLeft') }))
@@ -274,9 +267,9 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     } else {
       setHintMessage(t('hint.switchedTo', { viewLabel: getViewLabel(view) }).replace(getViewLabel(view), `<span class="hint-highlight">${getViewLabel(view)}</span>`))
     }
-    
+
     addOperationHistory(t('op.switchView', { view: getViewLabel(view) }))
-  }, [addOperationHistory, currentGroup, cayleyActions, cayleyMultiplyType, cayleyShape3D])
+  }, [addOperationHistory, currentGroup, cayleyActions, cayleyMultiplyType, cayleyShape3D, t, getViewLabel])
 
   const selectElement = useCallback((id: string, additive = false) => {
     if (symmetryShowAction) {
@@ -287,7 +280,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       })
       if (currentGroup) {
         const el = currentGroup.elements.find(e => e.id === id)
-        if (el)         setHintMessage(t('hint.symmetryAction', { label: el.label }).replace(el.label, `<span class="hint-highlight">${el.label}</span>`))
+        if (el) setHintMessage(t('hint.symmetryAction', { label: el.label }).replace(el.label, `<span class="hint-highlight">${el.label}</span>`))
       }
       return
     }
@@ -301,21 +294,19 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         }
         return next
       } else {
-        if (prev.has(id)) {
-          return new Set()
-        }
+        if (prev.has(id)) return new Set()
         return new Set([id])
       }
     })
-    
+
     if (!additive && currentGroup) {
       const el = currentGroup.elements.find(e => e.id === id)
-      if (el)       setHintMessage(t('hint.elementSelected', { label: el.label }).replace(el.label, `<span class="hint-highlight">${el.label}</span>`))
+      if (el) setHintMessage(t('hint.elementSelected', { label: el.label }).replace(el.label, `<span class="hint-highlight">${el.label}</span>`))
     }
     if (id !== selfInverseElementId) {
       setSelfInverseElementId(null)
     }
-  }, [currentGroup, symmetryShowAction, setSymmetryActionElementId, setHintMessage, selfInverseElementId])
+  }, [currentGroup, symmetryShowAction, setSymmetryActionElementId, setHintMessage, selfInverseElementId, t])
 
   const clearSelection = useCallback(() => {
     setSelectedElements(new Set())
@@ -329,8 +320,6 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   const resetCanvasTransform = useCallback(() => {
     setCanvasTransformState({ x: 0, y: 0, scale: 1 })
   }, [])
-
-
 
   const setNodePosition = useCallback((id: string, x: number, y: number) => {
     setNodePositions(prev => {
@@ -355,22 +344,29 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     return nodePositions.get(currentView)?.get(id)
   }, [nodePositions, currentView])
 
-  const resetNodePositions = useCallback(() => {
+  const resetNodePositions = useCallback((shape2D?: CayleyShape2D) => {
     if (!currentGroup) return
+    const effectiveShape = shape2D ?? (currentView === 'cayley' ? cayleyShape2D : undefined)
     setNodePositions(prev => {
       const next = new Map(prev)
-      next.set(currentView, initializeNodePositions(currentGroup, currentView))
+      next.set(currentView, initializeNodePositions(currentGroup, currentView, effectiveShape))
       return next
     })
-  }, [currentGroup, currentView])
+  }, [currentGroup, currentView, cayleyShape2D])
 
   const runForceLayout = useCallback(() => {
     if (!currentGroup) return
 
-    const vbs = getViewBoxSize(currentGroup.order, currentView, true)
-    const existingPositions = nodePositions.get(currentView)
+    const vbs = getViewBoxSize(currentGroup.order, currentView, forceShowLargeGroupViews.has(currentView))
+    let existingPositions = nodePositions.get(currentView)
 
-    let positions: Map<string, NodePosition>
+    if (isGroupDirectProduct(currentGroup) && currentView === 'cayley') {
+      const gridPos = directProductGridLayout2D(currentGroup, vbs.width, vbs.height)
+      if (gridPos && (!existingPositions || existingPositions.size === 0)) {
+        existingPositions = gridPos
+      }
+    }
+
     if (currentView === 'cycle') {
       const cycleSubgroups = computeCycleSubgroups(currentGroup)
       let cycles = cycleSubgroups
@@ -384,14 +380,20 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         cycles = computeMaximalCycles(cycles)
       }
 
-      positions = planarCycleLayout(
+      const positions = planarCycleLayout(
         currentGroup.elements,
         cycles,
         vbs.width,
         vbs.height,
         { initialPositions: existingPositions }
       )
+      batchSetNodePositions(positions)
+      addOperationHistory(t('op.layout', { view: getViewLabel(currentView) }))
+      setHintMessage(t('hint.layoutDone'))
     } else {
+      const isLarge = currentGroup.order > 30
+      if (isLarge) setHintMessage(t('hint.layoutComputing'))
+
       const enabledActions = cayleyActions.filter(a => a.enabled)
       const edges = currentGroup.elements.reduce<{ source: string; target: string }[]>((acc, el) => {
         for (const action of enabledActions) {
@@ -408,43 +410,55 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         }
         return acc
       }, [])
-      positions = forceLayout(
-        currentGroup.elements,
-        edges,
-        vbs.width,
-        vbs.height,
-        { initialPositions: existingPositions }
-      )
-    }
 
-    batchSetNodePositions(positions)
-    addOperationHistory(t('op.layout', { view: getViewLabel(currentView) }))
-    setHintMessage(t('hint.layoutDone'))
-  }, [currentGroup, currentView, showMaximalCycles, nodePositions, batchSetNodePositions, addOperationHistory, setHintMessage, cayleyActions, cayleyMultiplyType])
+      if (isLarge) {
+        forceLayoutAsync(
+          currentGroup.elements,
+          edges,
+          vbs.width,
+          vbs.height,
+          { initialPositions: existingPositions }
+        ).then(positions => {
+          batchSetNodePositions(positions)
+          addOperationHistory(t('op.layout', { view: getViewLabel(currentView) }))
+          setHintMessage(t('hint.layoutDone'))
+        })
+      } else {
+        const positions = forceLayout(
+          currentGroup.elements,
+          edges,
+          vbs.width,
+          vbs.height,
+          { initialPositions: existingPositions }
+        )
+        batchSetNodePositions(positions)
+        addOperationHistory(t('op.layout', { view: getViewLabel(currentView) }))
+        setHintMessage(t('hint.layoutDone'))
+      }
+    }
+  }, [currentGroup, currentView, showMaximalCycles, nodePositions, batchSetNodePositions, addOperationHistory, setHintMessage, cayleyActions, cayleyMultiplyType, forceShowLargeGroupViews, t, getViewLabel])
 
   const addViewTab = useCallback((view: ViewMode) => {
     const id = `tab-${Date.now()}`
-    setViewTabs(prev => [...prev, { id, view, label: getViewLabel(view) }])
+    setViewTabsBase(prev => [...prev, { id, view }])
     setActiveTabId(id)
     setCurrentViewState(view)
   }, [])
 
   const closeViewTab = useCallback((id: string) => {
-    if (viewTabs.length <= 1) return
-    setViewTabs(prev => prev.filter(t => t.id !== id))
+    if (viewTabsBase.length <= 1) return
+    setViewTabsBase(prev => prev.filter(t => t.id !== id))
     if (activeTabId === id) {
-      const remaining = viewTabs.filter(t => t.id !== id)
+      const remaining = viewTabsBase.filter(t => t.id !== id)
       setActiveTabId(remaining[0].id)
       setCurrentViewState(remaining[0].view)
     }
-  }, [viewTabs, activeTabId])
+  }, [viewTabsBase, activeTabId])
 
   const setActiveTab = useCallback((id: string) => {
     setActiveTabId(id)
     const tab = viewTabs.find(t => t.id === id)
-    if (tab) {
-      setCurrentViewState(tab.view)
-    }
+    if (tab) setCurrentViewState(tab.view)
   }, [viewTabs])
 
   const setHoverElement = useCallback((el: GroupElement | null) => {
@@ -454,23 +468,23 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   const checkSubsetProperty = useCallback((elements: string[]): SubgroupCheckResult => {
     const result: SubgroupCheckResult = {
       type: 'subset',
-      label: t('subset.normal'),
+      label: t('subset.plain'),
       color: '#888888'
     }
-    
+
     if (!currentGroup || elements.length === 0) return result
-    
+
     const selectedSet = new Set(elements)
-    
+
     let isClosed = true
     for (const a of elements) {
       const elA = currentGroup.elements.find(e => e.id === a)
       if (!elA) continue
-      
+
       for (const b of elements) {
         const elB = currentGroup.elements.find(e => e.id === b)
         if (!elB) continue
-        
+
         const product = currentGroup.multiply(elA, elB)
         if (!selectedSet.has(product.id)) {
           isClosed = false
@@ -479,17 +493,17 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       }
       if (!isClosed) break
     }
-    
+
     if (isClosed) {
       result.type = 'subgroup'
       result.label = t('subset.subgroup')
       result.color = '#4ecdc4'
-      
+
       let isNormal = true
       for (const a of elements) {
         const elA = currentGroup.elements.find(e => e.id === a)
         if (!elA) continue
-        
+
         for (const elG of currentGroup.elements) {
           const conj = currentGroup.multiply(currentGroup.multiply(elG, elA), currentGroup.inverse(elG))
           if (!selectedSet.has(conj.id)) {
@@ -499,17 +513,17 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         }
         if (!isNormal) break
       }
-      
+
       if (isNormal) {
         result.type = 'normal-subgroup'
         result.label = t('subset.normalSubgroup')
         result.color = '#9b59b6'
       }
     }
-    
+
     addOperationHistory(t('op.checkSubset', { label: result.label }))
     return result
-  }, [currentGroup, addOperationHistory])
+  }, [currentGroup, addOperationHistory, t])
 
   const computeInverse = useCallback(() => {
     if (selfInverseTimerRef.current) {
@@ -522,11 +536,11 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       addOperationHistory(t('op.inverseRequest'))
       return
     }
-    
+
     const id = Array.from(selectedElements)[0]
     const element = currentGroup?.elements.find(e => e.id === id)
     if (!element || !currentGroup) return
-    
+
     const inv = currentGroup.inverse(element)
     addOperationHistory(t('op.inverseDone', { label: element.label, result: inv.label }))
     selectElement(inv.id, true)
@@ -538,7 +552,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         selfInverseTimerRef.current = null
       }, 2500)
     }
-  }, [currentGroup, selectedElements, addOperationHistory, selectElement])
+  }, [currentGroup, selectedElements, addOperationHistory, selectElement, t])
 
   const clearCanvas = useCallback(() => {
     clearSelection()
@@ -546,15 +560,14 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     setNodePositions(new Map())
     addOperationHistory(t('op.clearCanvas'))
     setSelfInverseElementId(null)
-  }, [clearSelection, resetCanvasTransform, addOperationHistory])
+  }, [clearSelection, resetCanvasTransform, addOperationHistory, t])
 
   const generateSubgroups = useCallback(() => {
     addOperationHistory(t('op.generateSubgroup'))
-  }, [addOperationHistory])
+  }, [addOperationHistory, t])
 
   const selectNextElement = useCallback(() => {
     if (!currentGroup || selectedElements.size === 0) return
-    
     const currentId = Array.from(selectedElements)[0]
     const currentIdx = currentGroup.elements.findIndex(el => el.id === currentId)
     const nextIdx = (currentIdx + 1) % currentGroup.elements.length
@@ -563,54 +576,52 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
   const selectPrevElement = useCallback(() => {
     if (!currentGroup || selectedElements.size === 0) return
-    
     const currentId = Array.from(selectedElements)[0]
     const currentIdx = currentGroup.elements.findIndex(el => el.id === currentId)
     const prevIdx = (currentIdx - 1 + currentGroup.elements.length) % currentGroup.elements.length
     setSelectedElements(new Set([currentGroup.elements[prevIdx].id]))
   }, [currentGroup, selectedElements])
 
-  const setForceShowLargeGroup = useCallback((show: boolean) => {
-    setForceShowLargeGroupState(show)
+  const setForceShowLargeGroupForView = useCallback((view: ViewMode, allow: boolean) => {
+    setForceShowLargeGroupViewsState(prev => {
+      const next = new Set(prev)
+      if (allow) next.add(view)
+      else next.delete(view)
+      return next
+    })
     setCanvasTransformState({ x: 0, y: 0, scale: 1 })
-  }, [])
+    if (currentGroup) {
+      setNodePositions(prev => {
+        const next = new Map(prev)
+        next.set(currentView, initializeNodePositions(currentGroup, currentView,
+          currentView === 'cayley' ? cayleyShape2D : undefined))
+        return next
+      })
+    }
+  }, [currentGroup, currentView, cayleyShape2D])
 
   const setCayleyMultiplyType = useCallback((type: MultiplyType) => {
     setCayleyMultiplyTypeState(type)
     const label = type === 'right' ? t('cayley3d.multiplyRight') : t('cayley3d.multiplyLeft')
     setHintMessage(t('hint.cayleyMultiply', { label }).replace(label, `<span class="hint-highlight">${label}</span>`))
     addOperationHistory(t('op.setCayleyMultiply', { label }))
-  }, [addOperationHistory])
+  }, [addOperationHistory, t])
 
   const toggleCayleyAction = useCallback((elementId: string) => {
-    setCayleyActionsState(prev => {
-      const idx = prev.findIndex(a => a.elementId === elementId)
-      if (idx === -1) {
-        const colorIdx = prev.length
-        return [...prev, { elementId, enabled: true, color: COLOR_PALETTE[colorIdx % COLOR_PALETTE.length] }]
-      }
-      return prev.map((a, i) => i === idx ? { ...a, enabled: !a.enabled } : a)
-    })
+    setCayleyActionsState(prev => toggleCayleyActionReducer(prev, elementId))
   }, [])
 
   const addAllCayleyActions = useCallback(() => {
     if (!currentGroup) return
-    const actions: GroupAction[] = currentGroup.elements.map((el, i) => {
-      const existing = cayleyActions.find(a => a.elementId === el.id)
-      return {
-        elementId: el.id,
-        enabled: existing?.enabled ?? (currentGroup.generators.some(g => g.apply(currentGroup.identity).id === el.id)),
-        color: existing?.color ?? COLOR_PALETTE[i % COLOR_PALETTE.length]
-      }
-    })
+    const actions = addAllCayleyActionsHelper(currentGroup, currentView, cayleyShape3D, cayleyActions)
     setCayleyActionsState(actions)
-  }, [currentGroup, cayleyActions])
+  }, [currentGroup, cayleyActions, currentView, cayleyShape3D])
 
   const clearCayleyActions = useCallback(() => {
     setCayleyActionsState([])
     setHintMessage(t('hint.cayleyCleared'))
     addOperationHistory(t('op.clearCayley'))
-  }, [addOperationHistory])
+  }, [addOperationHistory, t])
 
   const setCayleyActions = useCallback((actions: GroupAction[]) => {
     setCayleyActionsState(actions)
@@ -621,75 +632,160 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     setHintMessage(t('hint.cayleyShape', { shape }).replace(shape, `<span class="hint-highlight">${shape}</span>`))
     addOperationHistory(t('op.setShape', { shape }))
 
-    if (currentGroup?.symbol === 'S4') {
-      if (shape === 'rhombicuboctahedron') {
-        setCayleyActionsState([
-          { elementId: '4,1,2,3', enabled: true, color: COLOR_PALETTE[0] },
-          { elementId: '3,1,2,4', enabled: true, color: COLOR_PALETTE[1] },
-        ])
-      } else if (shape === 'truncatedOctahedron2') {
-        setCayleyActionsState([
-          { elementId: '2,3,4,1', enabled: true, color: COLOR_PALETTE[0] },
-          { elementId: '2,1,3,4', enabled: true, color: COLOR_PALETTE[1] },
-        ])
-      } else if (shape === 'truncatedOctahedron3') {
-        setCayleyActionsState([
-          { elementId: '2,1,3,4', enabled: true, color: COLOR_PALETTE[0] },
-          { elementId: '1,3,2,4', enabled: true, color: COLOR_PALETTE[1] },
-          { elementId: '1,2,4,3', enabled: true, color: COLOR_PALETTE[2] },
-        ])
-      } else if (shape === 'truncatedCube') {
-        setCayleyActionsState([
-          { elementId: '2,1,3,4', enabled: true, color: COLOR_PALETTE[0] },
-          { elementId: '1,3,4,2', enabled: true, color: COLOR_PALETTE[1] },
-        ])
+    if (currentGroup) {
+      const specialActions = getSpecialCayleyActions(currentGroup, shape)
+      if (specialActions) {
+        setCayleyActionsState(specialActions)
       }
     }
-    if (currentGroup?.symbol === 'A5') {
-      if (shape === 'truncatedIcosahedron') {
-        setCayleyActionsState([
-          { elementId: '2,3,4,5,1', enabled: true, color: COLOR_PALETTE[0] },
-          { elementId: '2,1,4,3,5', enabled: true, color: COLOR_PALETTE[1] },
-        ])
-      } else if (shape === 'truncatedDodecahedron') {
-        setCayleyActionsState([
-          { elementId: '2,3,1,4,5', enabled: true, color: COLOR_PALETTE[0] },
-          { elementId: '1,5,4,3,2', enabled: true, color: COLOR_PALETTE[1] },
-        ])
+  }, [addOperationHistory, currentGroup, t])
+
+  const setCayleyShape2D = useCallback((shape: CayleyShape2D) => {
+    setCayleyShape2DState(shape)
+    if (currentGroup && currentView === 'cayley') {
+      const vbs = getViewBoxSize(currentGroup.order, 'cayley', forceShowLargeGroupViews.has('cayley'))
+      if (shape === 'grid') {
+        const pos = directProductGridLayout2D(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else if (shape === 'spherical') {
+        const pos = fibonacci2DLayout(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else {
+        resetNodePositions(shape)
       }
     }
-  }, [addOperationHistory, currentGroup])
+  }, [currentGroup, currentView, forceShowLargeGroupViews, batchSetNodePositions, resetNodePositions])
 
   const saveSubset = useCallback(() => {
     if (!currentGroup || selectedElements.size === 0 || symmetryShowAction) return
     const elementIds = Array.from(selectedElements)
     const result = checkSubsetProperty(elementIds)
-    const idx = subsets.length
-    subsetIdCounter++
-    const newSubset: Subset = {
-      id: `subset-${subsetIdCounter}`,
-      elementIds,
-      label: result.label,
-      color: SUBSET_COLORS[idx % SUBSET_COLORS.length],
-      isSubgroup: result.type === 'subgroup' || result.type === 'normal-subgroup',
-      isNormalSubgroup: result.type === 'normal-subgroup',
-      type: result.type,
-    }
+    const newSubset = createSubset(elementIds, result, subsets.length)
     setSubsets(prev => [...prev, newSubset])
     clearSelection()
     addOperationHistory(t('op.saveSubset', { label: result.label, n: elementIds.length }))
     setHintMessage(t('hint.subsetSaved', { label: result.label, n: elementIds.length }).replace(result.label, `<span class="hint-highlight">${result.label}</span>`))
-  }, [currentGroup, selectedElements, subsets, checkSubsetProperty, clearSelection, addOperationHistory, setHintMessage, symmetryShowAction])
+  }, [currentGroup, selectedElements, subsets, checkSubsetProperty, clearSelection, addOperationHistory, setHintMessage, symmetryShowAction, t])
 
   const removeSubset = useCallback((id: string) => {
     setSubsets(prev => prev.filter(s => s.id !== id))
+    if (cosetSubsetId === id) {
+      setCosetSubsetId(null)
+      setShowAllCosets(false)
+    }
     addOperationHistory(t('op.removeSubset'))
-  }, [addOperationHistory])
+  }, [addOperationHistory, cosetSubsetId, t])
 
   const clearAllSubsets = useCallback(() => {
     setSubsets([])
+    setCosetSubsetId(null)
+    setShowAllCosets(false)
     addOperationHistory(t('op.clearSubsets'))
-  }, [addOperationHistory])
+  }, [addOperationHistory, t])
+
+  const showCosetsForSubset = useCallback((subsetId: string) => {
+    if (cosetSubsetId === subsetId) {
+      setCosetSubsetId(null)
+      setShowAllCosets(false)
+      setHintMessage(t('hint.cosetHide'))
+      addOperationHistory(t('op.cosetHide'))
+      return
+    }
+    setCosetSubsetId(subsetId)
+    setShowAllCosets(false)
+    const subset = subsets.find(s => s.id === subsetId)
+    if (subset) {
+      setHintMessage(t('hint.cosetShow', { label: subset.label, order: subset.elementIds.length }).replace(subset.label, `<span class="hint-highlight">${subset.label}</span>`))
+      addOperationHistory(t('op.cosetShow', { label: subset.label }))
+    }
+  }, [cosetSubsetId, subsets, addOperationHistory, setHintMessage, t])
+
+  const hideCosets = useCallback(() => {
+    setCosetSubsetId(null)
+    setShowAllCosets(false)
+    setHintMessage(t('hint.cosetHide'))
+    addOperationHistory(t('op.cosetHide'))
+  }, [addOperationHistory, setHintMessage, t])
+
+  const setCosetType = useCallback((type: 'left' | 'right') => {
+    setCosetTypeState(type)
+    const label = type === 'left' ? t('coset.left') : t('coset.right')
+    setHintMessage(t('hint.cosetType', { label }).replace(label, `<span class="hint-highlight">${label}</span>`))
+    addOperationHistory(t('op.cosetType', { label }))
+  }, [addOperationHistory, setHintMessage, t])
+
+  const toggleShowAllCosets = useCallback(() => {
+    setShowAllCosets(prev => {
+      if (!prev) {
+        setHintMessage(t('hint.cosetAll'))
+        addOperationHistory(t('op.cosetAll'))
+      } else {
+        setHintMessage(t('hint.cosetSelect'))
+        addOperationHistory(t('op.cosetSelect'))
+      }
+      return !prev
+    })
+  }, [addOperationHistory, setHintMessage, t])
+
+  const toggleDirectProductMode = useCallback(() => {
+    setIsDirectProductMode(prev => {
+      if (prev) {
+        setDirectProductSource(null)
+        setDirectProductTarget(null)
+        return false
+      }
+      return true
+    })
+  }, [])
+
+  const setDirectProductSourceWrapped = useCallback((group: Group | null) => {
+    setDirectProductSource(group)
+  }, [])
+
+  const setDirectProductTargetWrapped = useCallback((group: Group | null) => {
+    setDirectProductTarget(group)
+  }, [])
+
+  const setDirectProductCreationModeWrapped = useCallback((mode: 'cayley' | 'table' | 'direct') => {
+    setDirectProductCreationMode(mode)
+  }, [])
+
+  const executeDirectProduct = useCallback((): Group | null => {
+    const { group, error } = executeDirectProductHelper(directProductSource, directProductTarget)
+    if (error) {
+      setHintMessage(t(error, { n: directProductSource!.order * directProductTarget!.order }))
+    }
+    return group
+  }, [directProductSource, directProductTarget, setHintMessage, t])
+
+  const storeDirectProductGroup = useCallback((group: Group) => {
+    setDirectProductGroups(prev => {
+      const exists = prev.find(g => g.symbol === group.symbol)
+      const next = exists ? prev.map(g => g.symbol === group.symbol ? group : g) : [...prev, group]
+      saveDirectProductGroupsToStorage(next)
+      return next
+    })
+    setHintMessage(t('dp.storeHint', { symbol: group.symbol }).replace(group.symbol, `<span class="hint-highlight">${group.symbol}</span>`))
+  }, [setHintMessage, t])
+
+  const removeDirectProductGroup = useCallback((symbol: string) => {
+    setDirectProductGroups(prev => {
+      const next = prev.filter(g => g.symbol !== symbol)
+      saveDirectProductGroupsToStorage(next)
+      return next
+    })
+    setHintMessage(t('dp.removeHint', { symbol }).replace(symbol, `<span class="hint-highlight">${symbol}</span>`))
+  }, [setHintMessage, t])
+
+  const loadDirectProductGroup = useCallback((symbol: string) => {
+    const group = directProductGroups.find(g => g.symbol === symbol)
+    if (group) {
+      setCurrentGroup(group)
+      setIsDirectProductMode(false)
+      setHintMessage(t('dp.created', { symbol: group.symbol, order: group.order }).replace(group.symbol, `<span class="hint-highlight">${group.symbol}</span>`))
+      addOperationHistory(t('dp.created', { symbol: group.symbol, order: group.order }))
+    }
+  }, [directProductGroups, setCurrentGroup, setHintMessage, addOperationHistory, t])
 
   const toggleMultiViewMode = useCallback(() => {
     setMultiViewMode(prev => {
@@ -698,25 +794,20 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         setHintMessage(t('hint.multiViewOff'))
         addOperationHistory(t('op.multiViewOff'))
         return false
-      } else {
-        setHintMessage(t('hint.multiViewOn'))
-        addOperationHistory(t('op.multiViewOn'))
-        return true
       }
+      setHintMessage(t('hint.multiViewOn'))
+      addOperationHistory(t('op.multiViewOn'))
+      return true
     })
-  }, [addOperationHistory, setHintMessage])
+  }, [addOperationHistory, setHintMessage, t])
 
   const openFloatingView = useCallback((view: ViewMode) => {
     if (!multiViewMode || !currentGroup) return
     const id = `fv-${Date.now()}`
-    const newFv: FloatingView = {
-      id,
-      view,
-      title: getViewLabel(view) || view,
-    }
+    const newFv: FloatingView = { id, view, title: getViewLabel(view) || view }
     setFloatingViews(prev => [...prev, newFv])
     addOperationHistory(t('op.openFloatView', { viewLabel: getViewLabel(view) }))
-  }, [multiViewMode, currentGroup, addOperationHistory])
+  }, [multiViewMode, currentGroup, addOperationHistory, t, getViewLabel])
 
   const closeFloatingView = useCallback((id: string) => {
     setFloatingViews(prev => prev.filter(fv => fv.id !== id))
@@ -730,7 +821,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     } else {
       setHintMessage(t('symmetry.selectHint'))
     }
-  }, [setHintMessage])
+  }, [setHintMessage, t])
 
   const setSymmetryRotateSpeedWrapped = useCallback((speed: number) => {
     setSymmetryRotateSpeed(speed)
@@ -741,73 +832,30 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value: GroupContextType = {
-    currentGroup,
-    currentView,
-    selectedElements,
-    canvasTransform,
-    operationHistory,
-    nodePositions,
-    viewTabs,
-    activeTabId,
-    hoverElement,
-    isSimpleGroup,
-    showMaximalCycles,
-    hintMessage,
-    forceShowLargeGroup,
-    viewBoxSize,
-    isPending,
-    subsets,
-    setCurrentGroup,
-    setCurrentView,
-    selectElement,
-    clearSelection,
-    setCanvasTransform,
-    resetCanvasTransform,
-    addOperationHistory,
-    setNodePosition,
-    batchSetNodePositions,
-    getNodePosition,
-    addViewTab,
-    closeViewTab,
-    setActiveTab,
-    setHoverElement,
-    checkSubsetProperty,
-    computeInverse,
-    clearCanvas,
-    generateSubgroups,
-    selectNextElement,
-    selectPrevElement,
-    resetNodePositions,
-    runForceLayout,
-    setShowMaximalCycles,
-    setHintMessage,
-    setForceShowLargeGroup,
-    cayleyMultiplyType,
-    cayleyActions,
-    cayleyShape3D,
-    cayleyAvailableShapes3D,
-    setCayleyMultiplyType,
-    setCayleyActions,
-    setCayleyShape3D,
-    toggleCayleyAction,
-    addAllCayleyActions,
-    clearCayleyActions,
-    multiViewMode,
-    floatingViews,
-    toggleMultiViewMode,
-    openFloatingView,
-    closeFloatingView,
-    symmetryShowAction,
-    symmetryRotateSpeed,
-    symmetryActionElementId,
-    selfInverseElementId,
-    setSymmetryShowAction: setSymmetryShowActionWrapped,
-    setSymmetryRotateSpeed: setSymmetryRotateSpeedWrapped,
-    setSymmetryActionElementId: setSymmetryActionElementIdWrapped,
-    setSelfInverseElementId,
-    saveSubset,
-    removeSubset,
-    clearAllSubsets,
+    currentGroup, currentView, selectedElements, canvasTransform, operationHistory,
+    nodePositions, viewTabs, activeTabId, hoverElement, isSimpleGroup, showMaximalCycles,
+    hintMessage, forceShowLargeGroupViews, viewBoxSize, isPending,
+    cayleyMultiplyType, cayleyActions, cayleyShape3D, cayleyAvailableShapes3D,
+    cayleyShape2D, cayleyAvailableShapes2D,
+    subsets, multiViewMode, floatingViews,
+    symmetryShowAction, symmetryRotateSpeed, symmetryActionElementId, selfInverseElementId,
+    cosetSubsetId, cosetType, showAllCosets, cosetData, cosetElementMap, cosetHighlightSet, cosetColors,
+    isDirectProductMode, directProductSource, directProductTarget, directProductCreationMode, directProductGroups,
+    setCurrentGroup, setCurrentView, selectElement, clearSelection, setCanvasTransform, resetCanvasTransform,
+    addOperationHistory, setNodePosition, batchSetNodePositions, getNodePosition,
+    addViewTab, closeViewTab, setActiveTab, setHoverElement, checkSubsetProperty, computeInverse,
+    clearCanvas, generateSubgroups, selectNextElement, selectPrevElement, resetNodePositions, runForceLayout,
+    setShowMaximalCycles, setHintMessage, setForceShowLargeGroupForView,
+    setCayleyMultiplyType, setCayleyActions, setCayleyShape3D, setCayleyShape2D,
+    toggleCayleyAction, addAllCayleyActions, clearCayleyActions,
+    toggleMultiViewMode, openFloatingView, closeFloatingView,
+    setSymmetryShowAction: setSymmetryShowActionWrapped, setSymmetryRotateSpeed: setSymmetryRotateSpeedWrapped,
+    setSymmetryActionElementId: setSymmetryActionElementIdWrapped, setSelfInverseElementId,
+    saveSubset, removeSubset, clearAllSubsets,
+    showCosetsForSubset, hideCosets, setCosetType, toggleShowAllCosets,
+    toggleDirectProductMode, setDirectProductSource: setDirectProductSourceWrapped,
+    setDirectProductTarget: setDirectProductTargetWrapped, setDirectProductCreationMode: setDirectProductCreationModeWrapped,
+    executeDirectProduct, storeDirectProductGroup, removeDirectProductGroup, loadDirectProductGroup,
   }
 
   return (

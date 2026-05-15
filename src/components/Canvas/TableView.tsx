@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { isTooLarge } from '../../core/viewBox'
@@ -16,14 +16,35 @@ export function TableView() {
     selectElement,
     setHoverElement,
     viewBoxSize,
-    forceShowLargeGroup,
-    setForceShowLargeGroup,
+    forceShowLargeGroupViews,
+    setForceShowLargeGroupForView,
     subsets,
+    cosetElementMap,
+    cosetColors,
+    cosetData,
+    cosetType,
+    cosetSubsetId,
+    showAllCosets,
   } = useGroup()
   const { t } = useTranslation()
+  const isLargeTable = currentGroup ? currentGroup.order > 36 : false
+
+  const idToIdx = useMemo(() => {
+    if (!currentGroup) return new Map<string, number>()
+    const m = new Map<string, number>()
+    currentGroup.elements.forEach((el, i) => m.set(el.id, i))
+    return m
+  }, [currentGroup])
+
+  const labelToIdx = useMemo(() => {
+    if (!currentGroup) return new Map<string, number>()
+    const m = new Map<string, number>()
+    currentGroup.elements.forEach((el, i) => m.set(el.label, i))
+    return m
+  }, [currentGroup])
 
   const table = useMemo(() => {
-    if (!currentGroup) return null
+    if (!currentGroup || isLargeTable) return null
     const { elements, multiply } = currentGroup
     const n = elements.length
     const tableData: { label: string; id: string }[][] = []
@@ -36,23 +57,40 @@ export function TableView() {
       tableData.push(row)
     }
     return tableData
+  }, [currentGroup, isLargeTable])
+
+  const getCell = useCallback((rowIdx: number, colIdx: number) => {
+    if (!currentGroup) return null
+    return currentGroup.multiply(currentGroup.elements[colIdx], currentGroup.elements[rowIdx])
   }, [currentGroup])
 
+  const visibleIndices = useMemo(() => {
+    if (!currentGroup) return [] as number[]
+    if (!isLargeTable) return currentGroup.elements.map((_, i) => i)
+    const indices = new Set<number>([0])
+    for (const id of selectedElements) {
+      const idx = idToIdx.get(id)
+      if (idx !== undefined && indices.size < 12) indices.add(idx)
+    }
+    const step = Math.max(1, Math.ceil(currentGroup.order / 12))
+    for (let i = 0; i < currentGroup.order; i += step) indices.add(i)
+    return [...indices].sort((a, b) => a - b).slice(0, 20)
+  }, [currentGroup, isLargeTable, selectedElements, idToIdx])
+
   const getElementColor = (label: string): string => {
-    if (!currentGroup) return '#ccc'
-    const idx = currentGroup.elements.findIndex(e => e.label === label)
+    const idx = labelToIdx.get(label)
+    if (idx === undefined) return '#ccc'
     return elementColors[idx % elementColors.length]
   }
 
   const selectedIndices = useMemo(() => {
-    if (!currentGroup) return new Set<number>()
     const set = new Set<number>()
     selectedElements.forEach(id => {
-      const idx = currentGroup.elements.findIndex(e => e.id === id)
-      if (idx !== -1) set.add(idx)
+      const idx = idToIdx.get(id)
+      if (idx !== undefined) set.add(idx)
     })
     return set
-  }, [currentGroup, selectedElements])
+  }, [selectedElements, idToIdx])
 
   const subgroupIndexSets = useMemo(() => {
     if (!currentGroup) return [] as { color: string; indices: Set<number> }[]
@@ -61,33 +99,31 @@ export function TableView() {
       .map(s => {
         const indices = new Set<number>()
         s.elementIds.forEach(elId => {
-          const idx = currentGroup.elements.findIndex(e => e.id === elId)
-          if (idx !== -1) indices.add(idx)
+          const idx = idToIdx.get(elId)
+          if (idx !== undefined) indices.add(idx)
         })
         return { color: s.color, indices }
       })
-  }, [currentGroup, subsets])
+  }, [subsets, idToIdx, currentGroup])
 
   const nonSubgroupSubsetIndices = useMemo(() => {
-    if (!currentGroup) return new Set<number>()
     const set = new Set<number>()
     for (const subset of subsets) {
       if (subset.isSubgroup) continue
       for (const elId of subset.elementIds) {
-        const idx = currentGroup.elements.findIndex(e => e.id === elId)
-        if (idx !== -1) set.add(idx)
+        const idx = idToIdx.get(elId)
+        if (idx !== undefined) set.add(idx)
       }
     }
     return set
-  }, [currentGroup, subsets])
+  }, [subsets, idToIdx])
 
   const subsetElemMap = useMemo(() => {
-    if (!currentGroup) return new Map<number, { color: string; isSubgroup: boolean }>()
     const map = new Map<number, { color: string; isSubgroup: boolean }>()
     for (const subset of subsets) {
       for (const elId of subset.elementIds) {
-        const idx = currentGroup.elements.findIndex(e => e.id === elId)
-        if (idx !== -1) {
+        const idx = idToIdx.get(elId)
+        if (idx !== undefined) {
           if (!map.has(idx)) {
             map.set(idx, { color: subset.color, isSubgroup: subset.isSubgroup })
           }
@@ -95,7 +131,7 @@ export function TableView() {
       }
     }
     return map
-  }, [currentGroup, subsets])
+  }, [subsets, idToIdx])
 
   const subgroupCellColors = useMemo(() => {
     if (!currentGroup) return new Map<string, string>()
@@ -109,6 +145,42 @@ export function TableView() {
     }
     return map
   }, [subgroupIndexSets, currentGroup])
+
+  const cosetSubgroupIndices = useMemo(() => {
+    const set = new Set<number>()
+    if (!currentGroup || !cosetData) return set
+    for (const el of cosetData.subgroup.elements) {
+      const idx = idToIdx.get(el.id)
+      if (idx !== undefined) set.add(idx)
+    }
+    return set
+  }, [currentGroup, cosetData, idToIdx])
+
+  const cosetActiveRowIds = useMemo(() => {
+    if (!currentGroup || !cosetData || !cosetSubsetId) return new Set<string>()
+    if (showAllCosets) {
+      const reps = new Set<string>()
+      const cosets = cosetType === 'left' ? cosetData.leftCosets : cosetData.rightCosets
+      for (const coset of cosets) {
+        if (coset.length > 0) reps.add(coset[0].id)
+      }
+      return reps
+    }
+    return new Set(selectedElements)
+  }, [currentGroup, cosetData, cosetSubsetId, showAllCosets, cosetType, selectedElements])
+
+  const cosetActiveColIds = useMemo(() => {
+    if (!currentGroup || !cosetData || !cosetSubsetId) return new Set<string>()
+    if (showAllCosets) {
+      const reps = new Set<string>()
+      const cosets = cosetType === 'right' ? cosetData.rightCosets : cosetData.leftCosets
+      for (const coset of cosets) {
+        if (coset.length > 0) reps.add(coset[0].id)
+      }
+      return reps
+    }
+    return new Set(selectedElements)
+  }, [currentGroup, cosetData, cosetSubsetId, showAllCosets, cosetType, selectedElements])
 
   const elementsInAnySubgroup = useMemo(() => {
     const set = new Set<number>()
@@ -126,11 +198,11 @@ export function TableView() {
     )
   }
 
-  if (isTooLarge(currentGroup.order, 'table') && !forceShowLargeGroup) {
+  if (isTooLarge(currentGroup.order, 'table') && !forceShowLargeGroupViews.has('table')) {
     return (
       <div className="large-group-warning">
         <p>{t('canvas.orderTooLarge', { n: currentGroup.order })}</p>
-        <button className="panel-btn" onClick={() => setForceShowLargeGroup(true)}>
+        <button className="panel-btn" onClick={() => setForceShowLargeGroupForView('table', true)}>
           {t('canvas.show')}
         </button>
       </div>
@@ -146,9 +218,32 @@ export function TableView() {
   const offsetX = vw / 2 - tableWidth / 2
   const offsetY = vh / 2 - tableHeight / 2
 
-  const identityIdx = elements.findIndex(e =>
-    e.id === currentGroup.identity.id
-  )
+  if (isLargeTable) {
+    return (
+      <svg viewBox={`0 0 ${vw} ${vh}`} className="view-svg" style={{ userSelect: 'none' }}>
+        <g transform={`translate(${offsetX}, ${offsetY})`}>
+          <text x={0} y={0} fill="var(--text-muted)" fontSize={16}>{t('canvas.orderTooLarge', { n: currentGroup.order })}</text>
+          <text x={0} y={26} fill="var(--text-subtle)" fontSize={12}>Showing sampled rows and columns for large groups.</text>
+          {visibleIndices.map((rowIdx, ri) => (
+            visibleIndices.map((colIdx, ci) => {
+              const result = getCell(rowIdx, colIdx)
+              if (!result) return null
+              return (
+                <g key={`${rowIdx}-${colIdx}`} transform={`translate(${ci * cellSize}, ${ri * cellSize + 50})`}>
+                  <rect width={cellSize - 2} height={cellSize - 2} fill="#1f293733" stroke="#334155" rx={4} />
+                  <text x={cellSize / 2} y={cellSize / 2 + 5} textAnchor="middle" fill="#e5e7eb" fontSize={10}>
+                    {result.label}
+                  </text>
+                </g>
+              )
+            })
+          ))}
+        </g>
+      </svg>
+    )
+  }
+
+  const identityIdx = idToIdx.get(currentGroup.identity.id) ?? -1
 
   return (
     <svg viewBox={`0 0 ${vw} ${vh}`} className="view-svg" style={{ userSelect: 'none' }}>
@@ -159,12 +254,17 @@ export function TableView() {
           const isSelected = selectedIndices.has(rowIdx)
           const sInfo = subsetElemMap.get(rowIdx)
           const inSubgroup = elementsInAnySubgroup.has(rowIdx)
+          const cosetMode = cosetSubsetId !== null
+          const rowIsCosetAnchor = cosetActiveRowIds.has(rowEl.id)
+          const rowCosetIdx = cosetElementMap.get(rowEl.id)
+          const rowCosetHl = rowIsCosetAnchor && rowCosetIdx !== undefined
 
           let headerFill = elementColors[rowIdx % elementColors.length]
           let bg: string | null = null
-          if (isSelected) bg = '#ffd93d33'
-          else if (inSubgroup && sInfo) bg = sInfo.color + '33'
-          if (isSelected) headerFill = '#ffd93d'
+          if (!cosetMode && isSelected) bg = '#ffd93d33'
+          else if (rowCosetHl) bg = cosetColors[rowCosetIdx] + '33'
+          else if (!cosetMode && inSubgroup && sInfo) bg = sInfo.color + '33'
+          if (!cosetMode && isSelected) headerFill = '#ffd93d'
 
           return (
             <g
@@ -197,12 +297,17 @@ export function TableView() {
           const isSelected = selectedIndices.has(colIdx)
           const sInfo = subsetElemMap.get(colIdx)
           const inSubgroup = elementsInAnySubgroup.has(colIdx)
+          const cosetMode = cosetSubsetId !== null
+          const colIsCosetAnchor = cosetActiveColIds.has(colEl.id)
+          const colCosetIdx = cosetElementMap.get(colEl.id)
+          const colCosetHl = colIsCosetAnchor && colCosetIdx !== undefined
 
           let headerFill = elementColors[colIdx % elementColors.length]
           let bg: string | null = null
-          if (isSelected) bg = '#ffd93d33'
-          else if (inSubgroup && sInfo) bg = sInfo.color + '33'
-          if (isSelected) headerFill = '#ffd93d'
+          if (!cosetMode && isSelected) bg = '#ffd93d33'
+          else if (colCosetHl) bg = cosetColors[colCosetIdx] + '33'
+          else if (!cosetMode && inSubgroup && sInfo) bg = sInfo.color + '33'
+          if (!cosetMode && isSelected) headerFill = '#ffd93d'
 
           return (
             <g
@@ -244,25 +349,42 @@ export function TableView() {
             const nonSubRow = identityIdx >= 0 && rowIdx === identityIdx && nonSubgroupSubsetIndices.has(colIdx)
             const nonSubCol = identityIdx >= 0 && colIdx === identityIdx && nonSubgroupSubsetIndices.has(rowIdx)
 
+            const colInSubgroup = cosetSubgroupIndices.has(colIdx)
+            const rowInSubgroup = cosetSubgroupIndices.has(rowIdx)
+            const cosetMode = cosetSubsetId !== null
+            const rowIsCosetAnchor = cosetActiveRowIds.has(rowEl.id)
+            const colIsCosetAnchor = cosetActiveColIds.has(colEl.id)
+
+            const isLeftCosetCell = cosetType === 'left' && rowIsCosetAnchor && colInSubgroup
+            const isRightCosetCell = cosetType === 'right' && colIsCosetAnchor && rowInSubgroup
+            const isCosetCell = isLeftCosetCell || isRightCosetCell
+
             let cellFill = resultColor + '22'
             let cellStroke = resultColor
             let cellStrokeW = 0.5
 
-            if (sgColor) {
+            if (isCosetCell) {
+              const elId = cosetType === 'left' ? rowEl.id : colEl.id
+              const cIdx = cosetElementMap.get(elId)
+              const cColor = cIdx !== undefined ? cosetColors[cIdx] : '#888'
+              cellFill = cColor + '40'
+              cellStroke = cColor
+              cellStrokeW = 2.5
+            } else if (sgColor) {
               cellFill = sgColor + '28'
               cellStroke = sgColor
               cellStrokeW = 2
-            } else if (isRowSel && isColSel) {
+            } else if (!cosetMode && isRowSel && isColSel) {
               cellFill = '#ffd93d22'
               cellStroke = '#ffd93d'
               cellStrokeW = 2
-            } else if (isRowSel || isColSel) {
+            } else if (!cosetMode && (isRowSel || isColSel)) {
               cellFill = '#ffd93d15'
               cellStroke = '#ffd93d88'
               cellStrokeW = 1
             } else if (nonSubRow || nonSubCol) {
-              cellFill = '#ffffff0e'
-              cellStroke = '#ffffff44'
+              cellFill = 'var(--table-cell-bg)'
+              cellStroke = 'var(--table-cell-border)'
               cellStrokeW = 1.5
             }
 

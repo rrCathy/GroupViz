@@ -156,6 +156,9 @@ export function isSimpleGroup(group: Group): boolean {
     return isPrime(group.order)
   }
 
+  // Short-circuit for large groups to avoid main thread freeze
+  if (group.order > 60) return false
+
   const normalSubgroups = findAllNormalSubgroups(group)
   return normalSubgroups.length <= 2
 }
@@ -171,6 +174,9 @@ function isPrime(n: number): boolean {
 }
 
 export function findAllNormalSubgroups(group: Group): Subgroup[] {
+  // Short-circuit for large groups to avoid 2^N conjugacy class combinations freeze
+  if (group.order > 60) return []
+
   const classes = getConjugacyClasses(group)
   const identityClass = classes.find(c =>
     c.some(e => e.id === group.identity.id)
@@ -231,60 +237,96 @@ function isSubgroupClosed(group: Group, elements: GroupElement[]): boolean {
   return true
 }
 
+function closeUnderMultiply(group: Group, seed: GroupElement[]): GroupElement[] {
+  const result: GroupElement[] = []
+  const resultSet = new Set<string>()
+  for (const el of seed) {
+    if (!resultSet.has(el.id)) {
+      resultSet.add(el.id)
+      result.push(el)
+    }
+  }
+  let changed = true
+  while (changed) {
+    changed = false
+    const cur = result.slice()
+    for (let i = 0; i < cur.length; i++) {
+      for (let j = i; j < cur.length; j++) {
+        const prod = group.multiply(cur[i], cur[j])
+        if (!resultSet.has(prod.id)) {
+          resultSet.add(prod.id)
+          result.push(prod)
+          changed = true
+        }
+      }
+    }
+  }
+  return result
+}
+
+function isNormalClosure(group: Group, elements: GroupElement[]): boolean {
+  const elementSet = new Set(elements.map(e => e.id))
+  for (const h of elements) {
+    for (const g of group.elements) {
+      const conj = group.multiply(group.multiply(g, h), group.inverse(g))
+      if (!elementSet.has(conj.id)) return false
+    }
+  }
+  return true
+}
+
 export function findAllSubgroups(group: Group): Subgroup[] {
   const subgroups: Subgroup[] = []
-  
-  function getCyclicSubgroup(generator: GroupElement): GroupElement[] {
-    const elements: GroupElement[] = []
-    const set = new Set<string>()
-    let current = generator
-    
-    while (!set.has(current.id)) {
-      set.add(current.id)
-      elements.push(current)
-      current = group.multiply(current, generator)
-    }
-    
-    return elements
-  }
-  
   const subgroupKeys = new Set<string>()
-  
+
+  // Short-circuit for large groups to avoid combinatorial explosion
+  if (group.order > 60) return []
+
+  function addSubgroup(elements: GroupElement[]): void {
+    if (elements.length >= group.order) return
+    const key = elements.map(e => e.id).sort().join(',')
+    if (subgroupKeys.has(key)) return
+    subgroupKeys.add(key)
+    subgroups.push({
+      elements,
+      order: elements.length,
+      index: group.order / elements.length,
+      generators: [],
+      isNormal: isNormalClosure(group, elements),
+    })
+  }
+
+  // Phase 1: all cyclic subgroups
   for (const gen of group.elements) {
-    const cyclicElements = getCyclicSubgroup(gen)
-    const key = cyclicElements.map(e => e.id).sort().join(',')
-    
-    if (!subgroupKeys.has(key) && cyclicElements.length < group.order) {
-      subgroupKeys.add(key)
-      
-      let isNormal = true
-      for (const h of cyclicElements) {
-        for (const g of group.elements) {
-          const conj = group.multiply(group.multiply(g, h), group.inverse(g))
-          if (!cyclicElements.some(e => e.id === conj.id)) {
-            isNormal = false
-            break
-          }
-        }
-        if (!isNormal) break
+    const cyc: GroupElement[] = []
+    const seen = new Set<string>()
+    let cur = gen
+    while (!seen.has(cur.id)) {
+      seen.add(cur.id)
+      cyc.push(cur)
+      cur = group.multiply(cur, gen)
+    }
+    addSubgroup(cyc)
+  }
+
+  // Phase 2: pair-join closure — expand to non-cyclic subgroups
+  for (let prevCount = -1; subgroups.length !== prevCount;) {
+    prevCount = subgroups.length
+    const all = subgroups.slice()
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const join = closeUnderMultiply(group, [...all[i].elements, ...all[j].elements])
+        addSubgroup(join)
       }
-      
-      subgroups.push({
-        elements: cyclicElements,
-        order: cyclicElements.length,
-        index: group.order / cyclicElements.length,
-        generators: [gen],
-        isNormal
-      })
     }
   }
-  
+
   subgroups.sort((a, b) => a.order - b.order)
-  
   return subgroups
 }
 
 export function getGroupCenter(group: Group): GroupElement[] {
+  if (group.order > 60) return [group.identity]
   const center: GroupElement[] = []
   
   for (const a of group.elements) {
@@ -302,6 +344,9 @@ export function getGroupCenter(group: Group): GroupElement[] {
 }
 
 export function getConjugacyClasses(group: Group): GroupElement[][] {
+  if (group.order > 60) {
+    return group.elements.map(e => [e])
+  }
   const classes: GroupElement[][] = []
   const used = new Set<string>()
   

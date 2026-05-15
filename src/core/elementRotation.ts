@@ -83,7 +83,7 @@ export function computeElementRotation(group: Group, element: GroupElement): Rot
     return { axis: [Math.cos(refAngle), 0, Math.sin(refAngle)], angleRad: Math.PI, label: `绕 ${Math.round(refAngle*180/Math.PI)}° 轴翻转 180°` }
   }
 
-  if (sym === 'V₄' || sym === 'V4') {
+  if (sym === 'V_{4}') {
     const m: Record<string, RotationInfo> = {
       '1,3,2,4': { axis: [0, 1, 0], angleRad: Math.PI, label: '绕 Y 轴旋转 180°' },
       '2,1,4,3': { axis: [1, 0, 0], angleRad: Math.PI, label: '绕 X 轴旋转 180°' },
@@ -98,7 +98,7 @@ export function computeElementRotation(group: Group, element: GroupElement): Rot
     return { axis: [0, 1, 0], angleRad: ((idx) * 2 * Math.PI) / order, label: `旋转 ${Math.round((idx*360)/order)}°` }
   }
 
-  if ((sym === 'A₄' || sym === 'A4') && val.length >= 4) {
+  if (sym === 'A_{4}' && val.length >= 4) {
     const ct = getCycleType(val)
     if (ct === '3') {
       const k = elementHash(4, element.id)
@@ -114,7 +114,7 @@ export function computeElementRotation(group: Group, element: GroupElement): Rot
     return { axis: [0, 1, 0], angleRad: 0, label: '' }
   }
 
-  if ((sym === 'S₄' || sym === 'S4') && val.length >= 4) {
+  if (sym === 'S_{4}' && val.length >= 4) {
     const ct = getCycleType(val)
     if (ct === '4') {
       const k = elementHash(3, element.id, '4c')
@@ -141,7 +141,7 @@ export function computeElementRotation(group: Group, element: GroupElement): Rot
     return { axis: [0, 1, 0], angleRad: 0, label: '' }
   }
 
-  if ((sym === 'A₅' || sym === 'A5') && val.length >= 5) {
+  if (sym === 'A_{5}' && val.length >= 5) {
     const ct = getCycleType(val)
     if (ct === '5') {
       const k = elementHash(6, element.id, '5c')

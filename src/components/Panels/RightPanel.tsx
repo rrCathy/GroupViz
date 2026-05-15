@@ -20,7 +20,7 @@ function AccordionSection({ title, defaultOpen = false, children }: { title: str
           alignItems: 'center',
           background: 'none',
           border: 'none',
-          color: '#fff',
+          color: 'var(--text-heading)',
           fontSize: '14px',
           fontWeight: 500,
           padding: '0 0 12px 0',

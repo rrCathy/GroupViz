@@ -9,7 +9,7 @@ const zh: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': '群论可视化平台',
-  'welcome.version': 'v1.0',
+  'welcome.version': 'v1.2',
   'welcome.tagline': '探索抽象代数的对称之美 — 交互式群论可视化与学习工具',
   'welcome.enter': '进入应用',
   'welcome.feature.subgroups': '子群与陪集',
@@ -277,7 +277,7 @@ const en: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': 'Group Theory Visualization Platform',
-  'welcome.version': 'v1.0',
+  'welcome.version': 'v1.2',
   'welcome.tagline': 'Explore the beauty of symmetry in abstract algebra — Interactive group theory visualization & learning tool',
   'welcome.enter': 'Enter',
   'welcome.feature.subgroups': 'Subgroups & Cosets',

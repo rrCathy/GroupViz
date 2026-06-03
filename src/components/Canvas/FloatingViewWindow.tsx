@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { GroupContext } from '../../context/GroupContext'
 import type { GroupContextType } from '../../context/GroupContext'
 import { useGroup } from '../../context/useGroup'
@@ -7,11 +7,12 @@ import type { ViewMode, CanvasTransform } from '../../core/types'
 import { SetView } from './SetView'
 import { CycleView } from './CycleView'
 import { TableView } from './TableView'
-import { Cayley3DView } from './Cayley3DView'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { computeCayleyActionEdges, ringOrder } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
+
+const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ default: m.Cayley3DView })))
 
 function CayleyGraphViewLocal() {
   const { currentGroup, selectedElements, selectElement, setHoverElement, getNodePosition, setNodePosition, canvasTransform, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets } = useGroup()
@@ -402,7 +403,7 @@ function renderViewContent(view: ViewMode) {
     case 'table':
       return <TableZoomable><TableView /></TableZoomable>
     case '3d':
-      return <Cayley3DView />
+      return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><Cayley3DViewLazy /></Suspense>
     case 'sublattice':
       return <SvgPanZoom><SubgroupLatticeView /></SvgPanZoom>
     default:

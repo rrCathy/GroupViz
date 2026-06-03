@@ -15,6 +15,7 @@ export function OperationsPanel() {
     cosetData,
     symmetryShowAction,
     symmetryActionElementId,
+    cayleyShape2D,
     computeInverse,
     clearCanvas,
     resetNodePositions,
@@ -54,7 +55,7 @@ export function OperationsPanel() {
         </button>
         <button
           className="panel-btn"
-          onClick={resetNodePositions}
+          onClick={() => resetNodePositions()}
           disabled={!currentGroup}
         >
           {t('panel.resetPositions')}
@@ -62,7 +63,7 @@ export function OperationsPanel() {
         <button
           className="panel-btn"
           onClick={runForceLayout}
-          disabled={!currentGroup || (currentView !== 'cayley' && currentView !== 'cycle')}
+          disabled={!currentGroup || (currentView !== 'cayley' && currentView !== 'cycle') || cayleyShape2D === 'cosetStrip' || cayleyShape2D === 'concentric' || cayleyShape2D === 'dualRing' || cayleyShape2D === 'projection3D'}
         >
           {t('panel.forceLayout')}
         </button>

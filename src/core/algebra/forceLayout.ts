@@ -1,5 +1,6 @@
-import type { Group, GroupElement, NodePosition, GroupAction, CayleyEdgeData, MultiplyType } from '../types'
-import { isGroupDirectProduct, isCyclicFactorKeys } from '../types'
+import type { Group, GroupElement, NodePosition, GroupAction, CayleyEdgeData, MultiplyType, Layout3D } from '../types'
+import { getDefaultLayout3D, isGroupDirectProduct, isCyclicFactorKeys } from '../types'
+import { compute3DPositions } from './layout3D'
 
 export interface ForceLayoutEdge {
   source: string
@@ -576,6 +577,10 @@ export function ringOrder(keys: string[]): string[] {
   if (deduped.every(k => /^-?\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a) - Number(b))
   }
+  // Cn cyclic group: "e0", "e1", ... — sort numerically by suffix
+  if (deduped.every(k => /^e\d+$/.test(k))) {
+    return deduped.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+  }
   return deduped.sort()
 }
 
@@ -694,6 +699,9 @@ function cayleyRingKeys(keys: string[]): string[] {
   const deduped = [...new Set(keys)]
   if (deduped.every(k => /^-?\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a) - Number(b))
+  }
+  if (deduped.every(k => /^e\d+$/.test(k))) {
+    return deduped.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
   }
   return deduped.sort()
 }
@@ -833,6 +841,616 @@ export function fibonacci2DLayout(
       y: cy + y * r
     })
   }
+
+  return result
+}
+
+// ─── Concentric Layout (by conjugacy classes) ─────────────────────────
+
+function computeElementOrder(el: GroupElement, group: Group): number {
+  let current = el
+  let ord = 0
+  do {
+    current = group.multiply(current, el)
+    ord++
+    if (ord > group.order) return group.order
+  } while (current.id !== el.id)
+  return ord
+}
+
+export function concentricLayout(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> {
+  const n = group.order
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+
+  if (n === 0) return result
+  if (n === 1) {
+    result.set(group.elements[0].id, { x: cx, y: cy })
+    return result
+  }
+
+  const idToEl = new Map<string, GroupElement>()
+  group.elements.forEach(el => idToEl.set(el.id, el))
+
+  const conjugacyClasses: GroupElement[][] = []
+  const used = new Set<string>()
+
+  for (const a of group.elements) {
+    if (used.has(a.id)) continue
+    const conjugates: GroupElement[] = []
+    const maxIters = group.order > 60 ? 10 : group.order
+    const sample = group.order > 60
+      ? [group.identity, ...group.elements.slice(0, Math.min(maxIters - 1, group.order - 1))]
+      : group.elements
+    for (const g of sample) {
+      const conj = group.multiply(group.multiply(g, a), group.inverse(g))
+      if (!used.has(conj.id)) {
+        conjugates.push(conj)
+        used.add(conj.id)
+      }
+    }
+    if (conjugates.length > 0) conjugacyClasses.push(conjugates)
+  }
+
+  conjugacyClasses.sort((a, b) => a.length - b.length)
+
+  const maxRadius = Math.min(width, height) * 0.44
+  const minRadius = 0
+  const ringCount = conjugacyClasses.length
+  const idClass = conjugacyClasses.find(cls => cls.length === 1 && cls[0].id === group.identity.id)
+
+  let ringIndex = 0
+  for (const cls of conjugacyClasses) {
+    const isIdentityRing = cls === idClass
+    const m = cls.length
+
+    let ringRadius: number
+    if (isIdentityRing) {
+      ringRadius = 0
+    } else {
+      const effectiveRingIdx = ringIndex
+      const totalRings = idClass ? ringCount - 1 : ringCount
+      const t = totalRings > 1 ? effectiveRingIdx / (totalRings - 1) : 0.5
+      ringRadius = minRadius + (maxRadius - minRadius) * (0.15 + t * 0.85)
+    }
+
+    for (let i = 0; i < m; i++) {
+      let x: number, y: number
+      if (m === 1) {
+        x = cx
+        y = cy + ringRadius
+      } else {
+        const angle = (i * 2 * Math.PI) / m - Math.PI / 2
+        x = cx + ringRadius * Math.cos(angle)
+        y = cy + ringRadius * Math.sin(angle)
+      }
+      result.set(cls[i].id, { x, y })
+    }
+
+    if (!isIdentityRing) ringIndex++
+  }
+
+  return result
+}
+
+// ─── Dual Ring Layout (for Dihedral groups) ───────────────────────────
+
+export function dualRingLayout(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> {
+  const n = group.order
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+
+  if (n === 0) return result
+
+  const m = n / 2
+
+  const rotations: GroupElement[] = []
+  const reflections: GroupElement[] = []
+
+  for (const el of group.elements) {
+    if (el.value.length >= 2 && el.value[1] === 0) {
+      rotations.push(el)
+    } else {
+      reflections.push(el)
+    }
+  }
+
+  if (rotations.length === 0 || reflections.length === 0) {
+    for (let i = 0; i < n; i++) {
+      const angle = (i * 2 * Math.PI) / n - Math.PI / 2
+      const r = Math.min(width, height) * 0.38
+      result.set(group.elements[i].id, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+    }
+    return result
+  }
+
+  rotations.sort((a, b) => (a.value[0] ?? 0) - (b.value[0] ?? 0))
+  reflections.sort((a, b) => (a.value[0] ?? 0) - (b.value[0] ?? 0))
+
+  const outerR = Math.min(width, height) * 0.38
+  const innerR = outerR * 0.55
+
+  const refByRotIndex = new Map<number, GroupElement>()
+  for (const ref of reflections) {
+    refByRotIndex.set(ref.value[0] ?? 0, ref)
+  }
+
+  const rotationLabelOrder = new Map<string, number>()
+  rotations.forEach((el, i) => rotationLabelOrder.set(el.id, i))
+
+  for (let i = 0; i < rotations.length; i++) {
+    const el = rotations[i]
+    const angle = (i * 2 * Math.PI) / m - Math.PI / 2
+    result.set(el.id, { x: cx + outerR * Math.cos(angle), y: cy + outerR * Math.sin(angle) })
+  }
+
+  for (let i = 0; i < rotations.length; i++) {
+    const rotIdx = rotations[i].value[0] ?? 0
+    const ref = refByRotIndex.get(rotIdx)
+    const angle = (i * 2 * Math.PI) / m - Math.PI / 2
+    if (ref) {
+      result.set(ref.id, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
+    }
+  }
+
+  for (const ref of reflections) {
+    if (!result.has(ref.id)) {
+      const idx = reflections.indexOf(ref)
+      const angle = (idx * 2 * Math.PI) / reflections.length - Math.PI / 2
+      result.set(ref.id, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
+    }
+  }
+
+  return result
+}
+
+// ─── Coset Strip Layout ────────────────────────────────────────────────
+
+export interface CosetStripData {
+  positions: Map<string, NodePosition>
+  strips: CosetStripInfo[]
+}
+
+export interface CosetStripInfo {
+  elementIds: string[]
+  label: string
+  color: string
+  x: number
+  y: number
+  w: number
+  h: number
+  isSubgroup: boolean
+}
+
+const COSET_STRIP_COLORS: string[] = [
+  '#ff6b6b', '#4ecdc4', '#ffd93d', '#84cc16',
+  '#a78bfa', '#f97316', '#38bdf8', '#f43f5e',
+  '#eab308', '#6366f1', '#ec4899', '#14b8a6',
+  '#0ea5e9', '#22c55e', '#a855f7', '#06b6d4',
+]
+
+const NODE_RADIUS = 28
+const NODE_DIAMETER = NODE_RADIUS * 2
+const MIN_NODE_GAP = 20
+const MIN_NODE_STEP = NODE_DIAMETER + MIN_NODE_GAP  // 76px center-to-center
+const IDEAL_NODE_STEP = NODE_DIAMETER + 46          // 102px
+const MIN_COL_WIDTH = NODE_DIAMETER + 14             // 70px — node fits with 7px side margin
+
+function computeCosetGrid(totalStrips: number, stripSize: number, usableW: number, usableH: number) {
+  // Step 1: always prefer 1 row — that maximizes vertical node spacing.
+  let cols = totalStrips
+  let rows = 1
+  let colWidth = usableW / totalStrips
+  let nodeStep = usableH / Math.max(1, stripSize)
+
+  // Step 2: if columns are too narrow, wrap to a second row.
+  // This reduces vertical space per row, so only do it if horizontal space
+  // is constraining and there's enough vertical headroom.
+  if (colWidth < MIN_COL_WIDTH && totalStrips > 1) {
+    const candidateCols = Math.max(1, Math.floor(usableW / MIN_COL_WIDTH))
+    const candidateRows = Math.ceil(totalStrips / candidateCols)
+    const candidateStep = usableH / candidateRows / Math.max(1, stripSize)
+
+    // Only wrap if vertical spacing remains above the minimum
+    if (candidateStep >= MIN_NODE_STEP) {
+      cols = Math.min(candidateCols, totalStrips)
+      rows = candidateRows
+      colWidth = usableW / cols
+      nodeStep = candidateStep
+    }
+  }
+
+  // Clamp nodeStep to a reasonable range
+  nodeStep = Math.max(nodeStep, MIN_NODE_STEP)   // hard floor: minimum node spacing
+  nodeStep = Math.min(nodeStep, IDEAL_NODE_STEP)
+
+  return { cols, rows, colWidth, nodeStep }
+}
+
+export function cosetStripLayout(
+  group: Group,
+  width: number,
+  height: number,
+  subgroupElementIds?: string[],
+  cosetElementMap?: Map<string, number>,
+  cosetCount?: number,
+  cosetColors?: string[],
+): CosetStripData {
+  const n = group.order
+  const result = new Map<string, NodePosition>()
+  const strips: CosetStripInfo[] = []
+
+  if (n === 0) return { positions: result, strips }
+
+  // ── use global coset data if available ──
+  if (cosetElementMap && cosetElementMap.size > 0 && cosetCount && cosetCount > 0) {
+    const mapEi = cosetElementMap
+    const totalCosets = cosetCount
+    const colors = cosetColors && cosetColors.length > 0 ? cosetColors : COSET_STRIP_COLORS
+
+    // Collect elements per coset
+    const cosetBuckets: string[][] = Array.from({ length: totalCosets }, () => [])
+    for (const el of group.elements) {
+      const ci = mapEi.get(el.id)
+      if (ci !== undefined && ci < totalCosets) {
+        cosetBuckets[ci].push(el.id)
+      }
+    }
+
+    // Determine representative labels for each coset (use first non-subgroup element)
+    const subGroupSet = new Set(cosetBuckets[0]) // coset 0 = H
+    const repLabels: string[] = []
+    for (let c = 0; c < totalCosets; c++) {
+      if (c === 0) {
+        repLabels.push('H')
+      } else {
+        const repId = cosetBuckets[c].find(id => !subGroupSet.has(id)) || cosetBuckets[c][0]
+        const repEl = group.elements.find(e => e.id === repId)
+        repLabels.push(repEl ? `g_{${c}}H` : `c_{${c}}`)
+      }
+    }
+
+    // Determine coset height = max elements in any coset
+    const maxCosetSize = Math.max(...cosetBuckets.map(b => b.length))
+    const marginX = 50
+    const marginTop = 55
+    const marginBottom = 25
+    const labelGap = 16
+    const usableW = width - 2 * marginX
+    const usableH = height - marginTop - marginBottom
+
+    const { cols: colsPerRow, rows: numRows, colWidth, nodeStep } = computeCosetGrid(totalCosets, maxCosetSize, usableW, usableH)
+
+    for (let c = 0; c < totalCosets; c++) {
+      const row = Math.floor(c / colsPerRow)
+      const col = c % colsPerRow
+      const bucket = cosetBuckets[c]
+      const bx = marginX + colWidth * (col + 0.5)
+      const stripTop = marginTop + row * usableH / Math.max(1, numRows) + labelGap
+      const by = stripTop + (bucket.length > 0 ? (bucket.length - 1) * nodeStep / 2 : 0) + nodeStep / 2
+
+      bucket.forEach((elId, ri) => {
+        result.set(elId, {
+          x: bx,
+          y: by + (ri - (bucket.length - 1) / 2) * nodeStep
+        })
+      })
+
+      strips.push({
+        elementIds: bucket,
+        label: repLabels[c],
+        color: colors[c % colors.length],
+        x: marginX + colWidth * col + 4,
+        y: stripTop - nodeStep / 2,
+        w: colWidth - 8,
+        h: Math.max(1, bucket.length) * nodeStep,
+        isSubgroup: c === 0,
+      })
+    }
+
+    return { positions: result, strips }
+  }
+
+  // ── fallback: auto-detect cyclic subgroup from first generator ──
+  let subgroupSet: Set<string>
+  if (subgroupElementIds && subgroupElementIds.length > 0) {
+    subgroupSet = new Set(subgroupElementIds)
+  } else {
+    subgroupSet = new Set([group.identity.id])
+    const firstGenEl = group.generators[0]?.apply(group.identity)
+    if (!firstGenEl) {
+      for (let i = 0; i < n; i++) {
+        const angle = (i * 2 * Math.PI) / n - Math.PI / 2
+        const r = Math.min(width, height) * 0.35
+        result.set(group.elements[i].id, { x: width / 2 + r * Math.cos(angle), y: height / 2 + r * Math.sin(angle) })
+      }
+      return { positions: result, strips }
+    }
+    let current = group.identity
+    let next = firstGenEl
+    while (!subgroupSet.has(next.id)) {
+      subgroupSet.add(next.id)
+      current = next
+      next = group.multiply(current, firstGenEl)
+    }
+  }
+
+  const subgroupIds = Array.from(subgroupSet)
+  const used = new Set<string>(subgroupSet)
+  const cosetReps: string[] = []
+  for (const el of group.elements) {
+    if (!used.has(el.id)) {
+      cosetReps.push(el.id)
+      const subList = subgroupIds.map(id => {
+        const hEl = group.elements.find(e => e.id === id)!
+        return group.multiply(el, hEl).id
+      })
+      subList.forEach(id => used.add(id))
+    }
+  }
+
+  const numStrips = 1 + cosetReps.length
+  const hSize = subgroupIds.length
+
+  // Build coset maps
+  const allCosetStrips: string[][] = [subgroupIds]
+  for (const repId of cosetReps) {
+    const rep = group.elements.find(e => e.id === repId)!
+    const strip: string[] = subgroupIds.map(id => {
+      const hEl = group.elements.find(e => e.id === id)!
+      return group.multiply(rep, hEl).id
+    })
+    allCosetStrips.push(strip)
+  }
+
+  // Layout: wrap many cosets to multiple rows for readability
+  const marginX = 50
+  const marginTop = 55
+  const marginBottom = 25
+  const labelGap = 16
+  const usableW = width - 2 * marginX
+  const usableH = height - marginTop - marginBottom
+  const { cols, rows, colWidth: colW, nodeStep: step } = computeCosetGrid(numStrips, hSize, usableW, usableH)
+
+  for (let s = 0; s < allCosetStrips.length; s++) {
+    const row = Math.floor(s / cols)
+    const col = s % cols
+    const strip = allCosetStrips[s]
+    const bx = marginX + colW * (col + 0.5)
+    const stripTop = marginTop + row * usableH / Math.max(1, rows) + labelGap
+    const by = stripTop + (strip.length - 1) * step / 2 + step / 2
+
+    strip.forEach((elId, ri) => {
+      result.set(elId, {
+        x: bx,
+        y: by + (ri - (strip.length - 1) / 2) * step
+      })
+    })
+
+    const color = COSET_STRIP_COLORS[s % COSET_STRIP_COLORS.length]
+    strips.push({
+      elementIds: strip,
+      label: s === 0 ? 'H' : `g_{${s}}H`,
+      color,
+      x: marginX + colW * col + 4,
+      y: stripTop - step / 2,
+      w: colW - 8,
+      h: Math.max(1, strip.length) * step,
+      isSubgroup: s === 0,
+    })
+  }
+
+  // Fallback for any unassigned elements
+  for (const el of group.elements) {
+    if (!result.has(el.id)) {
+      const idx = group.elements.indexOf(el)
+      const col = idx % cols
+      result.set(el.id, {
+        x: marginX + colW * (col + 0.5),
+        y: marginTop + (idx % hSize) * step + step / 2
+      })
+    }
+  }
+
+  return { positions: result, strips }
+}
+
+// ─── Archimedean Spiral Layout ─────────────────────────────────────────
+
+export function archimedeanSpiralLayout(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> {
+  const n = group.order
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+
+  if (n === 0) return result
+  if (n === 1) {
+    result.set(group.elements[0].id, { x: cx, y: cy })
+    return result
+  }
+
+  const maxR = Math.min(width, height) * 0.44
+  const turns = Math.max(2, Math.ceil(n / 8))
+  const a = maxR / (turns * 2 * Math.PI)
+
+  // Sort elements by order to make it slightly more structured
+  const elementsWithOrder = group.elements.map(el => ({
+    el,
+    order: computeElementOrder(el, group)
+  }))
+  elementsWithOrder.sort((a, b) => {
+    if (a.el.id === group.identity.id && b.el.id !== group.identity.id) return -1
+    if (a.el.id !== group.identity.id && b.el.id === group.identity.id) return 1
+    return a.order - b.order || a.el.id.localeCompare(b.el.id)
+  })
+
+  for (let i = 0; i < elementsWithOrder.length; i++) {
+    const t = i / (n - 1)
+    const theta = t * turns * 2 * Math.PI
+    const r = a * theta
+
+    result.set(elementsWithOrder[i].el.id, {
+      x: cx + r * Math.cos(theta - Math.PI / 2),
+      y: cy + r * Math.sin(theta - Math.PI / 2)
+    })
+  }
+
+  return result
+}
+
+// ─── Spiral Layout (optimized for Cyclic groups Cn) ────────────────────
+//
+// Multi-turn Archimedean spiral following generator order.
+// Consecutive edges (e_i→e_{i+1}) are short and adjacent on the spiral.
+// The wrap-around edge (e_{n-1}→e_0) cuts from the outer tip to center,
+// creating a characteristic "rose" crossing pattern.
+
+export function spiralLayout(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> {
+  const n = group.order
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+
+  if (n === 0) return result
+  if (n === 1) {
+    result.set(group.elements[0].id, { x: cx, y: cy })
+    return result
+  }
+
+  const maxR = Math.min(width, height) * 0.42
+  const turns = Math.max(3, Math.ceil(n / 5))
+
+  for (let i = 0; i < n; i++) {
+    const t = n > 1 ? i / (n - 1) : 0
+    const r = maxR * t
+    const theta = t * turns * 2 * Math.PI
+
+    result.set(group.elements[i].id, {
+      x: cx + r * Math.cos(theta - Math.PI / 2),
+      y: cy + r * Math.sin(theta - Math.PI / 2)
+    })
+  }
+
+  return result
+}
+
+// ─── Coil Layout (variable-pitch spiral, only wrap-edge crosses) ────────
+//
+// Angular density increases with radius: inner nodes are sparse (large
+// angular gaps), outer nodes are packed tight (small angular gaps).
+// This keeps intermediate edges short angularly even at large radii,
+// preventing crossings among them.  Only the wrap-around edge jumps back.
+
+export function coilLayout(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> {
+  const n = group.order
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+
+  if (n === 0) return result
+  if (n === 1) {
+    result.set(group.elements[0].id, { x: cx, y: cy })
+    return result
+  }
+
+  const maxR = Math.min(width, height) * 0.42
+  const turns = Math.max(2, Math.ceil(n / 6))
+
+  // θ(t) = t^α * turns * 2π  with α < 1
+  // dθ/dt ∝ t^(α-1) — large near t=0 (sparse inner), small near t=1 (dense outer)
+  const alpha = 0.7
+
+  for (let i = 0; i < n; i++) {
+    const t = n > 1 ? i / (n - 1) : 0
+    const r = maxR * t
+    const theta = Math.pow(t, alpha) * turns * 2 * Math.PI
+
+    result.set(group.elements[i].id, {
+      x: cx + r * Math.cos(theta - Math.PI / 2),
+      y: cy + r * Math.sin(theta - Math.PI / 2)
+    })
+  }
+
+  return result
+}
+
+function projectionLayoutForGroup(group: Group): Layout3D {
+  const sym = group.symbol
+  if (sym === 'S_{3}' || sym === 'S3' || sym === 'S₃') return 'hexagon'
+  if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedCube'
+  if (sym === 'A_{4}' || sym === 'A4') return 'truncatedTetrahedron'
+  if (sym === 'A_{5}' || sym === 'A5') return 'truncatedIcosahedron'
+  if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'cube'
+  if (sym.startsWith('S') || sym.startsWith('A')) return 'spherical'
+  return getDefaultLayout3D(group)
+}
+
+export function projection3DLayout(group: Group, width: number, height: number): Map<string, NodePosition> | null {
+  const n = group.order
+  if (n === 0) return null
+
+  const layout = projectionLayoutForGroup(group)
+  const positions3D = compute3DPositions(group, layout)
+
+  if (!positions3D || positions3D.length !== n) return null
+
+  let minX = Infinity, maxX = -Infinity
+  let minY = Infinity, maxY = -Infinity
+
+  const flat: { x: number; y: number }[] = new Array(n)
+  const cos30 = Math.cos(Math.PI / 6)
+  const sin30 = Math.sin(Math.PI / 6)
+
+  for (let i = 0; i < n; i++) {
+    const [x3, y3, z3] = positions3D[i]
+    const px = (x3 - z3) * cos30
+    const py = (x3 + z3) * sin30 - y3
+    flat[i] = { x: px, y: py }
+    if (px < minX) minX = px
+    if (px > maxX) maxX = px
+    if (py < minY) minY = py
+    if (py > maxY) maxY = py
+  }
+
+  const dataW = maxX - minX || 1
+  const dataH = maxY - minY || 1
+  const margin = 80
+  const availW = width - margin * 2
+  const availH = height - margin * 2
+  const scale = Math.min(availW / dataW, availH / dataH)
+  const cx = width / 2
+  const cy = height / 2
+  const dataCx = (minX + maxX) / 2
+  const dataCy = (minY + maxY) / 2
+
+  const result = new Map<string, NodePosition>()
+  group.elements.forEach((el, i) => {
+    const px = cx + (flat[i].x - dataCx) * scale
+    const py = cy + (flat[i].y - dataCy) * scale
+    result.set(el.id, { x: px, y: py })
+  })
 
   return result
 }

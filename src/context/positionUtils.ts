@@ -1,7 +1,7 @@
 import type { Group, GroupElement, ViewMode } from '../core/types'
 import { isGroupDirectProduct, type CayleyShape2D } from '../core/types'
 import { getViewBoxSize } from '../core/viewBox'
-import { directProductGridLayout2D, fibonacci2DLayout, ringOrder } from '../core/algebra/forceLayout'
+import { directProductGridLayout2D, fibonacci2DLayout, concentricLayout, dualRingLayout, cosetStripLayout, archimedeanSpiralLayout, spiralLayout, coilLayout, projection3DLayout, ringOrder } from '../core/algebra/forceLayout'
 
 export type NodePositionsMap = Map<string, Map<string, { x: number; y: number }>>
 
@@ -15,17 +15,52 @@ function getIdParts(id: string): string[] {
   return parts
 }
 
-export function initializeNodePositions(group: Group, view: ViewMode, shape2D?: CayleyShape2D): Map<string, { x: number; y: number }> {
+export function initializeNodePositions(group: Group, view: ViewMode, shape2D?: CayleyShape2D, force = false): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>()
   const n = group.elements.length
 
-  const vbs = getViewBoxSize(n, view, false)
+  const vbs = getViewBoxSize(n, view, force)
   const centerX = vbs.width / 2
   const centerY = vbs.height / 2
 
   if (view === 'cayley' && shape2D === 'spherical') {
     const fib = fibonacci2DLayout(group, vbs.width, vbs.height)
     if (fib && fib.size > 0) return fib
+  }
+
+  if (view === 'cayley' && shape2D === 'concentric') {
+    const pos = concentricLayout(group, vbs.width, vbs.height)
+    if (pos && pos.size > 0) return pos
+  }
+
+  if (view === 'cayley' && shape2D === 'dualRing') {
+    const pos = dualRingLayout(group, vbs.width, vbs.height)
+    if (pos && pos.size > 0) return pos
+  }
+
+  if (view === 'cayley' && shape2D === 'cosetStrip') {
+    const pos = cosetStripLayout(group, vbs.width, vbs.height)
+    if (pos && pos.positions.size > 0) return pos.positions
+  }
+
+  if (view === 'cayley' && shape2D === 'archimedean') {
+    const pos = archimedeanSpiralLayout(group, vbs.width, vbs.height)
+    if (pos && pos.size > 0) return pos
+  }
+
+  if (view === 'cayley' && shape2D === 'spiral') {
+    const pos = spiralLayout(group, vbs.width, vbs.height)
+    if (pos && pos.size > 0) return pos
+  }
+
+  if (view === 'cayley' && shape2D === 'coil') {
+    const pos = coilLayout(group, vbs.width, vbs.height)
+    if (pos && pos.size > 0) return pos
+  }
+
+  if (view === 'cayley' && shape2D === 'projection3D') {
+    const pos = projection3DLayout(group, vbs.width, vbs.height)
+    if (pos && pos.size > 0) return pos
   }
 
   if (view === 'cayley' && isGroupDirectProduct(group)) {

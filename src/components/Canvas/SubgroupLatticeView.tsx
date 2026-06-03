@@ -41,6 +41,8 @@ export function SubgroupLatticeView() {
     clearSelection,
     canvasTransform,
     subsets,
+    backendCache,
+    isLargeGroup,
   } = useGroup()
   const { t } = useTranslation()
 
@@ -48,8 +50,12 @@ export function SubgroupLatticeView() {
 
   const latticeData = useMemo(() => {
     if (!currentGroup) return null
+    if (isLargeGroup && backendCache.lattice) {
+      return backendCache.lattice as { nodes: SubgroupLatticeNode[]; edges: SubgroupLatticeEdge[] }
+    }
+    if (isLargeGroup) return null
     return computeSubgroupLattice(currentGroup)
-  }, [currentGroup])
+  }, [currentGroup, isLargeGroup, backendCache.lattice])
 
   const { nodePositions, viewW, viewH, nodeRx, nodeRy } = useMemo(() => {
     if (!latticeData) {

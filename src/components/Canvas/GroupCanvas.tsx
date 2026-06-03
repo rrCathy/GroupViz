@@ -1,14 +1,15 @@
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
+import { useRef, useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { SetView } from './SetView'
 import { CycleView } from './CycleView'
 import { TableView } from './TableView'
-import { Cayley3DView } from './Cayley3DView'
-import { SymmetryView } from './SymmetryView'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { isTooLarge } from '../../core/viewBox'
-import { computeCayleyActionEdges, directProductGridLayout2D, fibonacci2DLayout, ringOrder } from '../../core/algebra/forceLayout'
+
+const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ default: m.Cayley3DView })))
+const SymmetryViewLazy = lazy(() => import('./SymmetryView').then(m => ({ default: m.SymmetryView })))
+import { computeCayleyActionEdges, directProductGridLayout2D, fibonacci2DLayout, concentricLayout, dualRingLayout, cosetStripLayout, archimedeanSpiralLayout, spiralLayout, coilLayout, projection3DLayout, ringOrder } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
 
@@ -171,9 +172,9 @@ export function GroupCanvas() {
       case 'table':
         return <TableView />
       case '3d':
-        return <Cayley3DView />
+        return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><Cayley3DViewLazy /></Suspense>
       case 'symmetry':
-        return <SymmetryView />
+        return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><SymmetryViewLazy /></Suspense>
       case 'sublattice':
         return <SubgroupLatticeView />
       default:
@@ -231,17 +232,51 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
   const cy = viewBoxSize.height / 2
   const graphRadius = Math.min(viewBoxSize.width * 0.3, 180 + n * 10)
 
+  const cosetStripData = useMemo(() => {
+    if (!currentGroup) return null
+    if (cayleyShape2D !== 'cosetStrip') return null
+    return cosetStripLayout(
+      currentGroup,
+      viewBoxSize.width,
+      viewBoxSize.height,
+      undefined,
+      cosetElementMap,
+      cosetElementMap.size > 0 ? new Set(cosetElementMap.values()).size : undefined,
+      cosetColors,
+    )
+  }, [cayleyShape2D, currentGroup, viewBoxSize.width, viewBoxSize.height, cosetElementMap, cosetColors])
+
   const gridPositions = useMemo(() => {
     if (!currentGroup) return null
+    if (cayleyShape2D === 'cosetStrip') {
+      return cosetStripData?.positions ?? null
+    }
     if (cayleyShape2D === 'spherical') {
       return fibonacci2DLayout(currentGroup, viewBoxSize.width, viewBoxSize.height)
     }
     if (cayleyShape2D === 'grid') {
       return directProductGridLayout2D(currentGroup, viewBoxSize.width, viewBoxSize.height)
     }
-    // circular -> fallback to null which will use circlePositions
+    if (cayleyShape2D === 'concentric') {
+      return concentricLayout(currentGroup, viewBoxSize.width, viewBoxSize.height)
+    }
+    if (cayleyShape2D === 'dualRing') {
+      return dualRingLayout(currentGroup, viewBoxSize.width, viewBoxSize.height)
+    }
+    if (cayleyShape2D === 'archimedean') {
+      return archimedeanSpiralLayout(currentGroup, viewBoxSize.width, viewBoxSize.height)
+    }
+    if (cayleyShape2D === 'spiral') {
+      return spiralLayout(currentGroup, viewBoxSize.width, viewBoxSize.height)
+    }
+    if (cayleyShape2D === 'coil') {
+      return coilLayout(currentGroup, viewBoxSize.width, viewBoxSize.height)
+    }
+    if (cayleyShape2D === 'projection3D') {
+      return projection3DLayout(currentGroup, viewBoxSize.width, viewBoxSize.height)
+    }
     return null
-  }, [cayleyShape2D, currentGroup, viewBoxSize.width, viewBoxSize.height])
+  }, [cayleyShape2D, currentGroup, viewBoxSize.width, viewBoxSize.height, cosetStripData])
 
   const circlePositions = useMemo(() => {
     const m = new Map<number, { x: number; y: number }>()
@@ -422,7 +457,51 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
       </defs>
       
       <g ref={gRef} transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale})`}>
+        {cosetStripData && cosetStripData.strips.length > 0 && cosetStripData.strips.map((strip, si) => (
+          <g key={`coset-bg-${si}`}>
+            <rect
+              x={strip.x}
+              y={strip.y}
+              width={strip.w}
+              height={strip.h}
+              rx={8}
+              fill={strip.color + (strip.isSubgroup ? '18' : '10')}
+              stroke={strip.isSubgroup ? strip.color + '55' : strip.color + '28'}
+              strokeWidth={strip.isSubgroup ? 2 : 1}
+              strokeDasharray={strip.isSubgroup ? undefined : '4 6'}
+            />
+            <text
+              x={strip.x + strip.w / 2}
+              y={strip.y - 10}
+              textAnchor="middle"
+              fill={strip.color}
+              fontSize={13}
+              fontWeight={strip.isSubgroup ? 700 : 400}
+              opacity={0.85}
+              style={{ fontFamily: 'KaTeX_Main, monospace', fontStyle: 'italic' }}
+            >{strip.label}</text>
+          </g>
+        ))}
         {edgeElements}
+        
+        {cosetStripData && cosetStripData.strips.length > 0 && (
+          (() => {
+            const shSize = cosetStripData.strips[0]?.elementIds.length || 0
+            const n = currentGroup!.order
+            const index = cosetStripData.strips.length
+            return (
+              <text
+                x={viewBoxSize.width / 2}
+                y={viewBoxSize.height - 14}
+                textAnchor="middle"
+                fill="#999"
+                fontSize={12}
+                opacity={0.7}
+                style={{ fontFamily: 'KaTeX_Main, monospace' }}
+              >{`|G|=${n} = ${shSize}\u00b7${index}   |H|\u00b7[G:H]`}</text>
+            )
+          })()
+        )}
         
         {currentGroup.elements.map((el) => {
           const pos = nodePositionsCache.get(el.id) || { x: cx, y: cy }

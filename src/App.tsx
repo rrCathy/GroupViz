@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from 'react'
 import { I18nProvider } from './i18n/I18nContext'
 import { useTranslation } from './i18n/useTranslation'
 import { ThemeProvider, useTheme } from './theme/useTheme'
@@ -7,13 +7,14 @@ import { useGroup } from './context/useGroup'
 import { LeftPanel } from './components/Panels/LeftPanel'
 import { RightPanel } from './components/Panels/RightPanel'
 import { GroupCanvas } from './components/Canvas/GroupCanvas'
-import { DirectProductView } from './components/Canvas/DirectProductView'
 import { FloatingViewWindow } from './components/Canvas/FloatingViewWindow'
 import { WelcomePage } from './components/WelcomePage'
 import { createGroupFromSymbol } from './utils/groupFactory'
 import { createS3 } from './core/groups/SymmetricGroup'
 import type { ViewMode } from './core/types'
 import './App.css'
+
+const DirectProductViewLazy = lazy(() => import('./components/Canvas/DirectProductView').then(m => ({ default: m.DirectProductView })))
 
 const STORAGE_KEY = 'groupviz-session'
 
@@ -120,7 +121,9 @@ function AppContent() {
       </aside>
 
       <main className="main-canvas">
-        {isDirectProductMode ? <DirectProductView /> : <GroupCanvas />}
+        {isDirectProductMode
+          ? <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><DirectProductViewLazy /></Suspense>
+          : <GroupCanvas />}
       </main>
 
       <aside className="right-sidebar">

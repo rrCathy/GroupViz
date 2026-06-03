@@ -40,7 +40,9 @@ export function RightPanel() {
     currentGroup, 
     selectedElements,
     selectElement,
-    clearSelection
+    clearSelection,
+    backendCache,
+    isLargeGroup,
   } = useGroup()
   const { t } = useTranslation()
   
@@ -56,20 +58,23 @@ export function RightPanel() {
   const subgroups = useMemo(() => {
     if (!currentGroup) return []
     if (precomputed) return precomputed.subgroups
+    if (isLargeGroup) return backendCache.subgroups ?? []
     return findAllSubgroups(currentGroup)
-  }, [currentGroup, precomputed])
+  }, [currentGroup, precomputed, isLargeGroup, backendCache.subgroups])
   
   const conjugacyClasses = useMemo(() => {
     if (!currentGroup) return []
     if (precomputed) return precomputed.conjugacyClasses
+    if (isLargeGroup) return backendCache.conjugacyClasses ?? []
     return getConjugacyClasses(currentGroup)
-  }, [currentGroup, precomputed])
+  }, [currentGroup, precomputed, isLargeGroup, backendCache.conjugacyClasses])
   
   const simpleGroup = useMemo(() => {
     if (!currentGroup) return false
     if (precomputed) return precomputed.isSimple
+    if (isLargeGroup) return backendCache.isSimple ?? false
     return isSimpleGroup(currentGroup)
-  }, [currentGroup, precomputed])
+  }, [currentGroup, precomputed, isLargeGroup, backendCache.isSimple])
 
   return (
     <div className="right-panel">
@@ -134,7 +139,9 @@ export function RightPanel() {
       )}
       
       <AccordionSection title={t('right.subgroups', { n: subgroups.length })} defaultOpen={false}>
-        {subgroups.length > 0 ? (
+        {backendCache.loading && isLargeGroup ? (
+          <p className="info-placeholder">{t('right.loadingBackend')}</p>
+        ) : subgroups.length > 0 ? (
           <div className="subgroup-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
             {subgroups.map((sg, i) => (
               <div 
@@ -158,7 +165,9 @@ export function RightPanel() {
       </AccordionSection>
       
       <AccordionSection title={t('right.conjugacyClasses', { n: conjugacyClasses.length })} defaultOpen={false}>
-        {conjugacyClasses.length > 0 ? (
+        {backendCache.loading && isLargeGroup ? (
+          <p className="info-placeholder">{t('right.loadingBackend')}</p>
+        ) : conjugacyClasses.length > 0 ? (
           <div className="class-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
             {conjugacyClasses.map((cls, i) => (
               <div

@@ -39,8 +39,10 @@ body {
   --text-subtle: #666666;
   --text-meta: #999999;
   --text-special: #a0a0c0;
-  --text-welcome-label: #7777aa;
+  --text-welcome-label: #8a8abb;
+
   --text-welcome-tagline: #8888aa;
+
   --text-welcome-feature: #c0c0e0;
   --text-lang-hover: #d0d0f0;
   --text-active: #e0e0f0;
@@ -110,8 +112,10 @@ body {
   --text-subtle: #9c9cac;
   --text-meta: #8e8ea0;
   --text-special: #56569e;
-  --text-welcome-label: #6a6a98;
-  --text-welcome-tagline: #7a7aaa;
+  --text-welcome-label: #434380;
+
+  --text-welcome-tagline: #5353a0;
+
   --text-welcome-feature: #585868;
   --text-lang-hover: #4a4a5a;
   --text-active: #383848;
@@ -122,8 +126,9 @@ body {
   --border-hover: #c8cad5;
 
   --accent-teal: #0ea5a0;
-  --accent-teal-hover: #0d8a86;
-  --accent-yellow-text: #b45309;
+  --accent-teal-hover: #0d8d88;
+  --accent-indigo: #4f46e5;
+  --accent-yellow-text: #92400e;
 
   --shadow-hint: 0 4px 16px rgba(0, 0, 0, 0.06);
   --shadow-preview: 0 0 40px rgba(99, 102, 241, 0.10), 0 8px 32px rgba(0, 0, 0, 0.08);

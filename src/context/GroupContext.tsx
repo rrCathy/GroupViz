@@ -1,10 +1,11 @@
-import { createContext, useState, useCallback, useMemo, useTransition, useRef, type ReactNode } from 'react'
+import { createContext, useState, useCallback, useMemo, useTransition, useRef, useEffect, type ReactNode } from 'react'
 import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResult, Subset, FloatingView, MultiplyType, GroupAction, Layout3D } from '../core/types'
 import { isGroupDirectProduct, getDefaultShape2D, type CayleyShape2D } from '../core/types'
 import { getViewBoxSize, type ViewBoxSize } from '../core/viewBox'
 import { isSimpleGroup as checkSimpleGroup, type CosetInfo } from '../core/algebra/subgroups'
-import { forceLayout, forceLayoutAsync, planarCycleLayout, computeCycleSubgroups, computeMaximalCycles, directProductGridLayout2D, fibonacci2DLayout } from '../core/algebra/forceLayout'
+import { forceLayout, forceLayoutAsync, planarCycleLayout, computeCycleSubgroups, computeMaximalCycles, directProductGridLayout2D, fibonacci2DLayout, concentricLayout, dualRingLayout, cosetStripLayout, archimedeanSpiralLayout, spiralLayout, coilLayout, projection3DLayout } from '../core/algebra/forceLayout'
 import { useTranslation } from '../i18n/useTranslation'
+import { type BackendCache, createEmptyBackendCache, fetchBackendResults, computeIsSimple as hybridIsSimple } from '../utils/hybridCompute'
 
 import { initializeNodePositions, type NodePositionsMap } from './positionUtils'
 import {
@@ -62,6 +63,8 @@ interface GroupContextState {
   directProductTarget: Group | null
   directProductCreationMode: 'cayley' | 'table' | 'direct'
   directProductGroups: Group[]
+  backendCache: BackendCache
+  isLargeGroup: boolean
 }
 
 interface GroupContextActions {
@@ -184,6 +187,10 @@ export function GroupProvider({ children }: { children: ReactNode }) {
   const [directProductCreationMode, setDirectProductCreationMode] = useState<'cayley' | 'table' | 'direct'>('cayley')
   const [directProductGroups, setDirectProductGroups] = useState<Group[]>(loadDirectProductGroupsFromStorage)
 
+  // Backend computation cache for large groups
+  const [backendCache, setBackendCache] = useState<BackendCache>(createEmptyBackendCache)
+  const isLargeGroup = (currentGroup?.order ?? 0) > 60
+
   // Derived state
   const viewBoxSize = useMemo(() => {
     if (!currentGroup) return { width: 800, height: 560 }
@@ -193,13 +200,40 @@ export function GroupProvider({ children }: { children: ReactNode }) {
 
   const isSimpleGroup = useMemo(() => {
     if (!currentGroup) return false
+    if (isLargeGroup) return hybridIsSimple(currentGroup, backendCache.subgroups ?? undefined)
     return checkSimpleGroup(currentGroup)
-  }, [currentGroup])
+  }, [currentGroup, isLargeGroup, backendCache.subgroups])
+
+
 
   const cosetData = useMemo(() => computeCosetData(currentGroup, cosetSubsetId, subsets), [currentGroup, subsets, cosetSubsetId])
   const cosetElementMap = useMemo(() => computeCosetElementMap(cosetData, cosetType), [cosetData, cosetType])
   const cosetColors = useMemo(() => computeCosetColors(cosetData, cosetType), [cosetData, cosetType])
   const cosetHighlightSet = useMemo(() => computeCosetHighlightSet(cosetData, cosetType, showAllCosets, selectedElements, cosetElementMap), [cosetData, cosetType, showAllCosets, selectedElements, cosetElementMap])
+
+  // When coset data changes while in cosetStrip mode, reposition nodes into the correct columns.
+  useEffect(() => {
+    if (!currentGroup || cayleyShape2D !== 'cosetStrip') return
+    if (!cosetElementMap || cosetElementMap.size === 0) return
+    const vbs = getViewBoxSize(currentGroup.order, currentView, forceShowLargeGroupViews.has(currentView))
+    const data = cosetStripLayout(
+      currentGroup,
+      vbs.width,
+      vbs.height,
+      undefined,
+      cosetElementMap,
+      new Set(cosetElementMap.values()).size,
+      cosetColors,
+    )
+    if (data && data.positions.size > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setNodePositions(prev => {
+        const next = new Map(prev)
+        next.set(currentView, data.positions)
+        return next
+      })
+    }
+  }, [cosetElementMap, cosetColors, cayleyShape2D, currentGroup, currentView, forceShowLargeGroupViews, setNodePositions])
 
   // Actions
   const addOperationHistory = useCallback((op: string) => {
@@ -217,6 +251,16 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       setSelfInverseElementId(null)
       setCosetSubsetId(null)
       setShowAllCosets(false)
+
+      // Trigger backend computation for large groups
+      if (group.order > 60) {
+        setBackendCache(prev => ({ ...prev, loading: true, error: null, groupSymbol: group.symbol }))
+        fetchBackendResults(group).then(results => {
+          setBackendCache(results)
+        })
+      } else {
+        setBackendCache(createEmptyBackendCache())
+      }
 
       // Initialize Cayley settings
       const actions = getInitialCayleyActions(group)
@@ -349,10 +393,10 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     const effectiveShape = shape2D ?? (currentView === 'cayley' ? cayleyShape2D : undefined)
     setNodePositions(prev => {
       const next = new Map(prev)
-      next.set(currentView, initializeNodePositions(currentGroup, currentView, effectiveShape))
+      next.set(currentView, initializeNodePositions(currentGroup, currentView, effectiveShape, forceShowLargeGroupViews.has(currentView)))
       return next
     })
-  }, [currentGroup, currentView, cayleyShape2D])
+  }, [currentGroup, currentView, cayleyShape2D, forceShowLargeGroupViews])
 
   const runForceLayout = useCallback(() => {
     if (!currentGroup) return
@@ -594,7 +638,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       setNodePositions(prev => {
         const next = new Map(prev)
         next.set(currentView, initializeNodePositions(currentGroup, currentView,
-          currentView === 'cayley' ? cayleyShape2D : undefined))
+          currentView === 'cayley' ? cayleyShape2D : undefined, allow))
         return next
       })
     }
@@ -650,11 +694,35 @@ export function GroupProvider({ children }: { children: ReactNode }) {
       } else if (shape === 'spherical') {
         const pos = fibonacci2DLayout(currentGroup, vbs.width, vbs.height)
         if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else if (shape === 'concentric') {
+        const pos = concentricLayout(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else if (shape === 'dualRing') {
+        const pos = dualRingLayout(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else if (shape === 'cosetStrip') {
+        const subgroupIds = cosetSubsetId
+          ? subsets.find(s => s.id === cosetSubsetId)?.elementIds
+          : undefined
+        const data = cosetStripLayout(currentGroup, vbs.width, vbs.height, subgroupIds)
+        if (data && data.positions.size > 0) batchSetNodePositions(data.positions)
+      } else if (shape === 'archimedean') {
+        const pos = archimedeanSpiralLayout(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else if (shape === 'spiral') {
+        const pos = spiralLayout(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else if (shape === 'coil') {
+        const pos = coilLayout(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
+      } else if (shape === 'projection3D') {
+        const pos = projection3DLayout(currentGroup, vbs.width, vbs.height)
+        if (pos && pos.size > 0) batchSetNodePositions(pos)
       } else {
         resetNodePositions(shape)
       }
     }
-  }, [currentGroup, currentView, forceShowLargeGroupViews, batchSetNodePositions, resetNodePositions])
+  }, [currentGroup, currentView, forceShowLargeGroupViews, batchSetNodePositions, resetNodePositions, cosetSubsetId, subsets])
 
   const saveSubset = useCallback(() => {
     if (!currentGroup || selectedElements.size === 0 || symmetryShowAction) return
@@ -841,6 +909,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
     symmetryShowAction, symmetryRotateSpeed, symmetryActionElementId, selfInverseElementId,
     cosetSubsetId, cosetType, showAllCosets, cosetData, cosetElementMap, cosetHighlightSet, cosetColors,
     isDirectProductMode, directProductSource, directProductTarget, directProductCreationMode, directProductGroups,
+    backendCache, isLargeGroup,
     setCurrentGroup, setCurrentView, selectElement, clearSelection, setCanvasTransform, resetCanvasTransform,
     addOperationHistory, setNodePosition, batchSetNodePositions, getNodePosition,
     addViewTab, closeViewTab, setActiveTab, setHoverElement, checkSubsetProperty, computeInverse,

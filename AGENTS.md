@@ -16,8 +16,8 @@
 ### 当前状态
 
 - ✅ S₃ 对称群完整实现
-- ✅ 循环群 Zₙ 实现 (n=1..20)
-- ✅ 二面群 Dₙ 实现 (n=3..8)
+- ✅ 循环群 Zₙ 实现 (n=1..120)
+- ✅ 二面群 Dₙ 实现 (n=3..12)
 - ✅ 交错群 Aₙ 实现 (n=3..5)
 - ✅ 特殊群 V₄、Q₈
 - ✅ 直积群 Z₄×Z₂、Z₂³、Z₃×Z₃
@@ -64,6 +64,16 @@
 - ✅ 直积群乘法缓存：pipe分隔DP的multiply/inverse结果Map缓存
 - ✅ 直积群localStorage持久化修复：新建直积群刷新后不再消失
 - ✅ 2D Cayley图初始化居中修复：position init与运行时viewBox space一致
+- ✅ 7种新增2D Cayley图形状：共轭类同心环、双环(旋转/反射)、陪集条带、阿基米德螺旋、螺旋、线圈、3D平面投影
+- ✅ 智能默认2D形状选择（按群类型自动匹配最佳形状）
+- ✅ Python FastAPI 后端：大群结构计算（子群/共轭类/中心/子群格/Cayley边/元素阶）
+- ✅ 混合计算系统：小群本地TypeScript计算（≤60），大群委托后端API计算
+- ✅ 3D布局引擎独立提取到 `layout3D.ts`，被2D投影布局复用
+- ✅ 后端API客户端 (`api.ts` + Vite proxy 配置)
+- ✅ 子群格视图大群支持：通过 `backendCache.lattice` 显示后端计算结果
+- ✅ 陪集条带布局：带标签的彩色列，底部显示 `|G|=n = |H|·[G:H]` Lagrange定理验证
+- ✅ 力导向面板按钮仅在非语义布局时启用（cosetStrip/concentric/dualRing/projection3D 禁用）
+- ✅ 大群UI加载状态：右侧面板显示 "正在从后端计算群结构..."
 
 ---
 
@@ -83,6 +93,14 @@
 | Three.js | ^0.184.0 | 3D渲染引擎 |
 | React Three Fiber | ^9.6.0 | React Three.js绑定 |
 | Mafs | ^0.21.0 | 数学函数绘图 |
+
+### 后端
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| Python | ^3.12 | 后端计算引擎 |
+| FastAPI | ^0.115+ | REST API服务 |
+| Uvicorn | - | ASGI服务器 |
+| Pydantic | ^2.0+ | 数据验证 |
 
 ### 数学渲染
 | 技术 | 版本 | 用途 |
@@ -144,12 +162,13 @@ GroupViz/
 │   │   │   └── DirectProduct.ts   # 任意两群直积 G×H
 │   │   ├── algebra/
 │   │   │   ├── subgroups.ts       # 子群、正规子群、共轭类、陪集、子群格
-│   │   │   └── forceLayout.ts     # 力导向布局 + Cayley边计算 + 圆圈图布局
+│   │   │   ├── forceLayout.ts     # 力导向布局 + 所有2D布局函数 + Cayley边计算
+│   │   │   └── layout3D.ts        # 3D布局引擎（全形状模板的节点位置计算）
 │   │   ├── polyhedra.ts           # 多面体顶点生成（截角四面体/立方体/二十面体等）
 │   │   ├── elementRotation.ts     # 群元素→几何旋转变换映射
 │   │   └── viewBox.ts             # SVG视口尺寸计算
 │   ├── context/
-│   │   ├── GroupContext.tsx        # 全局状态管理 + actions（868行）
+│   │   ├── GroupContext.tsx        # 全局状态管理 + actions（+940行）
 │   │   ├── useGroup.ts            # Context Hook
 │   │   ├── cayleyActions.ts       # 凯莱图action逻辑（116行）
 │   │   ├── cosetActions.ts        # 陪集action逻辑（84行）
@@ -158,6 +177,8 @@ GroupViz/
 │   ├── utils/
 │   │   ├── texify.ts              # Unicode→TeX转换 + KaTeX渲染
 │   │   ├── export.ts              # 视图导出（SVG/PNG/GIF）
+│   │   ├── api.ts                 # FastAPI后端API客户端
+│   │   ├── hybridCompute.ts       # 混合计算层（小群本地/大群后端）
 │   │   └── groupFactory.ts        # 群符号→群对象工厂（会话恢复用）
 │   ├── theme/
 │   │   ├── ThemeContext.tsx        # 深色/浅色主题Provider + localStorage持久化
@@ -178,9 +199,17 @@ GroupViz/
 │   ├── index.css                  # 基础全局样式
 │   └── main.tsx                   # 入口（React Root + KaTeX CSS导入）
 ├── public/
+├── backend/
+│   ├── main.py                    # FastAPI入口 + REST路由
+│   ├── group.py                   # Python群实现（Cayley表预计算）
+│   ├── algebra.py                 # 代数计算（子群/共轭类/陪集/子群格）
+│   ├── factory.py                 # 符号→群对象工厂
+│   ├── schemas.py                 # Pydantic请求/响应模型
+│   ├── requirements.txt           # Python依赖
+│   └── test_main.py               # 后端API测试
 ├── index.html
 ├── package.json
-├── vite.config.ts
+├── vite.config.ts                  # Vite配置（含/api→后端代理）
 ├── tsconfig.json
 ├── AGENTS.md                      # 本文档
 └── VISUALIZATION.md               # 可视化策略文档
@@ -343,17 +372,25 @@ interface CayleyEdgeData {
 - **力导向布局**：按钮（仅2D视图）
 - **添加所有元素 / 清除所有**：批量管理群元素作用
 - **群元素作用列表**：复选框 + 颜色条 + KaTeX标签
-- **2D图形状**：下拉选择（仅2D Cayley视图），支持 `grid`/`circular`/`spherical`
+- **2D图形状**：下拉选择（仅2D Cayley视图），支持圆形(circular)、网格(grid)、球面投影(spherical)、共轭类同心环(concentric)、双环(dualRing)、陪集条带(cosetStrip)、阿基米德螺旋(archimedean)、螺旋(spiral)、线圈(coil)、3D平面投影(projection3D)
+- **力导向布局**：按钮，语义布局(cosetStrip/concentric/dualRing/projection3D)时禁用
 
 ### 5.7 2D Cayley图形状系统
 
-2D Cayley图支持三种节点布局形状，通过 LeftPanel 下拉菜单切换：
+2D Cayley图支持十种节点布局形状，通过 LeftPanel 下拉菜单切换：
 
 | 形状 | 布局函数 | 适用群 | 描述 |
 |------|---------|--------|------|
 | `circular` | 圆形排列 | 所有群（默认） | 节点均匀分布在圆周上 |
 | `grid` | `directProductGridLayout2D()` | 直积群 | m×n网格布局，支持行列交换优化 |
 | `spherical` | `fibonacci2DLayout()` | 所有群 | Fibonacci球面分布的2D投影，均匀散布 |
+| `concentric` | `concentricLayout()` | 所有群 | 按共轭类分层同心环排列，单位元居中 |
+| `dualRing` | `dualRingLayout()` | 二面体群Dₙ | 旋转元在外环，反射元在内环 |
+| `cosetStrip` | `cosetStripLayout()` | 所有群 | 陪集列排布，每列彩色背景，底部验证Lagrange定理 |
+| `archimedean` | `archimedeanSpiralLayout()` | 所有群 | 阿基米德螺旋，按元素阶排序 |
+| `spiral` | `spiralLayout()` | 循环群Cₙ | 多圈螺旋，仅末尾→起始边交叉形成"玫瑰"图案 |
+| `coil` | `coilLayout()` | 所有群 | 变距螺旋，角密度随半径增大（α=0.7），仅收尾边交叉 |
+| `projection3D` | `projection3DLayout()` | S₃/S₄/S₅/A₄/A₅/Q₈ | 3D多面体顶点等轴投影到2D平面 |
 
 **布局函数（forceLayout.ts）：**
 
@@ -365,22 +402,39 @@ interface CayleyEdgeData {
 | `matrixGridLayout(rows, cols, w, h)` | 标准矩阵网格，行列自动交换优化 |
 | `parseProductFactors(group)` | 解析直积群因子 → `{colSize, rowSize, getCol, getRow}` |
 | `cayleyRingKeys(keys)` | Cayley环键排序（S3 Hamiltonian循环 / Z2ᵏ Gray码）|
+| `concentricLayout(group, w, h)` | 共轭类同心环，类按大小升序由内向外排列 |
+| `dualRingLayout(group, w, h)` | 内外双环，旋转元外环、反射元内环 |
+| `cosetStripLayout(group, w, h, ...)` | 陪集条带布局，返回 `CosetStripData`（含 strips 数组） |
+| `archimedeanSpiralLayout(group, w, h)` | 阿基米德螺旋，turns=n/8，按元素阶排序 |
+| `spiralLayout(group, w, h)` | 多圈螺旋（turns=n/5），按元素索引顺序 |
+| `coilLayout(group, w, h)` | 变距螺旋，α=0.7，内疏外密 |
+| `projection3DLayout(group, w, h)` | 调用 `layout3D.ts` 的 `compute3DPositions` 做等轴投影 |
 
 **类型定义（types.ts）：**
 ```typescript
-type CayleyShape2D = 'grid' | 'circular' | 'spherical'
+type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'cosetStrip' | 'archimedean' | 'spiral' | 'coil' | 'projection3D'
 
 // 按视图分配可用形状
 function getAvailableShapesForView(group, view) → CayleyShape2D[]
-// 按群性质判断默认形状
+// 按群性质判断默认形状（智能选择）
 function getDefaultShape2D(group) → CayleyShape2D
 // 检测因子键是否为循环序列
 function isCyclicFactorKeys(keys) → boolean
 ```
 
+**智能默认形状选择**（`getDefaultShape2D()`）：
+| 群类型 | 默认形状 |
+|--------|---------|
+| 直积群 | `grid` |
+| S₃/S₄/S₅, A₄/A₅, Q₈ | `projection3D` |
+| 循环群 Cₙ | `spiral` |
+| 二面体群 Dₙ | `dualRing` |
+| 大阶非循环群 (order > 30) | `archimedean` |
+| 其余 | `circular` |
+
 **节点位置优先级**（GroupCanvas.tsx）：
 1. 用户拖拽保存的位置（~1px容差）
-2. `gridPositions`（grid/spherical布局）
+2. `gridPositions`（grid/spherical/新形状布局）
 3. `circlePositions`（circular兜底）
 
 **初始化居中修复**：`initializeNodePositions` 与运行时 `viewBoxSize` 使用相同的 force 标志（默认false），避免 order≥38 的群因 viewBox 空间不匹配导致节点偏移到画面外。
@@ -820,6 +874,11 @@ npm run lint
 
 # 预览构建
 npm run preview
+
+# 后端启动（需先安装Python依赖）
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 ```
 
 ---
@@ -892,15 +951,25 @@ npm run preview
 - [x] 3D Cayley图直积群智能形状选择（全循环→lattice/单循环→cylinder/无循环→torus）
 - [x] 大阶群性能守卫（子群/共轭类/中心计算cutoff降至60，DP乘法缓存）
 - [x] 直积群localStorage持久化修复
+- [x] 7种新增2D Cayley图形状：共轭类同心环、双环(旋转/反射)、陪集条带、阿基米德螺旋、螺旋、线圈、3D平面投影
+- [x] 智能默认2D形状选择（按群类型自动匹配最佳形状）
+- [x] Python FastAPI 后端：大群结构计算（子群/共轭类/中心/子群格/Cayley边/元素阶）
+- [x] 混合计算系统：小群本地TypeScript计算（≤60），大群委托后端API计算
+- [x] 3D布局引擎独立提取到 `layout3D.ts`，被2D投影布局复用
+- [x] 后端API客户端 (`api.ts` + Vite proxy 配置)
+- [x] 子群格视图大群支持：通过 `backendCache.lattice` 显示后端计算结果
+- [x] 陪集条带布局：带标签的彩色列，底部显示 `|G|=n = |H|·[G:H]` Lagrange定理验证
+- [x] 力导向面板按钮仅在非语义布局时启用（cosetStrip/concentric/dualRing/projection3D 禁用）
+- [x] 大群UI加载状态：右侧面板显示 "正在从后端计算群结构..."
 
 ### 中期目标
-- [ ] S₄/A₄/A₅ 3D Cayley图形状重新设计
-- [ ] Lagrange定理验证动画
-- [ ] 群运算律验证动画（结合律、交换律）
-- [ ] 商群结构可视化
-- [ ] 群作用与轨道-稳定子可视化
 
 ### 长期目标
+- [ ] 任意有限群的输入与计算
+- [ ] 群同构检验
+- [ ] 同构定理演示
+- [ ] 群作用与表示论基础
+- [ ] 教学教程模式
 - [ ] 任意有限群的输入与计算
 - [ ] 群同构检验
 - [ ] 同构定理演示
@@ -909,5 +978,5 @@ npm run preview
 
 ---
 
-*文档版本: 4.1.1*
-*最后更新: 2026-05-15*
+*文档版本: 1.2.5*
+*最后更新: 2026-06-03*

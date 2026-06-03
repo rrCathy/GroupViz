@@ -39,7 +39,7 @@ export interface OrderEntry {
 
 export function buildGroupTypeConfigs(t: (key: string) => string): GroupTypeConfig[] {
   return [
-    { key: 'cyclic', label: t('group.cyclic.full'), minN: 2, maxN: 20, defaultN: 6, create: (n) => createCyclicGroup(n) },
+    { key: 'cyclic', label: t('group.cyclic.full'), minN: 2, maxN: 120, defaultN: 6, create: (n) => createCyclicGroup(n) },
     { key: 'symmetric', label: t('group.symmetric.full'), minN: 2, maxN: 5, defaultN: 3, create: (n) => createSymmetricGroup(n) },
     { key: 'dihedral', label: t('group.dihedral.full'), minN: 3, maxN: 8, defaultN: 4, create: (n) => createDihedralGroup(n) },
     { key: 'alternating', label: t('group.alternating.full'), minN: 3, maxN: 5, defaultN: 4, create: (n) => createAlternatingGroup(n) }
@@ -77,7 +77,7 @@ export function buildOrderGroupsMap(t: (key: string) => string): Map<number, Ord
     if (!map.has(order)) map.set(order, [])
     map.get(order)!.push(entry)
   }
-  for (let n = 2; n <= 20; n++) {
+  for (let n = 2; n <= 30; n++) {
     add(n, { symbol: `Z_{${n}}`, label: `Z_{${n}}`, desc: t('group.cyclic'), create: () => createCyclicGroup(n) })
   }
   for (let n = 3; n <= 5; n++) {

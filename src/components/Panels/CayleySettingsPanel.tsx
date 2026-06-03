@@ -94,14 +94,14 @@ export function CayleySettingsPanel() {
               className="shape-select"
             >
               {cayleyAvailableShapes2D.map(shape => (
-                <option key={shape} value={shape}>{shape}</option>
+                <option key={shape} value={shape}>{t(`panel.shape.${shape}`)}</option>
               ))}
             </select>
           </div>
         )}
 
-        {/* Force layout (2D only) */}
-        {currentView === 'cayley' && (
+        {/* Force layout (2D only) — not for semantically structured layouts */}
+        {currentView === 'cayley' && !(cayleyShape2D === 'cosetStrip' || cayleyShape2D === 'concentric' || cayleyShape2D === 'dualRing' || cayleyShape2D === 'projection3D') && (
           <button
             className="panel-btn"
             onClick={runForceLayout}

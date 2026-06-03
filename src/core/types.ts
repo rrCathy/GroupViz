@@ -4,7 +4,7 @@ export type MultiplyType = 'right' | 'left'
 
 export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron'
 
-export type CayleyShape2D = 'grid' | 'circular' | 'spherical'
+export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'cosetStrip' | 'archimedean' | 'spiral' | 'coil' | 'projection3D'
 
 export interface GroupElement {
   id: string
@@ -213,15 +213,39 @@ export function getDefaultLayout3D(group: Group): Layout3D {
 
 export function getDefaultShape2D(group: Group): CayleyShape2D {
   if (isGroupDirectProduct(group)) return 'grid'
+  const sym = group.symbol
+  const n = group.order
+  if (sym === 'S_{3}' || sym === 'S_{4}' || sym === 'S_{5}' || sym === 'S3' || sym === 'S4' || sym === 'S5' || sym === 'S₃' || sym === 'S₄' || sym === 'S₅') return 'projection3D'
+  if (sym === 'A_{4}' || sym === 'A_{5}' || sym === 'A4' || sym === 'A5') return 'projection3D'
+  if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'projection3D'
+  if (sym.startsWith('S') || (sym.startsWith('A') && n >= 12)) return 'projection3D'
+  if (isGroupCyclic(group)) return 'spiral'
+  if (isGroupDihedral(group)) return 'dualRing'
+  if (n > 30 && !isGroupCyclic(group)) return 'archimedean'
   return 'circular'
 }
 
 export function getAvailableShapesForView(group: Group | null, view: ViewMode): CayleyShape2D[] {
   if (!group) return ['circular']
   if (view === 'cayley' || view === 'cycle' || view === 'set') {
+    if (isGroupCyclic(group) && !isGroupDirectProduct(group)) {
+      return ['circular', 'spherical', 'spiral', 'coil']
+    }
+    if (isGroupDihedral(group)) {
+      return ['circular', 'spherical', 'dualRing']
+    }
     const shapes: CayleyShape2D[] = ['circular']
+    const sym = group.symbol
+    const isSA = sym.startsWith('S') || sym.startsWith('A')
+    const isSpecial = sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈'
+    if (isSA || isSpecial) {
+      shapes.push('projection3D')
+    }
     if (isGroupDirectProduct(group)) shapes.push('grid')
     shapes.push('spherical')
+    if (!isSA && !isSpecial) shapes.push('archimedean')
+    if (!isGroupDirectProduct(group) && !isSA && !isSpecial) shapes.push('concentric')
+    shapes.push('cosetStrip')
     return shapes
   }
   return ['circular']

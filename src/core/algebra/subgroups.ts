@@ -1,4 +1,13 @@
 import type { Group, GroupElement } from '../types'
+import { COLOR_PALETTE } from '../types'
+import { createCyclicGroup } from '../groups/CyclicGroup'
+import { createDihedralGroup } from '../groups/DihedralGroup'
+import { createSymmetricGroup } from '../groups/SymmetricGroup'
+import { createAlternatingGroup } from '../groups/AlternatingGroup'
+import { createKleinFour, createQuaternion } from '../groups/SpecialGroup'
+import { createDirectProduct } from '../groups/DirectProduct'
+import { computeCayleyActionEdges, type ForceLayoutEdge } from './cayleyEdges'
+import { forceLayout } from './cycleLayouts'
 
 export interface Subgroup {
   elements: GroupElement[]
@@ -50,7 +59,7 @@ export function computeSubgroupLattice(group: Group): {
 
   cyclicSubgroups.forEach((sg, i) => {
     const elementIds = sg.elements.map(e => e.id)
-    const key = elementIds.sort().join(',')
+    const key = elementIds.toSorted((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(',')
     if (seenKeys.has(key)) return
     seenKeys.add(key)
     nodes.push({
@@ -184,6 +193,30 @@ export function findAllNormalSubgroups(group: Group): Subgroup[] {
   if (!identityClass) return []
 
   const otherClasses = classes.filter(c => c !== identityClass)
+
+  // JS bitwise shifts operate on 32-bit ints; >31 classes causes overflow/wrap.
+  // For abelian groups, every subgroup is normal — delegate to findAllSubgroups.
+  if (otherClasses.length > 31 || group.isAbelian) {
+    const all = findAllSubgroups(group)
+    const subgs: Subgroup[] = []
+    const seen = new Set<string>()
+    for (const sg of all) {
+      const key = sg.elements.map(e => e.id).sort().join(',')
+      if (seen.has(key)) continue
+      seen.add(key)
+      let isNormal = true
+      for (const h of sg.elements) {
+        for (const g of group.elements) {
+          const conj = group.multiply(group.multiply(g, h), group.inverse(g))
+          if (!sg.elements.some(e => e.id === conj.id)) { isNormal = false; break }
+        }
+        if (!isNormal) break
+      }
+      subgs.push({ ...sg, isNormal })
+    }
+    return subgs.sort((a, b) => a.order - b.order)
+  }
+
   const normalSubgroups: Subgroup[] = []
   const seen = new Set<string>()
 
@@ -326,7 +359,7 @@ export function findAllSubgroups(group: Group): Subgroup[] {
 }
 
 export function getGroupCenter(group: Group): GroupElement[] {
-  if (group.order > 60) return [group.identity]
+  if (group.order > 60) return group.isAbelian ? [...group.elements] : [group.identity]
   const center: GroupElement[] = []
   
   for (const a of group.elements) {
@@ -353,11 +386,15 @@ export function getConjugacyClasses(group: Group): GroupElement[][] {
   for (const a of group.elements) {
     if (used.has(a.id)) continue
     
+    const seen = new Set<string>()
     const conjugates: GroupElement[] = []
     for (const g of group.elements) {
       const conj = group.multiply(group.multiply(g, a), group.inverse(g))
-      conjugates.push(conj)
-      used.add(conj.id)
+      if (!seen.has(conj.id)) {
+        seen.add(conj.id)
+        conjugates.push(conj)
+        used.add(conj.id)
+      }
     }
     classes.push(conjugates)
   }
@@ -370,6 +407,263 @@ export interface CosetInfo {
   leftCosets: GroupElement[][]
   rightCosets: GroupElement[][]
   isNormal: boolean
+}
+
+export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Group | null {
+  if (!normalSubgroup.isNormal) return null
+
+  const cosets = computeCosets(group, normalSubgroup)
+  let leftCosets = cosets.leftCosets
+
+  // Sort cosets deterministically: identity coset first, then by smallest element ID.
+  // This ensures qcoset-N IDs remain stable after page refresh / localStorage restore.
+  const normalKey = normalSubgroup.elements.map(e => e.id).sort().join(',')
+  leftCosets = [...leftCosets].sort((a, b) => {
+    const aKey = a.map(e => e.id).sort().join(',')
+    const bKey = b.map(e => e.id).sort().join(',')
+    if (aKey === normalKey) return -1
+    if (bKey === normalKey) return 1
+    // Compare by smallest element ID for deterministic ordering
+    const aMin = a.map(e => e.id).sort()[0]
+    const bMin = b.map(e => e.id).sort()[0]
+    return aMin < bMin ? -1 : aMin > bMin ? 1 : 0
+  })
+
+  const elements: GroupElement[] = leftCosets.map((coset, i) => {
+    const rep = coset[0]
+    const memberLabels = coset.map(e => e.label)
+    const label = coset.length <= 4
+      ? memberLabels.join(', ')
+      : `${rep.label}, \\dots`
+    return {
+      id: `qcoset-${i}`,
+      label,
+      value: [i],
+      cosetMemberLabels: memberLabels,
+    }
+  })
+
+  const cosetMap = new Map<string, number>()
+  leftCosets.forEach((coset, idx) => {
+    const key = coset.map(e => e.id).sort().join(',')
+    cosetMap.set(key, idx)
+  })
+
+  const identityIdx = cosetMap.get(normalSubgroup.elements.map(e => e.id).sort().join(',')) ?? 0
+
+  const nSubgroup = leftCosets[identityIdx]
+  const actionCandidates: GroupElement[] = []
+  for (const nEl of nSubgroup) {
+    if (nEl.id === group.identity.id) continue
+    const ord = computeElementOrderInGroup(nEl, group)
+    if (ord === 2 || ord === 3) actionCandidates.push(nEl)
+    if (actionCandidates.length >= 3) break
+  }
+  if (actionCandidates.length === 0) {
+    for (const nEl of nSubgroup) {
+      if (nEl.id !== group.identity.id) {
+        actionCandidates.push(nEl)
+        break
+      }
+    }
+  }
+
+  if (actionCandidates.length > 0) {
+    const palette = ['#ff6b6b','#4ecdc4','#ffd93d']
+    const actions: import('../types').GroupAction[] = actionCandidates.map((el, i) => ({
+      elementId: el.id,
+      enabled: true,
+      color: palette[i % palette.length],
+    }))
+    const parentEdges = computeCayleyActionEdges(group, actions, 'right')
+
+    const nIdSet = new Set(nSubgroup.map(e => e.id))
+    const nIdToIdx = new Map<string, number>()
+    nSubgroup.forEach((e, i) => nIdToIdx.set(e.id, i))
+
+    const parentElMap = new Map<string, GroupElement>()
+    for (const el of group.elements) parentElMap.set(el.id, el)
+
+    const internalEdges: import('../types').InternalEdgeData[] = []
+    for (const edge of parentEdges) {
+      if (nIdSet.has(edge.fromId) && nIdSet.has(edge.toId)) {
+        const actionEl = parentElMap.get(edge.actionElementId)
+        internalEdges.push({
+          fromInnerIdx: nIdToIdx.get(edge.fromId)!,
+          toInnerIdx: nIdToIdx.get(edge.toId)!,
+          color: edge.color,
+          isBidirectional: edge.isBidirectional,
+          actionElementId: edge.actionElementId,
+          actionLabel: actionEl?.label || edge.actionElementId,
+        })
+      }
+    }
+
+    if (internalEdges.length > 0) {
+      // Compute a normalized force-directed layout for the internal Cayley
+      // graph of the normal subgroup. All cosets are isomorphic to N, so the
+      // same layout is reused for every compound node and scaled at render time.
+      const layoutEdges: ForceLayoutEdge[] = internalEdges.map(e => ({
+        source: nSubgroup[e.fromInnerIdx].id,
+        target: nSubgroup[e.toInnerIdx].id,
+      }))
+      const positions = forceLayout(nSubgroup, layoutEdges, 100, 100, { cycleSubgroups: [] })
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+      positions.forEach(p => {
+        minX = Math.min(minX, p.x)
+        maxX = Math.max(maxX, p.x)
+        minY = Math.min(minY, p.y)
+        maxY = Math.max(maxY, p.y)
+      })
+      const centerX = (minX + maxX) / 2
+      const centerY = (minY + maxY) / 2
+      const range = Math.max(maxX - minX, maxY - minY, 1e-6)
+      const internalLayout = nSubgroup.map(e => {
+        const p = positions.get(e.id)
+        if (!p) return { x: 0, y: 0 }
+        return {
+          x: (p.x - centerX) / range * 2,
+          y: (p.y - centerY) / range * 2,
+        }
+      })
+
+      for (const el of elements) {
+        el.cosetInternalEdges = internalEdges
+        el.cosetInternalLayout = internalLayout
+      }
+    }
+  }
+
+  const multiply = (a: GroupElement, b: GroupElement): GroupElement => {
+    const aIdx = parseInt(a.id.split('-')[1], 10)
+    const bIdx = parseInt(b.id.split('-')[1], 10)
+    if (!isFinite(aIdx) || aIdx < 0 || aIdx >= leftCosets.length) return elements[0]
+    if (!isFinite(bIdx) || bIdx < 0 || bIdx >= leftCosets.length) return elements[0]
+    const aRep = leftCosets[aIdx][0]
+    const bRep = leftCosets[bIdx][0]
+    const product = group.multiply(aRep, bRep)
+    // Find which coset contains the product element
+    for (let i = 0; i < leftCosets.length; i++) {
+      if (leftCosets[i].some(e => e.id === product.id)) return elements[i]
+    }
+    // Fallback: match by value
+    for (let i = 0; i < leftCosets.length; i++) {
+      if (leftCosets[i].some(e =>
+        e.value.length === product.value.length && e.value.every((v, j) => v === product.value[j])
+      )) return elements[i]
+    }
+    return elements[0]
+  }
+
+  const inverse = (el: GroupElement): GroupElement => {
+    const idx = parseInt(el.id.split('-')[1], 10)
+    if (!isFinite(idx) || idx < 0 || idx >= leftCosets.length) return elements[0]
+    const rep = leftCosets[idx][0]
+    const inv = group.inverse(rep)
+    for (let i = 0; i < leftCosets.length; i++) {
+      if (leftCosets[i].some(e => e.id === inv.id)) return elements[i]
+    }
+    // Fallback: match by value
+    for (let i = 0; i < leftCosets.length; i++) {
+      if (leftCosets[i].some(e =>
+        e.value.length === inv.value.length && e.value.every((v, j) => v === inv.value[j])
+      )) return elements[i]
+    }
+    return elements[0]
+  }
+
+  const order = leftCosets.length
+  const isAbelian = group.isAbelian || order <= 4
+
+  const generators: import('../types').Generator[] = []
+  const sourceGens = group.generators.length > 0
+    ? group.generators.map(g => g.apply(group.identity))
+    : []
+
+  const seenGens = new Set<number>()
+  for (let genIdx = 0; genIdx < sourceGens.length; genIdx++) {
+    const genEl = sourceGens[genIdx]
+    for (let i = 0; i < leftCosets.length; i++) {
+      if (leftCosets[i].some(e => e.id === genEl.id)) {
+        if (i !== identityIdx && !seenGens.has(i)) {
+          seenGens.add(i)
+          const idx = i
+          const parentColor = group.generators[genIdx]?.color ?? COLOR_PALETTE[generators.length % COLOR_PALETTE.length]
+          const gen: import('../types').Generator = {
+            name: `g${idx}`,
+            symbol: `\\bar{g}_{${idx}}`,
+            color: parentColor,
+            apply: (el: GroupElement) => multiply(el, elements[idx]),
+            inverse: {} as import('../types').Generator,
+          }
+          generators.push(gen)
+        }
+        break
+      }
+    }
+  }
+
+  if (generators.length === 0 && order > 1) {
+    for (let i = 1; i < leftCosets.length && generators.length < 3; i++) {
+      if (seenGens.has(i)) continue
+      seenGens.add(i)
+      const idx = i
+      const gen: import('../types').Generator = {
+        name: `g${idx}`,
+        symbol: `\\bar{g}_{${idx}}`,
+        color: COLOR_PALETTE[generators.length % COLOR_PALETTE.length],
+        apply: (el: GroupElement) => multiply(el, elements[idx]),
+        inverse: {} as import('../types').Generator,
+      }
+      generators.push(gen)
+    }
+  }
+
+  const invIndex = new Map<number, number>()
+  for (let i = 0; i < elements.length; i++) {
+    const inv = inverse(elements[i])
+    invIndex.set(i, parseInt(inv.id.split('-')[1], 10))
+  }
+
+  for (const gen of generators) {
+    const genIdx = parseInt(gen.apply(elements[identityIdx]).id.split('-')[1], 10)
+    const targetInvIdx = invIndex.get(genIdx) ?? genIdx
+    const existingInv = generators.find(g => {
+      const gIdx = parseInt(g.apply(elements[identityIdx]).id.split('-')[1], 10)
+      return gIdx === targetInvIdx
+    })
+    if (existingInv) {
+      gen.inverse = existingInv
+      if (gen === existingInv) existingInv.inverse = existingInv
+    } else {
+      // Create an inverse generator reference but do not add it to the public
+      // generator set so the quotient Cayley graph only shows the chosen
+      // generating directions.
+      gen.inverse = {
+        name: `g${targetInvIdx}`,
+        symbol: `\\bar{g}_{${targetInvIdx}}`,
+        color: gen.color,
+        apply: (el: GroupElement) => multiply(el, elements[targetInvIdx]),
+        inverse: gen,
+      }
+    }
+  }
+
+  const quotientSymbol = `${group.symbol}/N`
+  const quotientName = `Quotient Group ${group.symbol}/N`
+
+  return {
+    name: quotientName,
+    symbol: quotientSymbol,
+    order,
+    elements,
+    generators,
+    multiply,
+    inverse,
+    identity: elements[identityIdx],
+    isAbelian,
+    normalSubgroupElementIds: normalSubgroup.elements.map(e => e.id),
+  }
 }
 
 export function computeCosets(group: Group, subgroup: Subgroup): CosetInfo {
@@ -406,9 +700,95 @@ export function computeCosets(group: Group, subgroup: Subgroup): CosetInfo {
     }
   }
   
-  const isNormal = leftCosets.every((lc, i) => 
-    lc.map(e => e.id).sort().join(',') === rightCosets[i]?.map(e => e.id).sort().join(',')
-  )
+  const leftKeys = new Set(leftCosets.map(lc => lc.map(e => e.id).sort().join(',')))
+  const rightKeys = new Set(rightCosets.map(rc => rc.map(e => e.id).sort().join(',')))
+  const isNormal = leftKeys.size === rightKeys.size && [...leftKeys].every(k => rightKeys.has(k))
   
   return { subgroup, leftCosets, rightCosets, isNormal }
+}
+
+export function computeElementOrderInGroup(el: GroupElement, group: Group): number {
+  let current = el
+  let ord = 0
+  do {
+    current = group.multiply(current, el)
+    ord++
+    if (ord > group.order) return group.order
+  } while (current.id !== el.id)
+  return ord
+}
+
+function getOrderDistribution(group: Group): Map<number, number> {
+  const dist = new Map<number, number>()
+  for (const el of group.elements) {
+    const ord = computeElementOrderInGroup(el, group)
+    dist.set(ord, (dist.get(ord) ?? 0) + 1)
+  }
+  return dist
+}
+
+function distributionsEqual(a: Map<number, number>, b: Map<number, number>): boolean {
+  if (a.size !== b.size) return false
+  for (const [k, v] of a) {
+    if (b.get(k) !== v) return false
+  }
+  return true
+}
+
+export function detectIsomorphicGroup(quotientGroup: Group): string | null {
+  const qOrder = quotientGroup.order
+  const qAbelian = quotientGroup.isAbelian
+  const qDist = getOrderDistribution(quotientGroup)
+
+  const tests: Array<{ symbol: string; factory: () => Group | null }> = []
+
+  tests.push({ symbol: `C_{${qOrder}}`, factory: () => createCyclicGroup(qOrder) })
+
+  if (qOrder >= 6 && qOrder % 2 === 0) {
+    const dN = qOrder / 2
+    tests.push({ symbol: `D_{${dN}}`, factory: () => createDihedralGroup(dN) })
+  }
+
+  for (let a = 2; a * a <= qOrder; a++) {
+    if (qOrder % a !== 0) continue
+    const b = qOrder / a
+    const fa = a
+    const fb = b
+    tests.push({
+      symbol: `C_{${a}}\\times C_{${b}}`,
+      factory: () => {
+        const ga = createCyclicGroup(fa)
+        const gb = createCyclicGroup(fb)
+        if (!ga || !gb) return null
+        try { return createDirectProduct(ga, gb) } catch { return null }
+      },
+    })
+  }
+
+  if (qOrder === 4) tests.push({ symbol: 'V_{4}', factory: createKleinFour })
+  if (qOrder === 8) tests.push({ symbol: 'Q_{8}', factory: createQuaternion })
+  if (qOrder === 12) tests.push({ symbol: 'A_{4}', factory: () => createAlternatingGroup(4) })
+  if (qOrder === 60) tests.push({ symbol: 'A_{5}', factory: () => createAlternatingGroup(5) })
+  if (qOrder === 6) tests.push({ symbol: 'S_{3}', factory: () => createSymmetricGroup(3) })
+  if (qOrder === 24) tests.push({ symbol: 'S_{4}', factory: () => createSymmetricGroup(4) })
+  if (qOrder === 120) tests.push({ symbol: 'S_{5}', factory: () => createSymmetricGroup(5) })
+
+  const seen = new Set<string>()
+  for (const { symbol, factory } of tests) {
+    if (seen.has(symbol)) continue
+    seen.add(symbol)
+    try {
+      const candidate = factory()
+      if (!candidate || candidate.order !== qOrder) continue
+      if (candidate.isAbelian !== qAbelian) continue
+      const cDist = getOrderDistribution(candidate)
+      if (distributionsEqual(qDist, cDist)) {
+        return symbol
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
 }

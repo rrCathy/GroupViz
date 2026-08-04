@@ -91,6 +91,17 @@ export function createGroupFromSymbol(symbol: string): Group | null {
     if (n >= 1 && n <= 30) return createCyclicGroup(n)
   }
 
+  // Z_{n} alias for cyclic groups: Z_{3}, Z_{n}, etc.
+  const zN = parseTexSubscript(symbol, 'Z')
+  if (zN !== null && zN >= 1 && zN <= 30) {
+    return createCyclicGroup(zN)
+  }
+  const zMatch = /^Z(\d+)$/.exec(symbol)
+  if (zMatch) {
+    const n = parseInt(zMatch[1], 10)
+    if (n >= 1 && n <= 30) return createCyclicGroup(n)
+  }
+
   // Dihedral groups: D_{n}
   const dN = parseTexSubscript(symbol, 'D')
   if (dN !== null && dN >= 3 && dN <= 12) {

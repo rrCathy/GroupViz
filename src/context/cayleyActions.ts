@@ -1,5 +1,5 @@
 import type { Group, ViewMode, GroupAction, Layout3D } from '../core/types'
-import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, type CayleyShape2D } from '../core/types'
+import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, isQuotientGroup, type CayleyShape2D } from '../core/types'
 
 export function getInitialCayleyActions(group: Group): GroupAction[] {
   return group.generators.map((gen, i) => {
@@ -12,7 +12,22 @@ export function getInitialCayleyActions(group: Group): GroupAction[] {
   })
 }
 
-export function getCayleyShapeConfig(group: Group) {
+export interface CayleyShapeConfig {
+  defaultShape3D: Layout3D
+  availableShapes3D: Layout3D[]
+  defaultShape2D: CayleyShape2D
+  availableShapes2D: CayleyShape2D[]
+}
+
+export function getCayleyShapeConfig(group: Group): CayleyShapeConfig {
+  if (isQuotientGroup(group)) {
+    return {
+      defaultShape3D: 'spherical' as Layout3D,
+      availableShapes3D: [],
+      defaultShape2D: 'circular',
+      availableShapes2D: ['circular'] as CayleyShape2D[],
+    }
+  }
   const defaultShape = getDefaultLayout3D(group)
   const shapes3D = getAvailableShapes3D(group)
   const shapes2D = getAvailableShapesForView(group, 'cayley') as CayleyShape2D[]
@@ -21,7 +36,7 @@ export function getCayleyShapeConfig(group: Group) {
   return {
     defaultShape3D: defaultShape,
     availableShapes3D: shapes3D,
-    defaultShape2D: shapes2D.includes(default2D) ? default2D : shapes2D[0],
+    defaultShape2D: shapes2D.includes(default2D) ? default2D : (shapes2D[0] || 'circular'),
     availableShapes2D: shapes2D,
   }
 }
@@ -86,6 +101,7 @@ export function addAllCayleyActionsHelper(
   cayleyShape3D: Layout3D,
   existingActions: GroupAction[]
 ): GroupAction[] {
+  const isQuotientGroup = group.symbol.includes('/N')
   const canonical3D = (() => {
     const sym = group.symbol
     if (currentView !== '3d') return new Set<string>()
@@ -101,6 +117,22 @@ export function addAllCayleyActionsHelper(
     }
     return new Set<string>()
   })()
+
+  if (isQuotientGroup) {
+    // For quotient groups, only expose generator actions so the Cayley graph
+    // shows the quotient structure (edges between cosets), not internal
+    // subgroup edges rendered inside compound nodes.
+    return group.generators.map((gen, i) => {
+      const targetEl = gen.apply(group.identity)
+      const elementId = targetEl?.id || group.elements[0].id
+      const existing = existingActions.find(a => a.elementId === elementId)
+      return {
+        elementId,
+        enabled: existing?.enabled ?? true,
+        color: existing?.color ?? COLOR_PALETTE[i % COLOR_PALETTE.length]
+      }
+    })
+  }
 
   return group.elements.map((el, i) => {
     const existing = existingActions.find(a => a.elementId === el.id)

@@ -21,9 +21,9 @@ GroupViz 是一个交互式群论可视化 Web 应用，帮助数学研究者和
 | 技术 | 版本 | 用途 | 选型理由 |
 |------|------|------|---------|
 | React | ^19.2.5 | UI 框架 | Hooks 驱动的函数式组件模式，Concurrent 模式下 useTransition 处理大量计算的过渡状态 |
-| TypeScript | ~6.0.2 | 类型安全 | 严格的类型系统保障群论计算正确性 |
+| TypeScript | ~6.0.2 | 类型安全 | 严格的类型系统保障群论计算正确性，已启用 strict 模式 |
 | Vite | ^8.0.9 | 构建工具 | 极速 HMR、ESM 原生支持、高效的 Rollup 生产构建 |
-| TailwindCSS | ^4.2.2 | 样式框架 | 原子化 CSS-in-JS，配合 CSS 自定义属性实现主题切换 |
+| TailwindCSS | 已移除 | — | 项目使用纯 CSS 自定义属性 + App.css 实现样式和主题切换 |
 
 ### 2.2 可视化引擎
 
@@ -32,22 +32,23 @@ GroupViz 是一个交互式群论可视化 Web 应用，帮助数学研究者和
 | Three.js | ^0.184.0 | WebGL 3D 渲染（Cayley 3D、对称性视图） |
 | @react-three/fiber (R3F) | ^9.6.0 | Three.js 的 React 声明式绑定 |
 | @react-three/drei | ^10.7.7 | R3F 工具组件（OrbitControls、Html 标签等） |
-| D3.js | ^7.9.0 | 力导向布局算法（`forceLayout` 自定义实现） |
-| Mafs | ^0.21.0 | 数学函数绘图（保留未使用） |
+| 力导向布局 | 自实现 | 自定义力学模拟（斥力/引力/重力/冷却），无外部依赖 |
+| D3.js | 已移除 | 力导向布局现为纯自定义 TypeScript 实现 |
+| Mafs | 已移除 | 未使用 |
 
 ### 2.3 数学渲染
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
 | KaTeX | ^0.16.45 | 轻量级 TeX 数学公式渲染（全应用所有数学符号） |
-| MathJax | ^4.1.1 | 保留依赖，当前未使用 |
+| MathJax | 已移除 | 未使用 |
 
 ### 2.4 导出
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
 | gifenc | ^1.0.3 | 对称性视图 GIF 动图编码（量化 + 调色板 + 帧写入） |
-| html-to-image | ^1.11.13 | 保留依赖，当前使用原生 canvas.toDataURL |
+| html-to-image | 已移除 | 当前使用原生 canvas.toDataURL + XMLSerializer |
 
 ### 2.5 开发工具
 
@@ -80,7 +81,11 @@ src/
 │   │   └── SmallGroups.ts   # 小群预计算注册表
 │   └── algebra/
 │       ├── subgroups.ts     # 子群/正规子群/共轭类/陪集/子群格
-│       └── forceLayout.ts   # 力导向布局 + 2D 布局函数
+│       ├── forceLayout.ts   # 力导向布局（重新导出子文件）
+│       ├── cayleyEdges.ts   # Cayley 边计算
+│       ├── cycleLayouts.ts  # 圆圈图 / 循环子群布局
+│       ├── ringOrder.ts     # Cayley 环排序 / 数字感知排序
+│       └── shapeLayouts.ts  # 10 种 2D 布局函数（grid/concentric/dualRing/spiral 等）
 ├── components/
 │   ├── Canvas/              # 视图渲染组件
 │   │   ├── GroupCanvas.tsx  # 主画布（SVG 2D Cayley 图）
@@ -94,18 +99,24 @@ src/
 │   │   └── DirectProductView.tsx   # 直积群构建画布
 │   ├── Panels/              # 面板组件
 │   └── WelcomePage.tsx      # 欢迎页
-├── context/                 # 状态管理
-│   ├── GroupContext.tsx      # 全局状态 + actions
-│   ├── cayleyActions.ts     # Cayley 图 action 逻辑
-│   ├── cosetActions.ts      # 陪集 action 逻辑
-│   ├── directProductActions.ts # 直积 action 逻辑
-│   ├── positionUtils.ts     # 节点位置初始化
-│   └── useGroup.ts          # Context Hook
-├── i18n/                    # 国际化
-├── theme/                   # 主题
+├── context/                 # 状态管理（8 个独立 Provider）
+│   ├── GroupContext.tsx      # 核心状态（群/视图/画布/键盘/历史）——组合其他 7 个 Provider
+│   ├── GroupCoreContext.tsx  # 基础 Hook + 类型
+│   ├── GroupBackendContext.tsx # 混合计算层缓存（backendCache/isLargeGroup）
+│   ├── GroupCayleyContext.tsx # 凯莱图状态（actions/shape/multiplyType）
+│   ├── GroupSubsetContext.tsx # 子集/陪集状态
+│   ├── GroupSymmetryContext.tsx # 对称性视图状态
+│   ├── GroupDirectProductContext.tsx # 直积群构建状态
+│   ├── GroupMultiViewContext.tsx # 多视图浮动窗口状态
+│   ├── GroupHomomorphismContext.tsx # 同态映射创建与验证
+│   └── positionUtils.ts     # 节点位置初始化
+├── i18n/                    # 国际化（中文/English）
+├── theme/                   # 主题（深色/浅色 CSS 自定义属性）
 ├── utils/                   # 工具函数
 │   ├── texify.ts            # Unicode→TeX 转换 + KaTeX 渲染
 │   ├── export.ts            # SVG/PNG/GIF 导出
+│   ├── api.ts               # FastAPI 后端客户端
+│   ├── hybridCompute.ts     # 混合计算层（小群本地/大群后端路由）
 │   └── groupFactory.ts      # 符号→群对象工厂
 └── hooks/                   # 自定义 Hooks（预留）
 ```
@@ -118,7 +129,15 @@ I18nProvider
       └── App
           ├── WelcomePage (showMain=false)
           └── App (showMain=true)
-              └── GroupProvider
+              └── GroupProvider (GroupContext)
+                  ├── GroupCoreProvider
+                  │   ├── GroupBackendProvider
+                  │   ├── GroupCayleyProvider
+                  │   ├── GroupSubsetProvider
+                  │   ├── GroupSymmetryProvider
+                  │   ├── GroupDirectProductProvider
+                  │   ├── GroupMultiViewProvider
+                  │   └── GroupHomomorphismProvider
                   ├── header (标题 + ThemeToggle + LanguageToggle)
                   ├── AppContent
                   │   ├── LeftPanel (aside.left-sidebar)
@@ -142,12 +161,27 @@ I18nProvider
 
 ### 3.3 状态管理架构
 
-使用 **React Context + useState** 轻量级状态管理，无外部依赖。`GroupProvider` 持有全部状态并通过 `useGroup()` Hook 暴露。
+采用 **模块化 React Context 架构**，将原单一 `GroupContext` (868 行) 拆分为 8 个独立 Provider，无外部状态库。
+
+**架构分层**：
+```
+GroupContext (核心容器，组合所有子 Provider)
+  ├── GroupCoreContext      — 基础类型 + useGroupCore hook
+  ├── GroupBackendContext   — 后端缓存 + 混合计算层
+  ├── GroupCayleyContext    — 凯莱图状态 + Cayley 配置
+  ├── GroupSubsetContext    — 子集分析 + 陪集状态
+  ├── GroupSymmetryContext  — 对称性视图配置
+  ├── GroupDirectProductContext — 直积群构建
+  ├── GroupMultiviewContext — 多视图浮动窗口
+  └── GroupHomomorphismContext — 同态映射创建与验证
+```
 
 **关键设计决策**：
-- 所有状态在 `GroupContext.tsx` 集中管理（868 行），通过 `useCallback` 包裹 action 保证引用稳定性
-- 派发分离到独立文件（`cayleyActions.ts`, `cosetActions.ts`, `directProductActions.ts`）保持可维护性
-- `useTransition` 处理大量计算（群切换）的过渡状态，避免阻塞 UI
+- 每个子 Provider 通过 `useGroupCore()` 获取核心状态（currentGroup, currentView 等），实现关注点分离
+- GroupContext 作为组合层，嵌套渲染 8 个子 Provider
+- `useGroup()` 聚合所有子 Provider 的 hook 返回值，对外提供统一接口
+- 群切换时通过 `useRef` 追踪变更，子 Provider 使用 `queueMicrotask` 在微任务中重置相关状态，遵循 React 19 最佳实践
+- `useTransition` 处理大量计算的过渡状态，避免阻塞 UI
 - `useMemo` 缓存派生数据（viewBoxSize, cosetData 等），减少重复计算
 
 ---
@@ -408,7 +442,16 @@ Hasse 图：
 
 ---
 
-## 6. 布局算法 (`core/algebra/forceLayout.ts`)
+## 6. 布局算法 (`core/algebra/`)
+
+### 6.0 文件结构
+
+原 `forceLayout.ts` (773 行) 已拆分为 5 个文件：
+- `forceLayout.ts` — 向量发射中心，重新导出所有子文件
+- `cayleyEdges.ts` — Cayley 边计算 (`computeCayleyActionEdges`)
+- `cycleLayouts.ts` — 圆圈图 + 循环群布局 (`planarCycleLayout`, `computeCycleSubgroups`)
+- `ringOrder.ts` — Cayley 环排序 + 数字感知排序 (`cayleyRingKeys`)
+- `shapeLayouts.ts` — 9 种 2D 布局函数 (`fibonacci2DLayout`, `concentricLayout`, `dualRingLayout`, `archimedeanSpiralLayout`, `spiralLayout`, `coilLayout`, `projection3DLayout`, `directProductGridLayout2D`, 等)；`cosetStripLayout` 保留在 `forceLayout.ts` 中仅供独立陪集条带视图使用
 
 ### 6.1 力导向布局 (`forceLayout`)
 
@@ -508,38 +551,61 @@ Hasse 图：
 
 ## 9. 状态管理 (Context)
 
-### 9.1 GroupContext 状态分类
+### 9.1 模块化 Provider 架构
 
-| 类别 | 状态数 | 示例 |
-|------|--------|------|
-| 核心 | 8 | currentGroup, currentView, selectedElements, canvasTransform |
-| Cayley | 5 | caylayActions, cayleyShape2D/3D, multiplyType |
-| 陪集 | 6 | cosetSubsetId, cosetType, cosetData, cosetElementMap |
-| 直积 | 5 | isDirectProductMode, directProductSource/Target |
-| 子集 | 2 | subsets |
-| 对称性 | 3 | symmetryShowAction, symmetryRotateSpeed |
-| 多视图 | 2 | multiViewMode, floatingViews |
-| 其他 | 7 | operationHistory, hintMessage, hoverElement 等 |
+状态管理采用 8 个独立 Provider 的分层架构，每个模块自包含状态 + actions + hook：
 
-### 9.2 Action 设计模式
+| Provider | 职责 | Hook |
+|----------|------|------|
+| `GroupCoreContext` | 核心类型定义 + 基础上下文 | `useGroupCore()` |
+| `GroupBackendContext` | 后端缓存 + isLargeGroup | `useGroupBackend()` |
+| `GroupCayleyContext` | Cayley actions / shape / multiplyType | `useGroupCayley()` |
+| `GroupSubsetContext` | 子集 + 陪集状态 | `useGroupSubset()` |
+| `GroupSymmetryContext` | 对称性视图配置 | `useGroupSymmetry()` |
+| `GroupDirectProductContext` | 直积群构建状态 | `useGroupDirectProduct()` |
+| `GroupMultiviewContext` | 多视图浮动窗口 | `useGroupMultiview()` |
+| `GroupHomomorphismContext` | 同态映射创建与验证 | `useGroupHomomorphism()` |
 
-所有 action 使用 `useCallback` 包裹，无外部状态库：
-
+`GroupContext.tsx` 作为组合层，嵌套渲染所有 Provider：
 ```typescript
-const setCurrentGroup = useCallback((group: Group) => {
-  startTransition(() => {
-    // 1. 设置基本状态
-    // 2. 初始化 Cayley 设置（生成元→初始 actions）
-    // 3. 初始化节点位置（各视图预计算）
-    // 4. 重置子集/陪集等
-    // 5. 记录操作历史
-  })
-}, [...deps])
+<GroupCoreProvider>
+  <GroupBackendProvider>
+    <GroupCayleyProvider>
+      <GroupSubsetProvider>
+        <GroupSymmetryProvider>
+          <GroupDirectProductProvider>
+            <GroupMultiviewProvider>
+              <GroupHomomorphismProvider>
+                {children}
+              </GroupHomomorphismProvider>
+            </GroupMultiviewProvider>
+          </GroupDirectProductProvider>
+        </GroupSymmetryProvider>
+      </GroupSubsetProvider>
+    </GroupCayleyProvider>
+  </GroupBackendProvider>
+</GroupCoreProvider>
 ```
 
-数据流：`组件 → useGroup().action → context state → useMemo 派生 → 组件渲染`
+### 9.2 统一接口
 
-### 9.3 位置管理
+`useGroup()` 聚合所有子 Provider 的返回值，对外暴露统一 API：
+
+```typescript
+const { currentGroup, setCurrentGroup, cayleyActions, toggleCayleyAction, ... } = useGroup()
+```
+
+数据流不变：`组件 → useGroup().action → 子 Provider state → useMemo 派生 → 组件渲染`
+
+### 9.3 Action 设计模式
+
+所有 action 使用 `useCallback` 包裹，无外部状态库。群切换通过 `useTransition` 包裹以避免阻塞 UI。
+
+### 9.4 群切换状态重置
+
+群切换时，子 Provider 通过 `useRef` 追踪 group 引用变化，在 `useEffect` 中使用 `queueMicrotask` 延迟重置状态，避免同步 setState in effect 的 React 19 lint 警告。
+
+### 9.5 位置管理
 
 `nodePositions: Map<viewName, Map<elementId, {x,y}>>`
 - 不同视图独立存储节点位置
@@ -748,7 +814,6 @@ npm run lint       # ESLint 代码检查
 npm run test       # Vitest 单元测试
 npm run test:watch # 测试监听模式
 ```
-
 ---
 
 ## 20. 数据流图
@@ -760,7 +825,9 @@ npm run test:watch # 测试监听模式
               ↓
          GroupContext state (useState)
               ↓
-         useMemo 派生数据 (cosetData, viewBoxSize, etc.)
+         ┌─ isLargeGroup? ──→ fetchBackendResults() → API → backendCache
+         │
+         └─ useMemo 派生数据 (cosetData, viewBoxSize, etc.)
               ↓
          视图组件重新渲染
               ↓
@@ -778,3 +845,182 @@ createDirectProduct() → Group
 setCurrentGroup() → 加载到应用
 storeDirectProductGroup() → localStorage 持久化
 ```
+
+---
+
+## 21. 混合计算系统
+
+### 21.1 路由逻辑
+
+GroupViz 在 `src/utils/hybridCompute.ts` 中实现自动路由：
+
+```
+setCurrentGroup(group)
+       ↓
+isLargeGroup = order > 60
+       ↓
+    ┌── false ──→ 本地 TypeScript 同步计算 (subgroups.ts)
+    │
+    └── true ───→ fetchBackendResults() → API POST
+                       ↓
+                  backendCache 更新 (loading→false)
+                       ↓
+                  RightPanel 读取缓存渲染
+```
+
+### 21.2 BackendCache 类型
+
+```typescript
+interface BackendCache {
+  subgroups: { id: string; elements: string[]; isNormal: boolean }[] | null
+  normalSubgroups: { id: string; elements: string[] }[] | null
+  conjugacyClasses: { rep: string; elements: string[] }[] | null
+  center: string[] | null
+  isSimple: boolean | null
+  lattice: { nodes: LatticeNode[]; edges: [number, number][] } | null
+  loading: boolean
+  error: string | null
+  groupSymbol: string | null
+}
+```
+
+### 21.3 状态变量
+
+| 变量 | 类型 | 说明 |
+|------|------|------|
+| `backendCache` | `BackendCache` | 后端计算结果缓存 |
+| `isLargeGroup` | `boolean` | `order > LARGE_ORDER_CUTOFF(60)` |
+
+### 21.4 调度流程 (`fetchBackendResults`)
+
+1. 设置 `loading = true`
+2. 调用 `fetchSubgroups()`（预热服务端 `_subgroup_cache`）
+3. `Promise.all([fetchConjugacyClasses, fetchCenter, fetchLattice])`
+4. 更新 `backendCache`，设置 `loading = false`
+
+---
+
+## 22. 后端 API 系统
+
+`backend/` 目录使用 Python FastAPI。
+
+### 22.1 端点
+
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| GET | `/api/health` | 健康检查 + 缓存统计 |
+| POST | `/api/compute/subgroups` | 所有子群 |
+| POST | `/api/compute/normal-subgroups` | 仅正规子群 |
+| POST | `/api/compute/conjugacy-classes` | 共轭类 |
+| POST | `/api/compute/center` | 群中心 |
+| POST | `/api/compute/cayley-edges` | Cayley 图边 |
+| POST | `/api/compute/element-orders` | 元素阶 |
+| POST | `/api/compute/lattice` | 子群格 (Hasse) |
+| POST | `/api/compute/direct-product` | 服务端直积 |
+
+### 22.2 服务端缓存
+
+| 缓存 | 类型 | Key |
+|------|------|-----|
+| `_group_cache` | LRU(soft) | 群符号 |
+| `_subgroup_cache` | LRU(soft) | 群符号（lattice 复用） |
+
+### 22.3 代理配置
+
+`vite.config.ts`：
+```typescript
+server: {
+  proxy: {
+    '/api': 'http://localhost:8000'
+  }
+}
+```
+
+---
+
+## 23. 导出系统 (补充)
+
+### 23.1 SVG 帧捕获 (`captureSvgFrame`)
+
+用于 GIF 导出的中间步骤，将 SVG 光栅化为 `Uint8Array` 像素缓冲区：
+- 解析 CSS 自定义属性（`getComputedStyle`）
+- 剥离 KaTeX MathML
+- 用 SVG `<text>` 替换 `foreignObject`（解决跨浏览器的 SVG→Canvas 兼容性）
+
+### 23.2 GIF 编码 (`encodeGif`)
+
+使用 `gifenc` 库：
+1. `quantize()` 降色至 256 色
+2. `applyPalette()` 构建调色板索引
+3. `GIFEncoder.writeFrame()` 逐帧写入
+4. 无限循环标记 (`repeat: 0`)
+
+---
+
+## 24. 半直积构建系统 (N ⋊_φ H)
+
+### 24.1 数学背景
+
+半直积 `N ⋊_φ H` 依赖群作用 φ: H → Aut(N)。群元为有序对 `(n, h)`，乘法与逆元公式：
+
+```
+(n₁, h₁) · (n₂, h₂) = (n₁ · φ(h₁)(n₂), h₁ · h₂)
+(n, h)⁻¹ = (φ(h⁻¹)(n⁻¹), h⁻¹)
+```
+
+### 24.2 核心实现 (`src/core/groups/SemidirectProduct.ts`)
+
+- **`createSemidirectProduct(N, H, phiMap)`**：`phiMap` 为 `Map<H元素id, Automorphism>`。
+  - 当 `H.order ≤ 30` 时全量验证 φ 是同态（`φ(h₁·h₂)(n) = φ(h₁)(φ(h₂)(n))`），违规抛 `Error`；大 H 跳过验证。
+  - 缺项回退为单位自同构（扫描 phiMap 或合成 `id: 'id'`）。
+  - 元素 id = `` `${n.id}|${h.id}` ``，label = `(n,h)`；`multiplyCache`/`inverseCache` 加速。
+  - 生成元 = N 生成元与 H 生成元分别提升（只作用本分量），自逆则 `inverse = self`，颜色按 `COLOR_PALETTE` 顺序。
+  - 符号 `` `${N.symbol} \rtimes_{\phi} ${H.symbol}` ``；`isAbelian` 抽样前 20 对；`exponent = lcm(N,H)`。
+  - 元数据 `_semidirectProduct: { normal: N, acting: H, phiMap }`；`isoSymbol` 经 `detectIsomorphicGroup` 识别。
+  - **阶上限 144 由 context 强制**（`executeSemidirectProduct` 检查 `N.order * H.order ≤ 144`）。
+
+### 24.3 状态与流程 (`src/context/semidirectProduct/GroupSemidirectProductContext.tsx`)
+
+模式标志 `isSemidirectProductMode`；状态：N/H 因子、Aut(N) 群与列表、φ 生成元映射 `sdPhiGenMapping`、全映射 `sdPhiFullMap`、有效性 `sdPhiValid`、已存群与规格列表。
+
+关键 Actions：
+- `computeAutN()`：`findAllAutomorphisms(N)`，空结果提示 "Aut(N) too large"。
+- `expandPhiFull()`：要求所有 H 生成元已映射，`extendFromGenerators` 扩展至全 H，try/catch 构建验证。
+- `executeSemidirectProduct()`：强制 ≤144，未映射生成元默认单位自同构，返回新群。
+- `storeSemidirectProductGroup` / `removeSemidirectProductGroup` / `loadSemidirectProductGroup`。
+
+持久化 key：`groupviz-sd-groups`；会话恢复走 `reconstructSemidirectProduct(spec)`（`createGroupFromSymbol` 重建 N/H → 重算 Aut(N) → 未知 id 回退单位自同构 → 重建）。`groupFactory` 不解析 `\rtimes` 符号。
+
+### 24.4 UI
+
+- **`SemidirectProductPanel`**：LeftPanel 第 2 个面板（⋉），默认折叠。5 个预设：Z₃⋊Z₂(≅S₃)、Z₄⋊Z₂(≅D₄)、Z₅⋊Z₂(≅D₅)、Z₇⋊Z₃(Frobenius, x→2x)、V₄⋊Z₃(≅A₄)。含 N/H 导入、计算 Aut(N)、每个 H 生成元的 φ 下拉、展开 φ、创建按钮与已存列表。
+- **`SemidirectProductView`**（懒加载，替代 GroupCanvas）：设置模式双 Cayley 图（左 H、右 Aut(N)）+ φ 映射贝塞尔箭头；动画模式 4 步教学动画（H 骨架环 → 每 H 节点膨胀为 N 副本环（φ(h) 重布线）→ H 边连接对应节点 → 完整乘积），rAF ease-in-out-cubic 每步 1s，Finish 按钮在 Step3 存储并进入 cayley 视图。
+- **rewiring 布局**（`semidirectProductLayout`，forceLayout.ts）：|H| 个 N 副本环绕 H 主环；`computeShape2DPositions` 的 `'rewiring'` 分支；`GroupCanvas` 实现 φ(h) 不动点青绿高亮（`sdFixedMap` 跳过全不动环）。力导向按钮对该形状禁用。
+
+---
+
+## 25. 自同构群系统 Aut(G)
+
+### 25.1 核心实现 (`src/core/algebra/automorphisms.ts`)
+
+- **`Automorphism` 接口**：`{ id, map: Map<元素id,元素id>, label, apply(el) }`。
+- **`findAllAutomorphisms(group)`**：按生成元置换枚举——每个生成元的候选 = 全部同阶元素；`totalCombinations > 30000` 直接返回 `[]`（如 Z₂⁴: 15⁴=50625），`MAX_RESULTS = 1000`；DFS + `extendFromGeneratorMap`（BFS 按生成元展开，覆盖不全返回 null）+ `verifyHomomorphism` + 核1 + 像全 + `seenMaps` 去重。
+- 已知数量：|Aut(Z₃)|=2, |Aut(Z₄)|=2, |Aut(Z₅)|=4, |Aut(S₃)|=6, |Aut(V₄)|=6, |Aut(D₃)|=6, |Aut(D₄)|=8, |Aut(Q₈)|=24。
+- **`createAutomorphismGroup(group)`**：返回完整 `Group`——元素 id `auto-N`，label 循环群按典范生成元像 α_k（k≥10 用 `\alpha_{k}`）、恒等 `\mathrm{id}`；multiply=复合 a∘b（与半直积同态条件一致）；inverse=反转映射；`generators` 贪心闭包扩张；`symbol = \operatorname{Aut}(parent)`；`automorphismParentSymbol` + `_automorphismById`；`isoSymbol` 识别（如 Aut(Z₃)≅C₂）。`isAutomorphismGroup(group)` 判据 = `automorphismParentSymbol` 非空（types.ts 与 automorphisms.ts 各有副本）。
+
+### 25.2 状态与持久化
+
+- `computeAutomorphismGroup()`（GroupSubsetContext）：按 parentSymbol 去重，entry `{id, group, parentSymbol, order, isoSymbol}`，hint 提示。
+- 持久化 key：`groupviz-automorphisms`（仅存元数据，加载时重建）；会话 `groupviz-session` 存 `automorphismData.isoSymbol`。
+
+### 25.3 UI
+
+- **OperationsPanel "Aut" tab**：计算按钮 + 已存列表（橙色 #f97316 色块、`Aut({parentSymbol})`、阶、≅ 徽章、Load/删除）。
+- **AutomorphismPreviewPopup**（App.tsx 全局挂载）：当当前群是 Aut(G) 且恰好选中 1 个元素时显示——可拖拽 360×360 弹窗：自同构标签 + 生成元像条 + 重布线 Cayley 图（父群元素圆周布局、自环椭圆、不动点青绿高亮）+ 映射底栏（≤40 行）+ `● fixed · moved` 统计。
+- **RightPanel `AutomorphismMappingPanel`**：选中自同构时的 src↦tgt 映射（非固定行）+ `+ n fixed` 页脚。
+
+### 25.4 半直积与自同构的联动
+
+半直积的 Aut(N) 计算、φ 校验与扩展全部复用自同构模块（`findAllAutomorphisms` / `extendFromGenerators`），Aut(N) 群本身也可作为普通群加载查看（Aut(Z₃)≅C₂ 等可验证）。
+
+> ⚠️ i18n 缺口：`hint.automorphismComputed`、`op.computedAutomorphism`、`right.automorphismMapping`、`homo.firstIso.phase0..3`、`panel.batchExport*`、`panel.cayleySettings` 等键未在 translations.ts 定义，`t()` 会回退到裸 key + console.warn。

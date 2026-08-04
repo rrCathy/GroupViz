@@ -3,17 +3,18 @@
  * (order ≤ 60) and delegates to the FastAPI backend for large groups.
  */
 
-import type { Group, GroupElement, SubgroupCheckResult } from '../core/types'
+import type { Group, GroupElement } from '../core/types'
+import type { CayleyEdgeData } from '../core/types'
 import {
   findAllSubgroups as localFindAllSubgroups,
   getConjugacyClasses as localGetConjugacyClasses,
   getGroupCenter as localGetGroupCenter,
   isSimpleGroup as localIsSimpleGroup,
-  computeSubgroupLattice as localSubgroupLattice
+  computeSubgroupLattice as localSubgroupLattice,
+  type Subgroup,
 } from '../core/algebra/subgroups'
 import {
   computeCayleyActionEdges as localComputeCayleyEdges,
-  type CayleyEdgeData,
 } from '../core/algebra/forceLayout'
 import {
   fetchSubgroups,
@@ -30,8 +31,8 @@ import {
 const LARGE_ORDER_CUTOFF = 60
 
 export interface BackendCache {
-  subgroups: SubgroupCheckResult[] | null
-  normalSubgroups: SubgroupCheckResult[] | null
+  subgroups: Subgroup[] | null
+  normalSubgroups: Subgroup[] | null
   conjugacyClasses: GroupElement[][] | null
   center: GroupElement[] | null
   isSimple: boolean | null
@@ -64,17 +65,19 @@ function apiElementToGroupElement(group: Group, apiEl: ApiElement): GroupElement
   return { id: apiEl.id, label: apiEl.label, value: apiEl.value }
 }
 
-function apiSubgroupToLocal(group: Group, apiSub: ApiSubgroup): SubgroupCheckResult {
+function apiSubgroupToLocal(group: Group, apiSub: ApiSubgroup): Subgroup {
   return {
     elements: apiSub.elements.map(e => apiElementToGroupElement(group, e)),
     isNormal: apiSub.is_normal,
     order: apiSub.order,
+    index: group.order / apiSub.order,
+    generators: [],
   }
 }
 
 // ── Hybrid Functions ────────────────────────────────────────────────────────
 
-export function computeSubgroups(group: Group, cached?: SubgroupCheckResult[]): SubgroupCheckResult[] {
+export function computeSubgroups(group: Group, cached?: Subgroup[]): Subgroup[] {
   if (group.order <= LARGE_ORDER_CUTOFF) {
     return localFindAllSubgroups(group)
   }
@@ -95,7 +98,7 @@ export function computeCenter(group: Group, cached?: GroupElement[]): GroupEleme
   return cached ?? [group.identity]
 }
 
-export function computeIsSimple(group: Group, cachedSubgroups?: SubgroupCheckResult[]): boolean {
+export function computeIsSimple(group: Group, cachedSubgroups?: Subgroup[]): boolean {
   if (group.order <= LARGE_ORDER_CUTOFF) {
     return localIsSimpleGroup(group)
   }

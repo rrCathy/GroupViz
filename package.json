@@ -1,7 +1,7 @@
 {
   "name": "groupviz",
   "private": true,
-  "version": "1.2.5",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,21 +9,18 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "export": "node scripts/batch-export.mjs",
+    "postinstall": "npx playwright install chromium"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.0",
-    "d3": "^7.9.0",
-    "ge-lib": "^0.4.0",
     "gifenc": "^1.0.3",
-    "html-to-image": "^1.11.13",
     "katex": "^0.16.45",
-    "mafs": "^0.21.0",
-    "mathjax": "^4.1.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "tailwindcss": "^4.2.2",
     "three": "^0.184.0"
   },
   "devDependencies": {
@@ -35,10 +32,12 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "playwright": "^1.55.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.9",

@@ -604,7 +604,7 @@ function SymmetryScene({
       setHintMessage(t('symmetry.clickHint'))
       return
     }
-    const elLabel = group.elements.find(e => e.id === actionElementId!)?.label || ''
+    const elLabel = group.elements.find(e => actionElementId && e.id === actionElementId)?.label || ''
     if (animPhase === 'reset') setHintMessage(`<span class="hint-highlight">${elLabel}</span>: ${animInfo.label} — ${t('symmetry.reset')}`)
     else if (animPhase === 'rotating') setHintMessage(`<span class="hint-highlight">${elLabel}</span>: ${animInfo.label} — ${t('symmetry.rotating')}`)
     else setHintMessage(`<span class="hint-highlight">${elLabel}</span>: ${animInfo.label}`)

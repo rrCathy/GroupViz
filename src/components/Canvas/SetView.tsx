@@ -2,6 +2,168 @@ import { useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
+import type { InternalEdgeData } from '../../core/types'
+
+const INNER_NODE_COLORS = [
+  '#ff6b6b','#4ecdc4','#ffd93d','#a78bfa','#f97316','#06b6d4',
+  '#84cc16','#f43f5e','#38bdf8','#a855f7','#14b8a6','#eab308',
+  '#6366f1','#ec4899','#0ea5e9','#22c55e',
+]
+
+function renderCompoundNode(
+  el: { cosetMemberLabels?: string[]; cosetInternalEdges?: InternalEdgeData[]; cosetInternalLayout?: { x: number; y: number }[] },
+  outerR: number,
+  isSelected: boolean,
+  fillColor: string,
+  strokeColor: string,
+  strokeWidth: number,
+  showInternalEdges: boolean = true,
+) {
+  const members = el.cosetMemberLabels!
+  const maxShow = 12
+  const showCount = Math.min(members.length, maxShow)
+  const innerR = Math.min(10, Math.max(4, Math.floor(outerR / (Math.max(3, Math.sqrt(showCount)) * 1.8))))
+  const layoutScale = outerR * 0.72
+
+  const hasLayout = el.cosetInternalLayout && el.cosetInternalLayout.length >= showCount
+  const innerPos = (idx: number) => {
+    if (hasLayout) {
+      const p = el.cosetInternalLayout![idx]
+      return { x: p.x * layoutScale, y: p.y * layoutScale }
+    }
+    const angle = (idx / showCount) * 2 * Math.PI - Math.PI / 2
+    return {
+      x: Math.cos(angle) * (outerR * 0.55),
+      y: Math.sin(angle) * (outerR * 0.55),
+    }
+  }
+
+  const circles = []
+  for (let i = 0; i < showCount; i++) {
+    const pos = innerPos(i)
+    circles.push(
+      <circle
+        key={i}
+        cx={pos.x}
+        cy={pos.y}
+        r={innerR}
+        fill={INNER_NODE_COLORS[i % INNER_NODE_COLORS.length]}
+        stroke="var(--node-stroke)"
+        strokeWidth={0.8}
+      />
+    )
+  }
+
+  const internalEdges = showInternalEdges ? el.cosetInternalEdges : undefined
+  const edgeElements: React.ReactNode[] = []
+  if (internalEdges && internalEdges.length > 0) {
+    for (let i = 0; i < internalEdges.length; i++) {
+      const edge = internalEdges[i]
+      if (edge.fromInnerIdx >= showCount || edge.toInnerIdx >= showCount) continue
+      const from = innerPos(edge.fromInnerIdx)
+      const to = innerPos(edge.toInnerIdx)
+      const dx = to.x - from.x
+      const dy = to.y - from.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < 0.1) continue
+      const ux = dx / dist
+      const uy = dy / dist
+      const sx = from.x + ux * innerR
+      const sy = from.y + uy * innerR
+      const ex = to.x - ux * innerR
+      const ey = to.y - uy * innerR
+      const midX = (sx + ex) / 2
+      const midY = (sy + ey) / 2
+
+      const edgeTitle = edge.actionLabel || edge.actionElementId || ''
+      const titleEl = edgeTitle ? <title>{edgeTitle}</title> : null
+      if (edge.isBidirectional) {
+        edgeElements.push(
+          <g key={`edge-${i}`}>
+            <line
+              x1={sx} y1={sy} x2={ex} y2={ey}
+              stroke={edge.color}
+              strokeWidth={1.5}
+              strokeOpacity={0.75}
+              strokeLinecap="round"
+            >{titleEl}</line>
+            <line
+              x1={sx} y1={sy} x2={ex} y2={ey}
+              stroke="transparent"
+              strokeWidth={8}
+              strokeLinecap="round"
+              style={{ pointerEvents: 'stroke' }}
+            >{titleEl}</line>
+          </g>
+        )
+      } else {
+        const curveOffset = 2.5
+        const nx = -uy * curveOffset
+        const ny = ux * curveOffset
+        const c1x = midX + nx
+        const c1y = midY + ny
+        const arrowSize = 2.5
+        edgeElements.push(
+          <g key={`edge-${i}`}>
+            <path
+              d={`M${sx},${sy} Q${c1x},${c1y} ${ex},${ey}`}
+              stroke={edge.color}
+              strokeWidth={1.5}
+              strokeOpacity={0.75}
+              fill="none"
+            >{titleEl}</path>
+            <path
+              d={`M${sx},${sy} Q${c1x},${c1y} ${ex},${ey}`}
+              stroke="transparent"
+              strokeWidth={8}
+              fill="none"
+              style={{ pointerEvents: 'stroke' }}
+            >{titleEl}</path>
+          </g>
+        )
+        const ax = ex - c1x
+        const ay = ey - c1y
+        const alen = Math.sqrt(ax * ax + ay * ay) || 1
+        const aux = ax / alen
+        const auy = ay / alen
+        edgeElements.push(
+          <polygon
+            key={`arrow-${i}`}
+            points={`${ex},${ey} ${ex - aux * arrowSize + auy * arrowSize * 0.5},${ey - auy * arrowSize - aux * arrowSize * 0.5} ${ex - aux * arrowSize - auy * arrowSize * 0.5},${ey - auy * arrowSize + aux * arrowSize * 0.5}`}
+            fill={edge.color}
+            stroke={edge.color}
+            strokeWidth={0.5}
+          />
+        )
+      }
+    }
+  }
+
+  return (
+    <>
+      <circle
+        r={outerR}
+        fill={fillColor}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeDasharray={isSelected ? undefined : "4 2"}
+        filter="url(#node-shadow)"
+      />
+      {edgeElements}
+      {circles}
+      {members.length > maxShow && (
+        <text
+          x={0} y={outerR - 2}
+          textAnchor="middle"
+          fill="var(--text-secondary)"
+          fontSize={10}
+        >
+          +{members.length - maxShow}
+        </text>
+      )}
+    </>
+  )
+}
 
 export function SetView() {
   const { currentGroup, selectedElements, selectElement, setHoverElement, canvasTransform, viewBoxSize, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors } = useGroup()
@@ -22,10 +184,13 @@ export function SetView() {
   }
 
   const isLarge = currentGroup.order > 60
-  const nodeRadius = 26
-  const gap = 8
+  const hasCompoundNodes = currentGroup.elements.some(el => el.cosetMemberLabels && el.cosetMemberLabels.length > 0)
+  const nodeRadius = hasCompoundNodes ? 72 : 26
+  const gap = hasCompoundNodes ? 12 : 8
   const cellSize = nodeRadius * 2 + gap
-  const cols = Math.ceil(Math.sqrt(currentGroup.order))
+  const cols = hasCompoundNodes
+    ? Math.min(currentGroup.order, Math.max(1, Math.floor(viewBoxSize.width / cellSize)))
+    : Math.ceil(Math.sqrt(currentGroup.order))
   const rows = currentGroup.order / cols
   const totalWidth = cols * cellSize
   const totalHeight = rows * cellSize
@@ -87,6 +252,8 @@ export function SetView() {
             strokeWidth = 2.5
           }
           
+          const isCompound = !!(el.cosetMemberLabels && el.cosetMemberLabels.length > 0)
+          
           return (
             <g
               key={el.id}
@@ -99,47 +266,67 @@ export function SetView() {
               onMouseLeave={() => setHoverElement(null)}
               style={{ cursor: 'pointer' }}
             >
-              <circle
-                r={nodeRadius}
-                fill={fillColor}
-                stroke={strokeColor}
-                strokeWidth={strokeWidth}
-                filter={isLarge ? undefined : "url(#node-shadow)"}
-              />
-              {isInHighlightedCoset && cosetIdx !== undefined && (
+              {isCompound ? (
+                renderCompoundNode(el, nodeRadius, isSelected, fillColor, strokeColor, strokeWidth, true)
+              ) : (
+                <>
+                  <circle
+                    r={nodeRadius}
+                    fill={fillColor}
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth}
+                    filter={isLarge ? undefined : "url(#node-shadow)"}
+                  />
+                  {isInHighlightedCoset && cosetIdx !== undefined && (
+                    <circle
+                      r={nodeRadius}
+                      fill={`${cosetColors[cosetIdx]}22`}
+                      stroke="none"
+                    />
+                  )}
+                  {parentSubset && (
+                    <circle
+                      r={nodeRadius}
+                      fill={`${parentSubset.color}22`}
+                      stroke="none"
+                    />
+                  )}
+                  {(!isLarge || isSelected || selectedElements.size === 0) && (
+                    <foreignObject
+                       x={-nodeRadius}
+                       y={-16}
+                       width={nodeRadius * 2}
+                       height={32}
+                       style={{ pointerEvents: 'none', userSelect: 'none' }}
+                     >
+                       <div
+                         style={{
+                           display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLarge ? '10px' : '15px'
+                         }}
+                         dangerouslySetInnerHTML={{
+                           __html: renderTex(texify(el.label))
+                         }}
+                       />
+                     </foreignObject>
+                   )}
+                </>
+              )}
+              {isInHighlightedCoset && cosetIdx !== undefined && isCompound && (
                 <circle
-                  r={nodeRadius}
+                  r={nodeRadius + 2}
                   fill={`${cosetColors[cosetIdx]}22`}
                   stroke="none"
                 />
               )}
-              {parentSubset && (
+              {parentSubset && isCompound && (
                 <circle
-                  r={nodeRadius}
+                  r={nodeRadius + 2}
                   fill={`${parentSubset.color}22`}
                   stroke="none"
                 />
               )}
-              {(!isLarge || isSelected || selectedElements.size === 0) && (
-                <foreignObject
-                   x={-nodeRadius}
-                   y={-16}
-                   width={nodeRadius * 2}
-                   height={32}
-                   style={{ pointerEvents: 'none', userSelect: 'none' }}
-                 >
-                   <div
-                     style={{
-                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLarge ? '10px' : '15px'
-                     }}
-                     dangerouslySetInnerHTML={{
-                       __html: renderTex(texify(el.label))
-                     }}
-                   />
-                 </foreignObject>
-               )}
-               {selfInverseElementId === el.id && (
+                {selfInverseElementId === el.id && (
                  <g>
                    <circle r={nodeRadius + 6} fill="none" stroke="#ffd93d" strokeWidth={2.5} strokeDasharray="6 3" opacity={0.85}>
                      <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="0.8s" repeatCount="indefinite" />

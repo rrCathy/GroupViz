@@ -5,12 +5,26 @@ import { computeCosets, type Subgroup, type CosetInfo } from '../core/algebra/su
 export function computeCosetData(
   currentGroup: Group | null,
   cosetSubsetId: string | null,
-  subsets: Subset[]
+  subsets: Subset[],
+  cosetSubgroupElementIds?: string[] | null
 ): CosetInfo | null {
-  if (!currentGroup || !cosetSubsetId) return null
-  const subset = subsets.find(s => s.id === cosetSubsetId)
-  if (!subset || !subset.isSubgroup) return null
-  const subgroupElements = subset.elementIds
+  if (!currentGroup) return null
+
+  let elementIds: string[] | undefined
+  let isNormal = false
+
+  if (cosetSubgroupElementIds && cosetSubgroupElementIds.length > 0) {
+    elementIds = cosetSubgroupElementIds
+  } else if (cosetSubsetId) {
+    const subset = subsets.find(s => s.id === cosetSubsetId)
+    if (!subset || !subset.isSubgroup) return null
+    elementIds = subset.elementIds
+    isNormal = subset.isNormalSubgroup
+  }
+
+  if (!elementIds || elementIds.length === 0) return null
+
+  const subgroupElements = elementIds
     .map(id => currentGroup.elements.find(e => e.id === id))
     .filter((el): el is GroupElement => el !== undefined)
   if (subgroupElements.length === 0) return null
@@ -19,7 +33,7 @@ export function computeCosetData(
     order: subgroupElements.length,
     index: currentGroup.order / subgroupElements.length,
     generators: [],
-    isNormal: subset.isNormalSubgroup,
+    isNormal,
   }
   return computeCosets(currentGroup, subgroup)
 }
@@ -67,16 +81,18 @@ export function computeCosetHighlightSet(
   return set
 }
 
+let _subsetNextId = 1
+
 export function createSubset(
   elementIds: string[],
   result: { type: string; label: string; color: string },
-  existingCount: number
+  _existingCount: number
 ): Subset {
   return {
-    id: `subset-${existingCount + 1}`,
+    id: `subset-${_subsetNextId++}`,
     elementIds,
     label: result.label,
-    color: SUBSET_COLORS[existingCount % SUBSET_COLORS.length],
+    color: SUBSET_COLORS[(_subsetNextId - 1) % SUBSET_COLORS.length],
     isSubgroup: result.type === 'subgroup' || result.type === 'normal-subgroup',
     isNormalSubgroup: result.type === 'normal-subgroup',
     type: result.type as Subset['type'],

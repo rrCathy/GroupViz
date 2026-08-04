@@ -337,11 +337,17 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
     setPopupData(null)
   }, [])
 
+  const enterTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
   const handleEnter = () => {
     setPopupData(null)
     setLeaving(true)
-    setTimeout(onEnter, 600)
+    enterTimerRef.current = setTimeout(onEnter, 600)
   }
+
+  useEffect(() => {
+    return () => clearTimeout(enterTimerRef.current)
+  }, [])
 
   return (
     <div className={`welcome-page${visible ? ' welcome-visible' : ''}${leaving ? ' welcome-leaving' : ''}`}>

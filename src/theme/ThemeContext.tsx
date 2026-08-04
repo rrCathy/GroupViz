@@ -21,8 +21,10 @@ function getSystemTheme(): Theme {
 
 function getStoredTheme(): Theme | null {
   if (typeof window === 'undefined') return null
-  const stored = localStorage.getItem('groupviz-theme')
-  if (stored === 'dark' || stored === 'light') return stored
+  try {
+    const stored = localStorage.getItem('groupviz-theme')
+    if (stored === 'dark' || stored === 'light') return stored
+  } catch { /* localStorage unavailable (e.g., privacy mode) */ }
   return null
 }
 

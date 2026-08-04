@@ -4,6 +4,100 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { findAllSubgroups, getConjugacyClasses, isSimpleGroup } from '../../core/algebra/subgroups'
 import { getPrecomputed } from '../../core/groups/SmallGroups'
 import { texify, renderTex } from '../../utils/texify'
+import { verifyHomomorphism, getHomomorphismProperties, formatKernelLabel } from '../../core/algebra/homomorphisms'
+import { createGroupFromSymbol } from '../../utils/groupFactory'
+import { isAutomorphismGroup } from '../../core/algebra/automorphisms'
+
+function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { currentGroup: { _automorphismById?: Map<string, { map: Map<string, string>; label: string }>; automorphismParentSymbol?: string }, selectedElementId: string }) {
+  const { t } = useTranslation()
+
+  const autoById = currentGroup._automorphismById
+  const automorphism = autoById?.get(selectedElementId) ?? null
+
+  const parentSymbol = currentGroup.automorphismParentSymbol ?? null
+
+  const parentGroup = useMemo(() => {
+    if (!parentSymbol) return null
+    try {
+      return createGroupFromSymbol(parentSymbol)
+    } catch {
+      return null
+    }
+  }, [parentSymbol])
+
+  const elLabelById = useMemo(() => {
+    if (!parentGroup) return null
+    return new Map(parentGroup.elements.map(e => [e.id, e.label]))
+  }, [parentGroup])
+
+  const entries = useMemo(() => {
+    if (!automorphism) return { nonFixed: [], fixedCount: 0 }
+    const automap = automorphism.map
+    const e: { srcId: string; tgtId: string }[] = []
+    for (const [src, tgt] of automap) {
+      if (src !== tgt) e.push({ srcId: src, tgtId: tgt })
+    }
+    const fixed = automap.size - e.length
+    return { nonFixed: e, fixedCount: fixed }
+  }, [automorphism])
+
+  if (!autoById || !automorphism || !parentGroup || !elLabelById) return null
+
+  return (
+    <div className="panel-section" style={{
+      borderTop: '2px solid var(--accent-teal)',
+      paddingTop: '10px',
+      marginTop: '2px',
+    }}>
+      <h3 style={{ color: 'var(--accent-teal)' }}>{t('right.automorphismMapping')}</h3>
+      <div className="info-row" style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
+        <span dangerouslySetInnerHTML={{ __html: renderTex(texify(automorphism.label)) }} />
+      </div>
+      <div style={{
+        maxHeight: '180px',
+        overflowY: 'auto',
+        fontSize: '11px',
+      }}>
+        {entries.nonFixed.slice(0, 40).map(({ srcId, tgtId }) => (
+          <div key={srcId} style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '2px 0',
+          }}>
+            <span
+              style={{
+                flex: 1,
+                textAlign: 'right',
+                color: 'var(--text-primary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+              dangerouslySetInnerHTML={{ __html: renderTex(texify(elLabelById.get(srcId) || srcId)) }}
+            />
+            <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>↦</span>
+            <span
+              style={{
+                flex: 1,
+                textAlign: 'left',
+                color: 'var(--accent-teal)',
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+              dangerouslySetInnerHTML={{ __html: renderTex(texify(elLabelById.get(tgtId) || tgtId)) }}
+            />
+          </div>
+        ))}
+        {entries.fixedCount > 0 && (
+          <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'center' }}>
+            + {entries.fixedCount} {t('right.automorphismFixed')}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function AccordionSection({ title, defaultOpen = false, children }: { title: string, defaultOpen?: boolean, children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
@@ -28,7 +122,7 @@ function AccordionSection({ title, defaultOpen = false, children }: { title: str
         }}
       >
         <span>{title}</span>
-        <span style={{ fontSize: '10px', color: '#888' }}>{isOpen ? '▼' : '▶'}</span>
+        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{isOpen ? '▼' : '▶'}</span>
       </button>
       {isOpen && <div>{children}</div>}
     </div>
@@ -43,11 +137,27 @@ export function RightPanel() {
     clearSelection,
     backendCache,
     isLargeGroup,
+    editingSource,
+    editingTarget,
+    editingMapping,
+    activeHomomorphismId,
+    homomorphisms,
+    theoremMode,
+    theoremPhase,
+    setTheoremMode,
+    createQuotientGroupWithHomomorphism,
+    subsets,
+    showCosetsFromElements,
+    cosetSubsetId,
+    cosetSubgroupElementIds,
+    currentView,
+    setCurrentGroup,
+    setCurrentView,
   } = useGroup()
   const { t } = useTranslation()
   
-  const selectedElement = selectedElements.size === 1 
-    ? currentGroup?.elements.find(e => e.id === Array.from(selectedElements)[0]) 
+  const selectedElement = selectedElements.size === 1 && currentGroup
+    ? currentGroup.elements.find(e => e.id === Array.from(selectedElements)[0]) 
     : null
   
   const precomputed = useMemo(() => {
@@ -76,6 +186,211 @@ export function RightPanel() {
     return isSimpleGroup(currentGroup)
   }, [currentGroup, precomputed, isLargeGroup, backendCache.isSimple])
 
+  const subsetByElements = useMemo(() => {
+    const map = new Map<string, typeof subsets[0]>()
+    for (const subset of subsets) {
+      const key = [...subset.elementIds].sort().join(',')
+      map.set(key, subset)
+    }
+    return map
+  }, [subsets])
+
+  const activeHomo = homomorphisms.find(h => h.id === activeHomomorphismId)
+  const homoSource = activeHomo?.source || editingSource
+  const homoFilter = activeHomo?.target || editingTarget
+  const homoMapping = activeHomo?.mapping || editingMapping
+
+  const homoResult = useMemo(() => {
+    if (!homoSource || !homoFilter || homoMapping.size === 0) return null
+    return activeHomo?.result || verifyHomomorphism(homoSource, homoFilter, homoMapping)
+  }, [homoSource, homoFilter, homoMapping, activeHomo])
+
+  const homoProperties = useMemo(() => {
+    if (!homoSource || !homoFilter || !homoResult?.isHomomorphism) return null
+    return getHomomorphismProperties(homoSource, homoFilter, homoResult)
+  }, [homoSource, homoFilter, homoResult])
+
+  const inHomoMode = !!(homoSource && homoFilter)
+
+  // ── Homomorphism mode: show only homomorphism info + both groups ──
+  if (inHomoMode) {
+    return (
+      <div className="right-panel">
+        {/* Source Group */}
+        <div className="panel-section">
+          <h3 style={{ color: 'var(--accent-teal)' }}>{t('homo.source')}</h3>
+          {homoSource && (
+            <>
+              <div className="info-row">
+                <span className="info-label">{t('right.groupName')}</span>
+                <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(homoSource.name)) }} />
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.symbol')}</span>
+                <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(homoSource.symbol)) }} />
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.order')}</span>
+                <span className="info-value">{homoSource.order}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.generators')}</span>
+                <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(homoSource.generators.map(g => g.symbol).join(', '))) }} />
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.abelian')}</span>
+                <span className="info-value">
+                  {homoSource.isAbelian ? t('right.yes') : t('right.no')}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Target Group */}
+        <div className="panel-section">
+          <h3 style={{ color: 'var(--accent-teal)' }}>{t('homo.target')}</h3>
+          {homoFilter && (
+            <>
+              <div className="info-row">
+                <span className="info-label">{t('right.groupName')}</span>
+                <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(homoFilter.name)) }} />
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.symbol')}</span>
+                <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(homoFilter.symbol)) }} />
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.order')}</span>
+                <span className="info-value">{homoFilter.order}</span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.generators')}</span>
+                <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(homoFilter.generators.map(g => g.symbol).join(', '))) }} />
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.abelian')}</span>
+                <span className="info-value">
+                  {homoFilter.isAbelian ? t('right.yes') : t('right.no')}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Homomorphism Info */}
+        <div className="panel-section">
+          <h3>{t('right.homomorphism')}</h3>
+          {homoResult?.isHomomorphism ? (
+            <>
+              <div className="info-row" style={{ marginBottom: '6px' }}>
+                <span className="info-label" style={{ fontSize: '13px', fontWeight: 700 }}>
+                  <span dangerouslySetInnerHTML={{ __html: renderTex(texify(homoSource.symbol)) }} />
+                  {' → '}
+                  <span dangerouslySetInnerHTML={{ __html: renderTex(texify(homoFilter.symbol)) }} />
+                </span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.homo.kernel')}</span>
+                <span className="info-value" style={{ color: '#ff6b6b' }}>
+                  <span dangerouslySetInnerHTML={{ __html: renderTex(formatKernelLabel(homoSource, homoResult.kernel)) }} />
+                  {' '}(|Ker|={homoResult.kernel.length})
+                </span>
+              </div>
+              <div className="info-row">
+                <span className="info-label">{t('right.homo.image')}</span>
+                <span className="info-value" style={{ color: 'var(--accent-teal)' }}>|Im|={homoResult.image.length}</span>
+              </div>
+              {homoProperties && (
+                <>
+                  <div className="info-row">
+                    <span className="info-label">{t('right.homo.quotient')}</span>
+                    <span className="info-value">
+                      {homoSource.order}/{homoResult.kernel.length} = {homoResult.kernel.length > 0 ? Math.round(homoSource.order / homoResult.kernel.length) : '∞'}
+                      {' '}= |Im f|
+                    </span>
+                  </div>
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      padding: '3px 10px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      background: homoProperties.isInjective ? 'rgba(78, 205, 196, 0.2)' : 'rgba(255, 107, 107, 0.15)',
+                      color: homoProperties.isInjective ? 'var(--accent-teal)' : '#ff6b6b',
+                    }}>
+                      {homoProperties.isInjective ? t('homo.injective') : t('homo.notInjective')}
+                    </span>
+                    <span style={{
+                      padding: '3px 10px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      background: homoProperties.isSurjective ? 'rgba(78, 205, 196, 0.2)' : 'rgba(255, 107, 107, 0.15)',
+                      color: homoProperties.isSurjective ? 'var(--accent-teal)' : '#ff6b6b',
+                    }}>
+                      {homoProperties.isSurjective ? t('homo.surjective') : t('homo.notSurjective')}
+                    </span>
+                    {homoProperties.isIsomorphism && (
+                      <span style={{
+                        padding: '3px 10px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        background: 'rgba(78, 205, 196, 0.25)',
+                        color: 'var(--accent-teal)',
+                      }}>
+                        {t('homo.isomorphism')}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          ) : homoResult ? (
+            <p className="info-placeholder" style={{ color: '#ff6b6b' }}>✗ {t('homo.invalid')}</p>
+          ) : (
+            <p className="info-placeholder">{t('right.homo.noActive')}</p>
+          )}
+          {homoResult?.isHomomorphism && !theoremMode && (
+            <button
+              className="panel-btn"
+              onClick={() => setTheoremMode(true)}
+              style={{ marginTop: '10px', width: '100%', fontSize: '11px', padding: '5px 8px' }}
+            >
+              {t('homo.theoremMode')} →
+            </button>
+          )}
+        </div>
+
+        {/* First Isomorphism Theorem (only in theorem mode) */}
+        {theoremMode && (
+          <div className="panel-section" style={{
+            background: 'rgba(56, 189, 248, 0.06)',
+            border: '1px solid var(--accent-teal)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-teal)' }}>
+                {t('homo.firstIso')}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--panel-bg)', padding: '1px 6px', borderRadius: 3 }}>
+                {theoremPhase + 1}/4
+              </span>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-accent, var(--accent-teal))', marginBottom: 4 }}
+              dangerouslySetInnerHTML={{ __html: renderTex(t(`homo.firstIso.phase${theoremPhase}`)) }} />
+            <div style={{ fontSize: 11, color: 'var(--text-primary)', lineHeight: 1.6 }}>
+              {t(`homo.firstIso.phase${theoremPhase}Desc`)}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Normal mode: show current group info ──
   return (
     <div className="right-panel">
       <div className="panel-section">
@@ -99,6 +414,13 @@ export function RightPanel() {
           <p className="info-placeholder">{t('right.selectHint')}</p>
         )}
       </div>
+      
+      {currentGroup && isAutomorphismGroup(currentGroup) && selectedElement && (
+        <AutomorphismMappingPanel
+          currentGroup={currentGroup}
+          selectedElementId={selectedElement.id}
+        />
+      )}
       
       <div className="panel-section">
         <h3>{t('right.groupInfo')}</h3>
@@ -126,6 +448,21 @@ export function RightPanel() {
                 {currentGroup.isAbelian ? t('right.yes') : t('right.no')}
               </span>
             </div>
+            {currentGroup.isoSymbol && (
+              <div className="info-row">
+                <span className="info-label">{t('right.isomorphic')}</span>
+                <span
+                  className="info-value"
+                  style={{ color: 'var(--accent-purple)', cursor: 'pointer', textDecoration: 'underline' }}
+                  title={t('right.isomorphicClick')}
+                  onClick={() => {
+                    const isoGroup = createGroupFromSymbol(currentGroup.isoSymbol!)
+                    if (isoGroup) setCurrentGroup(isoGroup)
+                  }}
+                  dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.isoSymbol!)) }}
+                />
+              </div>
+            )}
           </>
         ) : (
           <p className="info-placeholder">{t('right.noGroup')}</p>
@@ -137,27 +474,88 @@ export function RightPanel() {
           <span>{t('right.simpleGroup')}</span>
         </div>
       )}
-      
+
+      {theoremMode && homoResult?.isHomomorphism && (
+        <div className="panel-section" style={{
+          background: 'var(--accent-teal-bg, rgba(56, 189, 248, 0.06))',
+          border: '1px solid var(--accent-teal)',
+          borderRadius: '8px',
+          padding: '10px 12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-teal)' }}>
+              {t('homo.firstIso')}
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--panel-bg)', padding: '1px 6px', borderRadius: 3 }}>
+              {theoremPhase + 1}/4
+            </span>
+          </div>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-accent, var(--accent-teal))', marginBottom: 3 }}
+            dangerouslySetInnerHTML={{ __html: renderTex(t(`homo.firstIso.phase${theoremPhase}`)) }} />
+          <div style={{ fontSize: 10, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+            {t(`homo.firstIso.phase${theoremPhase}Desc`)}
+          </div>
+        </div>
+      )}
+
       <AccordionSection title={t('right.subgroups', { n: subgroups.length })} defaultOpen={false}>
         {backendCache.loading && isLargeGroup ? (
           <p className="info-placeholder">{t('right.loadingBackend')}</p>
         ) : subgroups.length > 0 ? (
-          <div className="subgroup-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-            {subgroups.map((sg, i) => (
-              <div 
-                key={i} 
-                className={`subgroup-item ${sg.isNormal ? 'normal' : ''}`}
-                onClick={() => {
-                  const ids = sg.elements.map(el => el.id)
-                  clearSelection()
-                  ids.forEach(id => selectElement(id, true))
-                }}
-              >
-                <span className="sg-order">{sg.order}</span>
-                <span className="sg-info" dangerouslySetInnerHTML={{ __html: renderTex(texify(sg.elements.map(e => e.label).join(', '))) }} />
-                {sg.isNormal && <span className="sg-badge">{t('badge.normal')}</span>}
-              </div>
-            ))}
+          <div className="subgroup-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {subgroups.map((sg) => {
+              const key = sg.elements.map(e => e.id).sort().join(',')
+              const matchingSubset = subsetByElements.get(key)
+              const isCosetActive = (matchingSubset && cosetSubsetId === matchingSubset.id) ||
+                (cosetSubgroupElementIds !== null && [...cosetSubgroupElementIds].sort().join(',') === key)
+              const subgroupLabel = sg.elements.map(e => e.label).join(', ')
+              const inCosetStripMode = currentView === 'cosetstrip'
+              return (
+                <div
+                  key={key}
+                  className={`subgroup-item ${sg.isNormal ? 'normal' : ''} ${inCosetStripMode && isCosetActive ? 'coset-active' : ''}`}
+                  onClick={() => {
+                    const ids = sg.elements.map(el => el.id)
+                    clearSelection()
+                    ids.forEach(id => selectElement(id, true))
+                    showCosetsFromElements([...ids], subgroupLabel, sg.isNormal)
+                    setCurrentView('cosetstrip')
+                  }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <span className="sg-order">{sg.order}</span>
+                    <span className="sg-info" dangerouslySetInnerHTML={{ __html: renderTex(texify(subgroupLabel)) }} />
+                    {sg.isNormal && <span className="sg-badge">{t('badge.normal')}</span>}
+                  </div>
+                  {!inCosetStripMode && (
+                    <div className="sg-actions" style={{ display: 'flex', gap: '4px' }} onClick={(e) => e.stopPropagation()}>
+                      {sg.isNormal && (
+                        <button
+                          className="panel-btn"
+                          onClick={() => {
+                            const normalSubgroupElIds = sg.elements.map(e => e.id)
+                            const mSubset = subsets.find(s =>
+                              [...s.elementIds].sort().join(',') === normalSubgroupElIds.sort().join(',')
+                            )
+                            if (mSubset) {
+                              createQuotientGroupWithHomomorphism(mSubset.id)
+                            }
+                          }}
+                          style={{
+                            minWidth: '54px', fontSize: '9px', padding: '2px 4px',
+                            backgroundColor: 'var(--accent-purple)',
+                            color: '#0f0f1a',
+                          }}
+                        >
+                          {t('quotient.create')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         ) : (
           <p className="info-placeholder">{t('right.noSubgroups')}</p>
@@ -169,9 +567,11 @@ export function RightPanel() {
           <p className="info-placeholder">{t('right.loadingBackend')}</p>
         ) : conjugacyClasses.length > 0 ? (
           <div className="class-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-            {conjugacyClasses.map((cls, i) => (
+            {conjugacyClasses.map((cls) => {
+              const ccKey = cls.map(e => e.id).sort().join(',')
+              return (
               <div
-                key={i}
+                key={ccKey}
                 className="class-item"
                 onClick={() => {
                   clearSelection()
@@ -182,7 +582,8 @@ export function RightPanel() {
                 <span className="class-size">|{cls.length}|</span>
                 <span className="class-elements" dangerouslySetInnerHTML={{ __html: renderTex(texify(cls.map(e => e.label).join(', '))) }} />
               </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <p className="info-placeholder">{t('right.noClasses')}</p>
@@ -192,7 +593,7 @@ export function RightPanel() {
       <div className="panel-section elements-list">
         <h3>{t('right.elementList', { n: currentGroup?.elements.length || 0 })}</h3>
         <div className="elements-grid">
-          {currentGroup?.elements.map(el => (
+          {currentGroup?.elements?.map(el => (
               <button
                 key={el.id}
                 className={`element-chip ${selectedElements.has(el.id) ? 'selected' : ''}`}

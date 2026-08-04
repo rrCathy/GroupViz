@@ -62,7 +62,9 @@ export function buildViewModes(t: (key: string) => string): ViewModeEntry[] {
     { value: 'table', icon: '⊞', label: t('view.table'), desc: t('view.table.desc') },
     { value: '3d', icon: '◈', label: t('view.3d'), desc: t('view.3d.desc') },
     { value: 'symmetry', icon: '⬠', label: t('view.symmetry'), desc: t('view.symmetry.desc') },
-    { value: 'sublattice', icon: '⫘', label: t('view.sublattice'), desc: t('view.sublattice.desc') }
+    { value: 'sublattice', icon: '⫘', label: t('view.sublattice'), desc: t('view.sublattice.desc') },
+    { value: 'homomorphism', icon: '⟷', label: t('view.homomorphism'), desc: t('view.homomorphism.desc') },
+    { value: 'cosetstrip', icon: '▦', label: t('view.cosetstrip'), desc: t('view.cosetstrip.desc') }
   ]
 }
 

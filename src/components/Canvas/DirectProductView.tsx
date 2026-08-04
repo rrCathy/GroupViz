@@ -13,6 +13,7 @@ import { createAlternatingGroup } from '../../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../../core/groups/SpecialGroup'
 import type { Group } from '../../core/types'
 import { COLOR_PALETTE } from '../../core/types'
+import { useAutoFade } from '../../hooks/useAutoFade'
 
 const NODE_R = 22
 const VIEW_W = 1000
@@ -274,6 +275,8 @@ export function DirectProductView() {
     setCurrentView, storeDirectProductGroup, setHintMessage, toggleDirectProductMode,
     hintMessage,
   } = useGroup()
+
+  const hintFade = useAutoFade(hintMessage)
 
   // ---- Cayley drag ----
   const [drag, setDrag] = useState<GraphDragState | null>(null)
@@ -986,7 +989,12 @@ export function DirectProductView() {
       )}
 
       {hintMessage && (
-        <div className="hint-box" style={{ zIndex: 20 }}>
+        <div
+          className="hint-box"
+          style={{ zIndex: 20, opacity: hintFade.visible ? 1 : 0 }}
+          onMouseEnter={hintFade.onMouseEnter}
+          onMouseLeave={hintFade.onMouseLeave}
+        >
           <div className="hint-box-header">
             <span>{`💡 ${t('canvas.hintBox')}`}</span>
           </div>

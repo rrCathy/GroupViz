@@ -1,0 +1,210 @@
+import { describe, it, expect } from 'vitest'
+import {
+  isQuotientGroup,
+  isAutomorphismGroup,
+  isGroupCyclic,
+  isGroupDihedral,
+  isGroupDirectProduct,
+  isGroupSemidirectProduct,
+  analyzeDPFactors,
+  isCyclicFactorKeys,
+  getAvailableShapes3D,
+  getDefaultLayout3D,
+  getDefaultShape2D,
+  getAvailableShapesForView,
+} from '../core/types'
+import type { Group, GroupElement } from '../core/types'
+
+const ID: GroupElement = { id: 'e', label: '0', value: [] }
+
+function mk(overrides: Partial<Group>): Group {
+  return {
+    name: '',
+    symbol: '',
+    order: 1,
+    elements: [],
+    generators: [],
+    multiply: (a) => a,
+    inverse: (el) => el,
+    identity: ID,
+    isAbelian: false,
+    ...overrides,
+  }
+}
+
+describe('group property predicates', () => {
+  it('isQuotientGroup detects /N in symbol', () => {
+    expect(isQuotientGroup(mk({ symbol: 'S_{4}/N' }))).toBe(true)
+    expect(isQuotientGroup(mk({ symbol: 'C_{6}' }))).toBe(false)
+  })
+
+  it('isAutomorphismGroup requires a non-empty parent symbol', () => {
+    expect(isAutomorphismGroup(mk({ symbol: 'Aut(C_6)', automorphismParentSymbol: 'C_6' }))).toBe(true)
+    expect(isAutomorphismGroup(mk({ symbol: 'Aut(C_6)', automorphismParentSymbol: '' }))).toBe(false)
+    expect(isAutomorphismGroup(mk({ symbol: 'C_6' }))).toBe(false)
+  })
+
+  it('isGroupCyclic / isGroupDihedral / isGroupSemidirectProduct', () => {
+    expect(isGroupCyclic(mk({ symbol: 'C_{6}' }))).toBe(true)
+    expect(isGroupCyclic(mk({ symbol: 'D_6' }))).toBe(false)
+    expect(isGroupDihedral(mk({ symbol: 'D_6' }))).toBe(true)
+    expect(isGroupDihedral(mk({ symbol: 'C_6' }))).toBe(false)
+    expect(isGroupSemidirectProduct(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe(true)
+    expect(isGroupSemidirectProduct(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe(false)
+  })
+
+  it('isGroupDirectProduct rules', () => {
+    expect(isGroupDirectProduct(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe(true)
+    expect(isGroupDirectProduct(mk({ symbol: 'C_{2}^{3}' }))).toBe(true)
+    expect(isGroupDirectProduct(mk({
+      symbol: 'x',
+      elements: [{ id: 'a|b', label: '', value: [] }],
+    }))).toBe(true)
+    expect(isGroupDirectProduct(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe(false)
+    expect(isGroupDirectProduct(mk({ symbol: 'S_{3}' }))).toBe(false)
+  })
+})
+
+describe('analyzeDPFactors', () => {
+  it('parses \\times parts', () => {
+    const info = analyzeDPFactors(mk({ symbol: 'C_{2} \\times C_{3}' }))
+    expect(info).toEqual({ symbolParts: ['C_{2}', 'C_{3}'], totalFactors: 2, cyclicCount: 2, allCyclic: true, isPipeProduct: false })
+  })
+
+  it('parses ^{n} superscript form', () => {
+    const info = analyzeDPFactors(mk({ symbol: 'C_{2}^{3}' }))
+    expect(info?.totalFactors).toBe(3)
+    expect(info?.allCyclic).toBe(true)
+  })
+
+  it('fills unspecified parts for pipe-only symbols', () => {
+    const info = analyzeDPFactors(mk({
+      symbol: 'G',
+      elements: [{ id: 'a|b|c', label: '', value: [] }],
+    }))
+    expect(info?.symbolParts).toEqual(['unknown', 'unknown', 'unknown'])
+    expect(info?.isPipeProduct).toBe(true)
+  })
+
+  it('returns null for non-direct products', () => {
+    expect(analyzeDPFactors(mk({ symbol: 'S_{3}' }))).toBeNull()
+  })
+
+  it('returns null when nothing can be parsed', () => {
+    const info = analyzeDPFactors(mk({ symbol: 'x', elements: [{ id: 'ab', label: '', value: [] }] }))
+    expect(info?.totalFactors).toBeFalsy()
+    expect(info).toBeNull()
+  })
+})
+
+describe('isCyclicFactorKeys', () => {
+  it('accepts binary vector keys', () => {
+    expect(isCyclicFactorKeys(['0,0', '1,0', '1,1', '0,1'])).toBe(true)
+  })
+  it('accepts 0..n-1 integer keys', () => {
+    expect(isCyclicFactorKeys(['0', '1', '2', '3'])).toBe(true)
+  })
+  it('rejects non-canonical keys and empty input', () => {
+    expect(isCyclicFactorKeys(['a', 'b'])).toBe(false)
+    expect(isCyclicFactorKeys([])).toBe(false)
+  })
+})
+
+describe('getAvailableShapes3D', () => {
+  it('returns empty for quotient groups', () => {
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{4}/N' }))).toEqual([])
+  })
+
+  it('offers lattice/torus/circular for semidirect products', () => {
+    const shapes = getAvailableShapes3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))
+    expect(shapes).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+  })
+
+  it('handles direct products by factor type', () => {
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toEqual(['spherical', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times S_{3}' }))).toEqual(['spherical', 'cylinder', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3} \\times C_{5}' }))).toEqual(['spherical', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{3} \\times S_{4} \\times S_{5}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+  })
+
+  it('handles cyclic, dihedral, abelian order-4 and generic groups', () => {
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{7}' }))).toEqual(['spherical', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'D_4' }))).toEqual(['spherical', 'dihedral', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'V_{4}', isAbelian: true, order: 4 }))).toEqual(['spherical', 'circular', 'tetrahedron'])
+    expect(getAvailableShapes3D(mk({ symbol: 'V_{4}', isAbelian: true, order: 8 }))).toEqual(['spherical', 'circular'])
+  })
+
+  it('assigns special polyhedra for named groups', () => {
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{3}' }))).toContain('hexagon')
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{4}' }))).toContain('truncatedCube')
+    expect(getAvailableShapes3D(mk({ symbol: 'Q_{8}' }))).toContain('cube')
+    expect(getAvailableShapes3D(mk({ symbol: 'A_{4}' }))).toContain('truncatedTetrahedron')
+    expect(getAvailableShapes3D(mk({ symbol: 'A_{5}' }))).toContain('truncatedIcosahedron')
+    expect(getAvailableShapes3D(mk({ symbol: 'A_{6}' }))).toEqual(['spherical', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{6}' }))).toEqual(['spherical', 'circular'])
+  })
+})
+
+describe('getDefaultLayout3D', () => {
+  it('chooses layout per family', () => {
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{4}/N' }))).toBe('spherical')
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe('lattice')
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe('lattice')
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times S_{3}' }))).toBe('cylinder')
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{3} \\times S_{4}' }))).toBe('torus')
+    expect(getDefaultLayout3D(mk({ symbol: 'D_{3}' }))).toBe('dihedral')
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{5}' }))).toBe('circular')
+    expect(getDefaultLayout3D(mk({ symbol: 'V_{4}', isAbelian: true }))).toBe('circular')
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{3}' }))).toBe('hexagon')
+    expect(getDefaultLayout3D(mk({ symbol: 'Q_{8}' }))).toBe('cube')
+    expect(getDefaultLayout3D(mk({ symbol: 'A_{4}' }))).toBe('truncatedTetrahedron')
+    expect(getDefaultLayout3D(mk({ symbol: 'A_{5}' }))).toBe('truncatedIcosahedron')
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{4}' }))).toBe('truncatedCube')
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{6}' }))).toBe('circular')
+    expect(getDefaultLayout3D(mk({ symbol: 'Weird_{x}' }))).toBe('spherical')
+  })
+})
+
+describe('getDefaultShape2D', () => {
+  it('assigns 2D default shapes', () => {
+    expect(getDefaultShape2D(mk({ symbol: 'S_{4}/N' }))).toBe('circular')
+    expect(getDefaultShape2D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe('rewiring')
+    expect(getDefaultShape2D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe('grid')
+    expect(getDefaultShape2D(mk({ symbol: 'S_{3}' }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'A_{5}' }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'Q_{8}' }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'S_{9}' }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'C_{5}' }))).toBe('spiral')
+    expect(getDefaultShape2D(mk({ symbol: 'D_{3}' }))).toBe('dualRing')
+    expect(getDefaultShape2D(mk({ symbol: 'X_{1}', order: 40 }))).toBe('archimedean')
+    expect(getDefaultShape2D(mk({ symbol: 'S_{3} \\times C_{2}', order: 20 }))).toBe('grid')
+  })
+})
+
+describe('getAvailableShapesForView', () => {
+  it('returns circular for null group', () => {
+    expect(getAvailableShapesForView(null, 'cayley')).toEqual(['circular'])
+  })
+
+  it('cayley view per family', () => {
+    expect(getAvailableShapesForView(mk({ symbol: 'S_{4}/N' }), 'cayley')).toEqual(['circular'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }), 'cayley')).toEqual(['rewiring', 'circular', 'spherical', 'concentric'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{6}' }), 'cayley')).toEqual(['circular', 'spherical', 'spiral', 'coil'])
+    expect(getAvailableShapesForView(mk({ symbol: 'D_{3}' }), 'cayley')).toEqual(['circular', 'spherical', 'dualRing'])
+
+    const s3 = getAvailableShapesForView(mk({ symbol: 'S_{3}' }), 'cayley')
+    expect(s3).toContain('projection3D')
+    expect(s3).toContain('spherical')
+    expect(s3).not.toContain('archimedean')
+
+    const g = getAvailableShapesForView(mk({ symbol: 'C_{2} \\times S_{3}' }), 'cayley')
+    expect(g).toContain('grid')
+    expect(g).toContain('archimedean')
+    expect(g).not.toContain('concentric')
+  })
+
+  it('other views get a single default', () => {
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{6}' }), 'cycle')).toEqual(['circular'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{6}' }), 'set')).toEqual(['circular'])
+  })
+})

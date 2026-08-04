@@ -23,7 +23,6 @@ export function TableView() {
     cosetColors,
     cosetData,
     cosetType,
-    cosetSubsetId,
     showAllCosets,
   } = useGroup()
   const { t } = useTranslation()
@@ -157,7 +156,7 @@ export function TableView() {
   }, [currentGroup, cosetData, idToIdx])
 
   const cosetActiveRowIds = useMemo(() => {
-    if (!currentGroup || !cosetData || !cosetSubsetId) return new Set<string>()
+    if (!currentGroup || !cosetData) return new Set<string>()
     if (showAllCosets) {
       const reps = new Set<string>()
       const cosets = cosetType === 'left' ? cosetData.leftCosets : cosetData.rightCosets
@@ -167,10 +166,10 @@ export function TableView() {
       return reps
     }
     return new Set(selectedElements)
-  }, [currentGroup, cosetData, cosetSubsetId, showAllCosets, cosetType, selectedElements])
+  }, [currentGroup, cosetData, showAllCosets, cosetType, selectedElements])
 
   const cosetActiveColIds = useMemo(() => {
-    if (!currentGroup || !cosetData || !cosetSubsetId) return new Set<string>()
+    if (!currentGroup || !cosetData) return new Set<string>()
     if (showAllCosets) {
       const reps = new Set<string>()
       const cosets = cosetType === 'right' ? cosetData.rightCosets : cosetData.leftCosets
@@ -180,7 +179,7 @@ export function TableView() {
       return reps
     }
     return new Set(selectedElements)
-  }, [currentGroup, cosetData, cosetSubsetId, showAllCosets, cosetType, selectedElements])
+  }, [currentGroup, cosetData, showAllCosets, cosetType, selectedElements])
 
   const elementsInAnySubgroup = useMemo(() => {
     const set = new Set<number>()
@@ -223,7 +222,7 @@ export function TableView() {
       <svg viewBox={`0 0 ${vw} ${vh}`} className="view-svg" style={{ userSelect: 'none' }}>
         <g transform={`translate(${offsetX}, ${offsetY})`}>
           <text x={0} y={0} fill="var(--text-muted)" fontSize={16}>{t('canvas.orderTooLarge', { n: currentGroup.order })}</text>
-          <text x={0} y={26} fill="var(--text-subtle)" fontSize={12}>Showing sampled rows and columns for large groups.</text>
+          <text x={0} y={26} fill="var(--text-subtle)" fontSize={12}>{t('canvas.tableSampled')}</text>
           {visibleIndices.map((rowIdx, ri) => (
             visibleIndices.map((colIdx, ci) => {
               const result = getCell(rowIdx, colIdx)
@@ -254,7 +253,7 @@ export function TableView() {
           const isSelected = selectedIndices.has(rowIdx)
           const sInfo = subsetElemMap.get(rowIdx)
           const inSubgroup = elementsInAnySubgroup.has(rowIdx)
-          const cosetMode = cosetSubsetId !== null
+          const cosetMode = cosetData !== null
           const rowIsCosetAnchor = cosetActiveRowIds.has(rowEl.id)
           const rowCosetIdx = cosetElementMap.get(rowEl.id)
           const rowCosetHl = rowIsCosetAnchor && rowCosetIdx !== undefined
@@ -297,7 +296,7 @@ export function TableView() {
           const isSelected = selectedIndices.has(colIdx)
           const sInfo = subsetElemMap.get(colIdx)
           const inSubgroup = elementsInAnySubgroup.has(colIdx)
-          const cosetMode = cosetSubsetId !== null
+          const cosetMode = cosetData !== null
           const colIsCosetAnchor = cosetActiveColIds.has(colEl.id)
           const colCosetIdx = cosetElementMap.get(colEl.id)
           const colCosetHl = colIsCosetAnchor && colCosetIdx !== undefined
@@ -351,7 +350,7 @@ export function TableView() {
 
             const colInSubgroup = cosetSubgroupIndices.has(colIdx)
             const rowInSubgroup = cosetSubgroupIndices.has(rowIdx)
-            const cosetMode = cosetSubsetId !== null
+            const cosetMode = cosetData !== null
             const rowIsCosetAnchor = cosetActiveRowIds.has(rowEl.id)
             const colIsCosetAnchor = cosetActiveColIds.has(colEl.id)
 

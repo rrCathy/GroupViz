@@ -40,7 +40,11 @@ export function executeDirectProductHelper(
   if (order > 144) {
     return { group: null, error: 'dp.orderTooLarge' }
   }
-  return { group: createDirectProduct(source, target) }
+  try {
+    return { group: createDirectProduct(source, target) }
+  } catch {
+    return { group: null, error: 'dp.createFailed' }
+  }
 }
 
 export function updateDirectProductGroupsHelper(

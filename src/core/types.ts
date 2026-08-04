@@ -1,15 +1,30 @@
-export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice'
+export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip'
 
 export type MultiplyType = 'right' | 'left'
 
 export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron'
 
-export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'cosetStrip' | 'archimedean' | 'spiral' | 'coil' | 'projection3D'
+export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring'
+
+export interface InternalEdgeData {
+  fromInnerIdx: number
+  toInnerIdx: number
+  color: string
+  isBidirectional: boolean
+  actionElementId?: string
+  actionLabel?: string
+}
 
 export interface GroupElement {
   id: string
   label: string
   value: number[]
+  cosetMemberLabels?: string[]
+  cosetInternalEdges?: InternalEdgeData[]
+  // Pre-computed normalized layout for the internal Cayley graph of the normal
+  // subgroup rendered inside compound quotient nodes. Positions are in [-1, 1]
+  // and scaled at render time based on the outer node radius.
+  cosetInternalLayout?: { x: number; y: number }[]
 }
 
 export interface Generator {
@@ -31,6 +46,11 @@ export interface Group {
   identity: GroupElement
   isAbelian: boolean
   exponent?: number
+  isoSymbol?: string
+  normalSubgroupElementIds?: string[]  // Only for quotient groups: reconstructs the kernel
+  automorphismParentSymbol?: string     // Only for automorphism groups: parent group symbol
+  _automorphismById?: Map<string, import('./algebra/automorphisms').Automorphism> // Only for automorphism groups
+  _semidirectProduct?: { normal: Group; acting: Group; phiMap: Map<string, import('./algebra/automorphisms').Automorphism> } // Only for semidirect products
 }
 
 export interface GroupAction {
@@ -50,12 +70,51 @@ export interface CayleyEdgeData {
   isSelfLoop: boolean
 }
 
+export type HomomorphismMap = Map<string, string>
+
+export interface HomomorphismResult {
+  isHomomorphism: boolean
+  kernel: string[]
+  image: string[]
+  violation?: {
+    a: string
+    b: string
+    lhs: string
+    rhs: string
+  }
+}
+
+export interface Homomorphism {
+  id: string
+  source: Group
+  target: Group
+  mapping: HomomorphismMap
+  result?: HomomorphismResult
+  name?: string
+}
+
+export interface HomomorphismProperties {
+  isInjective: boolean
+  isSurjective: boolean
+  isIsomorphism: boolean
+  kernelOrder: number
+  imageOrder: number
+}
+
 export const COLOR_PALETTE: string[] = [
   '#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa',
   '#f97316', '#06b6d4', '#84cc16', '#f43f5e',
   '#38bdf8', '#a855f7', '#14b8a6', '#eab308',
   '#6366f1', '#ec4899', '#0ea5e9', '#22c55e',
 ]
+
+export function isQuotientGroup(group: Group): boolean {
+  return group.symbol.includes('/N')
+}
+
+export function isAutomorphismGroup(group: Group): boolean {
+  return 'automorphismParentSymbol' in group && typeof (group as Group).automorphismParentSymbol === 'string' && (group as Group).automorphismParentSymbol !== ''
+}
 
 export function isGroupCyclic(group: Group): boolean {
   const sym = group.symbol
@@ -111,9 +170,20 @@ export function analyzeDPFactors(group: Group): DPFactorInfo | null {
 
 export function isGroupDirectProduct(group: Group): boolean {
   const sym = group.symbol
+  if (sym.includes('\\rtimes')) return false
   if (sym.includes('\\times') || sym.includes('^{')) return true
   if (group.elements.length > 0 && group.elements[0].id.includes('|')) return true
   return false
+}
+
+export function isGroupSemidirectProduct(group: Group): boolean {
+  return group.symbol.includes('\\rtimes')
+}
+
+export interface SemidirectProductSpec {
+  normalSymbol: string
+  actingSymbol: string
+  phiGenMapping: Record<string, string>
 }
 
 export function isCyclicFactorKeys(keys: string[]): boolean {
@@ -127,8 +197,14 @@ export function isCyclicFactorKeys(keys: string[]): boolean {
 }
 
 export function getAvailableShapes3D(group: Group): Layout3D[] {
+  if (isQuotientGroup(group)) return []
   const sym = group.symbol
   const shapes: Layout3D[] = ['spherical']
+
+  if (isGroupSemidirectProduct(group)) {
+    shapes.push('lattice', 'torus', 'circular')
+    return shapes
+  }
 
   if (isGroupDirectProduct(group)) {
     const info = analyzeDPFactors(group)
@@ -186,6 +262,8 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
 }
 
 export function getDefaultLayout3D(group: Group): Layout3D {
+  if (isQuotientGroup(group)) return 'spherical'
+  if (isGroupSemidirectProduct(group)) return 'lattice'
   if (isGroupDirectProduct(group)) {
     const info = analyzeDPFactors(group)
     if (info) {
@@ -212,11 +290,14 @@ export function getDefaultLayout3D(group: Group): Layout3D {
 }
 
 export function getDefaultShape2D(group: Group): CayleyShape2D {
+  if (isQuotientGroup(group)) return 'circular'
+  // Semidirect product: coset layout of N across H — the "rewiring" shape
+  if (isGroupSemidirectProduct(group)) return 'rewiring'
   if (isGroupDirectProduct(group)) return 'grid'
   const sym = group.symbol
   const n = group.order
   if (sym === 'S_{3}' || sym === 'S_{4}' || sym === 'S_{5}' || sym === 'S3' || sym === 'S4' || sym === 'S5' || sym === 'S₃' || sym === 'S₄' || sym === 'S₅') return 'projection3D'
-  if (sym === 'A_{4}' || sym === 'A_{5}' || sym === 'A4' || sym === 'A5') return 'projection3D'
+  if (sym === 'A_{5}' || sym === 'A5') return 'projection3D'
   if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'projection3D'
   if (sym.startsWith('S') || (sym.startsWith('A') && n >= 12)) return 'projection3D'
   if (isGroupCyclic(group)) return 'spiral'
@@ -227,7 +308,13 @@ export function getDefaultShape2D(group: Group): CayleyShape2D {
 
 export function getAvailableShapesForView(group: Group | null, view: ViewMode): CayleyShape2D[] {
   if (!group) return ['circular']
-  if (view === 'cayley' || view === 'cycle' || view === 'set') {
+  if (view === 'cayley') {
+    if (isQuotientGroup(group)) {
+      return ['circular']
+    }
+    if (isGroupSemidirectProduct(group)) {
+      return ['rewiring', 'circular', 'spherical', 'concentric']
+    }
     if (isGroupCyclic(group) && !isGroupDirectProduct(group)) {
       return ['circular', 'spherical', 'spiral', 'coil']
     }
@@ -245,9 +332,9 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     shapes.push('spherical')
     if (!isSA && !isSpecial) shapes.push('archimedean')
     if (!isGroupDirectProduct(group) && !isSA && !isSpecial) shapes.push('concentric')
-    shapes.push('cosetStrip')
     return shapes
   }
+  // set, cycle, and other views have a single default layout
   return ['circular']
 }
 

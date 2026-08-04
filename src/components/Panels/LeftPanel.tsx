@@ -1,22 +1,17 @@
-import { useGroup } from '../../context/useGroup'
-import { GroupCreationPanel } from './GroupCreationPanel'
-import { ViewModePanel } from './ViewModePanel'
-import { DirectProductPanel } from './DirectProductPanel'
-import { CayleySettingsPanel } from './CayleySettingsPanel'
+import { GroupPanel } from './GroupPanel'
+import { ViewPanel } from './ViewPanel'
 import { OperationsPanel } from './OperationsPanel'
+import { HomomorphismPanel } from './HomomorphismPanel'
+import { SemidirectProductPanel } from './SemidirectProductPanel'
 
 export function LeftPanel() {
-  const { currentView } = useGroup()
-
   return (
     <div className="left-panel">
-      <GroupCreationPanel />
-      <ViewModePanel />
-      <DirectProductPanel />
-      {(currentView === 'cayley' || currentView === '3d') && (
-        <CayleySettingsPanel />
-      )}
+      <GroupPanel />
+      <SemidirectProductPanel />
+      <ViewPanel />
       <OperationsPanel />
+      <HomomorphismPanel />
     </div>
   )
 }

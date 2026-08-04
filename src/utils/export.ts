@@ -190,6 +190,60 @@ export function encodeGif(
   return new Blob([bytes as BlobPart], { type: 'image/gif' })
 }
 
+export async function exportSymmetryAsGifBlob(
+  durationMs = 3000,
+  fps = 10,
+  onRestartAnimation?: () => void,
+): Promise<Blob | null> {
+  const viewport = document.querySelector('.canvas-viewport')
+  if (!viewport) return null
+
+  const canvas = viewport.querySelector('canvas')
+  if (!canvas) return null
+
+  const frameDelay = Math.round(1000 / fps)
+  const frameCount = Math.ceil(durationMs / frameDelay)
+
+  const gif = GIFEncoder()
+  const captureStart = performance.now()
+
+  for (let i = 0; i < frameCount; i++) {
+    if (onRestartAnimation && i === Math.floor(frameCount / 3)) {
+      onRestartAnimation()
+    }
+
+    await new Promise<void>(resolve => {
+      requestAnimationFrame(() => {
+        const offCanvas = document.createElement('canvas')
+        offCanvas.width = canvas.width
+        offCanvas.height = canvas.height
+        const ctx = offCanvas.getContext('2d')!
+        ctx.drawImage(canvas, 0, 0)
+        const imageData = ctx.getImageData(0, 0, offCanvas.width, offCanvas.height)
+        const frame = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength)
+        const palette = quantize(frame, 256, { format: 'rgba' })
+        const index = applyPalette(frame, palette, 'rgba')
+        gif.writeFrame(index, canvas.width, canvas.height, {
+          palette,
+          delay: frameDelay,
+          repeat: i === 0 ? 0 : undefined,
+        })
+        resolve()
+      })
+    })
+
+    if (i < frameCount - 1) {
+      const nextTarget = captureStart + (i + 1) * frameDelay
+      const wait = Math.max(0, nextTarget - performance.now())
+      if (wait > 0) await new Promise(r => setTimeout(r, wait))
+    }
+  }
+
+  gif.finish()
+  const bytes = gif.bytes()
+  return new Blob([bytes as BlobPart], { type: 'image/gif' })
+}
+
 export async function exportSymmetryAsGif(
   filename: string,
   durationMs = 3000,

@@ -11,21 +11,37 @@ import { FloatingViewWindow } from './components/Canvas/FloatingViewWindow'
 import { WelcomePage } from './components/WelcomePage'
 import { createGroupFromSymbol } from './utils/groupFactory'
 import { createS3 } from './core/groups/SymmetricGroup'
-import type { ViewMode } from './core/types'
+import { computeQuotientGroup } from './core/algebra/subgroups'
+import { createAutomorphismGroup, isAutomorphismGroup } from './core/algebra/automorphisms'
+import { reconstructSemidirectProduct } from './context/semidirectProduct/semidirectProductStorage'
+import type { StoredSemidirectProduct } from './context/semidirectProduct/semidirectProductStorage'
+import { AutomorphismPreviewPopup } from './components/Canvas/AutomorphismPreviewPopup'
+import type { Group, ViewMode } from './core/types'
+import type { Subgroup } from './core/algebra/subgroups'
 import './App.css'
 
 const DirectProductViewLazy = lazy(() => import('./components/Canvas/DirectProductView').then(m => ({ default: m.DirectProductView })))
+const SemidirectProductViewLazy = lazy(() => import('./components/Canvas/SemidirectProductView').then(m => ({ default: m.SemidirectProductView })))
 
 const STORAGE_KEY = 'groupviz-session'
 
 interface SavedSession {
   symbol: string
   view: ViewMode
+  quotientData?: {
+    normalSubgroupElementIds: string[]
+    normalSubgroupLabel: string
+    isoSymbol: string | null
+  }
+  automorphismData?: {
+    isoSymbol: string | null
+  }
+  semidirectData?: StoredSemidirectProduct
 }
 
-function saveSession(symbol: string, view: ViewMode) {
+function saveSession(session: SavedSession) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ symbol, view }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
   } catch { /* ignore */ }
 }
 
@@ -66,24 +82,110 @@ function ThemeToggle({ className }: { className?: string }) {
 }
 
 function AppContent() {
-  const { currentGroup, currentView, setCurrentGroup, setCurrentView, selectNextElement, selectPrevElement, floatingViews, isDirectProductMode } = useGroup()
+  const { currentGroup, currentView, setCurrentGroup, setCurrentView, selectNextElement, selectPrevElement, floatingViews, isDirectProductMode, isSemidirectProductMode } = useGroup()
   const restoreViewRef = useRef<ViewMode | null>(null)
 
   // Auto-save session whenever group or view changes
   useEffect(() => {
-    if (currentGroup) {
-      saveSession(currentGroup.symbol, currentView)
+    if (!currentGroup) return
+    const sym = currentGroup.symbol
+    if (sym.includes('/N')) {
+      // Save parent symbol + enough data to reconstruct the quotient group
+      const parentSym = sym.endsWith('/N') ? sym.slice(0, -2) : sym
+      if (currentGroup.normalSubgroupElementIds && currentGroup.normalSubgroupElementIds.length > 0) {
+        saveSession({
+          symbol: parentSym,
+          view: currentView,
+          quotientData: {
+            normalSubgroupElementIds: currentGroup.normalSubgroupElementIds,
+            normalSubgroupLabel: currentGroup.elements[0]?.label ?? '',
+            isoSymbol: currentGroup.isoSymbol ?? null,
+          },
+        })
+        return
+      }
     }
+    if (isAutomorphismGroup(currentGroup)) {
+      const parentSym = currentGroup.automorphismParentSymbol
+      if (parentSym) {
+        saveSession({
+          symbol: parentSym,
+          view: currentView,
+          automorphismData: {
+            isoSymbol: currentGroup.isoSymbol ?? null,
+          },
+        })
+        return
+      }
+    }
+    const sdMeta = currentGroup._semidirectProduct
+    if (sdMeta) {
+      const { normal: N, acting: H, phiMap } = sdMeta
+      const phiGenMapping: Record<string, string> = {}
+      for (const gen of H.generators) {
+        const genElId = gen.apply(H.identity).id
+        const auto = phiMap.get(genElId)
+        if (auto) phiGenMapping[genElId] = auto.id
+      }
+      saveSession({
+        symbol: sym,
+        view: currentView,
+        semidirectData: {
+          id: `sd-session-${Date.now()}`,
+          normalSymbol: N.symbol,
+          actingSymbol: H.symbol,
+          phiGenMapping,
+        },
+      })
+      return
+    }
+    saveSession({ symbol: sym, view: currentView })
   }, [currentGroup, currentView])
 
   // Restore session on first mount
   useEffect(() => {
     const saved = loadSession()
     if (saved) {
-      const group = createGroupFromSymbol(saved.symbol)
-      if (group) {
+      if (saved.semidirectData) {
+        const sdGroup = reconstructSemidirectProduct(saved.semidirectData)
+        if (sdGroup) {
+          restoreViewRef.current = saved.view
+          setCurrentGroup(sdGroup)
+          return
+        }
+      }
+      const parentGroup = createGroupFromSymbol(saved.symbol)
+      if (parentGroup) {
         restoreViewRef.current = saved.view
-        setCurrentGroup(group)
+        if (saved.automorphismData) {
+          const autoGroup = createAutomorphismGroup(parentGroup)
+          if (autoGroup) {
+            autoGroup.isoSymbol = saved.automorphismData.isoSymbol ?? undefined
+            setCurrentGroup(autoGroup)
+            return
+          }
+        }
+        if (saved.quotientData && saved.quotientData.normalSubgroupElementIds) {
+          const subgroupElements = saved.quotientData.normalSubgroupElementIds
+            .map(id => parentGroup.elements.find(e => e.id === id))
+            .filter((e): e is Group['elements'][0] => e !== undefined)
+          if (subgroupElements.length > 0) {
+            const normalSubgroup: Subgroup = {
+              elements: subgroupElements,
+              order: subgroupElements.length,
+              index: parentGroup.order / subgroupElements.length,
+              generators: [],
+              isNormal: true,
+            }
+            const qg = computeQuotientGroup(parentGroup, normalSubgroup)
+            if (qg) {
+              qg.isoSymbol = saved.quotientData.isoSymbol ?? undefined
+              setCurrentGroup(qg)
+              return
+            }
+          }
+        }
+        setCurrentGroup(parentGroup)
         return
       }
     }
@@ -123,7 +225,9 @@ function AppContent() {
       <main className="main-canvas">
         {isDirectProductMode
           ? <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><DirectProductViewLazy /></Suspense>
-          : <GroupCanvas />}
+          : isSemidirectProductMode
+            ? <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><SemidirectProductViewLazy /></Suspense>
+            : <GroupCanvas />}
       </main>
 
       <aside className="right-sidebar">
@@ -138,6 +242,7 @@ function AppContent() {
           title={fv.title}
         />
       ))}
+      <AutomorphismPreviewPopup />
     </div>
   )
 }

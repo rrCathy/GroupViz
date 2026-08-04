@@ -4,7 +4,7 @@ import { createS3 } from '../core/groups/SymmetricGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../core/groups/SpecialGroup'
-import { findAllSubgroups, isSimpleGroup, getConjugacyClasses, getGroupCenter } from '../core/algebra/subgroups'
+import { findAllSubgroups, isSimpleGroup, getConjugacyClasses, getGroupCenter, computeQuotientGroup } from '../core/algebra/subgroups'
 import type { Group } from '../core/types'
 
 function isSubgroup(group: Group, candidateIds: string[]): boolean {
@@ -148,6 +148,50 @@ describe('Subgroup Calculations', () => {
         for (const g of group.elements) {
           expect(group.multiply(z, g).id).toBe(group.multiply(g, z).id)
         }
+      }
+    })
+  })
+
+  describe('computeQuotientGroup', () => {
+    it('S_3 / A_3 should have correct order', () => {
+      const group = createS3()
+      const normal = findAllSubgroups(group).find(s => s.order === 3 && s.isNormal)
+      expect(normal).toBeDefined()
+      const q = computeQuotientGroup(group, normal!)
+      expect(q).not.toBeNull()
+      expect(q!.order).toBe(2)
+      expect(q!.normalSubgroupElementIds).toBeDefined()
+      expect(q!.normalSubgroupElementIds!.length).toBe(3)
+    })
+
+    it('quotient group inverse should return the correct coset', () => {
+      const group = createS3()
+      const normal = findAllSubgroups(group).find(s => s.order === 3 && s.isNormal)
+      expect(normal).toBeDefined()
+      const q = computeQuotientGroup(group, normal!)
+      expect(q).not.toBeNull()
+
+      // Every element multiplied by its inverse should be identity
+      for (const el of q!.elements) {
+        const inv = q!.inverse(el)
+        const product = q!.multiply(el, inv)
+        expect(product.id).toBe(q!.identity.id)
+      }
+    })
+
+    it('quotient group inverse should be deterministic after reconstruction', () => {
+      const group = createS3()
+      const normal = findAllSubgroups(group).find(s => s.order === 3 && s.isNormal)
+      expect(normal).toBeDefined()
+      const q1 = computeQuotientGroup(group, normal!)
+      const q2 = computeQuotientGroup(group, normal!)
+      expect(q1).not.toBeNull()
+      expect(q2).not.toBeNull()
+      for (let i = 0; i < q1!.elements.length; i++) {
+        expect(q1!.elements[i].id).toBe(q2!.elements[i].id)
+        const inv1 = q1!.inverse(q1!.elements[i])
+        const inv2 = q2!.inverse(q2!.elements[i])
+        expect(inv1.id).toBe(inv2.id)
       }
     })
   })

@@ -8,6 +8,8 @@ import { SetView } from './SetView'
 import { CycleView } from './CycleView'
 import { TableView } from './TableView'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
+import { HomomorphismView } from './HomomorphismView'
+import { CosetStripView } from './CosetStripView'
 import { computeCayleyActionEdges, ringOrder } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
@@ -406,6 +408,10 @@ function renderViewContent(view: ViewMode) {
       return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><Cayley3DViewLazy /></Suspense>
     case 'sublattice':
       return <SvgPanZoom><SubgroupLatticeView /></SvgPanZoom>
+    case 'homomorphism':
+      return <SvgPanZoom><HomomorphismView /></SvgPanZoom>
+    case 'cosetstrip':
+      return <SvgPanZoom><CosetStripView /></SvgPanZoom>
     default:
       return <SvgPanZoom><SetView /></SvgPanZoom>
   }

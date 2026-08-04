@@ -280,7 +280,7 @@ interface Group {
 
 | 函数 | 复杂度 | 说明 |
 |------|--------|------|
-| `findAllSubgroups()` | O(2^n) | 两阶段：先找循环子群，再 pair-join 闭包扩张。阶>60 时跳过 |
+| `findAllSubgroups()` | O(2^n) | 两阶段：先找循环子群，再 pair-join 闭包扩张。已 idx 化（预计算乘法表/逆元表查表 + 剪枝），order>60 守卫，`allowLarge` 可强制计算 |
 | `findAllNormalSubgroups()` | O(2^c) | 共轭类子集枚举，c 为共轭类数 |
 | `getConjugacyClasses()` | O(n²) | 逐元素共轭遍历。阶>60 时每个元素独成类 |
 | `getGroupCenter()` | O(n²) | 交换性检查。阶>60 时只返回单位元 |
@@ -1023,4 +1023,4 @@ server: {
 
 半直积的 Aut(N) 计算、φ 校验与扩展全部复用自同构模块（`findAllAutomorphisms` / `extendFromGenerators`），Aut(N) 群本身也可作为普通群加载查看（Aut(Z₃)≅C₂ 等可验证）。
 
-> ⚠️ i18n 缺口：`hint.automorphismComputed`、`op.computedAutomorphism`、`right.automorphismMapping`、`homo.firstIso.phase0..3`、`panel.batchExport*`、`panel.cayleySettings` 等键未在 translations.ts 定义，`t()` 会回退到裸 key + console.warn。
+> ✅ i18n 已补全：`hint.automorphismComputed`、`op.computedAutomorphism`、`right.automorphismMapping`、`homo.firstIso.phase0..3`、`panel.cayleySettings` 等键均已定义；`panel.batchExport*` 键随 BatchExportPanel 移除（批量导出由 CLI 承担）。zh/en 键集合一致性由 `i18n.test.ts` 自动化断言。

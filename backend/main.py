@@ -28,6 +28,7 @@ from algebra import (
     compute_conjugacy_classes, compute_center,
     compute_cosets, compute_subgroup_lattice,
     compute_cayley_edges, compute_element_order,
+    compute_group_properties,
 )
 
 
@@ -269,3 +270,16 @@ async def direct_product(req: DirectProductRequest):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+@app.post("/api/compute/properties")
+async def group_properties(req: ComputeRequest):
+    """Solvable / nilpotent / perfect + derived series for a group."""
+    try:
+        g = get_group(req.symbol)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    t0 = time.perf_counter()
+    result = compute_group_properties(g)
+    result["elapsed_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    return result

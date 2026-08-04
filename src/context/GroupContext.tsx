@@ -272,6 +272,22 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     }
   }, [core, cayley, t])
 
+  // Direct-product and semidirect-product build modes share the main canvas,
+  // so entering one must exit the other.
+  const toggleDirectProductMode = useCallback(() => {
+    if (!directProduct.isDirectProductMode && sd.isSemidirectProductMode) {
+      sd.toggleSemidirectProductMode()
+    }
+    directProduct.toggleDirectProductMode()
+  }, [directProduct, sd])
+
+  const toggleSemidirectProductMode = useCallback(() => {
+    if (!sd.isSemidirectProductMode && directProduct.isDirectProductMode) {
+      directProduct.toggleDirectProductMode()
+    }
+    sd.toggleSemidirectProductMode()
+  }, [directProduct, sd])
+
   const computeInverse = useCallback(() => {
     if (selfInverseTimerRef.current) {
       clearTimeout(selfInverseTimerRef.current)
@@ -566,7 +582,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setSymmetryActionElementId: symmetry.setSymmetryActionElementId,
     setSelfInverseElementId: symmetry.setSelfInverseElementId,
 
-    toggleDirectProductMode: directProduct.toggleDirectProductMode,
+    toggleDirectProductMode,
     setDirectProductSource: directProduct.setDirectProductSource,
     setDirectProductTarget: directProduct.setDirectProductTarget,
     setDirectProductCreationMode: directProduct.setDirectProductCreationMode,
@@ -575,7 +591,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     removeDirectProductGroup: directProduct.removeDirectProductGroup,
     loadDirectProductGroup: directProduct.loadDirectProductGroup,
 
-    toggleSemidirectProductMode: sd.toggleSemidirectProductMode,
+    toggleSemidirectProductMode,
     setSDNormalSubgroup: sd.setSDNormalSubgroup,
     setSDActingGroup: sd.setSDActingGroup,
     computeAutN: sd.computeAutN,
@@ -612,6 +628,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setCurrentView, selectElement, computeInverse, clearCanvas,
     resetNodePositions, runForceLayout, setForceShowLargeGroupForView, saveSubset,
     createQuotientGroupWithHomomorphism,
+    toggleDirectProductMode, toggleSemidirectProductMode,
   ])
 
   return (

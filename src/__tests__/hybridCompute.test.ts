@@ -5,7 +5,9 @@ import {
   computeCenter,
   computeIsSimple,
   computeLattice,
+  computeGroupProperties,
   createEmptyBackendCache,
+  computeLocalFallbackResults,
   fetchBackendResults,
   fetchBackendCayleyEdges,
   fetchBackendElementOrder,
@@ -17,9 +19,10 @@ import {
   fetchLattice,
   fetchCayleyEdges,
   fetchElementOrder,
+  fetchGroupProperties,
 } from '../utils/api'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
-import { createS3 } from '../core/groups/SymmetricGroup'
+import { createS3, createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import type { Group, GroupElement } from '../core/types'
 
 vi.mock('../utils/api', () => ({
@@ -29,6 +32,7 @@ vi.mock('../utils/api', () => ({
   fetchLattice: vi.fn(),
   fetchCayleyEdges: vi.fn(),
   fetchElementOrder: vi.fn(),
+  fetchGroupProperties: vi.fn(),
 }))
 
 const mockFetchFunctions = {
@@ -38,6 +42,7 @@ const mockFetchFunctions = {
   fetchLattice: vi.mocked(fetchLattice),
   fetchCayleyEdges: vi.mocked(fetchCayleyEdges),
   fetchElementOrder: vi.mocked(fetchElementOrder),
+  fetchGroupProperties: vi.mocked(fetchGroupProperties),
 }
 
 beforeEach(() => {
@@ -65,7 +70,7 @@ function makeBigGroup(order: number, ids: string[] = []): Group {
   }
 }
 
-describe('hybrid compute cutoff (order ≤ 60 local)', () => {
+describe('hybrid compute cutoff (order �?60 local)', () => {
   it('computes local subgroups for small groups', () => {
     const subs = computeSubgroups(createCyclicGroup(6))
     expect(subs.length).toBeGreaterThan(0)
@@ -137,10 +142,34 @@ describe('hybrid compute cutoff (order ≤ 60 local)', () => {
     expect(computeLattice(big)).toEqual({ nodes: [], edges: [] })
   })
 
+  it('computes properties locally for small groups', () => {
+    const props = computeGroupProperties(createS3())
+    expect(props).toEqual({
+      solvable: true,
+      nilpotent: false,
+      perfect: false,
+      derivedSeriesOrders: [6, 3, 1],
+    })
+  })
+
+  it('uses backend cache for large groups, null when unavailable', () => {
+    const big = makeBigGroup(120)
+    expect(computeGroupProperties(big)).toBeNull()
+    expect(computeGroupProperties(big, {
+      ...createEmptyBackendCache(),
+      isSolvable: true, isNilpotent: false, isPerfect: false,
+      derivedSeriesOrders: [120, 60, 1],
+    })).toEqual({
+      solvable: true, nilpotent: false, perfect: false,
+      derivedSeriesOrders: [120, 60, 1],
+    })
+  })
+
   it('creates an empty backend cache', () => {
     expect(createEmptyBackendCache()).toEqual({
       subgroups: null, normalSubgroups: null, conjugacyClasses: null,
-      center: null, isSimple: null, lattice: null, loading: false,
+      center: null, isSimple: null, isSolvable: null, isNilpotent: null,
+      isPerfect: null, derivedSeriesOrders: [], lattice: null, loading: false,
       error: null, groupSymbol: null,
     })
   })
@@ -172,6 +201,12 @@ describe('fetchBackendResults', () => {
       nodes: [{ id: 0, elements: [], order: 1, is_normal: true, level: 0 }],
       edges: [],
     })
+    mockFetchFunctions.fetchGroupProperties.mockResolvedValue({
+      derived_series_orders: [120, 60, 1],
+      solvable: true,
+      nilpotent: false,
+      perfect: false,
+    })
 
     const res = await fetchBackendResults(big)
 
@@ -184,15 +219,59 @@ describe('fetchBackendResults', () => {
       nodes: [{ id: 0, elements: [], order: 1, is_normal: true, level: 0 }],
       edges: [],
     })
+    expect(res.isSolvable).toBe(true)
+    expect(res.isNilpotent).toBe(false)
+    expect(res.isPerfect).toBe(false)
+    expect(res.derivedSeriesOrders).toEqual([120, 60, 1])
     expect(res.error).toBeNull()
   })
 
-  it('records the error message when the backend fails', async () => {
-    const big = makeBigGroup(120)
+  it('falls back to local computation when the backend fails', async () => {
+    const s5 = createSymmetricGroup(5)
     mockFetchFunctions.fetchSubgroups.mockRejectedValue(new Error('backend down'))
-    const res = await fetchBackendResults(big)
+    const res = await fetchBackendResults(s5)
     expect(res.error).toBe('backend down')
+    expect(res.subgroups!.length).toBeGreaterThan(0)
+    expect(res.normalSubgroups!.length).toBeGreaterThan(0)
+    expect(res.isSimple).toBe(false)
+    expect(res.center!.map(e => e.id)).toEqual([s5.identity.id])
+    expect(res.conjugacyClasses).toHaveLength(7)
+    expect(res.isSolvable).toBe(false)
+    expect(res.isNilpotent).toBe(false)
+    expect(res.isPerfect).toBe(false)
+    expect(res.lattice!.nodes.length).toBeGreaterThan(2)
+  }, 30000)
+
+  it('falls back when the backend returns truncated results', async () => {
+    const s5 = createSymmetricGroup(5)
+    mockFetchFunctions.fetchSubgroups.mockResolvedValue({
+      subgroups: [],
+      total_count: 0,
+      truncated: true,
+    })
+    const res = await fetchBackendResults(s5)
+    expect(res.error).toContain('truncated')
+    expect(res.subgroups!.length).toBeGreaterThan(0)
+    expect(res.conjugacyClasses).toHaveLength(7)
+    expect(res.isSolvable).toBe(false)
+  }, 30000)
+
+  it('computeLocalFallbackResults returns empty above the cutoff', () => {
+    const huge = makeBigGroup(250)
+    const res = computeLocalFallbackResults(huge)
+    expect(res.subgroups).toBeNull()
+    expect(res.isSimple).toBeNull()
+    expect(res.groupSymbol).toBe('C_{250}')
   })
+
+  it('computeLocalFallbackResults computes S_5 locally', () => {
+    const s5 = createSymmetricGroup(5)
+    const res = computeLocalFallbackResults(s5)
+    expect(res.subgroups!.length).toBeGreaterThan(0)
+    expect(res.isSimple).toBe(false)
+    expect(res.conjugacyClasses).toHaveLength(7)
+    expect(res.isSolvable).toBe(false)
+  }, 30000)
 })
 
 describe('fetchBackendCayleyEdges', () => {

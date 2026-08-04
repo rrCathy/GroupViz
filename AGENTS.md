@@ -15,6 +15,8 @@
 
 > **可视化方案参考**：若对可视化方案不理解（元素如何摆放、边如何连接、视图长什么样），请阅读 `refer/` 目录下的参考书籍，尤其《群论彩图版》（Visual Group Theory，Nathan Carter 著）——Cayley 图、群作用、陪集等约定均以其为准。
 
+> **界面模式（硬核模式）**：当前 UI 定位为**硬核模式**（面向研究者/数学用户，欢迎页 + 三栏工作台）。后续计划开发**教育模式**（引导式学习欢迎页与教学视图），届时按模式切换入口与样式。欢迎页"即将推出"列表：教育模式、Sylow 型可视化、自由群、DLC（空间群/点群可视化）。
+
 ## 2. 文档导航
 
 详细技术文档已拆分至 `docs/` 目录（本文件为精简索引）：
@@ -27,7 +29,7 @@
 | [docs/STATE.md](docs/STATE.md) | 状态管理：9 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端） |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 5 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：21 文件 427 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：26 文件 483 tests、vitest 配置、覆盖率、测试约定 |
 
 ## 3. 技术栈
 
@@ -48,17 +50,17 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 21 个测试文件（427 tests），见 docs/TESTING.md
+│   ├── __tests__/              # 26 个测试文件（483 tests），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
 │   │   │                       # DirectProductView/CosetStripView/HomomorphismView/
 │   │   │                       # FirstIsomorphismAnimation/SemidirectProductView/
 │   │   │                       # AutomorphismPreviewPopup
-│   │   ├── Panels/             # LeftPanel/RightPanel/AccordionSection/GroupPanel(创建+直积)/
-│   │   │                       # ViewPanel(视图+凯莱设置)/OperationsPanel(5 tab)/
-│   │   │                       # HomomorphismPanel/SemidirectProductPanel/TabBar/
-│   │   │                       # BatchExportPanel(已孤儿)/constants.ts
+│   │   ├── Panels/             # LeftPanel/RightPanel/AccordionSection/BasicGroupPanel/
+│   │   │                       # ViewPanel(视图+导出)/OperationsPanel(4 tab)/
+│   │   │                       # DirectProductPanel/HomomorphismPanel/
+│   │   │                       # SemidirectProductPanel/TabBar/constants.ts
 │   │   ├── Tex.tsx             # KaTeX 渲染组件
 │   │   └── WelcomePage.tsx     # 欢迎页（群记号预览弹窗、赞助链接）
 │   ├── core/
@@ -92,17 +94,17 @@ GroupViz/
 ## 5. 当前状态
 
 - ✅ 9 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip
-- ✅ 群族：Sₙ(2-6)、Cₙ(1-30)、Dₙ(3-12)、Aₙ(3-5)、V₄、Q₈、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N
+- ✅ 群族：Sₙ(2-5)、Cₙ(2-120)、Dₙ(3-8)、Aₙ(3-5)、V₄、Q₈、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（UI 上限出于性能：S₅=120 在本地兜底 FALLBACK_CUTOFF=240 内，S₆=720 超限故不提供）
 - ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、10 种 2D 形状（含 rewiring）、17 种 3D 形状模板（按群性质自动分配）
 - ✅ 对称性视图：多面体几何 + 元素操作动画 + 旋转轴/交点标记（运行时从几何数据计算）
 - ✅ 同态映射系统：创建/验证/性质分析 + 第一同构定理动画
 - ✅ 半直积构建：5 预设、φ 映射 UI、4 步构建动画、rewiring 布局与不动点高亮
-- ✅ 混合计算：小群本地 TS（≤60），大群 FastAPI 后端（>60）+ 缓存
+- ✅ 混合计算：小群本地 TS（≤60），大群 FastAPI 后端（>60）+ 缓存；**后端不可用时前端本地兜底**（FALLBACK_CUTOFF=240 内全量重算，S₅ 约 2.6s），大群计算 >3s 显示顶部进度条（TopProgressBar）
 - ✅ 小群预计算注册表（阶 1-15，27 条）
 - ✅ 多视图浮动窗口、子集保存与分析、陪集分解（Lagrange 验证）、自逆元素检测
 - ✅ KaTeX 全应用渲染、i18n 中英文、深/浅主题、会话保存与恢复
 - ✅ 视图导出：SVG/PNG/GIF + 批量导出 CLI（`npm run export`）
-- ✅ 测试体系：21 文件 427 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
+- ✅ 测试体系：26 文件 483 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
 
 ## 6. 运行命令
 
@@ -162,5 +164,5 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-*文档版本: 1.6.0*
-*最后更新: 2026-08-03*
+*文档版本: 1.7.0*
+*最后更新: 2026-08-04*

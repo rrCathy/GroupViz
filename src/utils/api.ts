@@ -120,6 +120,14 @@ export interface ApiElementOrder {
   elapsed_ms?: number
 }
 
+export interface ApiGroupProperties {
+  derived_series_orders: number[]
+  solvable: boolean | null
+  nilpotent: boolean | null
+  perfect: boolean | null
+  elapsed_ms?: number
+}
+
 // ── API Functions ──────────────────────────────────────────────────────────
 
 export async function fetchGroupInfo(symbol: string): Promise<ApiGroupInfo> {
@@ -140,6 +148,10 @@ export async function fetchConjugacyClasses(symbol: string): Promise<ApiConjugac
 
 export async function fetchCenter(symbol: string): Promise<ApiCenter> {
   return apiPost<ApiCenter>('/compute/center', { symbol })
+}
+
+export async function fetchGroupProperties(symbol: string): Promise<ApiGroupProperties> {
+  return apiPost<ApiGroupProperties>('/compute/properties', { symbol })
 }
 
 export async function fetchCosets(

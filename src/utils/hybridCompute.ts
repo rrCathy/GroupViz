@@ -23,12 +23,25 @@ import {
   fetchLattice,
   fetchCayleyEdges,
   fetchElementOrder,
+  fetchGroupProperties,
   type ApiSubgroup,
   type ApiElement,
   type ApiCayleyEdge,
 } from './api'
+import { computeGroupProperties as localGroupProperties } from '../core/algebra/properties'
+
+export interface ResolvedGroupProperties {
+  solvable: boolean
+  nilpotent: boolean
+  perfect: boolean
+  derivedSeriesOrders: number[]
+}
 
 const LARGE_ORDER_CUTOFF = 60
+
+// Orders above this are not feasible for the local fallback (pair-join
+// subgroup enumeration explodes); they stay unavailable without a backend.
+const FALLBACK_CUTOFF = 240
 
 export interface BackendCache {
   subgroups: Subgroup[] | null
@@ -36,6 +49,10 @@ export interface BackendCache {
   conjugacyClasses: GroupElement[][] | null
   center: GroupElement[] | null
   isSimple: boolean | null
+  isSolvable: boolean | null
+  isNilpotent: boolean | null
+  isPerfect: boolean | null
+  derivedSeriesOrders: number[]
   lattice: { nodes: unknown[]; edges: unknown[] } | null
   loading: boolean
   error: string | null
@@ -49,6 +66,10 @@ export function createEmptyBackendCache(): BackendCache {
     conjugacyClasses: null,
     center: null,
     isSimple: null,
+    isSolvable: null,
+    isNilpotent: null,
+    isPerfect: null,
+    derivedSeriesOrders: [],
     lattice: null,
     loading: false,
     error: null,
@@ -109,6 +130,31 @@ export function computeIsSimple(group: Group, cachedSubgroups?: Subgroup[]): boo
   return false
 }
 
+export function computeGroupProperties(
+  group: Group,
+  cached?: BackendCache
+): ResolvedGroupProperties | null {
+  if (group.order <= LARGE_ORDER_CUTOFF) {
+    const local = localGroupProperties(group)
+    if (!local) return null
+    return {
+      solvable: local.solvable,
+      nilpotent: local.nilpotent,
+      perfect: local.perfect,
+      derivedSeriesOrders: local.derivedSeries.map(d => d.length),
+    }
+  }
+  if (!cached || cached.isSolvable === null || cached.isNilpotent === null || cached.isPerfect === null) {
+    return null
+  }
+  return {
+    solvable: cached.isSolvable,
+    nilpotent: cached.isNilpotent,
+    perfect: cached.isPerfect,
+    derivedSeriesOrders: cached.derivedSeriesOrders,
+  }
+}
+
 export function computeLattice(
   group: Group,
   cached?: { nodes: unknown[]; edges: unknown[] }
@@ -117,6 +163,35 @@ export function computeLattice(
     return localSubgroupLattice(group)
   }
   return cached ?? { nodes: [], edges: [] }
+}
+
+// ── Local Fallback ──────────────────────────────────────────────────────────
+
+/**
+ * Computes every backend result locally. Used when the backend is
+ * unreachable/fails. Slow for large orders (findAllSubgroups pair-join),
+ * but guaranteed to produce correct results up to FALLBACK_CUTOFF.
+ */
+export function computeLocalFallbackResults(group: Group): BackendCache {
+  const empty = createEmptyBackendCache()
+  const results: BackendCache = { ...empty, groupSymbol: group.symbol }
+  if (group.order > FALLBACK_CUTOFF) return results
+
+  const subgroups = localFindAllSubgroups(group, true)
+  results.subgroups = subgroups
+  results.normalSubgroups = subgroups.filter(s => s.isNormal)
+  results.isSimple = subgroups.filter(s => s.isNormal && s.order > 1 && s.order < group.order).length === 0
+  results.conjugacyClasses = localGetConjugacyClasses(group, true)
+  results.center = localGetGroupCenter(group, true)
+  results.lattice = localSubgroupLattice(group, true)
+  const props = localGroupProperties(group, true)
+  if (props) {
+    results.isSolvable = props.solvable
+    results.isNilpotent = props.nilpotent
+    results.isPerfect = props.perfect
+    results.derivedSeriesOrders = props.derivedSeries.map(d => d.length)
+  }
+  return results
 }
 
 // ── Async Backend Fetchers ─────────────────────────────────────────────────
@@ -129,6 +204,10 @@ export async function fetchBackendResults(group: Group): Promise<BackendCache> {
     conjugacyClasses: null,
     center: null,
     isSimple: null,
+    isSolvable: null,
+    isNilpotent: null,
+    isPerfect: null,
+    derivedSeriesOrders: [],
     lattice: null,
     loading: false,
     error: null,
@@ -140,6 +219,12 @@ export async function fetchBackendResults(group: Group): Promise<BackendCache> {
   try {
     // Fetch subgroups first (caches on server), then lattice reuses cache
     const subgroupsRes = await fetchSubgroups(symbol)
+    if (subgroupsRes.truncated || subgroupsRes.subgroups.length === 0) {
+      // Backend intentionally skips heavy computation above its cutoff
+      // (>120) and returns an empty result with HTTP 200. Treat it as a
+      // failure so the local fallback kicks in (up to FALLBACK_CUTOFF).
+      throw new Error('backend truncated results (order > 120); using local fallback')
+    }
     results.subgroups = subgroupsRes.subgroups.map(s => apiSubgroupToLocal(group, s))
 
     const normal = subgroupsRes.subgroups.filter(s => s.is_normal)
@@ -150,10 +235,11 @@ export async function fetchBackendResults(group: Group): Promise<BackendCache> {
     ).length === 0
 
     // Now fetch lattice (reuses cached subgroups on server)
-    const [classesRes, centerRes, latticeRes] = await Promise.all([
+    const [classesRes, centerRes, latticeRes, propsRes] = await Promise.all([
       fetchConjugacyClasses(symbol),
       fetchCenter(symbol),
       fetchLattice(symbol),
+      fetchGroupProperties(symbol),
     ])
 
     results.conjugacyClasses = classesRes.classes.map(cls =>
@@ -163,8 +249,26 @@ export async function fetchBackendResults(group: Group): Promise<BackendCache> {
     results.center = centerRes.center.map(e => apiElementToGroupElement(group, e))
 
     results.lattice = latticeRes as unknown as { nodes: unknown[]; edges: unknown[] }
+
+    results.isSolvable = propsRes.solvable
+    results.isNilpotent = propsRes.nilpotent
+    results.isPerfect = propsRes.perfect
+    results.derivedSeriesOrders = propsRes.derived_series_orders
   } catch (err) {
     results.error = err instanceof Error ? err.message : String(err)
+    // Backend unreachable/failed — fall back to local computation so the
+    // app stays fully functional (slow for large groups, see FALLBACK_CUTOFF).
+    const fallback = computeLocalFallbackResults(group)
+    results.subgroups = fallback.subgroups
+    results.normalSubgroups = fallback.normalSubgroups
+    results.conjugacyClasses = fallback.conjugacyClasses
+    results.center = fallback.center
+    results.isSimple = fallback.isSimple
+    results.isSolvable = fallback.isSolvable
+    results.isNilpotent = fallback.isNilpotent
+    results.isPerfect = fallback.isPerfect
+    results.derivedSeriesOrders = fallback.derivedSeriesOrders
+    results.lattice = fallback.lattice
   }
 
   return results

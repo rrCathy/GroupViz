@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useEffect } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { buildViewModes } from './constants'
 import { renderTex, texify } from '../../utils/texify'
+import { exportView, exportSymmetryAsGif } from '../../utils/export'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
-import type { Layout3D, CayleyShape2D } from '../../core/types'
+import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
 
 export function ViewPanel() {
   const {
@@ -209,7 +210,69 @@ export function ViewPanel() {
           )}
         </div>
       )}
+
+      <ExportSection currentGroup={currentGroup} />
     </AccordionSection>
+  )
+}
+
+function ExportSection({ currentGroup }: { currentGroup: Group | null }) {
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
+  const { currentView, symmetryShowAction, symmetryActionElementId, setSymmetryActionElementId } = useGroup()
+  const { t } = useTranslation()
+
+  const handleExportView = () => {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const viewName = currentView === '3d' ? '3d_cayley' : currentView
+    const is3d = currentView === '3d' || currentView === 'symmetry'
+    const ext = is3d ? 'png' : 'svg'
+    exportView(currentView, `groupviz_${viewName}_${ts}.${ext}`)
+  }
+
+  const handleExportGif = () => {
+    const elId = symmetryActionElementId
+    if (!currentGroup || !elId) { alert(t('panel.selectElementFirst')); return }
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    setSymmetryActionElementId(null)
+    setTimeout(() => {
+      if (!mountedRef.current) return
+      setSymmetryActionElementId(elId)
+      setTimeout(() => {
+        if (!mountedRef.current) return
+        exportSymmetryAsGif(`groupviz_symmetry_${ts}.gif`, 1700, 20, () => {
+          if (!mountedRef.current) return
+          setSymmetryActionElementId(null)
+          setTimeout(() => {
+            if (mountedRef.current) setSymmetryActionElementId(elId)
+          }, 40)
+        })
+      }, 80)
+    }, 120)
+  }
+
+  return (
+    <div className="view-export-section" style={{ marginTop: '8px' }}>
+      <div className="subset-section-header">{t('panel.exportView')}</div>
+      <button
+        className="panel-btn"
+        onClick={handleExportView}
+        disabled={!currentGroup}
+        style={{ width: '100%' }}
+      >
+        {currentView === '3d' || currentView === 'symmetry' ? t('panel.exportPng') : t('panel.exportSvg')}
+      </button>
+      {currentView === 'symmetry' && (
+        <button
+          className="panel-btn"
+          onClick={handleExportGif}
+          disabled={!currentGroup || !symmetryShowAction || !symmetryActionElementId}
+          style={{ width: '100%', marginTop: '4px' }}
+        >
+          {t('panel.exportGif')}
+        </button>
+      )}
+    </div>
   )
 }
 

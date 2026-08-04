@@ -60,11 +60,11 @@ Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.t
 | `computeConjugacyClasses(group, cache)` | 同上模式 |
 | `computeCenter(group, cache)` | 同上模式 |
 | `computeIsSimple(group, cache)` | 利用缓存子群判断单群 |
-| `fetchBackendResults(group, setCache)` | 主调度：先取子群（预热），再并行取共轭类/中心/子群格 |
+| `fetchBackendResults(group, setCache)` | 主调度：先取子群（预热），再并行取共轭类/中心/子群格/群性质；**后端失败时自动本地兜底**（见 §8） |
 | `fetchBackendCayleyEdges(group, actions, type)` | 异步 Cayley 边，小群本地降级 |
 | `fetchBackendElementOrder(group, elementIds)` | 异步元素阶，小群本地降级 |
 
-**BackendCache 结构**：`{subgroups, normalSubgroups, conjugacyClasses, center, isSimple, lattice, loading, error, groupSymbol}`。
+**BackendCache 结构**：`{subgroups, normalSubgroups, conjugacyClasses, center, isSimple, lattice, isSolvable, isNilpotent, isPerfect, derivedSeriesOrders, loading, error, groupSymbol}`。
 
 ## 7. 数据流
 
@@ -79,4 +79,5 @@ Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.t
 
 - 半直积、自同构群、商群等**不参与后端计算**，全部本地 TypeScript
 - 大群 UI 守卫：子群/共轭类/中心 cutoff 60；Cayley 边预算限流 `max(120, order*3)`
-- 后端不可用时（未启动），大群视图降级：子群格等区域显示错误/空状态
+- 后端不可用时（未启动/报错），**前端本地兜底**：`fetchBackendResults` 的 catch 分支调用 `computeLocalFallbackResults(group)`（`src/utils/hybridCompute.ts`）全量本地重算子群/共轭类/中心/子群格/群性质。兜底上限 `FALLBACK_CUTOFF = 240`（覆盖直积/半直积上限 144 与 S₅=120），超过则返回空兜底防浏览器卡死。`findAllSubgroups` 已 idx 化（乘法表/逆元表查表 + pair-join 剪枝），S₅（120 阶）本地兜底约 2.6s，S₄×S₃（144 阶）约 4s
+- **顶部进度条**：大群计算（`backendCache.loading && isLargeGroup`）超过 3s 时显示 `TopProgressBar`（`src/components/TopProgressBar.tsx`，fixed 顶部 3px，CSS `animation-delay: 3s`，动画运行在 compositor，主线程被同步兜底阻塞时依然可见）

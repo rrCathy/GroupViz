@@ -9,6 +9,7 @@ import { RightPanel } from './components/Panels/RightPanel'
 import { GroupCanvas } from './components/Canvas/GroupCanvas'
 import { FloatingViewWindow } from './components/Canvas/FloatingViewWindow'
 import { WelcomePage } from './components/WelcomePage'
+import { TopProgressBar } from './components/TopProgressBar'
 import { createGroupFromSymbol } from './utils/groupFactory'
 import { createS3 } from './core/groups/SymmetricGroup'
 import { computeQuotientGroup } from './core/algebra/subgroups'
@@ -82,8 +83,41 @@ function ThemeToggle({ className }: { className?: string }) {
 }
 
 function AppContent() {
-  const { currentGroup, currentView, setCurrentGroup, setCurrentView, selectNextElement, selectPrevElement, floatingViews, isDirectProductMode, isSemidirectProductMode } = useGroup()
+  const { currentGroup, currentView, setCurrentGroup, setCurrentView, selectNextElement, selectPrevElement, floatingViews, isDirectProductMode, isSemidirectProductMode, backendCache, isLargeGroup } = useGroup()
+  const { t } = useTranslation()
   const restoreViewRef = useRef<ViewMode | null>(null)
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(false)
+  const [leftDrawerView, setLeftDrawerView] = useState<ViewMode | null>(null)
+
+  // True while the backend is being queried (or the local fallback is
+  // computing); TopProgressBar reveals itself after 3s via CSS animation.
+  const computing = backendCache.loading && isLargeGroup
+
+  // The left drawer auto-closes when the view changes (derived from currentView)
+  const leftOpen = leftDrawerOpen && leftDrawerView === currentView
+
+  const toggleLeftDrawer = useCallback(() => {
+    setLeftDrawerOpen(o => {
+      if (!o) {
+        setRightDrawerOpen(false)
+        setLeftDrawerView(currentView)
+      }
+      return !o
+    })
+  }, [currentView])
+
+  const toggleRightDrawer = useCallback(() => {
+    setRightDrawerOpen(o => {
+      if (!o) setLeftDrawerOpen(false)
+      return !o
+    })
+  }, [])
+
+  const closeDrawers = useCallback(() => {
+    setLeftDrawerOpen(false)
+    setRightDrawerOpen(false)
+  }, [])
 
   // Auto-save session whenever group or view changes
   useEffect(() => {
@@ -209,16 +243,19 @@ function AppContent() {
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault()
         selectPrevElement()
+      } else if (e.key === 'Escape') {
+        closeDrawers()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectNextElement, selectPrevElement])
+  }, [selectNextElement, selectPrevElement, closeDrawers])
 
   return (
     <div className="app-layout">
-      <aside className="left-sidebar">
+      <TopProgressBar active={computing} />
+      <aside className={`left-sidebar${leftOpen ? ' sidebar-open' : ''}`}>
         <LeftPanel />
       </aside>
 
@@ -230,9 +267,29 @@ function AppContent() {
             : <GroupCanvas />}
       </main>
 
-      <aside className="right-sidebar">
+      <aside className={`right-sidebar${rightDrawerOpen ? ' sidebar-open' : ''}`}>
         <RightPanel />
       </aside>
+
+      {(leftOpen || rightDrawerOpen) && (
+        <div className="sidebar-overlay" onClick={closeDrawers} />
+      )}
+      <button
+        className="drawer-btn drawer-btn-left"
+        onClick={toggleLeftDrawer}
+        title={t('ui.openToolbar')}
+        aria-label={t('ui.openToolbar')}
+      >
+        {'\u2630'}
+      </button>
+      <button
+        className="drawer-btn drawer-btn-right"
+        onClick={toggleRightDrawer}
+        title={t('ui.openInfo')}
+        aria-label={t('ui.openInfo')}
+      >
+        {'\u2139'}
+      </button>
 
       {floatingViews.map(fv => (
         <FloatingViewWindow

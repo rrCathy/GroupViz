@@ -546,3 +546,85 @@ def compute_cayley_edges(
             break
 
     return {"edges": edges}
+
+# ©¤©¤ Group Properties (solvable / nilpotent / perfect) ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+
+def compute_group_properties(group: Group) -> dict:
+    """Derived series, solvability, nilpotence (lower central series),
+    perfection. Returns None fields above the performance cutoff."""
+    n = group.order
+    if n > PERF_CUTOFF:
+        return {"derived_series_orders": [], "solvable": None, "nilpotent": None, "perfect": None}
+
+    table = group._table
+    inv_map = group._inverse_map
+
+    def close_idx(seed: list[int]) -> list[int]:
+        result: list[int] = []
+        result_set: set[int] = set()
+        for x in seed:
+            if x not in result_set:
+                result.append(x)
+                result_set.add(x)
+        changed = True
+        while changed:
+            changed = False
+            k = len(result)
+            for i in range(k):
+                for j in range(i, k):
+                    p = table[result[i]][result[j]]
+                    if p not in result_set:
+                        result.append(p)
+                        result_set.add(p)
+                        changed = True
+        return result
+
+    def commutators(left: list[int], right: list[int]) -> list[int]:
+        out: list[int] = []
+        seen: set[int] = set()
+        for a in left:
+            inv_a = inv_map[a]
+            for b in right:
+                # [a, b] = a*b*a^-1*b^-1
+                c = table[table[table[a][b]][inv_a]][inv_map[b]]
+                if c not in seen:
+                    seen.add(c)
+                    out.append(c)
+        return out
+
+    def derived_step(current: list[int]) -> list[int]:
+        return close_idx(commutators(current, current))
+
+    all_idx = list(range(n))
+
+    # Derived series G ? G' ? G'' ? ...
+    series_orders = [n]
+    current = all_idx
+    while True:
+        nxt = derived_step(current)
+        if len(nxt) == len(current) and set(nxt) == set(current):
+            break
+        series_orders.append(len(nxt))
+        current = nxt
+
+    solvable = len(current) == 1
+    perfect = series_orders[1] == n if len(series_orders) > 1 else len(current) == n
+
+    # Lower central series gamma_1 = G, gamma_{k+1} = [G, gamma_k]
+    lower = all_idx
+    nilpotent = True
+    while True:
+        nxt = close_idx(commutators(all_idx, lower))
+        if len(nxt) == 1:
+            break
+        if len(nxt) == len(lower) and set(nxt) == set(lower):
+            nilpotent = False
+            break
+        lower = nxt
+
+    return {
+        "derived_series_orders": series_orders,
+        "solvable": solvable,
+        "nilpotent": nilpotent,
+        "perfect": perfect,
+    }

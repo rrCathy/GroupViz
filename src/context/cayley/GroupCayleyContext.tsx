@@ -110,6 +110,24 @@ export function GroupCayleyProvider({ children }: { children: ReactNode }) {
     addOperationHistory(t('op.clearCayley'))
   }, [addOperationHistory, setHintMessage, t])
 
+  // Keep the hint bar's enabled-action count in sync whenever the action list
+  // changes (toggle / add-all / clear / group init). This also repairs the
+  // stale "0 个边作用元素" shown after session restore, where setCurrentView
+  // runs before getInitialCayleyActions populates the list. The ref guard
+  // prevents overwriting hints set by setCayleyMultiplyType / setCayleyShape3D.
+  const lastHintActionsRef = useRef<GroupAction[]>([])
+  useEffect(() => {
+    if (currentView !== 'cayley' && currentView !== '3d') return
+    if (lastHintActionsRef.current === cayleyActions) return
+    lastHintActionsRef.current = cayleyActions
+    const count = cayleyActions.filter(a => a.enabled).length
+    if (currentView === 'cayley') {
+      setHintMessage(t('hint.cayley', { count, type: cayleyMultiplyType === 'right' ? t('cayley3d.multiplyRight') : t('cayley3d.multiplyLeft') }))
+    } else {
+      setHintMessage(t('hint.cayley3d', { count, shape: cayleyShape3D }))
+    }
+  }, [cayleyActions, currentView, cayleyMultiplyType, cayleyShape3D, setHintMessage, t])
+
   const setCayleyActions = useCallback((actions: GroupAction[]) => {
     setCayleyActionsState(actions)
   }, [])

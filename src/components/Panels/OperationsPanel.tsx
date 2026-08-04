@@ -1,13 +1,9 @@
-import { useRef, useEffect } from 'react'
 import { useGroup } from '../../context/useGroup'
-import { exportView, exportSymmetryAsGif } from '../../utils/export'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import { TabBar, type TabDef } from './TabBar'
 
 export function OperationsPanel() {
-  const mountedRef = useRef(true)
-  useEffect(() => () => { mountedRef.current = false }, [])
   const {
     currentGroup,
     currentView,
@@ -19,8 +15,6 @@ export function OperationsPanel() {
     cosetData,
     quotientGroups,
     automorphismGroups,
-    symmetryShowAction,
-    symmetryActionElementId,
     computeInverse,
     clearCanvas,
     resetNodePositions,
@@ -36,7 +30,6 @@ export function OperationsPanel() {
     computeAutomorphismGroup,
     removeAutomorphismGroup,
     setCurrentGroup,
-    setSymmetryActionElementId,
   } = useGroup()
   const { t } = useTranslation()
 
@@ -307,60 +300,7 @@ export function OperationsPanel() {
     ),
   }
 
-  const exportTab: TabDef = {
-    key: 'export',
-    label: t('panel.exportView'),
-    icon: '↓',
-    content: (
-      <div>
-        <button
-          className="panel-btn"
-          onClick={() => {
-            const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-            const viewName = currentView === '3d' ? '3d_cayley' : currentView
-            const is3d = currentView === '3d' || currentView === 'symmetry'
-            const ext = is3d ? 'png' : 'svg'
-            exportView(currentView, `groupviz_${viewName}_${ts}.${ext}`)
-          }}
-          disabled={!currentGroup}
-          style={{ width: '100%' }}
-        >
-          {currentView === '3d' || currentView === 'symmetry' ? t('panel.exportPng') : t('panel.exportSvg')}
-        </button>
-        {currentView === 'symmetry' && (
-          <button
-            className="panel-btn"
-            onClick={() => {
-              const elId = symmetryActionElementId
-              if (!currentGroup || !elId) { alert(t('panel.selectElementFirst')); return }
-              const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-              setSymmetryActionElementId(null)
-              setTimeout(() => {
-                if (!mountedRef.current) return
-                setSymmetryActionElementId(elId)
-                setTimeout(() => {
-                  if (!mountedRef.current) return
-                  exportSymmetryAsGif(`groupviz_symmetry_${ts}.gif`, 1700, 20, () => {
-                    if (!mountedRef.current) return
-                    setSymmetryActionElementId(null)
-                    setTimeout(() => {
-                      if (mountedRef.current) setSymmetryActionElementId(elId)
-                    }, 40)
-                  })
-                }, 80)
-              }, 120)
-            }}
-            disabled={!currentGroup || !symmetryShowAction || !symmetryActionElementId}
-            style={{ width: '100%', marginTop: '4px' }}
-          >
-            {t('panel.exportGif')}
-          </button>
-        )}
-      </div>
-    ),
-  }
-
-  const tabs = [generalTab, subsetTab, quotientTab, automorphismTab, exportTab]
+  const tabs = [generalTab, subsetTab, quotientTab, automorphismTab]
 
   return (
     <AccordionSection

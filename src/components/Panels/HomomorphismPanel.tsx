@@ -20,6 +20,7 @@ export function HomomorphismPanel() {
     isFullExtended,
     kernelLabel,
     homomorphisms,
+    activeHomomorphismId,
     setEditingSource,
     setEditingTarget,
     setGeneratorMapping,
@@ -42,6 +43,19 @@ export function HomomorphismPanel() {
 
   const genElements = editingSource ? getGeneratorElements(editingSource) : []
 
+  const firstValid = homomorphisms.find(h => h.result?.isHomomorphism)
+
+  const openHomomorphismView = useCallback(() => {
+    if (firstValid && !activeHomomorphismId) activateHomomorphism(firstValid.id)
+    setCurrentView('homomorphism')
+  }, [firstValid, activeHomomorphismId, activateHomomorphism, setCurrentView])
+
+  const openFirstIsoAnimation = useCallback(() => {
+    if (firstValid) activateHomomorphism(firstValid.id)
+    setCurrentView('homomorphism')
+    setTheoremMode(true)
+  }, [firstValid, activateHomomorphism, setCurrentView, setTheoremMode])
+
   const handleVerify = useCallback(() => {
     const result = verifyCurrentMapping()
     if (result) setLastResult(result)
@@ -56,6 +70,13 @@ export function HomomorphismPanel() {
   return (
     <AccordionSection title={t('homo.title')} icon="⟷" defaultOpen={false}>
       <div className="homo-panel">
+        <div className="homo-view-section">
+          <div className="subset-section-header">{t('homo.viewSection')}</div>
+          <div className="homo-row">
+            <button className="panel-btn" onClick={openHomomorphismView} disabled={!firstValid} style={{ flex: 1, fontSize: '11px' }}>{t('homo.openView')}</button>
+            <button className="panel-btn" onClick={openFirstIsoAnimation} disabled={!firstValid} style={{ flex: 1, fontSize: '11px' }}>{t('homo.firstIso')} →</button>
+          </div>
+        </div>
         {/* Source/Target Row */}
         <div className="homo-row">
           <button className="homo-group-btn" onClick={() => currentGroup && currentGroup !== editingTarget && setEditingSource(currentGroup)} disabled={!currentGroup}>

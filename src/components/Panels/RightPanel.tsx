@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { findAllSubgroups, getConjugacyClasses, isSimpleGroup } from '../../core/algebra/subgroups'
@@ -7,6 +7,8 @@ import { texify, renderTex } from '../../utils/texify'
 import { verifyHomomorphism, getHomomorphismProperties, formatKernelLabel } from '../../core/algebra/homomorphisms'
 import { createGroupFromSymbol } from '../../utils/groupFactory'
 import { isAutomorphismGroup } from '../../core/algebra/automorphisms'
+import { computeGroupProperties } from '../../utils/hybridCompute'
+import { AccordionSection } from './AccordionSection'
 
 function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { currentGroup: { _automorphismById?: Map<string, { map: Map<string, string>; label: string }>; automorphismParentSymbol?: string }, selectedElementId: string }) {
   const { t } = useTranslation()
@@ -99,36 +101,6 @@ function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { current
   )
 }
 
-function AccordionSection({ title, defaultOpen = false, children }: { title: string, defaultOpen?: boolean, children: React.ReactNode }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
-  
-  return (
-    <div className="panel-section">
-      <button 
-        className="accordion-header"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{ 
-          width: '100%', 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          background: 'none',
-          border: 'none',
-          color: 'var(--text-heading)',
-          fontSize: '14px',
-          fontWeight: 500,
-          padding: '0 0 12px 0',
-          cursor: 'pointer'
-        }}
-      >
-        <span>{title}</span>
-        <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{isOpen ? '▼' : '▶'}</span>
-      </button>
-      {isOpen && <div>{children}</div>}
-    </div>
-  )
-}
-
 export function RightPanel() {
   const { 
     currentGroup, 
@@ -186,6 +158,11 @@ export function RightPanel() {
     return isSimpleGroup(currentGroup)
   }, [currentGroup, precomputed, isLargeGroup, backendCache.isSimple])
 
+  const groupProps = useMemo(() => {
+    if (!currentGroup) return null
+    return computeGroupProperties(currentGroup, isLargeGroup ? backendCache : undefined)
+  }, [currentGroup, isLargeGroup, backendCache])
+
   const subsetByElements = useMemo(() => {
     const map = new Map<string, typeof subsets[0]>()
     for (const subset of subsets) {
@@ -210,7 +187,7 @@ export function RightPanel() {
     return getHomomorphismProperties(homoSource, homoFilter, homoResult)
   }, [homoSource, homoFilter, homoResult])
 
-  const inHomoMode = !!(homoSource && homoFilter)
+  const inHomoMode = currentView === 'homomorphism' && !!(homoSource && homoFilter)
 
   // ── Homomorphism mode: show only homomorphism info + both groups ──
   if (inHomoMode) {
@@ -448,6 +425,46 @@ export function RightPanel() {
                 {currentGroup.isAbelian ? t('right.yes') : t('right.no')}
               </span>
             </div>
+            {groupProps ? (
+              <>
+                <div className="property-chips">
+                  <span
+                    className={`property-chip${groupProps.solvable ? ' on' : ''}`}
+                    title={groupProps.solvable ? t('right.propertyTrue') : t('right.propertyFalse')}
+                  >
+                    {t('right.solvable')}
+                  </span>
+                  <span
+                    className={`property-chip${groupProps.nilpotent ? ' on' : ''}`}
+                    title={groupProps.nilpotent ? t('right.propertyTrue') : t('right.propertyFalse')}
+                  >
+                    {t('right.nilpotent')}
+                  </span>
+                  <span
+                    className={`property-chip${groupProps.perfect ? ' on' : ''}`}
+                    title={groupProps.perfect ? t('right.propertyTrue') : t('right.propertyFalse')}
+                  >
+                    {t('right.perfect')}
+                  </span>
+                </div>
+                {groupProps.derivedSeriesOrders.length > 1 && (
+                  <div className="info-row">
+                    <span className="info-label">{t('right.derivedSeries')}</span>
+                    <span
+                      className="info-value"
+                      dangerouslySetInnerHTML={{
+                        __html: renderTex(texify(groupProps.derivedSeriesOrders.join(' \\supseteq '))),
+                      }}
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="info-row">
+                <span className="info-label">{t('right.properties')}</span>
+                <span className="info-value">{t('right.propertyUnavailable')}</span>
+              </div>
+            )}
             {currentGroup.isoSymbol && (
               <div className="info-row">
                 <span className="info-label">{t('right.isomorphic')}</span>

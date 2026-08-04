@@ -16,7 +16,7 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，21 文件 / 427 tests）
+## 3. 测试文件清单（src/__tests__，26 文件 / 483 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -34,13 +34,15 @@
 | quotientFlow.test.ts | 1 | 商群流程 |
 | quotientRendering.test.ts | 1 | 商群渲染数据 |
 | quotientLayout.test.ts | 1 | 商群 projection3D 布局 |
-| hybridCompute.test.ts | 22 | 混合计算：order ≤60 本地 / >60 后端缓存、fetchBackendResults 合并转换、fetchBackendCayleyEdges/ElementOrder |
+| hybridCompute.test.ts | 26 | 混合计算：order ≤60 本地 / >60 后端缓存、fetchBackendResults 合并转换、computeGroupProperties 本地/后端、后端失败本地兜底（computeLocalFallbackResults：S₅ 子群/共轭类/性质、>240 空兜底）、fetchBackendCayleyEdges/ElementOrder |
 | types.test.ts | 22 | 群类型判定函数、analyzeDPFactors、isCyclicFactorKeys、getAvailableShapes3D/形状与布局默认值、getViewBoxSize 全分支 |
 | api.test.ts | 14 | 后端 API 客户端：9 端点 URL/method/body、错误路径（detail 优先、否则 statusText） |
 | cycleLayouts.test.ts | 14 | computeCycleSubgroups、computeMaximalCycles、forceLayout（自环/initialPositions/cycleSubgroups）、planarCycleLayout |
 | ringOrder.test.ts | 17 | S3 排列/Z₂ 位向量/整数/eN 排序、parseProductFactors、matrixGridLayout、nestedFactorLayout2D |
 | viewBox.test.ts | 8 | getViewBoxSize（table clamp、sublattice、force 放大）、isTooLarge 各视图阈值 |
 | semidirectProduct.test.ts | 6 | createSemidirectProduct：C3⋊C2→D3、平凡φ→直接积、幂等回退、非同态φ抛错、exponent=lcm、生成元提升 |
+| properties.test.ts | 13 | 群性质：S₃/A₄/S₄ 导出列可解非幂零、A₅ 完美不可解、D₈ 幂零/D₁₂ 非幂零、Q₈、Cₙ/V₄、S₃×C₂、>60 cutoff 返回 null、导出列均为子群 |
+| i18n.test.ts | 3 | i18n 键完整性：zh/en 键集合相等、非空字符串、占位符参数一致 |
 
 ## 4. 测试要点与约定
 

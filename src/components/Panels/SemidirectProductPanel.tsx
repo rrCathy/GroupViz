@@ -12,12 +12,22 @@ import {
   type StoredSemidirectProduct,
 } from '../../context/semidirectProduct/semidirectProductStorage'
 
-const SEMIDIRECT_PRESETS = [
-  { key: 'Z3sZ2', label: 'Z_{3} \\rtimes_{\\phi} Z_{2} \\cong S_{3}', N: () => createCyclicGroup(3), H: () => createCyclicGroup(2), desc: 'C_3 ⋊_φ C_2 (inversion)' },
-  { key: 'Z4sZ2', label: 'Z_{4} \\rtimes_{\\phi} Z_{2} \\cong D_{4}', N: () => createCyclicGroup(4), H: () => createCyclicGroup(2), desc: 'C_4 ⋊_φ C_2 (inversion)' },
-  { key: 'Z5sZ2', label: 'Z_{5} \\rtimes_{\\phi} Z_{2} \\cong D_{5}', N: () => createCyclicGroup(5), H: () => createCyclicGroup(2), desc: 'C_5 ⋊_φ C_2 (inversion)' },
-  { key: 'Z7sZ3', label: 'Z_{7} \\rtimes_{\\phi} Z_{3}', N: () => createCyclicGroup(7), H: () => createCyclicGroup(3), desc: 'C_7 ⋊_φ C_3 (Frobenius, x→2x)' },
-  { key: 'V4sZ3', label: 'V_{4} \\rtimes_{\\phi} Z_{3} \\cong A_{4}', N: () => createKleinFour(), H: () => createCyclicGroup(3), desc: 'V₄ ⋊_φ C₃ (3-cycle on non-identity)' },
+interface SemidirectPreset {
+  key: string
+  label: string
+  desc: string
+  phiTargetPower: number
+  N: () => ReturnType<typeof createCyclicGroup> | ReturnType<typeof createKleinFour>
+  H: () => ReturnType<typeof createCyclicGroup>
+}
+
+const SEMIDIRECT_PRESETS: SemidirectPreset[] = [
+  { key: 'Z4sZ2', label: 'Z_{4} \\rtimes_{\\phi} Z_{2}', desc: 'C_4 ⋊_φ C_2 ≅ D_4 (inversion)', phiTargetPower: 3, N: () => createCyclicGroup(4), H: () => createCyclicGroup(2) },
+  { key: 'Z5sZ2', label: 'Z_{5} \\rtimes_{\\phi} Z_{2}', desc: 'C_5 ⋊_φ C_2 ≅ D_5 (inversion)', phiTargetPower: 4, N: () => createCyclicGroup(5), H: () => createCyclicGroup(2) },
+  { key: 'Z7sZ3', label: 'Z_{7} \\rtimes_{\\phi} Z_{3}', desc: 'C_7 ⋊_φ C_3 (Frobenius, x→2x)', phiTargetPower: 2, N: () => createCyclicGroup(7), H: () => createCyclicGroup(3) },
+  { key: 'Z9sZ3', label: 'Z_{9} \\rtimes_{\\phi} Z_{3}', desc: 'C_9 ⋊_φ C_3 (x→4x, nonabelian p-group)', phiTargetPower: 4, N: () => createCyclicGroup(9), H: () => createCyclicGroup(3) },
+  { key: 'Z11sZ5', label: 'Z_{11} \\rtimes_{\\phi} Z_{5}', desc: 'C_11 ⋊_φ C_5 (Frobenius, x→3x)', phiTargetPower: 3, N: () => createCyclicGroup(11), H: () => createCyclicGroup(5) },
+  { key: 'V4sZ3', label: 'V_{4} \\rtimes_{\\phi} Z_{3}', desc: 'V₄ ⋊_φ C₃ ≅ A₄ (3-cycle on non-identity)', phiTargetPower: 0, N: () => createKleinFour(), H: () => createCyclicGroup(3) },
 ]
 
 export function SemidirectProductPanel() {
@@ -38,11 +48,13 @@ function SemidirectProductInner() {
     toggleSemidirectProductMode, setSDNormalSubgroup, setSDActingGroup,
     computeAutN, setPhiGenMapping, expandPhiFull, executeSemidirectProduct,
     storeSemidirectProductGroup, removeSemidirectProductGroup, loadSemidirectProductGroup,
+    isDirectProductMode, toggleDirectProductMode,
   } = useGroup()
   const { t } = useTranslation()
   const presetsIdCounter = useRef(0)
 
   function createPresetSD(key: string) {
+    if (isDirectProductMode) toggleDirectProductMode()
     const preset = SEMIDIRECT_PRESETS.find(p => p.key === key)
     if (!preset) return
     const N = preset.N()
@@ -58,31 +70,7 @@ function SemidirectProductInner() {
     const hGens = getGeneratorElements(H)
     const genMap = new Map<string, string>()
 
-    if (key === 'Z3sZ2' || key === 'Z4sZ2' || key === 'Z5sZ2') {
-      if (N.generators.length > 0 && hGens.length > 0) {
-        const nGen = N.generators[0].apply(N.identity)
-        const nInv = N.inverse(nGen)
-        for (const auto of autos) {
-          if (auto.apply(nGen).id === nInv.id) {
-            genMap.set(hGens[0].el.id, auto.id)
-            break
-          }
-        }
-        if (!genMap.has(hGens[0].el.id)) genMap.set(hGens[0].el.id, idAutoId)
-      }
-    } else if (key === 'Z7sZ3') {
-      if (N.generators.length > 0 && hGens.length > 0) {
-        const nGen = N.generators[0].apply(N.identity)
-        const doubleGen = N.multiply(nGen, nGen)
-        for (const auto of autos) {
-          if (auto.apply(nGen).id === doubleGen.id) {
-            genMap.set(hGens[0].el.id, auto.id)
-            break
-          }
-        }
-        if (!genMap.has(hGens[0].el.id)) genMap.set(hGens[0].el.id, idAutoId)
-      }
-    } else if (key === 'V4sZ3') {
+    if (key === 'V4sZ3') {
       if (hGens.length > 0) {
         const nonId = N.elements.filter(e => e.id !== N.identity.id)
         for (const auto of autos) {
@@ -101,6 +89,17 @@ function SemidirectProductInner() {
         }
         if (!genMap.has(hGens[0].el.id)) genMap.set(hGens[0].el.id, idAutoId)
       }
+    } else if (preset.phiTargetPower > 0 && N.generators.length > 0 && hGens.length > 0) {
+      const nGen = N.generators[0].apply(N.identity)
+      let target = N.identity
+      for (let i = 0; i < preset.phiTargetPower; i++) target = N.multiply(target, nGen)
+      for (const auto of autos) {
+        if (auto.apply(nGen).id === target.id) {
+          genMap.set(hGens[0].el.id, auto.id)
+          break
+        }
+      }
+      if (!genMap.has(hGens[0].el.id)) genMap.set(hGens[0].el.id, idAutoId)
     }
 
     if (genMap.size > 0) {
@@ -138,11 +137,10 @@ function SemidirectProductInner() {
 
       <div className="dp-group-list" style={{ marginTop: '8px' }}>
         <div className="subset-section-header">{t('sd.presets')}</div>
-        <div className="special-groups-grid">
+        <div className="sd-presets-grid">
           {SEMIDIRECT_PRESETS.map(p => (
-            <button key={p.key} className="special-group-item" style={{ minWidth: '100%' }} onClick={() => createPresetSD(p.key)}>
-              <span className="special-group-symbol" dangerouslySetInnerHTML={{ __html: renderTex(p.label) }} />
-              <span className="special-group-desc">{p.desc}</span>
+            <button key={p.key} className="sd-preset-btn" onClick={() => createPresetSD(p.key)} title={p.desc}>
+              <span dangerouslySetInnerHTML={{ __html: renderTex(p.label) }} />
             </button>
           ))}
         </div>

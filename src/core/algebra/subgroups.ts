@@ -32,11 +32,14 @@ export interface SubgroupLatticeEdge {
   to: number
 }
 
-export function computeSubgroupLattice(group: Group): {
+export function computeSubgroupLattice(
+  group: Group,
+  allowLarge = false
+): {
   nodes: SubgroupLatticeNode[]
   edges: SubgroupLatticeEdge[]
 } {
-  const cyclicSubgroups = findAllSubgroups(group)
+  const cyclicSubgroups = findAllSubgroups(group, allowLarge)
   const identityEl = group.identity
 
   const nodes: SubgroupLatticeNode[] = []
@@ -283,7 +286,7 @@ function isSubgroupClosed(group: Group, elements: GroupElement[]): boolean {
   return true
 }
 
-function closeUnderMultiply(group: Group, seed: GroupElement[]): GroupElement[] {
+export function closeUnderMultiply(group: Group, seed: GroupElement[]): GroupElement[] {
   const result: GroupElement[] = []
   const resultSet = new Set<string>()
   for (const el of seed) {
@@ -310,47 +313,96 @@ function closeUnderMultiply(group: Group, seed: GroupElement[]): GroupElement[] 
   return result
 }
 
-function isNormalClosure(group: Group, elements: GroupElement[]): boolean {
-  const elementSet = new Set(elements.map(e => e.id))
-  for (const h of elements) {
-    for (const g of group.elements) {
-      const conj = group.multiply(group.multiply(g, h), group.inverse(g))
-      if (!elementSet.has(conj.id)) return false
-    }
-  }
-  return true
-}
+export function findAllSubgroups(group: Group, allowLarge = false): Subgroup[] {
+  // Short-circuit for large groups to avoid combinatorial explosion
+  if (group.order > 60 && !allowLarge) return []
 
-export function findAllSubgroups(group: Group): Subgroup[] {
+  const n = group.order
+  const elems = group.elements
+
+  // Index-based multiplication table + inverse table (much faster than
+  // repeated group.multiply / group.inverse calls for large groups)
+  const idToIdx = new Map<string, number>()
+  for (let i = 0; i < n; i++) idToIdx.set(elems[i].id, i)
+  const table: number[][] = new Array(n)
+  const invIdx: number[] = new Array(n)
+  for (let i = 0; i < n; i++) {
+    const row = new Array(n)
+    const ei = elems[i]
+    for (let j = 0; j < n; j++) {
+      row[j] = idToIdx.get(group.multiply(ei, elems[j]).id) ?? 0
+    }
+    table[i] = row
+    invIdx[i] = idToIdx.get(group.inverse(ei).id) ?? 0
+  }
+
   const subgroups: Subgroup[] = []
   const subgroupKeys = new Set<string>()
 
-  // Short-circuit for large groups to avoid combinatorial explosion
-  if (group.order > 60) return []
-
-  function addSubgroup(elements: GroupElement[]): void {
-    if (elements.length >= group.order) return
-    const key = elements.map(e => e.id).sort().join(',')
+  function addSubgroup(idx: number[]): void {
+    if (idx.length >= n) return
+    const key = idx.sort((a, b) => a - b).join(',')
     if (subgroupKeys.has(key)) return
     subgroupKeys.add(key)
+    const elements = idx.map(i => elems[i])
     subgroups.push({
       elements,
       order: elements.length,
-      index: group.order / elements.length,
+      index: n / elements.length,
       generators: [],
-      isNormal: isNormalClosure(group, elements),
+      isNormal: isNormalIdx(idx),
     })
   }
 
+  function closeIdx(seed: number[]): number[] {
+    const result: number[] = []
+    const resultSet = new Set<number>()
+    for (const x of seed) {
+      if (!resultSet.has(x)) {
+        resultSet.add(x)
+        result.push(x)
+      }
+    }
+    let changed = true
+    while (changed) {
+      changed = false
+      const k = result.length
+      for (let i = 0; i < k; i++) {
+        const ri = result[i]
+        const row = table[ri]
+        for (let j = i; j < k; j++) {
+          const p = row[result[j]]
+          if (!resultSet.has(p)) {
+            resultSet.add(p)
+            result.push(p)
+            changed = true
+          }
+        }
+      }
+    }
+    return result
+  }
+
+  function isNormalIdx(sub: number[]): boolean {
+    const subSet = new Set(sub)
+    for (let i = 0; i < n; i++) {
+      const invI = invIdx[i]
+      for (const h of sub) {
+        if (!subSet.has(table[table[i][h]][invI])) return false
+      }
+    }
+    return true
+  }
+
   // Phase 1: all cyclic subgroups
-  for (const gen of group.elements) {
-    const cyc: GroupElement[] = []
-    const seen = new Set<string>()
+  for (let gen = 0; gen < n; gen++) {
+    const cyc: number[] = []
+    const seen = new Set<number>()
     let cur = gen
-    while (!seen.has(cur.id)) {
-      seen.add(cur.id)
+    while (!seen.has(cur)) {
+      seen.add(cur)
       cyc.push(cur)
-      cur = group.multiply(cur, gen)
+      cur = table[cur][gen]
     }
     addSubgroup(cyc)
   }
@@ -360,8 +412,11 @@ export function findAllSubgroups(group: Group): Subgroup[] {
     prevCount = subgroups.length
     const all = subgroups.slice()
     for (let i = 0; i < all.length; i++) {
+      const ai = all[i]
       for (let j = i + 1; j < all.length; j++) {
-        const join = closeUnderMultiply(group, [...all[i].elements, ...all[j].elements])
+        // Skip pairs whose union already covers the whole group
+        if (ai.order + all[j].order >= n) continue
+        const join = closeIdx([...ai.elements.map(e => idToIdx.get(e.id)!), ...all[j].elements.map(e => idToIdx.get(e.id)!)])
         addSubgroup(join)
       }
     }
@@ -371,8 +426,8 @@ export function findAllSubgroups(group: Group): Subgroup[] {
   return subgroups
 }
 
-export function getGroupCenter(group: Group): GroupElement[] {
-  if (group.order > 60) return group.isAbelian ? [...group.elements] : [group.identity]
+export function getGroupCenter(group: Group, allowLarge = false): GroupElement[] {
+  if (group.order > 60 && !allowLarge) return group.isAbelian ? [...group.elements] : [group.identity]
   const center: GroupElement[] = []
   
   for (const a of group.elements) {
@@ -389,8 +444,8 @@ export function getGroupCenter(group: Group): GroupElement[] {
   return center
 }
 
-export function getConjugacyClasses(group: Group): GroupElement[][] {
-  if (group.order > 60) {
+export function getConjugacyClasses(group: Group, allowLarge = false): GroupElement[][] {
+  if (group.order > 60 && !allowLarge) {
     return group.elements.map(e => [e])
   }
   const classes: GroupElement[][] = []

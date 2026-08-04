@@ -80,7 +80,7 @@
 - **混合计算** — 小群本地 TS 计算（≤60），大群自动切换 FastAPI 后端（>60）
 - **小群注册表** — 阶 1–15 全部 27 个群，预计算子群/共轭类/中心数据
 - **性能守卫** — 子群/共轭类 cutoff 60；Cayley 边限流；自同构枚举组合 >30000 放弃
-- **测试体系** — 24 个测试文件 462 tests（vitest）
+- **测试体系** — 26 个测试文件 483 tests（vitest）
 ---
 
 ## 🚀 快速开始
@@ -141,14 +141,14 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 24 个测试文件（462 tests）
+├── __tests__/            # 26 个测试文件（483 tests）
 ├── components/
 │   ├── Canvas/           # 视图组件（Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/多视图窗口）
-│   ├── Panels/           # 左侧面板（Group/View/Operations/Homomorphism/SemidirectProduct）
-│   │                    #   + RightPanel + TabBar + constants
+│   ├── Panels/           # 左侧面板（BasicGroup/View/Operations/DirectProduct/
+│   │                    #   Homomorphism/SemidirectProduct）+ RightPanel + TabBar + constants
 │   ├── Tex.tsx           # KaTeX React 组件
-│   └── WelcomePage.tsx   # 欢迎页（群记号预览弹窗、赞助链接）
+│   └── WelcomePage.tsx   # 硬核模式欢迎页（功能清单、即将推出、赞助链接）
 ├── core/
 │   ├── types.ts          # 类型定义、色板、形状检测函数
 │   ├── groups/           # 群实现（循环/二面/对称/交错/特殊/直积/半直积/小群注册表）
@@ -216,8 +216,8 @@ GroupViz 可视化抽象代数与有限群论中的概念。
 - [x] 深色/浅色主题
 - [x] 会话保存与恢复
 - [x] 视图导出（SVG/PNG/GIF）+ 批量导出 CLI
-- [x] 混合计算（本地 TS + FastAPI 后端）
-- [x] 测试体系（24 文件 462 tests）
+- [x] 混合计算（本地 TS + FastAPI 后端，本地兜底 + 进度条）
+- [x] 测试体系（26 文件 483 tests）
 - [ ] 群运算律验证动画
 - [ ] 自定义有限群输入
 - [ ] 教学模式

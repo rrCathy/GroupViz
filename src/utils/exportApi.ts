@@ -34,7 +34,7 @@ interface ExportBridge {
 }
 
 const _prevDisplayMap = new Map<HTMLElement, string>()
-const OVERLAY_SELECTORS = ['.operation-history', '.hint-box', '.hint-message']
+const OVERLAY_SELECTORS = ['.history-panel', '.hint-box']
 
 function hideOverlaysImpl(): void {
   for (const sel of OVERLAY_SELECTORS) {

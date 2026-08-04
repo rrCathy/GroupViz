@@ -115,4 +115,4 @@ interface GroupContextState {
 
 - `src/i18n/`：`I18nProvider`（默认按浏览器语言）、`useTranslation()`、`translations.ts` 中英字典，偏好存 localStorage
 - `src/theme/`：`ThemeContext`（深/浅色，CSS 自定义属性驱动，系统偏好检测 + 记忆）
-- ✅ i18n 键已补全：商群/自同构提示（`hint.quotientCreated`、`hint.automorphismComputed` 等）、操作键（`op.createQuotient`、`op.removeAutomorphism` 等）、同态面板（`right.homo.*`）、第一同构定理四阶段（`homo.firstIso.phase0..3` + Desc）、自同构映射/不动点、批量导出键（`panel.batchExport*`）均已定义，无 t() 回退警告
+- ✅ i18n 键已补全：商群/自同构提示（`hint.quotientCreated`、`hint.automorphismComputed` 等）、操作键（`op.createQuotient`、`op.removeAutomorphism` 等）、同态面板（`right.homo.*`）、第一同构定理四阶段（`homo.firstIso.phase0..3` + Desc）、自同构映射/不动点，均已定义，无 t() 回退警告（`panel.batchExport*` 键随 BatchExportPanel 移除）；zh/en 键集合一致性由 `i18n.test.ts` 自动化断言

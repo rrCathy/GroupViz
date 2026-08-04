@@ -1,14 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from '../i18n/useTranslation'
 import { useTheme } from '../theme/useTheme'
-import { renderTex, texify } from '../utils/texify'
-import { createS3 } from '../core/groups/SymmetricGroup'
-import { createCyclicGroup } from '../core/groups/CyclicGroup'
-import { createDihedralGroup } from '../core/groups/DihedralGroup'
-import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
-import { createKleinFour, createQuaternion } from '../core/groups/SpecialGroup'
-import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3 } from '../core/groups/SmallGroups'
-import type { Group, GroupElement } from '../core/types'
 
 const SPONSOR_LINKS = [
   { label: 'PayPal', url: 'https://paypal.me/rrCathy314', color: '#f6c23e' },
@@ -16,70 +8,22 @@ const SPONSOR_LINKS = [
   { label: '爱发电', url: 'https://afdian.com/a/rrCathy314', color: '#946ce6' },
 ]
 
-const FEATURES = [
-  { icon: 'G', tex: '|H| \\mid |G|', key: 'welcome.feature.subgroups' },
-  { icon: 'C', tex: '\\Gamma(G,C)', key: 'welcome.feature.cayley' },
-  { icon: 'S', tex: 'S_n,\\ D_n,\\ A_n,\\ Q_8', key: 'welcome.feature.multigroup' },
-  { icon: 'M', tex: 'g \\cdot h = k', key: 'welcome.feature.table' },
-  { icon: '3', tex: '\\mathbb{R}^3', key: 'welcome.feature.3d' },
-  { icon: 'P', tex: '\\text{Tetrahedron}', key: 'welcome.feature.symmetry' },
+const DONE_FEATURES = [
+  'welcome.item.subgroups',
+  'welcome.item.cayley',
+  'welcome.item.table',
+  'welcome.item.build',
+  'welcome.item.homomorphism',
 ]
 
-const GROUPS = ['S_{3}', 'Z_{n}', 'D_{n}', 'A_{n}', 'V_{4}', 'Q_{8}', 'Z_{4}\\times Z_{2}', 'Z_{2}^{3}', 'Z_{3}^{2}']
+const SOON_FEATURES = [
+  'welcome.soon.education',
+  'welcome.soon.sylow',
+  'welcome.soon.freegroup',
+  'welcome.soon.dlc',
+]
 
 const FLOATING_SYMBOLS = ['G', '∀', '∃', '→', '≅', '≤', '⊲', '×', '∗', 'ℤ', '∘', '↻']
-
-const PREVIEW_STYLES = ['ring', 'generators', 'orders'] as const
-type PreviewStyle = typeof PREVIEW_STYLES[number]
-
-interface PopupData {
-  group: Group
-  style: PreviewStyle
-  chipRect: { top: number; left: number; width: number; height: number }
-}
-
-function randomStyle(): PreviewStyle {
-  return PREVIEW_STYLES[Math.floor(Math.random() * PREVIEW_STYLES.length)]
-}
-
-function createGroupBySymbol(symbol: string): Group | null {
-  switch (symbol) {
-    case 'S_{3}': return createS3()
-    case 'Z_{n}': return createCyclicGroup(3)
-    case 'D_{n}': return createDihedralGroup(4)
-    case 'A_{n}': return createAlternatingGroup(4)
-    case 'V_{4}': return createKleinFour()
-    case 'Q_{8}': return createQuaternion()
-    case 'Z_{4}\\times Z_{2}': return createZ4xZ2()
-    case 'Z_{2}^{3}': return createZ2xZ2xZ2()
-    case 'Z_{3}\\times Z_{3}': case 'Z_{3}^{2}': return createZ3xZ3()
-    default: return null
-  }
-}
-
-function computeElementOrder(group: Group, element: GroupElement): number {
-  if (element.id === group.identity.id) return 1
-  let current = element
-  let order = 1
-  for (let i = 0; i < group.order; i++) {
-    current = group.multiply(current, element)
-    order++
-    if (current.id === group.identity.id) return order
-  }
-  return 1
-}
-
-const ORDER_COLORS: Record<number, string> = {
-  1: '#ffd93d',
-  2: '#ff6b6b',
-  3: '#4ecdc4',
-  4: '#a78bfa',
-  5: '#f97316',
-  6: '#84cc16',
-  8: '#38bdf8',
-  10: '#eab308',
-  12: '#ec4899',
-}
 
 function FloatingSymbol({ symbol, index }: { symbol: string; index: number }) {
   const delay = (index * 0.8) % 8
@@ -102,190 +46,6 @@ function FloatingSymbol({ symbol, index }: { symbol: string; index: number }) {
   )
 }
 
-const POPUP_SIZE = 210
-const CX = POPUP_SIZE / 2
-const CY = POPUP_SIZE / 2
-const RING_RADIUS = 68
-const NODE_RADIUS = 13
-
-function circularPosition(index: number, total: number, radius: number, cx: number, cy: number) {
-  const angle = (index * 2 * Math.PI / total) - Math.PI / 2
-  return {
-    x: cx + radius * Math.cos(angle),
-    y: cy + radius * Math.sin(angle),
-  }
-}
-
-function computeGeneratorArrows(group: Group): { targetId: string; color: string }[] {
-  return group.generators.map((gen, i) => {
-    const target = gen.apply(group.identity)
-    return {
-      targetId: target?.id ?? '',
-      color: ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa', '#f97316', '#84cc16'][i % 6],
-    }
-  }).filter(a => a.targetId)
-}
-
-function WelcomePreviewPopup({ data, onClose }: { data: PopupData; onClose: () => void }) {
-  const { group, style, chipRect } = data
-  const n = group.elements.length
-  const popupRef = useRef<HTMLDivElement>(null)
-  const [animating, setAnimating] = useState(true)
-  const identityId = group.identity.id
-  const { theme } = useTheme()
-
-  useEffect(() => {
-    const timer = setTimeout(() => setAnimating(false), 220)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const top = chipRect.top - POPUP_SIZE - 18
-  const left = chipRect.left + chipRect.width / 2 - POPUP_SIZE / 2
-
-  const genArrows = style === 'generators' ? computeGeneratorArrows(group) : []
-  const showOrders = style === 'orders'
-
-  const elementOrders = showOrders
-    ? new Map(group.elements.map((el: GroupElement) => [el.id, computeElementOrder(group, el)]))
-    : null
-
-  const positions: Map<string, { x: number; y: number }> = new Map(group.elements.map((el: GroupElement, i: number) =>
-    [el.id, circularPosition(i, n, RING_RADIUS, CX, CY)]
-  ))
-
-  const isLight = theme === 'light'
-  const gradCenter = isLight ? '#f0f1f6' : '#1e2040'
-  const gradEdge = isLight ? '#fafbfe' : '#0c0c1a'
-  const nodeFill = isLight ? '#d4d7de' : '#1a1a2e'
-  const nodeStroke = isLight ? '#c5c8d2' : '#4a4a7a'
-  const identityFill = isLight ? '#eaedd4' : '#2a2a1a'
-  const textColor = isLight ? '#4a4a5e' : '#d0d0f0'
-  const footerColor = isLight ? '#8e8ea0' : '#666'
-
-  const getOrderColor = (order: number): string => {
-    return ORDER_COLORS[order] ?? '#888'
-  }
-
-  return (
-    <div className="welcome-preview-backdrop" onClick={onClose}>
-      <div
-        ref={popupRef}
-        className={`welcome-preview-popup${animating ? ' preview-entering' : ''}`}
-        style={{ position: 'fixed', top, left, width: POPUP_SIZE, height: POPUP_SIZE + 18 }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="welcome-preview-circle">
-          <svg viewBox={`0 0 ${POPUP_SIZE} ${POPUP_SIZE}`} width={POPUP_SIZE} height={POPUP_SIZE}>
-            <defs>
-              <radialGradient id="preview-bg-grad" cx="50%" cy="45%" r="55%">
-                <stop offset="0%" stopColor={gradCenter} />
-                <stop offset="100%" stopColor={gradEdge} />
-              </radialGradient>
-              {genArrows.map((a, i) => (
-                <marker key={`gm-${i}`} id={`gen-arrow-${i}`} markerWidth={7} markerHeight={6} refX={6} refY={3} orient="auto">
-                  <path d="M0,0 L6,3 L0,6 Z" fill={a.color} />
-                </marker>
-              ))}
-            </defs>
-
-            <circle cx={CX} cy={CY} r={RING_RADIUS + NODE_RADIUS + 10} fill="url(#preview-bg-grad)" />
-            <circle cx={CX} cy={CY} r={RING_RADIUS + NODE_RADIUS + 10} fill="none" stroke="#6366f1" strokeWidth="1.5" opacity="0.35" />
-
-            {style === 'generators' && (
-              <circle cx={CX} cy={CY} r={4} fill="#ffd93d" opacity="0.8" />
-            )}
-
-            {genArrows.map((arrow, ai) => {
-              const tp = positions.get(arrow.targetId)
-              if (!tp || arrow.targetId === identityId) return null
-              const dx = tp.x - CX
-              const dy = tp.y - CY
-              const dist = Math.sqrt(dx * dx + dy * dy)
-              const endX = tp.x - (dx / dist) * (NODE_RADIUS + 3)
-              const endY = tp.y - (dy / dist) * (NODE_RADIUS + 3)
-              return (
-                <line
-                  key={`gen-arrow-${ai}`}
-                  x1={CX} y1={CY}
-                  x2={endX} y2={endY}
-                  stroke={arrow.color}
-                  strokeWidth="1.6"
-                  opacity="0.7"
-                  markerEnd={`url(#gen-arrow-${ai})`}
-                />
-              )
-            })}
-
-            {group.elements.map((el: GroupElement) => {
-              const pos = positions.get(el.id)
-              if (!pos) return null
-              const isIdentity = el.id === identityId
-
-              const order = elementOrders?.get(el.id) ?? 0
-              const orderColor = getOrderColor(order)
-
-              let fill = nodeFill
-              let stroke = nodeStroke
-              let strokeWidth = 1.2
-
-              if (showOrders) {
-                fill = isIdentity ? identityFill : `${orderColor}18`
-                stroke = orderColor
-                strokeWidth = isIdentity ? 2 : 1.5
-              } else if (isIdentity) {
-                fill = identityFill
-                stroke = '#ffd93d'
-                strokeWidth = 2
-              }
-
-              return (
-                <g key={el.id}>
-                  {showOrders && !isIdentity && (
-                    <circle cx={pos.x} cy={pos.y} r={NODE_RADIUS + 4} fill={`${orderColor}10`} stroke={orderColor} strokeWidth="0.8" opacity="0.5" />
-                  )}
-                  <circle cx={pos.x} cy={pos.y} r={NODE_RADIUS} fill={fill} stroke={stroke} strokeWidth={strokeWidth} opacity="0.85" />
-                  <foreignObject
-                    x={pos.x - NODE_RADIUS}
-                    y={pos.y - 11}
-                    width={NODE_RADIUS * 2}
-                    height={22}
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        width: '100%', height: '100%', color: textColor, fontSize: '10px',
-                      }}
-                      dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }}
-                    />
-                  </foreignObject>
-                </g>
-              )
-            })}
-
-            {style === 'orders' && (
-              <foreignObject x={CX - 40} y={CY - 14} width={80} height={28}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}
-                  dangerouslySetInnerHTML={{ __html: renderTex(texify(group.symbol)) }} />
-              </foreignObject>
-            )}
-            {style !== 'orders' && (
-              <foreignObject x={CX - 50} y={CY - 14} width={100} height={28}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%' }}
-                  dangerouslySetInnerHTML={{ __html: renderTex(texify(group.symbol)) }} />
-              </foreignObject>
-            )}
-            <text x={CX} y={CY + 14} textAnchor="middle" fill={footerColor} fontSize="11" opacity="0.7">
-              |G| = {group.order}
-            </text>
-          </svg>
-        </div>
-        <div className="welcome-preview-pointer" />
-      </div>
-    </div>
-  )
-}
-
 interface WelcomePageProps {
   onEnter: () => void
 }
@@ -295,8 +55,6 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
   const [leaving, setLeaving] = useState(false)
   const { t, lang, setLang } = useTranslation()
   const { theme, toggleTheme } = useTheme()
-  const [activeChip, setActiveChip] = useState<string | null>(null)
-  const [popupData, setPopupData] = useState<PopupData | null>(null)
   const [sponsorOpen, setSponsorOpen] = useState(false)
 
   useEffect(() => {
@@ -304,43 +62,9 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
     return () => clearTimeout(timer)
   }, [])
 
-  useEffect(() => {
-    return () => setPopupData(null)
-  }, [])
-
-  const doGroupClick = useCallback((symbol: string, target: HTMLElement) => {
-    if (activeChip === symbol) {
-      setActiveChip(null)
-      setPopupData(null)
-      return
-    }
-
-    const group = createGroupBySymbol(symbol)
-    if (!group) return
-
-    const rect = target.getBoundingClientRect()
-    setActiveChip(symbol)
-    setPopupData({
-      group,
-      style: randomStyle(),
-      chipRect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height },
-    })
-  }, [activeChip])
-
-  const handleGroupClick = useCallback((symbol: string, e: React.MouseEvent<HTMLSpanElement>) => {
-    e.stopPropagation()
-    doGroupClick(symbol, e.currentTarget)
-  }, [doGroupClick])
-
-  const closePopup = useCallback(() => {
-    setActiveChip(null)
-    setPopupData(null)
-  }, [])
-
   const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleEnter = () => {
-    setPopupData(null)
     setLeaving(true)
     enterTimerRef.current = setTimeout(onEnter, 600)
   }
@@ -442,32 +166,30 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
           <p className="welcome-tagline">{t('welcome.tagline')}</p>
         </div>
 
-        <div className="welcome-features">
-          {FEATURES.map((f) => (
-            <div key={f.key} className="welcome-feature-card">
-              <div className="welcome-feature-icon">{f.icon}</div>
-              <div
-                className="welcome-feature-tex"
-                dangerouslySetInnerHTML={{ __html: renderTex(f.tex) }}
-              />
-              <div className="welcome-feature-label">{t(f.key)}</div>
-            </div>
-          ))}
-        </div>
+        <div className="welcome-sections">
+          <section className="welcome-section">
+            <h2 className="welcome-section-title">{t('welcome.section.done')}</h2>
+            <ul className="welcome-feature-list">
+              {DONE_FEATURES.map((key) => (
+                <li key={key} className="welcome-feature-row done">
+                  <span className="welcome-feature-mark">✓</span>
+                  <span className="welcome-feature-text">{t(key)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-        <div className="welcome-groups">
-          {GROUPS.map((g) => (
-            <span
-              key={g}
-              className={`welcome-group-chip${activeChip === g ? ' welcome-group-chip-active' : ''}`}
-              onClick={(e) => handleGroupClick(g, e)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doGroupClick(g, e.currentTarget) } }}
-              role="button"
-              tabIndex={0}
-              aria-label={`Group ${g}`}
-              dangerouslySetInnerHTML={{ __html: renderTex(g) }}
-            />
-          ))}
+          <section className="welcome-section">
+            <h2 className="welcome-section-title">{t('welcome.section.soon')}</h2>
+            <ul className="welcome-feature-list">
+              {SOON_FEATURES.map((key) => (
+                <li key={key} className="welcome-feature-row soon">
+                  <span className="welcome-feature-mark">○</span>
+                  <span className="welcome-feature-text">{t(key)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         </div>
 
         <button className="welcome-enter-btn" onClick={handleEnter}>
@@ -478,10 +200,6 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
           </svg>
         </button>
       </div>
-
-      {popupData && (
-        <WelcomePreviewPopup data={popupData} onClose={closePopup} />
-      )}
     </div>
   )
 }

@@ -36,3 +36,10 @@ temp_*
 
 # Lighthouse reports
 lighthouse/
+
+# MCP / agent tooling artifacts
+.playwright-mcp/
+.serena/
+
+# Screenshots from browser scans
+sweep-*.png

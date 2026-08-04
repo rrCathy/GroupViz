@@ -72,13 +72,13 @@ AppWrapper (I18nProvider → ThemeProvider)
 - **TabBar.tsx**：面板内部组件（非顶层 tab 栏），`TabDef {key, label, icon?, content}`，`compact` 模式只显示图标
 - **批量导出**：无 UI 面板，由 CLI 承担 → `npm run export`（scripts/batch-export.mjs），经 `window.__groupVizExport__` 桥渲染 9 预设群 × 7 视图
 - **AutomorphismPreviewPopup.tsx**：360×360 可拖拽弹窗（zIndex 2000），展示自同构的重布线 Cayley 图、生成元像、不动点（青绿）与映射列表
-- **WelcomePage.tsx**：浮动数学符号动画、群记号倒水滴预览弹窗（ring/generators/orders 三风格随机）、GitHub 链接、赞助菜单（PayPal/Ko-fi/爱发电）
+- **WelcomePage.tsx**：硬核模式欢迎页——浮动数学符号动画、已开发功能/即将推出清单、GitHub 链接、赞助菜单（PayPal/Ko-fi/爱发电）
 
 ## 5. 主题与国际化
 
 - **主题**：ThemeContext + useTheme，CSS 自定义属性驱动（--bg/--panel/--accent 等），支持深/浅色、系统偏好检测、localStorage 记忆
 - **国际化**：I18nContext + useTranslation，中文(zh)/English(en)，浏览器语言自动选择，localStorage 记忆
-- ✅ **i18n 键已补全**：`hint.quotientCreated( Iso)`、`hint.automorphismComputed( Iso)`、`hint.layoutFailed`、`op.createQuotient`、`op.removeQuotient`、`op.computedAutomorphism`、`op.removeAutomorphism`、`right.homomorphism`、`right.homo.kernel/image/quotient/noActive`、`right.automorphismMapping`、`right.automorphismFixed`、`homo.firstIso.phase0..3(+Desc)`、`panel.batchExport*`、`canvas.cosetStripNoSubgroup/NoCosets`、`canvas.tableSampled` 均已定义；CosetStripView/TableView 硬编码英文已改为 t() 调用
+- ✅ **i18n 键已补全**：`hint.quotientCreated( Iso)`、`hint.automorphismComputed( Iso)`、`hint.layoutFailed`、`op.createQuotient`、`op.removeQuotient`、`op.computedAutomorphism`、`op.removeAutomorphism`、`right.homomorphism`、`right.homo.kernel/image/quotient/noActive`、`right.automorphismMapping`、`right.automorphismFixed`、`homo.firstIso.phase0..3(+Desc)`、`canvas.cosetStripNoSubgroup/NoCosets`、`canvas.tableSampled` 均已定义；CosetStripView/TableView 硬编码英文已改为 t() 调用（`panel.batchExport*` 键随 BatchExportPanel 移除，批量导出由 CLI 承担）；zh/en 键集合一致性由 `i18n.test.ts` 自动化断言
 
 ## 6. CSS 约定
 

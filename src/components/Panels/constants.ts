@@ -5,7 +5,7 @@ import { createCyclicGroup } from '../../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../../core/groups/SpecialGroup'
-import { createZ6xZ2, createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3 } from '../../core/groups/SmallGroups'
+import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3 } from '../../core/groups/SmallGroups'
 
 export interface GroupTypeConfig {
   key: string
@@ -49,7 +49,6 @@ export function buildGroupTypeConfigs(t: (key: string) => string): GroupTypeConf
 export function buildSpecialGroups(t: (key: string) => string): SpecialGroupEntry[] {
   return [
     { label: 'V_{4}', desc: t('group.klein'), order: 4, create: createKleinFour },
-    { label: 'Z_{6}\\times Z_{2}', desc: t('group.direct.z6z2'), order: 12, create: createZ6xZ2 },
     { label: 'Q_{8}', desc: t('group.quaternion'), order: 8, create: createQuaternion }
   ]
 }
@@ -63,7 +62,6 @@ export function buildViewModes(t: (key: string) => string): ViewModeEntry[] {
     { value: '3d', icon: '◈', label: t('view.3d'), desc: t('view.3d.desc') },
     { value: 'symmetry', icon: '⬠', label: t('view.symmetry'), desc: t('view.symmetry.desc') },
     { value: 'sublattice', icon: '⫘', label: t('view.sublattice'), desc: t('view.sublattice.desc') },
-    { value: 'homomorphism', icon: '⟷', label: t('view.homomorphism'), desc: t('view.homomorphism.desc') },
     { value: 'cosetstrip', icon: '▦', label: t('view.cosetstrip'), desc: t('view.cosetstrip.desc') }
   ]
 }
@@ -96,7 +94,6 @@ export function buildOrderGroupsMap(t: (key: string) => string): Map<number, Ord
   add(8, { symbol: 'Z_{4}\\times Z_{2}', label: 'Z_{4}\\times Z_{2}', desc: t('group.direct.z4z2'), create: createZ4xZ2 })
   add(8, { symbol: 'Z_{2}^{3}', label: 'Z_{2}^{3}', desc: t('group.direct.z2cubed'), create: createZ2xZ2xZ2 })
   add(9, { symbol: 'Z_{3}\\times Z_{3}', label: 'Z_{3}\\times Z_{3}', desc: t('group.direct.z3z3'), create: createZ3xZ3 })
-  add(12, { symbol: 'Z_{6}\\times Z_{2}', label: 'Z_{6}\\times Z_{2}', desc: t('group.direct.z6z2'), create: createZ6xZ2 })
   return map
 }
 

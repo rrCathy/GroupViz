@@ -157,10 +157,10 @@ interface Automorphism { id: string; map: Map<string,string>; label: string; app
 
 | 函数 | 说明 |
 |------|------|
-| `findAllSubgroups(group)` | 所有子群（pair-join 闭包），order > 60 有守卫 |
+| `findAllSubgroups(group, allowLarge?)` | 所有子群（idx 化乘法表 + 循环子群 + pair-join 闭包，order > 60 有守卫，allowLarge 强制计算） |
 | `findAllNormalSubgroups(group)` | 正规子群 |
-| `getConjugacyClasses(group)` | 共轭类（order > 60 时每元素单独成类） |
-| `getGroupCenter(group)` | 群中心 |
+| `getConjugacyClasses(group, allowLarge?)` | 共轭类（order > 60 时每元素单独成类，allowLarge 强制计算） |
+| `getGroupCenter(group, allowLarge?)` | 群中心 |
 | `computeQuotientGroup(group, normalSubgroup)` | 商群 G/N |
 | `computeCosets(group, subgroup, type)` | 左/右陪集（CosetInfo） |
 | `computeSubgroupLattice(group)` | 子群格（Hasse 图节点/边） |

@@ -145,6 +145,15 @@ describe('createAutomorphismGroup', () => {
     expect(AutS3!.isAbelian).toBe(false)
   })
 
+  it('Aut(Q_8) is non-abelian of order 24 (≅ S_4)', () => {
+    const Q8 = createQuaternion()
+    const AutQ8 = createAutomorphismGroup(Q8)!
+    expect(AutQ8.order).toBe(24)
+    // |Aut(Q8)| > 20: the abelianity check must cover ALL pairs, not the
+    // first 20 elements (S_4 is non-abelian).
+    expect(AutQ8.isAbelian).toBe(false)
+  })
+
   it('should have valid group operations (closure, identity, inverse)', () => {
     const S3 = createS3()
     const AutS3 = createAutomorphismGroup(S3)!

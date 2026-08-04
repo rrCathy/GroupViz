@@ -15,7 +15,13 @@ function getCycleType(elements: number[]): string {
     if (visited[i]) continue
     let len = 0
     let j = i
-    while (!visited[j]) { visited[j] = true; j = normalized[j]; len++ }
+    while (j >= 0 && j < n && !visited[j]) {
+      visited[j] = true
+      const next = normalized[j]
+      if (next === undefined || next < 0 || next >= n) break
+      j = next
+      len++
+    }
     if (len > 1) cycles.push(len)
   }
   return cycles.sort().join('-') || '1'
@@ -144,8 +150,8 @@ export function computeElementRotation(group: Group, element: GroupElement): Rot
   if (sym === 'A_{5}' && val.length >= 5) {
     const ct = getCycleType(val)
     if (ct === '5') {
-      const k = elementHash(6, element.id, '5c')
-      const axis = getNormalizedAxis(k, 6, CUBE_FACE_AXES.concat(CUBE_DIAGONAL_AXES))
+      const k = elementHash(7, element.id, '5c')
+      const axis = getNormalizedAxis(k, 7, CUBE_FACE_AXES.concat(CUBE_DIAGONAL_AXES))
       const deg = 72
       return { axis, angleRad: (2 * Math.PI) / 5 * (k % 2 === 0 ? 1 : -1), label: `绕五阶轴旋转 ${deg}°` }
     }

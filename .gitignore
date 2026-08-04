@@ -28,6 +28,9 @@ coverage
 __pycache__/
 *.pyc
 
+# Reference books (large PDFs, kept local only)
+refer/
+
 # Temp files
 temp_*
 

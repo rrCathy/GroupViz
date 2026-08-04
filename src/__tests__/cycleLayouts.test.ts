@@ -34,7 +34,7 @@ describe('computeCycleSubgroups', () => {
 
 describe('computeMaximalCycles', () => {
   it('keeps only cycles not contained in others', () => {
-    const c = (ids: string[]) => ({ elements: ids.map(el) })
+    const c = (ids: string[]) => ({ elements: ids.map(el), order: ids.length })
     const cycles = [c(['a', 'b', 'c']), c(['a', 'b', 'c', 'd']), c(['x', 'y'])]
     const result = computeMaximalCycles(cycles)
     expect(result).toHaveLength(2)
@@ -42,7 +42,7 @@ describe('computeMaximalCycles', () => {
   })
 
   it('keeps equal-size disjoint cycles', () => {
-    const c = (ids: string[]) => ({ elements: ids.map(el) })
+    const c = (ids: string[]) => ({ elements: ids.map(el), order: ids.length })
     const result = computeMaximalCycles([c(['a', 'b']), c(['c', 'd'])])
     expect(result).toHaveLength(2)
   })
@@ -86,6 +86,19 @@ describe('forceLayout', () => {
   it('returns empty map for empty input', () => {
     expect(forceLayout([], [], 800, 800).size).toBe(0)
   })
+
+  it('separates coincident initial positions instead of locking them together', () => {
+    const elements = [el('a'), el('b')]
+    const initial = new Map([
+      ['a', { x: 400, y: 400 }],
+      ['b', { x: 400, y: 400 }],
+    ])
+    const pos = forceLayout(elements, [], 800, 800, { initialPositions: initial })
+    const pa = pos.get('a')!
+    const pb = pos.get('b')!
+    const dist = Math.hypot(pa.x - pb.x, pa.y - pb.y)
+    expect(dist).toBeGreaterThan(1e-4)
+  })
 })
 
 describe('planarCycleLayout', () => {
@@ -104,8 +117,8 @@ describe('planarCycleLayout', () => {
   it('lays out shared cycles with identity in the middle', () => {
     const elements = [el('e'), el('a'), el('b'), el('c'), el('d')]
     const pos = planarCycleLayout(elements, [
-      { elements: [el('a'), el('b'), el('c')] },
-      { elements: [el('c'), el('d'), el('a')] },
+      { elements: [el('a'), el('b'), el('c')], order: 3 },
+      { elements: [el('c'), el('d'), el('a')], order: 3 },
     ], 800, 800)
     expect(pos.size).toBe(5)
     expect(pos.get('e')!.x).toBe(400)
@@ -113,17 +126,17 @@ describe('planarCycleLayout', () => {
 
   it('handles singleton cycles (one non-identity element)', () => {
     const elements = [el('e'), el('a')]
-    const pos = planarCycleLayout(elements, [{ elements: [el('a')] }], 800, 800)
+    const pos = planarCycleLayout(elements, [{ elements: [el('a')], order: 1 }], 800, 800)
     expect(pos.size).toBe(2)
   })
 
   it('falls back to a circle when shared elements exceed two', () => {
     const elements = [el('e'), el('a'), el('b'), el('c'), el('d')]
     const pos = planarCycleLayout(elements, [
-      { elements: [el('a'), el('b'), el('c')] },
-      { elements: [el('a'), el('b'), el('d')] },
-      { elements: [el('a'), el('c'), el('d')] },
-      { elements: [el('b'), el('c'), el('d')] },
+      { elements: [el('a'), el('b'), el('c')], order: 3 },
+      { elements: [el('a'), el('b'), el('d')], order: 3 },
+      { elements: [el('a'), el('c'), el('d')], order: 3 },
+      { elements: [el('b'), el('c'), el('d')], order: 3 },
     ], 800, 800)
     expect(pos.size).toBe(5)
   })

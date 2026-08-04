@@ -158,16 +158,20 @@ describe('fetchBackendResults', () => {
     const big = makeBigGroup(120, ['g0', 'g1', 'g2'])
     mockFetchFunctions.fetchSubgroups.mockResolvedValue({
       subgroups: [
-        { elements: [{ id: 'g0' }], is_normal: true, order: 1 },
-        { elements: [{ id: 'g1', label: 'x' }], is_normal: false, order: 40 },
-        { elements: [{ id: 'g2' }], is_normal: true, order: 60 },
+        { elements: [{ id: 'g0', label: 'g0', value: [0] }], is_normal: true, order: 1 },
+        { elements: [{ id: 'g1', label: 'x', value: [1] }], is_normal: false, order: 40 },
+        { elements: [{ id: 'g2', label: 'g2', value: [2] }], is_normal: true, order: 60 },
       ],
+      total_count: 3,
     })
     mockFetchFunctions.fetchConjugacyClasses.mockResolvedValue({
-      classes: [[{ id: 'g0' }], [{ id: 'g1' }]],
+      classes: [[{ id: 'g0', label: 'g0', value: [0] }], [{ id: 'g1', label: 'g1', value: [1] }]],
     })
-    mockFetchFunctions.fetchCenter.mockResolvedValue({ center: [{ id: 'g0' }] })
-    mockFetchFunctions.fetchLattice.mockResolvedValue({ nodes: [{ id: 0 }], edges: [] })
+    mockFetchFunctions.fetchCenter.mockResolvedValue({ center: [{ id: 'g0', label: 'g0', value: [0] }] })
+    mockFetchFunctions.fetchLattice.mockResolvedValue({
+      nodes: [{ id: 0, elements: [], order: 1, is_normal: true, level: 0 }],
+      edges: [],
+    })
 
     const res = await fetchBackendResults(big)
 
@@ -176,7 +180,10 @@ describe('fetchBackendResults', () => {
     expect(res.isSimple).toBe(false)
     expect(res.conjugacyClasses).toHaveLength(2)
     expect(res.center?.map(e => e.id)).toEqual(['g0'])
-    expect(res.lattice).toEqual({ nodes: [{ id: 0 }], edges: [] })
+    expect(res.lattice).toEqual({
+      nodes: [{ id: 0, elements: [], order: 1, is_normal: true, level: 0 }],
+      edges: [],
+    })
     expect(res.error).toBeNull()
   })
 
@@ -237,7 +244,7 @@ describe('fetchBackendElementOrder', () => {
     const big = makeBigGroup(120, ['g0', 'g1'])
     mockFetchFunctions.fetchElementOrder.mockResolvedValue({
       element_id: 'g1', element_label: 'x', order: 10,
-      cycle: [{ id: 'g1' }, { id: 'g0' }],
+      cycle: [{ id: 'g1', label: 'x', value: [1] }, { id: 'g0', label: 'g0', value: [0] }],
     })
     const res = await fetchBackendElementOrder(big, 'g1')
     expect(res?.order).toBe(10)

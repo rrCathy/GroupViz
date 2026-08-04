@@ -194,9 +194,10 @@ export function findAllNormalSubgroups(group: Group): Subgroup[] {
 
   const otherClasses = classes.filter(c => c !== identityClass)
 
-  // JS bitwise shifts operate on 32-bit ints; >31 classes causes overflow/wrap.
-  // For abelian groups, every subgroup is normal — delegate to findAllSubgroups.
-  if (otherClasses.length > 31 || group.isAbelian) {
+  // JS bitwise shifts operate on 32-bit ints; >=31 classes causes 1<<31 overflow.
+  // 2^k subset enumeration freezes the main thread for k >= 20 (e.g. S3 x C10 has
+  // 3x10 = 30 conjugacy classes -> 2^29 iterations), so fall back below that.
+  if (otherClasses.length >= 20 || group.isAbelian) {
     const all = findAllSubgroups(group)
     const subgs: Subgroup[] = []
     const seen = new Set<string>()
@@ -212,8 +213,20 @@ export function findAllNormalSubgroups(group: Group): Subgroup[] {
         }
         if (!isNormal) break
       }
+      // fallback reuses findAllSubgroups which lists ALL subgroups; only normal
+      // ones may be returned (mask path only yields normal candidates).
+      if (!isNormal) continue
       subgs.push({ ...sg, isNormal })
     }
+    // findAllSubgroups excludes the full group; the mask path includes it, so
+    // keep both paths consistent (G is always a normal subgroup).
+    subgs.push({
+      elements: group.elements,
+      order: group.order,
+      index: 1,
+      generators: [],
+      isNormal: true,
+    })
     return subgs.sort((a, b) => a.order - b.order)
   }
 
@@ -573,7 +586,18 @@ export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Gr
   }
 
   const order = leftCosets.length
-  const isAbelian = group.isAbelian || order <= 4
+  // A quotient of an abelian group is abelian, but a NON-abelian group can also
+  // have an abelian quotient (e.g. (S3 x C5) / (A3 x {e}) ~= C10), so verify
+  // commutativity on the quotient elements directly (order <= 60 locally).
+  let isAbelian = true
+  outer: for (let i = 0; i < order; i++) {
+    for (let j = i + 1; j < order; j++) {
+      if (multiply(elements[i], elements[j]).id !== multiply(elements[j], elements[i]).id) {
+        isAbelian = false
+        break outer
+      }
+    }
+  }
 
   const generators: import('../types').Generator[] = []
   const sourceGens = group.generators.length > 0

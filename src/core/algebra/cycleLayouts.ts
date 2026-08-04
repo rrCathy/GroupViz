@@ -131,9 +131,18 @@ function runForceLayoutIteration(st: ForceLayoutState, iter: number): void {
 
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const dx = pos[i].x - pos[j].x
-      const dy = pos[i].y - pos[j].y
-      const dist = Math.sqrt(dx * dx + dy * dy) || 0.01
+      let dx = pos[i].x - pos[j].x
+      let dy = pos[i].y - pos[j].y
+      let dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < 1e-6) {
+        // Coincident points: a zero-length direction vector cancels both the
+        // repulsion and gravity terms, so fully overlapping nodes never
+        // separate. Inject a deterministic pseudo-random direction instead.
+        const angle = ((i * 127 + j * 311) % 1000) / 1000 * Math.PI * 2
+        dx = Math.cos(angle) * 1e-6
+        dy = Math.sin(angle) * 1e-6
+        dist = 1e-6
+      }
       const f = repC / (dist * dist)
       disp[i].x += (dx / dist) * f
       disp[i].y += (dy / dist) * f

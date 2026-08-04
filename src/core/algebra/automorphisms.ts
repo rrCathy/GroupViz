@@ -304,8 +304,11 @@ function checkAutomorphismAbelian(
   elements: GroupElement[],
   multiply: (a: GroupElement, b: GroupElement) => GroupElement,
 ): boolean {
-  for (let i = 0; i < elements.length && i < 20; i++) {
-    for (let j = i + 1; j < elements.length && j < 20; j++) {
+  // |Aut(G)| can exceed 20 (e.g. 168 for GL(3,2), 96 for C4 x C4), so sampling
+  // only the first 20 elements could certify a non-abelian automorphism group.
+  // Full pairwise check: at most 168^2/2 ~ 14k multiplications, fine locally.
+  for (let i = 0; i < elements.length; i++) {
+    for (let j = i + 1; j < elements.length; j++) {
       const ab = multiply(elements[i], elements[j])
       const ba = multiply(elements[j], elements[i])
       if (ab.id !== ba.id) return false

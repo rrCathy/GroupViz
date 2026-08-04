@@ -17,7 +17,7 @@ import { createKleinFour } from '../core/groups/SpecialGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createDirectProduct } from '../core/groups/DirectProduct'
 import { findAllSubgroups } from '../core/algebra/subgroups'
-import type { Group } from '../core/types'
+import type { Group, GroupElement } from '../core/types'
 
 function identityMap(group: Group) {
   const map = new Map<string, string>()
@@ -25,7 +25,7 @@ function identityMap(group: Group) {
   return map
 }
 
-function computeElementOrder(group: Group, el: Group): number {
+function computeElementOrder(group: Group, el: GroupElement): number {
   let a = el
   let count = 0
   do {
@@ -75,6 +75,18 @@ describe('verifyHomomorphism', () => {
     expect(result.isHomomorphism).toBe(true)
     expect(result.kernel.length).toBe(S3.order)
     expect(result.image.length).toBe(1)
+  })
+
+  it('partial mapping (missing elements) is rejected as a homomorphism', () => {
+    const S3 = createS3()
+    const map = new Map<string, string>()
+    map.set(S3.elements[0].id, S3.elements[0].id)
+    map.set(S3.elements[1].id, S3.elements[1].id)
+    const result = verifyHomomorphism(S3, S3, map)
+    expect(result.isHomomorphism).toBe(false)
+    expect(result.violation).toBeDefined()
+    expect(result.kernel.length).toBe(0)
+    expect(result.image.length).toBe(0)
   })
 })
 

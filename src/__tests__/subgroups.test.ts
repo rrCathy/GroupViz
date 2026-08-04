@@ -4,7 +4,8 @@ import { createS3 } from '../core/groups/SymmetricGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../core/groups/SpecialGroup'
-import { findAllSubgroups, isSimpleGroup, getConjugacyClasses, getGroupCenter, computeQuotientGroup } from '../core/algebra/subgroups'
+import { findAllSubgroups, isSimpleGroup, getConjugacyClasses, getGroupCenter, computeQuotientGroup, findAllNormalSubgroups } from '../core/algebra/subgroups'
+import { createDirectProduct } from '../core/groups/DirectProduct'
 import type { Group } from '../core/types'
 
 function isSubgroup(group: Group, candidateIds: string[]): boolean {
@@ -192,6 +193,38 @@ describe('Subgroup Calculations', () => {
         const inv1 = q1!.inverse(q1!.elements[i])
         const inv2 = q2!.inverse(q2!.elements[i])
         expect(inv1.id).toBe(inv2.id)
+      }
+    })
+
+    it('non-abelian group can have an abelian quotient: (S3 x C5) / (A3 x {e}) ~= C10', () => {
+      const group = createDirectProduct(createS3(), createCyclicGroup(5))
+      const normal = findAllSubgroups(group).find(s => s.order === 3 && s.isNormal)
+      expect(normal).toBeDefined()
+      const q = computeQuotientGroup(group, normal!)
+      expect(q).not.toBeNull()
+      expect(q!.order).toBe(10)
+      expect(q!.isAbelian).toBe(true)
+    })
+  })
+
+  describe('findAllNormalSubgroups', () => {
+    it('fallback path (many conjugacy classes) includes the full group and trivial subgroup', () => {
+      // S3 x C10: 3 x 10 = 30 conjugacy classes -> otherClasses = 29 >= 20, uses fallback
+      const group = createDirectProduct(createS3(), createCyclicGroup(10))
+      expect(group.order).toBe(60)
+      const normal = findAllNormalSubgroups(group)
+      expect(normal.some(s => s.order === group.order && s.isNormal)).toBe(true)
+      expect(normal.some(s => s.order === 1 && s.isNormal)).toBe(true)
+      expect(normal.length).toBeGreaterThan(2)
+    })
+
+    it('fallback path marks only genuinely normal subgroups as normal', () => {
+      const group = createDirectProduct(createS3(), createCyclicGroup(10))
+      const normal = findAllNormalSubgroups(group)
+      const ids = new Set(normal.map(s => s.order + ':' + s.elements.map(e => e.id).sort().join(',')))
+      expect(ids.size).toBe(normal.length)
+      for (const sub of normal) {
+        expect(sub.isNormal).toBe(true)
       }
     })
   })

@@ -7,6 +7,24 @@ export function verifyHomomorphism(
 ): HomomorphismResult {
   const identityTarget = target.identity.id
 
+  // A partial mapping cannot be a homomorphism: the UI allows editing mappings
+  // element by element, and skipping undefined entries would certify an
+  // incomplete map (with a bogus kernel/image). Reject early.
+  const unmapped = source.elements.find(el => !mapping.has(el.id))
+  if (unmapped) {
+    return {
+      isHomomorphism: false,
+      kernel: [],
+      image: [],
+      violation: {
+        a: unmapped.id,
+        b: unmapped.id,
+        lhs: 'unmapped',
+        rhs: 'unmapped',
+      },
+    }
+  }
+
   for (const a of source.elements) {
     for (const b of source.elements) {
       const faId = mapping.get(a.id)

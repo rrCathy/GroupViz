@@ -642,6 +642,13 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
     }
   }
 
+  // Specialized placements (S4/A5/...) only fill positions whose element ids
+  // match the canonical permutation format; fill any leftovers so downstream
+  // destructuring never hits undefined.
+  for (let i = 0; i < n; i++) {
+    if (!positions[i]) positions[i] = fibonacciSphere(n, radius)[i]
+  }
+
   return positions
 }
 

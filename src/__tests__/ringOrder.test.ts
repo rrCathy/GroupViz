@@ -139,7 +139,7 @@ describe('parseProductFactors', () => {
 })
 
 describe('matrixGridLayout', () => {
-  const elements = [
+  const elements: GroupElement[] = [
     { id: 'a', label: '', value: [] },
     { id: 'b', label: '', value: [] },
     { id: 'c', label: '', value: [] },

@@ -1,5 +1,8 @@
 # GroupViz — Interactive Group Theory Visualization
 
+[![CI](https://github.com/rrCathy/GroupViz/actions/workflows/ci.yml/badge.svg)](https://github.com/rrCathy/GroupViz/actions/workflows/ci.yml)
+[![Deploy to GitHub Pages](https://github.com/rrCathy/GroupViz/actions/workflows/pages.yml/badge.svg)](https://github.com/rrCathy/GroupViz/actions/workflows/pages.yml)
+
 <p align="center">
   <strong>English</strong> | <a href="./README_zh-CN.md">简体中文</a>
 </p>
@@ -80,7 +83,7 @@
 - **Hybrid computation** — local TypeScript for small groups (≤60), FastAPI backend for large ones (>60)
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 21 test files, 427 tests (Vitest)
+- **Test suite** — 24 test files, 462 tests (Vitest)
 
 ---
 
@@ -144,7 +147,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 21 test files (427 tests)
+├── __tests__/            # 24 test files (462 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/floating windows)
@@ -232,7 +235,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI)
-- [x] Test suite (21 files, 427 tests)
+- [x] Test suite (24 files, 462 tests)
 - [ ] Group operation law verification animations
 - [ ] Custom finite group input
 - [ ] Tutorial mode

@@ -326,7 +326,7 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
     if (!quotientGroup) return null
 
     const isoSymbol = detectIsomorphicGroup(quotientGroup)
-    quotientGroup.isoSymbol = isoSymbol
+    quotientGroup.isoSymbol = isoSymbol ?? undefined
 
     const entry: QuotientGroupEntry = {
       id: `quotient-${Date.now()}`,

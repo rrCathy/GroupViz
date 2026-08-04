@@ -337,7 +337,7 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
     setPopupData(null)
   }, [])
 
-  const enterTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleEnter = () => {
     setPopupData(null)
@@ -346,7 +346,9 @@ export function WelcomePage({ onEnter }: WelcomePageProps) {
   }
 
   useEffect(() => {
-    return () => clearTimeout(enterTimerRef.current)
+    return () => {
+      if (enterTimerRef.current) clearTimeout(enterTimerRef.current)
+    }
   }, [])
 
   return (

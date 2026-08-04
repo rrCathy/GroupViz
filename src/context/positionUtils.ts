@@ -31,13 +31,7 @@ export function initializeNodePositions(group: Group, view: ViewMode, shape2D?: 
 
   if (view === 'cayley' && shape2D) {
     const pos = computeShape2DPositions(group, shape2D, vbs.width, vbs.height)
-    if (pos) {
-      if ('positions' in pos) {
-        if (pos.positions.size > 0) return pos.positions
-      } else if (pos.size > 0) {
-        return pos
-      }
-    }
+    if (pos && pos.size > 0) return pos
   }
 
   if (view === 'cayley' && isGroupDirectProduct(group) && shape2D !== 'circular') {

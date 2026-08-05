@@ -4,7 +4,7 @@
 
 ## 1. 模块化 Provider 架构
 
-GroupViz 采用 **9 个独立 Provider** 的分层架构（`src/context/`）：
+GroupViz 采用 **10 个独立 Provider** 的分层架构（`src/context/`）：
 
 ```
 GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
@@ -16,11 +16,12 @@ GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
   ├── GroupDirectProductContext — 直积群构建
   ├── GroupSemidirectProductContext — 半直积构建（N ⋊_φ H）
   ├── GroupMultiViewContext   — 多视图浮动窗口
-  └── GroupHomomorphismContext — 同态映射创建与验证
+  ├── GroupHomomorphismContext — 同态映射创建与验证
+  └── GroupActionContext      — 群作用（共轭/几何/自定义 + 轨道计算，最外层）
 ```
 
 - 每个子 Provider 通过 `useGroupCore()` 获取核心状态，实现关注点分离
-- `GroupContext.tsx` 作为组合层，嵌套渲染 9 个子 Provider
+- `GroupContext.tsx` 作为组合层，嵌套渲染 10 个子 Provider
 - `useGroup()`（useGroup.ts）聚合所有子 Provider 的 hook 返回值，对外提供统一接口
 - 群切换时通过 `useRef` 追踪变更，子 Provider 用 `queueMicrotask` 在微任务中重置相关状态
 - `GroupContext.tsx` ~L223 注册 `window.__groupVizExport__` 导出桥
@@ -32,7 +33,7 @@ GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
 ```typescript
 interface GroupContextState {
   currentGroup: Group | null
-  currentView: ViewMode           // 9 种
+  currentView: ViewMode           // 10 种
   selectedElements: Set<string>
   canvasTransform: { x; y; scale }
   operationHistory: string[]
@@ -43,7 +44,7 @@ interface GroupContextState {
   forceShowLargeGroupViews: Set<ViewMode>
   viewBoxSize / isPending / backendCache / isLargeGroup
   cayleyMultiplyType: 'right' | 'left'
-  cayleyActions: GroupAction[]
+  cayleyActions: CayleyAction[]
   cayleyShape3D: Layout3D / cayleyAvailableShapes3D
   cayleyShape2D: CayleyShape2D / cayleyAvailableShapes2D
   subsets: Subset[]               // 子集分析（含子群/正规子群检测）
@@ -57,6 +58,7 @@ interface GroupContextState {
   isSemidirectProductMode / sd* 状态（见 GROUPS.md §4）
   homomorphisms / activeHomomorphismId / quotientGroups
   automorphismGroups / theoremPhase
+  action* 状态（actionKind/actionArrows/actionComputation/actionSelectedElement 等，见 ACTIONS.md §5）
 }
 ```
 

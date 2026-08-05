@@ -42,7 +42,7 @@ export function isTooLarge(order: number, view: ViewMode): boolean {
   if (view === 'table') {
     return order > 100
   }
-  if (view === 'symmetry' || view === 'sublattice') {
+  if (view === 'symmetry' || view === 'sublattice' || view === 'action') {
     return order > 120
   }
   if (view === '3d') {

@@ -16,11 +16,12 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，26 文件 / 483 tests）
+## 3. 测试文件清单（src/__tests__，27 文件 / 511 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
 | groups.test.ts | 154 | 群公理：createCyclicGroup/createS3/createSymmetricGroup/createDihedralGroup/createAlternatingGroup/createKleinFour/createQuaternion（单位元/逆元/闭包/结合律） |
+| actions.test.ts | 28 | 群作用：置换工具（compose 方向/逆/恒等）、共轭作用（S₃/C₆/D₄/S₅ 同态+轨道=共轭类+OST 校验）、几何作用（A₄+截角四面体、S₄+截角立方体、A₅ 失败诚实报告）、自定义作用（C₃ 循环合法、missing-target/conflict/duplicate/range 报错、无箭头生成元恒等初始化、非法阶绑定 → violation） |
 | automorphisms.test.ts | 28 | findAllAutomorphisms（已知数量：Z3→2、Z4→2、Z5→4、S3→6、V4→6、Q8→24、D3→6、D4→8；Z₂⁴ 守卫返回 []）、createAutomorphismGroup 群律、Aut 群 Cayley 边连通性、标签/映射 |
 | homomorphisms.test.ts | 24 | verifyHomomorphism（含 violation）、naturalProjectionMapping、getHomomorphismProperties、subgroupInclusionMapping、directProductProjectionMapping、extendFromGenerators、formatKernelLabel、isElementIdentity |
 | layouts.test.ts | 25 | computeShape2DPositions（10 形状 size=order、circular→null、grid 需直积）、compute3DPositions（17 布局）、ringOrder 数字感知排序、computeElementOrder |

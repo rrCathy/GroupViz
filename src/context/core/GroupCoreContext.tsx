@@ -64,7 +64,7 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
       set: 'view.set', cayley: 'view.cayley', cycle: 'view.cycle',
       table: 'view.table', '3d': 'view.3d', symmetry: 'view.symmetry',
       sublattice: 'view.sublattice', homomorphism: 'view.homomorphism',
-      cosetstrip: 'view.cosetstrip',
+      cosetstrip: 'view.cosetstrip', action: 'view.action',
     }
     return t(keyMap[view])
   }, [t])

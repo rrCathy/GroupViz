@@ -2,7 +2,7 @@
 
 > 所属文档集：GroupViz 开发文档。入口见 [AGENTS.md](../AGENTS.md)。
 
-9 种视图模式（`ViewMode`：'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip'），主画布 `GroupCanvas.tsx` 按 `currentView` 分发渲染。
+10 种视图模式（`ViewMode`：'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action'），主画布 `GroupCanvas.tsx` 按 `currentView` 分发渲染。
 
 ## 1. 集合视图 (SetView.tsx)
 
@@ -85,7 +85,11 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 - 底部 `|G|=n = |H|·[G:H]` Lagrange 定理验证
 - 空态提示目前为硬编码英文
 
-## 10. 多视图模式
+## 10. 轨道视图 / 群作用 (ActionView.tsx)
+
+详见 [ACTIONS.md](ACTIONS.md)。轨道簇布局（大小升序左→右，固定点 ★ 最左）、生成元作用边、hover 群元素显示全部箭头、点击元素 → 右侧面板 OST/Stab 详情；自定义作用编辑模式（元素围圈 + 生成元 chips + 虚线未绑定箭头）。isTooLarge 阈值 120。
+
+## 11. 多视图模式
 
 `toggleMultiViewMode()` 开启后可通过 `openFloatingView(view)` 打开浮动窗口（`FloatingViewWindow.tsx`）：
 
@@ -93,11 +97,11 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 - 主画布与浮动窗口可同时对比不同视图
 - 缩放上限 8x（乘法表 10x）
 
-## 11. 直积/半直积构建视图
+## 12. 直积/半直积构建视图
 
 - `DirectProductView.tsx`：直积群构建画布（isDirectProductMode 时替换主画布）
 - `SemidirectProductView.tsx`：半直积设置 + 4 步教学动画（详见 [GROUPS.md](GROUPS.md) 第 4 节）
 
-## 12. 大群视图守卫
+## 13. 大群视图守卫
 
 `forceShowLargeGroupViews`：order > 60 的群对计算密集视图（cycle/sublattice/symmetry/homomorphism/cosetstrip）提供守卫与后端降级。

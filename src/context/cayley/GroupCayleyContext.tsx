@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import type { GroupAction, MultiplyType, Layout3D } from '../../core/types'
+import type { CayleyAction, MultiplyType, Layout3D } from '../../core/types'
 import { type CayleyShape2D } from '../../core/types'
 import { getViewBoxSize } from '../../core/viewBox'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
@@ -13,7 +13,7 @@ import {
 
 interface GroupCayleyState {
   cayleyMultiplyType: MultiplyType
-  cayleyActions: GroupAction[]
+  cayleyActions: CayleyAction[]
   cayleyShape3D: Layout3D
   cayleyAvailableShapes3D: Layout3D[]
   cayleyShape2D: CayleyShape2D
@@ -22,7 +22,7 @@ interface GroupCayleyState {
 
 interface GroupCayleyActions {
   setCayleyMultiplyType: (type: MultiplyType) => void
-  setCayleyActions: (actions: GroupAction[]) => void
+  setCayleyActions: (actions: CayleyAction[]) => void
   setCayleyShape3D: (shape: Layout3D) => void
   setCayleyShape2D: (shape: CayleyShape2D) => void
   toggleCayleyAction: (elementId: string) => void
@@ -42,7 +42,7 @@ export function GroupCayleyProvider({ children }: { children: ReactNode }) {
   } = useGroupCore()
 
   const [cayleyMultiplyType, setCayleyMultiplyTypeState] = useState<MultiplyType>('right')
-  const [cayleyActions, setCayleyActionsState] = useState<GroupAction[]>([])
+  const [cayleyActions, setCayleyActionsState] = useState<CayleyAction[]>([])
   const [cayleyShape3D, setCayleyShape3DState] = useState<Layout3D>('spherical')
   const [cayleyAvailableShapes3D, setCayleyAvailableShapes3D] = useState<Layout3D[]>(['spherical', 'circular'])
   const [cayleyShape2D, setCayleyShape2DState] = useState<CayleyShape2D>('circular')
@@ -115,7 +115,7 @@ export function GroupCayleyProvider({ children }: { children: ReactNode }) {
   // stale "0 个边作用元素" shown after session restore, where setCurrentView
   // runs before getInitialCayleyActions populates the list. The ref guard
   // prevents overwriting hints set by setCayleyMultiplyType / setCayleyShape3D.
-  const lastHintActionsRef = useRef<GroupAction[]>([])
+  const lastHintActionsRef = useRef<CayleyAction[]>([])
   useEffect(() => {
     if (currentView !== 'cayley' && currentView !== '3d') return
     if (lastHintActionsRef.current === cayleyActions) return
@@ -128,7 +128,7 @@ export function GroupCayleyProvider({ children }: { children: ReactNode }) {
     }
   }, [cayleyActions, currentView, cayleyMultiplyType, cayleyShape3D, setHintMessage, t])
 
-  const setCayleyActions = useCallback((actions: GroupAction[]) => {
+  const setCayleyActions = useCallback((actions: CayleyAction[]) => {
     setCayleyActionsState(actions)
   }, [])
 

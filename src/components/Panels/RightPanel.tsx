@@ -125,6 +125,9 @@ export function RightPanel() {
     currentView,
     setCurrentGroup,
     setCurrentView,
+    actionKind,
+    actionComputation,
+    actionSelectedElement,
   } = useGroup()
   const { t } = useTranslation()
   
@@ -514,6 +517,101 @@ export function RightPanel() {
           </div>
         </div>
       )}
+
+      {currentView === 'action' && actionComputation && currentGroup && (() => {
+        const comp = actionComputation
+        const sumOk = comp.orbits.reduce((s, o) => s + o.elements.length, 0) === comp.n
+        const fixedCount = comp.orbits.filter(o => o.elements.length === 1).length
+        const selected = actionSelectedElement
+        const selOrbit = selected !== null ? comp.orbits[comp.orbitOf[selected]] : null
+        const selStab = selected !== null ? comp.stabilizers.get(selected) ?? [] : []
+        const kindLabel = actionKind ? t(`action.kind.${actionKind}`) : ''
+        return (
+          <div className="panel-section">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent-teal)' }}>
+                {t('right.actionInfo')}
+              </span>
+              {kindLabel && (
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'var(--panel-bg)', padding: '1px 6px', borderRadius: 3 }}>
+                  {kindLabel}
+                </span>
+              )}
+            </div>
+            <div className="info-row">
+              <span className="info-label">{t('homo.verify')}</span>
+              <span className="info-value" style={{ color: comp.isHomomorphism ? '#22c55e' : '#f43f5e', fontWeight: 700 }}>
+                {comp.isHomomorphism ? `✓ ${t('action.valid')}` : `✗ ${t('action.invalid')}`}
+              </span>
+            </div>
+            {comp.violation && (
+              <div style={{ fontSize: 10, color: '#f43f5e', lineHeight: 1.5, marginBottom: 4 }}>
+                {t('action.violation', {
+                  g: comp.violation.g,
+                  a: comp.violation.a,
+                  x: String(comp.violation.x + 1),
+                })}
+              </div>
+            )}
+            <div className="info-row">
+              <span className="info-label">|X|</span>
+              <span className="info-value">{comp.n}</span>
+            </div>
+            <div className="info-row">
+              <span className="info-label">{t('action.orbitCount', { n: comp.orbits.length })}</span>
+              <span className="info-value">
+                {comp.orbits.map(o => o.elements.length).join(', ')}
+              </span>
+            </div>
+            <div className="info-row">
+              <span className="info-label">{t('action.sumCheck', { sum: comp.orbits.reduce((s, o) => s + o.elements.length, 0), n: comp.n })}</span>
+              <span className="info-value" style={{ color: sumOk ? '#22c55e' : '#f43f5e' }}>{sumOk ? '✓' : '✗'}</span>
+            </div>
+            <div className="info-row">
+              <span className="info-label">{t('action.fixedPoints', { n: fixedCount })}</span>
+              <span className="info-value">★ ×{fixedCount}</span>
+            </div>
+            {selected !== null && selOrbit && (
+              <div style={{ marginTop: 6, borderTop: '1px dashed var(--border-color, rgba(128,128,128,0.3))', paddingTop: 6 }}>
+                <div className="info-row">
+                  <span className="info-label">
+                    <span dangerouslySetInnerHTML={{ __html: renderTex(`x = ${selected + 1}`) }} />
+                  </span>
+                  <span className="info-value" dangerouslySetInnerHTML={{
+                    __html: renderTex(t('action.orbitStab', {
+                      orbit: String(selOrbit.elements.length),
+                      stab: String(selStab.length),
+                    })),
+                  }} />
+                </div>
+                <div className="info-row">
+                  <span className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.ost', {
+                    orbit: String(selOrbit.elements.length),
+                    stab: String(selStab.length),
+                    product: String(selOrbit.elements.length * selStab.length),
+                  })) }} />
+                  <span className="info-value" style={{ color: selOrbit.elements.length * selStab.length === currentGroup.order ? '#22c55e' : '#f43f5e' }}>
+                    {selOrbit.elements.length * selStab.length === currentGroup.order ? '✓' : '✗'}
+                  </span>
+                </div>
+                {selStab.length > 0 && (
+                  <div style={{ marginTop: 4 }}>
+                    <div className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.stabilizer', { x: String(selected + 1) })) }} />
+                    <div className="elements-grid" style={{ marginTop: 4 }}>
+                      {selStab.map((gid) => {
+                        const el = currentGroup.elements.find(e => e.id === gid)
+                        return el ? (
+                          <span key={gid} className="element-chip" dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }} />
+                        ) : null
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       <AccordionSection title={t('right.subgroups', { n: subgroups.length })} defaultOpen={false}>
         {backendCache.loading && isLargeGroup ? (

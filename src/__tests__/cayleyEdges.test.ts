@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { computeCayleyActionEdges } from '../core/algebra/cayleyEdges'
-import type { Group, GroupAction } from '../core/types'
+import type { Group, CayleyAction } from '../core/types'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createS3 } from '../core/groups/SymmetricGroup'
 
-function makeAction(elementId: string, color = '#ff0000'): GroupAction {
+function makeAction(elementId: string, color = '#ff0000'): CayleyAction {
   return { elementId, enabled: true, color }
 }
 
@@ -97,7 +97,7 @@ describe('computeCayleyActionEdges', () => {
 
   it('limits edges to max(120, order*3) for order > 60', () => {
     const C120 = createCyclicGroup(120)
-    const actions: GroupAction[] = C120.elements.map((el, i) => ({
+    const actions: CayleyAction[] = C120.elements.map((el, i) => ({
       elementId: el.id,
       enabled: true,
       color: `#${(i * 1000).toString(16).padStart(6, '0')}`,
@@ -108,7 +108,7 @@ describe('computeCayleyActionEdges', () => {
 
   it('does not limit edges for order <= 60', () => {
     const C60 = createCyclicGroup(60)
-    const actions: GroupAction[] = C60.elements.map((el, i) => ({
+    const actions: CayleyAction[] = C60.elements.map((el, i) => ({
       elementId: el.id,
       enabled: true,
       color: `#${(i * 1000).toString(16).padStart(6, '0')}`,

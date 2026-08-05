@@ -538,7 +538,7 @@ export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Gr
 
   if (actionCandidates.length > 0) {
     const palette = ['#ff6b6b','#4ecdc4','#ffd93d']
-    const actions: import('../types').GroupAction[] = actionCandidates.map((el, i) => ({
+    const actions: import('../types').CayleyAction[] = actionCandidates.map((el, i) => ({
       elementId: el.id,
       enabled: true,
       color: palette[i % palette.length],

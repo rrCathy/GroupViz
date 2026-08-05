@@ -7,6 +7,7 @@ import { TableView } from './TableView'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
+import { ActionView } from './ActionView'
 import { isTooLarge } from '../../core/viewBox'
 import { useAutoFade } from '../../hooks/useAutoFade'
 
@@ -392,6 +393,8 @@ export function GroupCanvas() {
         return <HomomorphismView />
       case 'cosetstrip':
         return <CosetStripView />
+      case 'action':
+        return <ActionView />
       default:
         return <SetView />
     }

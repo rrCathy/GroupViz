@@ -1,6 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResult, Subset, FloatingView, MultiplyType, GroupAction, Layout3D, Homomorphism, HomomorphismResult } from '../core/types'
+import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResult, Subset, FloatingView, MultiplyType, CayleyAction, Layout3D, Homomorphism, HomomorphismResult, GroupActionArrow, GroupActionComputation, GroupActionKind } from '../core/types'
 import { isGroupDirectProduct, type CayleyShape2D } from '../core/types'
+import type { PolyhedronType } from '../core/polyhedra'
 import { getViewBoxSize, type ViewBoxSize } from '../core/viewBox'
 import { type CosetInfo } from '../core/algebra/subgroups'
 import { forceLayout, forceLayoutAsync, planarCycleLayout, computeCycleSubgroups, computeMaximalCycles } from '../core/algebra/forceLayout'
@@ -19,6 +20,7 @@ import { GroupDirectProductProvider, useGroupDirectProduct } from './directProdu
 import { GroupMultiViewProvider, useGroupMultiView } from './multiview/GroupMultiViewContext'
 import { GroupHomomorphismProvider, useGroupHomomorphism } from './homomorphism/GroupHomomorphismContext'
 import { GroupSemidirectProductProvider, useGroupSemidirectProduct } from './semidirectProduct/GroupSemidirectProductContext'
+import { GroupActionProvider, useGroupAction } from './actions/GroupActionContext'
 import type { Automorphism } from '../core/algebra/automorphisms'
 
 interface GroupContextState {
@@ -38,7 +40,7 @@ interface GroupContextState {
   viewBoxSize: ViewBoxSize
   isPending: boolean
   cayleyMultiplyType: MultiplyType
-  cayleyActions: GroupAction[]
+  cayleyActions: CayleyAction[]
   cayleyShape3D: Layout3D
   cayleyAvailableShapes3D: Layout3D[]
   cayleyShape2D: CayleyShape2D
@@ -87,6 +89,16 @@ interface GroupContextState {
   theoremPhase: number
   isValidHomo: boolean | null
   kernelLabel: string
+  actionKind: GroupActionKind | null
+  actionGeometry: PolyhedronType | null
+  actionSetSize: number | null
+  actionArrows: GroupActionArrow[]
+  actionEditing: boolean
+  actionComputation: GroupActionComputation | null
+  actionError: { generatorId: string | null; from: number; to: number; type: string } | null
+  actionSelectedElement: number | null
+  actionHoverElement: string | null
+  actionShowEdges: boolean
 }
 
 interface GroupContextActions {
@@ -116,7 +128,7 @@ interface GroupContextActions {
   setHintMessage: (msg: string) => void
   setForceShowLargeGroupForView: (view: ViewMode, allow: boolean) => void
   setCayleyMultiplyType: (type: MultiplyType) => void
-  setCayleyActions: (actions: GroupAction[]) => void
+  setCayleyActions: (actions: CayleyAction[]) => void
   setCayleyShape3D: (shape: Layout3D) => void
   setCayleyShape2D: (shape: CayleyShape2D) => void
   toggleCayleyAction: (elementId: string) => void
@@ -180,6 +192,18 @@ interface GroupContextActions {
   setEditingSource: (group: Group) => void
   setTheoremMode: (value: boolean) => void
   setTheoremPhase: (phase: number) => void
+  createConjugationAction: (group: Group) => void
+  createGeometryAction: (group: Group, geometry: PolyhedronType) => void
+  startCustomAction: (group: Group, n: number) => void
+  addArrow: (from: number, to: number) => void
+  bindArrow: (from: number, generatorId: string) => void
+  removeArrow: (from: number) => void
+  clearArrows: () => void
+  completeCustomAction: (group: Group) => void
+  setActionSelectedElement: (x: number | null) => void
+  setActionHoverElement: (id: string | null) => void
+  setActionShowEdges: (show: boolean) => void
+  clearAction: () => void
 }
 
 export type GroupContextType = GroupContextState & GroupContextActions
@@ -197,6 +221,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
   const multiView = useGroupMultiView()
   const homo = useGroupHomomorphism()
   const sd = useGroupSemidirectProduct()
+  const action = useGroupAction()
 
   const exportSetGroupRef = useRef(core.setCurrentGroup)
   const exportSetViewRef = useRef(core.setCurrentView)
@@ -525,6 +550,17 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     isValidHomo: homo.isValid,
     kernelLabel: homo.kernelLabel,
 
+    actionKind: action.actionKind,
+    actionGeometry: action.actionGeometry,
+    actionSetSize: action.actionSetSize,
+    actionArrows: action.actionArrows,
+    actionEditing: action.actionEditing,
+    actionComputation: action.actionComputation,
+    actionError: action.actionError,
+    actionSelectedElement: action.actionSelectedElement,
+    actionHoverElement: action.actionHoverElement,
+    actionShowEdges: action.actionShowEdges,
+
     setCurrentGroup: core.setCurrentGroup,
     setCurrentView,
     selectElement,
@@ -620,11 +656,24 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setTheoremMode: homo.setTheoremMode,
     setTheoremPhase: homo.setTheoremPhase,
 
+    createConjugationAction: action.createConjugationAction,
+    createGeometryAction: action.createGeometryAction,
+    startCustomAction: action.startCustomAction,
+    addArrow: action.addArrow,
+    bindArrow: action.bindArrow,
+    removeArrow: action.removeArrow,
+    clearArrows: action.clearArrows,
+    completeCustomAction: action.completeCustomAction,
+    setActionSelectedElement: action.setActionSelectedElement,
+    setActionHoverElement: action.setActionHoverElement,
+    setActionShowEdges: action.setActionShowEdges,
+    clearAction: action.clearAction,
+
     toggleMultiViewMode: multiView.toggleMultiViewMode,
     openFloatingView: multiView.openFloatingView,
     closeFloatingView: multiView.closeFloatingView,
   }), [
-    core, backend, cayley, subset, symmetry, directProduct, multiView, homo, sd,
+    core, backend, cayley, subset, symmetry, directProduct, multiView, homo, sd, action,
     setCurrentView, selectElement, computeInverse, clearCanvas,
     resetNodePositions, runForceLayout, setForceShowLargeGroupForView, saveSubset,
     createQuotientGroupWithHomomorphism,
@@ -649,9 +698,11 @@ export function GroupProvider({ children }: { children: ReactNode }) {
                   <GroupSemidirectProductProvider>
                   <GroupMultiViewProvider>
                     <GroupHomomorphismProvider>
-                      <GroupContextCombiner>
-                        {children}
-                      </GroupContextCombiner>
+                      <GroupActionProvider>
+                        <GroupContextCombiner>
+                          {children}
+                        </GroupContextCombiner>
+                      </GroupActionProvider>
                     </GroupHomomorphismProvider>
                   </GroupMultiViewProvider>
                   </GroupSemidirectProductProvider>

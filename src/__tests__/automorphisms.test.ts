@@ -362,7 +362,7 @@ describe('Automorphism Cayley edges and connectivity', () => {
     expect(imageEl?.value[0]).toBe(9)
 
     // Rewired action for alpha_9 should be e9, producing edge e0 -> e9
-    const action: import('../core/types').GroupAction = { elementId: imageId!, enabled: true, color: '#ff6b6b' }
+    const action: import('../core/types').CayleyAction = { elementId: imageId!, enabled: true, color: '#ff6b6b' }
     const edges = computeCayleyActionEdges(C11, [action], 'right')
     const edgeFrom0 = edges.find(e => e.fromId === C11.elements[0].id)
     expect(edgeFrom0).toBeDefined()

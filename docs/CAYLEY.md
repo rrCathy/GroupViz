@@ -19,7 +19,7 @@ GroupViz 实现了**广义 Cayley 图**（Generalized Cayley Graph），边可�
 ```typescript
 type MultiplyType = 'right' | 'left'
 
-interface GroupAction {
+interface CayleyAction {   // 原 GroupAction，v1.8 起更名以让出"群作用"命名
   elementId: string   // 作用元素的ID
   enabled: boolean    // 是否显示该作用的边
   color: string       // 该作用对应的边颜色

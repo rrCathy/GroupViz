@@ -3,7 +3,7 @@ import { useGroup } from '../../context/useGroup'
 import { texify, renderTex } from '../../utils/texify'
 import { createGroupFromSymbol } from '../../utils/groupFactory'
 import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
-import type { CayleyEdgeData, GroupAction, Group, GroupElement } from '../../core/types'
+import type { CayleyEdgeData, CayleyAction, Group, GroupElement } from '../../core/types'
 import type { Automorphism } from '../../core/algebra/automorphisms'
 
 const POPUP_SIZE = 360
@@ -78,11 +78,11 @@ export function AutomorphismPreviewPopup() {
     return { group: parentGroup, positions, elById, showLabels }
   }, [parentGroup])
 
-  const rewiredActions = useMemo((): GroupAction[] => {
+  const rewiredActions = useMemo((): CayleyAction[] => {
     if (!stableFrame || !automorphism) return []
     const { group, elById } = stableFrame
     const automap = automorphism.map
-    const actions: GroupAction[] = []
+    const actions: CayleyAction[] = []
     for (const gen of group.generators) {
       const genEl = gen.apply(group.identity)
       const mappedId = automap.get(genEl.id)

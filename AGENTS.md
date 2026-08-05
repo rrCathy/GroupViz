@@ -29,7 +29,9 @@
 | [docs/STATE.md](docs/STATE.md) | 状态管理：9 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端） |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 5 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：26 文件 483 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：27 文件 511 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/几何/自定义三来源、同态校验、轨道/稳定化子/OST、轨道视图 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期 → 中期 FGVE 引擎化 → 远期 GVL 教学实验室 |
 
 ## 3. 技术栈
 
@@ -50,17 +52,17 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 26 个测试文件（483 tests），见 docs/TESTING.md
+│   ├── __tests__/              # 27 个测试文件（511 tests），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
 │   │   │                       # DirectProductView/CosetStripView/HomomorphismView/
 │   │   │                       # FirstIsomorphismAnimation/SemidirectProductView/
-│   │   │                       # AutomorphismPreviewPopup
+│   │   │                       # ActionView(轨道视图)/AutomorphismPreviewPopup
 │   │   ├── Panels/             # LeftPanel/RightPanel/AccordionSection/BasicGroupPanel/
 │   │   │                       # ViewPanel(视图+导出)/OperationsPanel(4 tab)/
 │   │   │                       # DirectProductPanel/HomomorphismPanel/
-│   │   │                       # SemidirectProductPanel/TabBar/constants.ts
+│   │   │                       # GroupActionPanel/SemidirectProductPanel/TabBar/constants.ts
 │   │   ├── Tex.tsx             # KaTeX 渲染组件
 │   │   └── WelcomePage.tsx     # 欢迎页（群记号预览弹窗、赞助链接）
 │   ├── core/
@@ -69,14 +71,14 @@ GroupViz/
 │   │   │                       # SpecialGroup(V4,Q8)/SmallGroups(注册表)/DirectProduct/
 │   │   │                       # SemidirectProduct
 │   │   ├── algebra/            # subgroups/homomorphisms/automorphisms/cayleyEdges/
-│   │   │                       # forceLayout/cayleyEdges/cycleLayouts/ringOrder/
+│   │   │                       # actions(群作用)/forceLayout/cayleyEdges/cycleLayouts/ringOrder/
 │   │   │                       # shapeLayouts/layout3D
 │   │   ├── polyhedra.ts        # 多面体顶点生成（截角四面体/立方体/二十面体等）
 │   │   ├── elementRotation.ts  # 群元素→几何旋转变换映射
 │   │   └── viewBox.ts
-│   ├── context/                # 9 个 Provider 分层（见 docs/STATE.md）
+│   ├── context/                # 10 个 Provider 分层（见 docs/STATE.md）
 │   │   ├── core/ backend/ cayley/ subsets/ symmetry/ directProduct/
-│   │   ├── multiview/ homomorphism/ semidirectProduct/
+│   │   ├── multiview/ homomorphism/ semidirectProduct/ actions/
 │   │   ├── GroupContext.tsx    # 组合容器（注册 window.__groupVizExport__ 导出桥）
 │   │   ├── useGroup.ts
 │   │   └── cayleyActions.ts cosetActions.ts directProductActions.ts positionUtils.ts
@@ -93,7 +95,7 @@ GroupViz/
 
 ## 5. 当前状态
 
-- ✅ 9 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip
+- ✅ 10 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action
 - ✅ 群族：Sₙ(2-5)、Cₙ(2-120)、Dₙ(3-8)、Aₙ(3-5)、V₄、Q₈、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（UI 上限出于性能：S₅=120 在本地兜底 FALLBACK_CUTOFF=240 内，S₆=720 超限故不提供）
 - ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、10 种 2D 形状（含 rewiring）、17 种 3D 形状模板（按群性质自动分配）
 - ✅ 对称性视图：多面体几何 + 元素操作动画 + 旋转轴/交点标记（运行时从几何数据计算）
@@ -104,7 +106,8 @@ GroupViz/
 - ✅ 多视图浮动窗口、子集保存与分析、陪集分解（Lagrange 验证）、自逆元素检测
 - ✅ KaTeX 全应用渲染、i18n 中英文、深/浅主题、会话保存与恢复
 - ✅ 视图导出：SVG/PNG/GIF + 批量导出 CLI（`npm run export`）
-- ✅ 测试体系：26 文件 483 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
+- ✅ 群作用系统：共轭/几何/自定义三来源、同态校验（violation 定位）、轨道/稳定化子/轨道-稳定化子定理验证、轨道视图（簇布局 + 生成元作用边 + hover 全箭头 + 固定点 ★）、自定义作用交互式箭头编辑（见 docs/ACTIONS.md）
+- ✅ 测试体系：27 文件 511 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
 
 ## 6. 运行命令
 
@@ -132,21 +135,52 @@ uvicorn main:app --reload --port 8000
 - 风险分级：鉴权/数据库/资金/核心架构改动需人工审查；常规改动（UI、内部逻辑、测试）自测自审后直接推进
 - ESLint + TypeScript 严格检查，提交前保证 `npm run lint` 无错误
 
-## 8. 数学参考速查
+## 8. 发布工作流（扫 → 修 → 更 → 推）
 
-### 8.1 广义 Cayley 图
+开发完成到推送之间的标准闭环流程。四个阶段依次执行，任何阶段失败都回退修正后重跑。
+
+### 阶段 1：扫（Scan）— 找 bug 与体验问题
+
+1. **静态基线**：`npm run lint` + `npm run test` + `npm run build` 必须全绿，作为出发点。
+2. **动态扫描**：dev server + Playwright 实测核心路径——8 视图切换、操作面板 4 tab、直积/半直积/同态创建流程、会话恢复、导出（SVG/PNG/GIF）、多视图浮动窗口；全程观察 console error/warning（快照含属性计数，如 `[marker-end]` 计数无向边会误判为 0）。
+3. **专项扫描**（本项目反复踩坑的检查项）：
+   - **BOM 检查**：Windows 下 write 工具可能写入 UTF-8 BOM，使 vite/postcss（JSON.parse package.json）崩溃。改动文件首字节应为 `7B`（`{`），package.json 必须无 BOM。
+   - **硬编码版本**：欢迎页 `welcome.version`（translations.ts zh/en 两处）须与 package.json 版本一致。
+   - **i18n 缺失键**：`i18n.test.ts` 自动断言 zh/en 键集合一致；新增 `t()` 调用必须 zh/en 成对补键。
+   - **文档一致性**：grep 全仓 `.md` 的测试计数（511）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
+
+### 阶段 2：修（Fix）— 修复并验证
+
+- 常规改动（UI、内部逻辑、测试）直接修，不中断询问；触及红线（鉴权/数据库/资金/核心架构）输出《人工审查请求单》。
+- 每个 bug 修复后立即验证：相关单测 → `npm run lint` → 浏览器回归该路径。
+- **Windows 编码铁律**：PowerShell 5.1 的 `Get-Content`/`Set-Content` 默认 ANSI，会破坏 UTF-8 中文文件——必须用 .NET（`[System.IO.File]::ReadAllText/WriteAllText` + `New-Object System.Text.UTF8Encoding($false)`）；普通文件编辑优先用 edit 工具（写入 UTF-8 无 BOM）。
+
+### 阶段 3：更（Update docs）— 同步文档事实
+
+- **AGENTS.md**：版本号、测试计数、群族范围、§5 当前状态新增项、底部 `*文档版本 / 最后更新*`。
+- **README.md / README_zh-CN.md / docs/\*.md**：同步同一事实（测试数、范围、新功能）。数字用 grep 全仓核对，防止只改一处。
+
+### 阶段 4：推（Push）— 提交与发布
+
+- `git status` 检查未跟踪文件；工具产物（`.playwright-mcp/`、`.serena/`、`sweep-*.png`）必须忽略不提交。
+- `git add -A` → 提交信息按仓库风格：`vN.N: <主题>` + 分条 bullet 列出修复/新增/验证结果。
+- 提交前确认 lint/test/build 全绿；`git push origin main` 触发 Pages 部署（git stderr 被 PowerShell 报为 NativeCommandError 是误报，以远程分支更新为准）。
+
+## 9. 数学参考速查
+
+### 9.1 广义 Cayley 图
 
 设 G 是群，C 是 G 的任意元素子集（不限于生成集）。顶点 = G 的元素；对 c∈C：
 - **右乘**：`a·c = b` ⇒ 有向边 a→b；**左乘**：`c·a = b` ⇒ 有向边 a→b
 - 若 `a·c = b` 且 `b·c = a`（c 自逆）⇒ 无向边（不画箭头）
 - 当 C 是生成集时退化为标准 Cayley 图
 
-### 8.2 颜色编码
+### 9.2 颜色编码
 
 16 色调色板 `COLOR_PALETTE`，按群元素作用添加顺序分配：
 `#ff6b6b #4ecdc4 #ffd93d #a78bfa #f97316 #06b6d4 #84cc16 #f43f5e #38bdf8 #a855f7 #14b8a6 #eab308 #6366f1 #ec4899 #0ea5e9 #22c55e`
 
-### 8.3 关键定理
+### 9.3 关键定理
 
 | 定理 | 内容 | 可视化重点 |
 |------|------|-----------|
@@ -155,7 +189,7 @@ uvicorn main:app --reload --port 8000
 | 第一同构 | G/ker ≅ im | 核与像、四阶段动画 |
 | 轨道-稳定子 | \|G\| = \|O\|·\|S\| | 群作用 |
 
-### 8.4 性能守卫
+### 9.4 性能守卫
 
 - 本地/后端阈值：order ≤ 60 本地，> 60 后端
 - 子群/共轭类/中心 cutoff：60；Cayley 边限流：`max(120, order*3)`
@@ -164,5 +198,5 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-*文档版本: 1.7.0*
-*最后更新: 2026-08-04*
+*文档版本: 1.8.0*
+*最后更新: 2026-08-05*

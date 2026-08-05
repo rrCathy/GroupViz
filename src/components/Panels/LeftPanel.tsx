@@ -4,6 +4,7 @@ import { BasicGroupPanel } from './BasicGroupPanel'
 import { DirectProductPanel } from './DirectProductPanel'
 import { HomomorphismPanel } from './HomomorphismPanel'
 import { SemidirectProductPanel } from './SemidirectProductPanel'
+import { GroupActionPanel } from './GroupActionPanel'
 
 export function LeftPanel() {
   return (
@@ -13,6 +14,7 @@ export function LeftPanel() {
       <BasicGroupPanel />
       <DirectProductPanel />
       <HomomorphismPanel />
+      <GroupActionPanel />
       <SemidirectProductPanel />
     </div>
   )

@@ -1,4 +1,4 @@
-import type { Group, GroupElement, GroupAction, CayleyEdgeData, MultiplyType, NodePosition } from '../types'
+import type { Group, GroupElement, CayleyAction, CayleyEdgeData, MultiplyType, NodePosition } from '../types'
 
 export interface ForceLayoutEdge {
   source: string
@@ -12,7 +12,7 @@ export interface ForceLayoutOptions {
 
 export function computeCayleyActionEdges(
   group: Group,
-  actions: GroupAction[],
+  actions: CayleyAction[],
   multiplyType: MultiplyType
 ): CayleyEdgeData[] {
   const idToIdx = new Map<string, number>()

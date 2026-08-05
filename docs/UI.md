@@ -30,9 +30,12 @@ AppWrapper (I18nProvider → ThemeProvider)
 |---|------|------|------|
 | 1 | GroupPanel（`panel.createGroup`） | ⊕ | 内部 TabBar 2 tab：`create` 群创建（GroupCreationInner：群类型/阶滑块/按阶浏览/创建）；`dp` 直积构建（DirectProductInner：三模式 cayley/table/direct、导入当前群、存储/加载直积群） |
 | 2 | SemidirectProductPanel（`sd.title`） | ⋉ | 5 预设、进入/退出模式、导入当前群为 N/H、计算 Aut(N)、φ 生成元映射下拉、展开 φ、创建、已保存半直积列表 |
-| 3 | ViewPanel（`panel.viewMode`，默认展开） | ⊞ | 9 个视图卡片 + 多视图勾选；下方按视图显示上下文设置（见下） |
+| 3 | ViewPanel（`panel.viewMode`，默认展开） | ⊞ | 10 个视图卡片 + 多视图勾选；下方按视图显示上下文设置（见下） |
 | 4 | OperationsPanel（`panel.operations`） | ⚙ | 内部 TabBar 5 tab：general/subsets/quotient/automorphism/export |
 | 5 | HomomorphismPanel（`homo.title`） | ⟷ | 同态构建与验证（源/目标选择、自动映射、生成元映射、验证结果、第一同构定理入口、已存同态列表） |
+| 6 | GroupActionPanel（`action.title`） | ➤ | 群作用：共轭/几何/自定义三来源、几何体下拉、\|X\| 输入、自定义箭头编辑、完成并验证 |
+
+> 注：直积构建入口在 GroupPanel 的 `dp` tab；BasicGroupPanel（`panel.basicGroup`）为按群类型/按阶创建（含交错群 Aₙ）。
 
 ### ViewPanel 上下文设置
 

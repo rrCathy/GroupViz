@@ -33,7 +33,7 @@
 - **Coset decomposition** — left/right cosets, color-coded, Lagrange's theorem verification in the coset strip view
 - **Simple group detection** — automatic property checking
 
-### 9 View Modes
+### 10 View Modes
 | View | Description |
 |------|-------------|
 | **Set View** | Grid layout of all group elements |
@@ -45,6 +45,14 @@
 | **Subgroup Lattice** | Hasse diagram with layer-based layout |
 | **Homomorphism View** | Source/target dual Cayley graphs + mapping edges, kernel/image highlighting, first isomorphism theorem animation |
 | **Coset Strip** | Cosets as colored columns with `|G| = |H|·[G:H]` Lagrange verification |
+| **Orbit View** | Group action orbits as clusters (fixed points ★ leftmost), generator edges, hover shows full action, orbit-stabilizer verification |
+
+### Group Action System
+| Source | Description |
+|------|-------------|
+| Conjugation | Action of G on itself by conjugation; orbits = conjugacy classes, fixed points = center Z(G) |
+| Geometry | Action on polyhedron vertices (6 solids, 12/24/60 vertices) via symmetry rotations (A₄→truncated tetrahedron, S₄→truncated cube, A₅→truncated icosahedron) |
+| Custom | Draw arrows between set elements, bind generators, auto-completion + homomorphism verification Φ: G → Sym(X) with violation pinpointing |
 
 ### Group Construction System
 | Construction | Description |
@@ -83,7 +91,7 @@
 - **Hybrid computation** — local TypeScript for small groups (≤60), FastAPI backend for large ones (>60)
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 26 test files, 483 tests (Vitest)
+- **Test suite** — 27 test files, 511 tests (Vitest)
 
 ---
 
@@ -147,7 +155,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 26 test files (483 tests)
+├── __tests__/            # 27 test files (511 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/floating windows)
@@ -219,7 +227,7 @@ Edge semantics:
 
 ## 🔮 Roadmap
 
-- [x] 9 visualization modes (incl. homomorphism view, coset strip)
+- [x] 10 visualization modes (incl. homomorphism view, coset strip, orbit view)
 - [x] Multi-view floating windows
 - [x] Subgroup lattice (Hasse diagram)
 - [x] Symmetry view with polyhedra rotation animations
@@ -230,12 +238,13 @@ Edge semantics:
 - [x] Semidirect product construction (5 presets + φ UI + animation)
 - [x] Automorphism group Aut(G)
 - [x] Homomorphism mapping + first isomorphism theorem animation
+- [x] Group action system (conjugation / geometry / custom, orbit view, OST verification)
 - [x] 2D Cayley multi-shape layouts (10, incl. rewiring)
 - [x] Dark/light theme
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (26 files, 483 tests)
+- [x] Test suite (27 files, 511 tests)
 - [ ] Group operation law verification animations
 - [ ] Custom finite group input
 - [ ] Tutorial mode

@@ -1,4 +1,4 @@
-export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip'
+export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action'
 
 export type MultiplyType = 'right' | 'left'
 
@@ -53,7 +53,7 @@ export interface Group {
   _semidirectProduct?: { normal: Group; acting: Group; phiMap: Map<string, import('./algebra/automorphisms').Automorphism> } // Only for semidirect products
 }
 
-export interface GroupAction {
+export interface CayleyAction {
   elementId: string
   enabled: boolean
   color: string
@@ -99,6 +99,35 @@ export interface HomomorphismProperties {
   isIsomorphism: boolean
   kernelOrder: number
   imageOrder: number
+}
+
+export type GroupActionKind = 'conjugation' | 'geometry' | 'custom'
+
+export interface GroupActionArrow {
+  generatorId: string | null
+  from: number
+  to: number
+}
+
+export interface OrbitInfo {
+  representative: number
+  elements: number[]
+}
+
+export interface GroupActionComputation {
+  n: number
+  perms: Map<string, number[]>
+  orbits: OrbitInfo[]
+  orbitOf: number[]
+  stabilizers: Map<number, string[]>
+  isHomomorphism: boolean
+  violation?: { g: string; a: string; x: number }
+}
+
+export interface GroupActionDef {
+  kind: GroupActionKind
+  geometry?: import('./polyhedra').PolyhedronType
+  setSize?: number
 }
 
 export const COLOR_PALETTE: string[] = [

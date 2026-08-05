@@ -1,7 +1,7 @@
-import type { Group, ViewMode, GroupAction, Layout3D } from '../core/types'
+import type { Group, ViewMode, CayleyAction, Layout3D } from '../core/types'
 import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, isQuotientGroup, type CayleyShape2D } from '../core/types'
 
-export function getInitialCayleyActions(group: Group): GroupAction[] {
+export function getInitialCayleyActions(group: Group): CayleyAction[] {
   return group.generators.map((gen, i) => {
     const targetEl = gen.apply(group.identity)
     return {
@@ -41,7 +41,7 @@ export function getCayleyShapeConfig(group: Group): CayleyShapeConfig {
   }
 }
 
-export function getSpecialCayleyActions(group: Group, shape: Layout3D): GroupAction[] | null {
+export function getSpecialCayleyActions(group: Group, shape: Layout3D): CayleyAction[] | null {
   const sym = group.symbol
 
   if (sym === 'S_{4}') {
@@ -86,7 +86,7 @@ export function getSpecialCayleyActions(group: Group, shape: Layout3D): GroupAct
   return null
 }
 
-export function toggleCayleyActionReducer(prev: GroupAction[], elementId: string): GroupAction[] {
+export function toggleCayleyActionReducer(prev: CayleyAction[], elementId: string): CayleyAction[] {
   const idx = prev.findIndex(a => a.elementId === elementId)
   if (idx === -1) {
     const colorIdx = prev.length
@@ -99,8 +99,8 @@ export function addAllCayleyActionsHelper(
   group: Group,
   currentView: ViewMode,
   cayleyShape3D: Layout3D,
-  existingActions: GroupAction[]
-): GroupAction[] {
+  existingActions: CayleyAction[]
+): CayleyAction[] {
   const isQuotientGroup = group.symbol.includes('/N')
   const canonical3D = (() => {
     const sym = group.symbol

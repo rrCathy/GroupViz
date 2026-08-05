@@ -3,12 +3,10 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import { useTranslation } from '../../i18n/useTranslation'
 import { useGroupCore } from '../core/GroupCoreContext'
 import type { Group, GroupActionArrow, GroupActionComputation, GroupActionKind } from '../../core/types'
-import type { PolyhedronType } from '../../core/polyhedra'
 import { buildActionComputation, type CustomArrowError } from '../../core/algebra/actions'
 
 interface GroupActionState {
   actionKind: GroupActionKind | null
-  actionGeometry: PolyhedronType | null
   actionSetSize: number | null
   actionArrows: GroupActionArrow[]
   actionEditing: boolean
@@ -16,21 +14,19 @@ interface GroupActionState {
   actionError: CustomArrowError | null
   actionSelectedElement: number | null
   actionHoverElement: string | null
-  actionShowEdges: boolean
 }
 
 interface GroupActionActions {
   createConjugationAction: (group: Group) => void
-  createGeometryAction: (group: Group, geometry: PolyhedronType) => void
   startCustomAction: (group: Group, n: number) => void
   addArrow: (from: number, to: number) => void
   bindArrow: (from: number, generatorId: string) => void
   removeArrow: (from: number) => void
+  replaceGenArrows: (generatorId: string | null, pairs: [number, number][]) => void
   clearArrows: () => void
   completeCustomAction: (group: Group) => void
   setActionSelectedElement: (x: number | null) => void
   setActionHoverElement: (id: string | null) => void
-  setActionShowEdges: (show: boolean) => void
   clearAction: () => void
 }
 
@@ -43,7 +39,6 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   const { currentGroup, setHintMessage } = useGroupCore()
 
   const [actionKind, setActionKind] = useState<GroupActionKind | null>(null)
-  const [actionGeometry, setActionGeometry] = useState<PolyhedronType | null>(null)
   const [actionSetSize, setActionSetSize] = useState<number | null>(null)
   const [actionArrows, setActionArrows] = useState<GroupActionArrow[]>([])
   const [actionEditing, setActionEditing] = useState(false)
@@ -51,7 +46,6 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   const [actionError, setActionError] = useState<CustomArrowError | null>(null)
   const [actionSelectedElement, setActionSelectedElement] = useState<number | null>(null)
   const [actionHoverElement, setActionHoverElement] = useState<string | null>(null)
-  const [actionShowEdges, setActionShowEdges] = useState(true)
   const prevGroupRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -62,7 +56,6 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
 
     queueMicrotask(() => {
       setActionKind(null)
-      setActionGeometry(null)
       setActionSetSize(null)
       setActionArrows([])
       setActionEditing(false)
@@ -78,28 +71,12 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
     if (result.computation) {
       setActionKind('conjugation')
       setActionComputation(result.computation)
-      setActionGeometry(null)
       setActionSetSize(null)
       setActionArrows([])
       setActionEditing(false)
       setActionError(null)
       setActionSelectedElement(null)
       setHintMessage(t('action.created', { kind: t('action.kind.conjugation') }))
-    }
-  }, [setHintMessage, t])
-
-  const createGeometryAction = useCallback((group: Group, geometry: PolyhedronType) => {
-    const result = buildActionComputation(group, { kind: 'geometry', geometry })
-    if (result.computation) {
-      setActionKind('geometry')
-      setActionGeometry(geometry)
-      setActionComputation(result.computation)
-      setActionSetSize(null)
-      setActionArrows([])
-      setActionEditing(false)
-      setActionError(null)
-      setActionSelectedElement(null)
-      setHintMessage(t('action.created', { kind: t('action.kind.geometry') }))
     }
   }, [setHintMessage, t])
 
@@ -142,6 +119,15 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
     setActionArrows(prev => prev.filter(a => a.from !== from))
   }, [])
 
+  const replaceGenArrows = useCallback((generatorId: string | null, pairs: [number, number][]) => {
+    const pairFroms = new Set(pairs.map(([from]) => from))
+    setActionArrows(prev => [
+      ...prev.filter(a => a.generatorId !== generatorId && !(pairFroms.has(a.from) && a.generatorId === null)),
+      ...pairs.map(([from, to]) => ({ generatorId, from, to })),
+    ])
+    setActionError(null)
+  }, [])
+
   const clearArrows = useCallback(() => {
     setActionArrows([])
     setActionError(null)
@@ -156,14 +142,17 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
       return
     }
     if (result.computation) {
+      if (!result.computation.isHomomorphism && result.computation.violation) {
+        const v = result.computation.violation
+        setActionError({ generatorId: v.a, from: v.x, to: -1, g: v.g, type: 'homomorphism' })
+        setActionComputation(null)
+        setHintMessage(t('action.invalid'))
+        return
+      }
       setActionComputation(result.computation)
       setActionEditing(false)
       setActionError(null)
-      if (result.computation.isHomomorphism) {
-        setHintMessage(t('action.valid'))
-      } else {
-        setHintMessage(t('action.invalid'))
-      }
+      setHintMessage(t('action.valid'))
     }
   }, [actionSetSize, actionArrows, setHintMessage, t])
 
@@ -175,13 +164,8 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
     setActionHoverElement(id)
   }, [])
 
-  const setActionShowEdgesCb = useCallback((show: boolean) => {
-    setActionShowEdges(show)
-  }, [])
-
   const clearAction = useCallback(() => {
     setActionKind(null)
-    setActionGeometry(null)
     setActionSetSize(null)
     setActionArrows([])
     setActionEditing(false)
@@ -192,13 +176,12 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value: GroupActionContextType = {
-    actionKind, actionGeometry, actionSetSize, actionArrows, actionEditing,
-    actionComputation, actionError, actionSelectedElement, actionHoverElement, actionShowEdges,
-    createConjugationAction, createGeometryAction, startCustomAction,
-    addArrow, bindArrow, removeArrow, clearArrows, completeCustomAction,
+    actionKind, actionSetSize, actionArrows, actionEditing,
+    actionComputation, actionError, actionSelectedElement, actionHoverElement,
+    createConjugationAction, startCustomAction,
+    addArrow, bindArrow, removeArrow, replaceGenArrows, clearArrows, completeCustomAction,
     setActionSelectedElement: setActionSelectedElementCb,
     setActionHoverElement: setActionHoverElementCb,
-    setActionShowEdges: setActionShowEdgesCb,
     clearAction,
   }
 

@@ -101,7 +101,7 @@ export interface HomomorphismProperties {
   imageOrder: number
 }
 
-export type GroupActionKind = 'conjugation' | 'geometry' | 'custom'
+export type GroupActionKind = 'conjugation' | 'custom'
 
 export interface GroupActionArrow {
   generatorId: string | null
@@ -126,7 +126,6 @@ export interface GroupActionComputation {
 
 export interface GroupActionDef {
   kind: GroupActionKind
-  geometry?: import('./polyhedra').PolyhedronType
   setSize?: number
 }
 

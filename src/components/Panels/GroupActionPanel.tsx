@@ -2,16 +2,6 @@ import { useState, useCallback } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
-import type { PolyhedronType } from '../../core/polyhedra'
-
-const POLYHEDRA: PolyhedronType[] = [
-  'truncatedTetrahedron',
-  'truncatedCube',
-  'rhombicuboctahedron',
-  'truncatedOctahedron',
-  'truncatedIcosahedron',
-  'truncatedDodecahedron',
-]
 
 export function GroupActionPanel() {
   const {
@@ -23,7 +13,6 @@ export function GroupActionPanel() {
     actionComputation,
     actionError,
     createConjugationAction,
-    createGeometryAction,
     startCustomAction,
     completeCustomAction,
     clearArrows,
@@ -31,7 +20,6 @@ export function GroupActionPanel() {
     setCurrentView,
   } = useGroup()
   const { t } = useTranslation()
-  const [geoSel, setGeoSel] = useState<PolyhedronType>('truncatedTetrahedron')
   const [sizeInput, setSizeInput] = useState('6')
 
   const goActionView = useCallback(() => {
@@ -43,12 +31,6 @@ export function GroupActionPanel() {
     createConjugationAction(currentGroup)
     goActionView()
   }, [currentGroup, createConjugationAction, goActionView])
-
-  const handleGeometry = useCallback(() => {
-    if (!currentGroup) return
-    createGeometryAction(currentGroup, geoSel)
-    goActionView()
-  }, [currentGroup, createGeometryAction, geoSel, goActionView])
 
   const handleStartCustom = useCallback(() => {
     if (!currentGroup) return
@@ -91,16 +73,23 @@ export function GroupActionPanel() {
             ))}
             {actionError && (
               <div className="action-error">
-                {t(`action.error.${actionError.type}`, {
-                  gen: actionError.generatorId ?? '',
-                  from: String(actionError.from + 1),
-                  to: String(actionError.to + 1),
-                })}
+                {actionError.type === 'homomorphism'
+                  ? t('action.error.homomorphism', {
+                      g: actionError.g ?? '',
+                      gen: actionError.generatorId ?? '',
+                      x: String(actionError.from + 1),
+                    })
+                  : t(`action.error.${actionError.type}`, {
+                      gen: actionError.generatorId ?? '',
+                      from: String(actionError.from + 1),
+                      to: String(actionError.to + 1),
+                    })}
               </div>
             )}
             <div className="homo-row">
               <button className="panel-btn" onClick={handleFinish} style={{ flex: 1, fontSize: '11px' }}>{t('action.finish')} ✓</button>
               <button className="panel-btn" onClick={clearArrows} style={{ flex: 1, fontSize: '11px' }}>{t('action.clear')}</button>
+              <button className="panel-btn" onClick={clearAction} style={{ flex: 1, fontSize: '11px' }}>{t('action.exit')}</button>
             </div>
           </>
         ) : (
@@ -108,7 +97,6 @@ export function GroupActionPanel() {
             <div className="subset-section-header">{t('right.actionInfo')}</div>
             <div className="homo-row">
               <button className="panel-btn" onClick={handleConjugation} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.conjugation')}</button>
-              <button className="panel-btn" onClick={handleGeometry} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.geometry')}</button>
               <button className="panel-btn" onClick={handleStartCustom} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.custom')}</button>
             </div>
 
@@ -118,20 +106,6 @@ export function GroupActionPanel() {
                 <span className="info-value" style={{ color: '#22c55e' }}>✓</span>
               </div>
             )}
-
-            <div className="homo-row" style={{ marginTop: 8 }}>
-              <select
-                className="panel-select"
-                value={geoSel}
-                onChange={e => setGeoSel(e.target.value as PolyhedronType)}
-                disabled={!currentGroup}
-              >
-                {POLYHEDRA.map(p => (
-                  <option key={p} value={p}>{t(`action.geo.${p}`)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="info-placeholder">{t('action.geometry.hint')}</div>
 
             <div className="homo-row" style={{ marginTop: 8 }}>
               <input
@@ -147,12 +121,12 @@ export function GroupActionPanel() {
               <span className="info-label">{t('action.setSize')}</span>
             </div>
 
-            {actionComputation && (
-              <div className="homo-row" style={{ marginTop: 8 }}>
-                <button className="panel-btn" onClick={goActionView} style={{ flex: 1, fontSize: '11px' }}>{t('homo.openView')} →</button>
+            <div className="homo-row" style={{ marginTop: 8 }}>
+              <button className="panel-btn" onClick={goActionView} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>{t('view.action')} →</button>
+              {actionComputation && (
                 <button className="panel-btn" onClick={clearAction} style={{ flex: 1, fontSize: '11px' }}>{t('action.clear')}</button>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
       </div>

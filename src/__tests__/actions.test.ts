@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   identityPermutation, composePermutations, inversePermutation, permsEqual,
-  firstDiffIndex, computeConjugationPerms, computeGeometryPerms,
+  firstDiffIndex, computeConjugationPerms,
   validateCustomArrows, extendAndVerifyPerms, generatorPermsFromArrows,
-  verifyOrbitStabilizer, computeFixedPoints,
+  verifyOrbitStabilizer, computeFixedPoints, computeCycleCandidates,
   buildActionComputation,
 } from '../core/algebra/actions'
 import { createS3, createSymmetricGroup } from '../core/groups/SymmetricGroup'
@@ -84,39 +84,6 @@ describe('conjugation action', () => {
     const result = buildActionComputation(Z6, { kind: 'conjugation' })
     expect(result.computation!.orbits.length).toBe(6)
     expect(result.computation!.orbits.every(o => o.elements.length === 1)).toBe(true)
-  })
-})
-
-describe('geometry action', () => {
-  it('A4 on truncated tetrahedron is a valid homomorphism with one orbit of size 12', () => {
-    const A4 = createAlternatingGroup(4)
-    const result = buildActionComputation(A4, { kind: 'geometry', geometry: 'truncatedTetrahedron' })
-    expect(result.error).toBeUndefined()
-    expect(result.computation!.isHomomorphism).toBe(true)
-    expect(result.computation!.n).toBe(12)
-    expect(result.computation!.orbits.length).toBe(1)
-    expect(result.computation!.orbits[0].elements.length).toBe(12)
-    const checks = verifyOrbitStabilizer(A4, result.computation!.orbits, result.computation!.stabilizers)
-    expect(checks[0].stabSize).toBe(1)
-    expect(checks[0].valid).toBe(true)
-  })
-
-  it('S4 on truncated cube is a valid homomorphism (regular action on 24 vertices)', () => {
-    const S4 = createSymmetricGroup(4)
-    const result = buildActionComputation(S4, { kind: 'geometry', geometry: 'truncatedCube' })
-    expect(result.computation!.isHomomorphism).toBe(true)
-    expect(result.computation!.n).toBe(24)
-    expect(result.computation!.orbits.length).toBe(1)
-  })
-
-  it('generator perms for A4 tetrahedron are faithful permutations of the 12 vertices', () => {
-    const A4 = createAlternatingGroup(4)
-    const { perms, ok } = computeGeometryPerms(A4, 'truncatedTetrahedron')
-    expect(ok).toBe(true)
-    expect(perms.size).toBe(12)
-    for (const p of perms.values()) {
-      expect(new Set(p).size).toBe(12)
-    }
   })
 })
 
@@ -302,5 +269,53 @@ describe('orbit and stabilizer machinery', () => {
     const sizes = result.computation!.orbits.map(o => o.elements.length).sort((a, b) => a - b)
     expect(sizes).toEqual([1, 10, 15, 20, 20, 24, 30])
     expect(sizes.reduce((a, b) => a + b, 0)).toBe(120)
+  })
+})
+
+describe('cycle candidates', () => {
+  it('returns empty for no arrows or n < 2', () => {
+    expect(computeCycleCandidates([], 6)).toEqual([])
+    expect(computeCycleCandidates([{ from: 0, to: 1 }], 1)).toEqual([])
+  })
+
+  it('1→2 on a 6-element set suggests 2-cycle through 6-cycle', () => {
+    const cs = computeCycleCandidates([{ from: 0, to: 1 }], 6)
+    expect(cs.length).toBe(5)
+    expect(cs[0]).toEqual({ length: 2, label: '(1 2)', pairs: [[0, 1], [1, 0]] })
+    expect(cs[1].label).toBe('(1 2 3)')
+    expect(cs[4].label).toBe('(1 2 3 4 5 6)')
+    expect(cs[4].pairs).toHaveLength(6)
+  })
+
+  it('1→3 on a 6-element set suggests 2-cycle, 3-cycle etc.', () => {
+    const cs = computeCycleCandidates([{ from: 0, to: 2 }], 6)
+    expect(cs.length).toBe(5)
+    expect(cs[0].label).toBe('(1 3)')
+    expect(cs[1]).toEqual({ length: 3, label: '(1 3 2)', pairs: [[0, 2], [2, 1], [1, 0]] })
+  })
+
+  it('a longer chain extends from its own length upward', () => {
+    const cs = computeCycleCandidates([{ from: 0, to: 1 }, { from: 1, to: 2 }], 6)
+    expect(cs.length).toBe(4)
+    expect(cs[0]).toEqual({ length: 3, label: '(1 2 3)', pairs: [[0, 1], [1, 2], [2, 0]] })
+  })
+
+  it('a closed cycle yields exactly one candidate', () => {
+    const cs = computeCycleCandidates([{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 2, to: 0 }], 6)
+    expect(cs.length).toBe(1)
+    expect(cs[0]).toEqual({ length: 3, label: '(1 2 3)', pairs: [[0, 1], [1, 2], [2, 0]] })
+  })
+
+  it('suggested candidates close to a valid permutation when applied', () => {
+    const C6 = createCyclicGroup(6)
+    const genSymbol = C6.generators[0].symbol
+    const cs = computeCycleCandidates([{ from: 0, to: 2 }], 6)
+    const arrows = cs[1].pairs.map(([from, to]) => ({ generatorId: genSymbol, from, to }))
+    const result = buildActionComputation(C6, { kind: 'custom', setSize: 6 }, arrows)
+    expect(result.error).toBeUndefined()
+    expect(result.computation!.isHomomorphism).toBe(true)
+    expect(result.computation!.orbits).toHaveLength(4)
+    const sizes = result.computation!.orbits.map(o => o.elements.length).sort((a, b) => a - b)
+    expect(sizes).toEqual([1, 1, 1, 3])
   })
 })

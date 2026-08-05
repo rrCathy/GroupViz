@@ -29,8 +29,8 @@
 | [docs/STATE.md](docs/STATE.md) | 状态管理：9 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端） |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 5 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：27 文件 511 tests、vitest 配置、覆盖率、测试约定 |
-| [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/几何/自定义三来源、同态校验、轨道/稳定化子/OST、轨道视图 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：27 文件 514 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/自定义两来源、同态校验、轨道/稳定化子/OST、轨道视图、几何作用暂缓记录 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期 → 中期 FGVE 引擎化 → 远期 GVL 教学实验室 |
 
 ## 3. 技术栈
@@ -52,7 +52,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 27 个测试文件（511 tests），见 docs/TESTING.md
+│   ├── __tests__/              # 27 个测试文件（514 tests），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
@@ -106,8 +106,8 @@ GroupViz/
 - ✅ 多视图浮动窗口、子集保存与分析、陪集分解（Lagrange 验证）、自逆元素检测
 - ✅ KaTeX 全应用渲染、i18n 中英文、深/浅主题、会话保存与恢复
 - ✅ 视图导出：SVG/PNG/GIF + 批量导出 CLI（`npm run export`）
-- ✅ 群作用系统：共轭/几何/自定义三来源、同态校验（violation 定位）、轨道/稳定化子/轨道-稳定化子定理验证、轨道视图（簇布局 + 生成元作用边 + hover 全箭头 + 固定点 ★）、自定义作用交互式箭头编辑（见 docs/ACTIONS.md）
-- ✅ 测试体系：27 文件 511 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
+- ✅ 群作用系统：共轭/自定义两来源、同态校验（violation 定位）、轨道/稳定化子/轨道-稳定化子定理验证、轨道视图（簇布局 + 生成元作用边 + hover 全箭头 + 固定点 ★）、自定义作用交互式箭头编辑（点击/拖放绑定 + 退出编辑）（见 docs/ACTIONS.md）
+- ✅ 测试体系：27 文件 514 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
 
 ## 6. 运行命令
 
@@ -147,7 +147,7 @@ uvicorn main:app --reload --port 8000
    - **BOM 检查**：Windows 下 write 工具可能写入 UTF-8 BOM，使 vite/postcss（JSON.parse package.json）崩溃。改动文件首字节应为 `7B`（`{`），package.json 必须无 BOM。
    - **硬编码版本**：欢迎页 `welcome.version`（translations.ts zh/en 两处）须与 package.json 版本一致。
    - **i18n 缺失键**：`i18n.test.ts` 自动断言 zh/en 键集合一致；新增 `t()` 调用必须 zh/en 成对补键。
-   - **文档一致性**：grep 全仓 `.md` 的测试计数（511）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
+   - **文档一致性**：grep 全仓 `.md` 的测试计数（514）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
 
 ### 阶段 2：修（Fix）— 修复并验证
 

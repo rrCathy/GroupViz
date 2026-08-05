@@ -525,6 +525,8 @@ export function RightPanel() {
         const selected = actionSelectedElement
         const selOrbit = selected !== null ? comp.orbits[comp.orbitOf[selected]] : null
         const selStab = selected !== null ? comp.stabilizers.get(selected) ?? [] : []
+        const selEl = selected !== null && actionKind === 'conjugation' ? currentGroup.elements[selected] : null
+        const selLabel = selEl ? texify(selEl.label) : String(selected !== null ? selected + 1 : 0)
         const kindLabel = actionKind ? t(`action.kind.${actionKind}`) : ''
         return (
           <div className="panel-section">
@@ -575,10 +577,11 @@ export function RightPanel() {
               <div style={{ marginTop: 6, borderTop: '1px dashed var(--border-color, rgba(128,128,128,0.3))', paddingTop: 6 }}>
                 <div className="info-row">
                   <span className="info-label">
-                    <span dangerouslySetInnerHTML={{ __html: renderTex(`x = ${selected + 1}`) }} />
+                    <span dangerouslySetInnerHTML={{ __html: renderTex(`x = ${selLabel}`) }} />
                   </span>
                   <span className="info-value" dangerouslySetInnerHTML={{
                     __html: renderTex(t('action.orbitStab', {
+                      x: selLabel,
                       orbit: String(selOrbit.elements.length),
                       stab: String(selStab.length),
                     })),
@@ -596,7 +599,7 @@ export function RightPanel() {
                 </div>
                 {selStab.length > 0 && (
                   <div style={{ marginTop: 4 }}>
-                    <div className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.stabilizer', { x: String(selected + 1) })) }} />
+                    <div className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.stabilizer', { x: selLabel })) }} />
                     <div className="elements-grid" style={{ marginTop: 4 }}>
                       {selStab.map((gid) => {
                         const el = currentGroup.elements.find(e => e.id === gid)

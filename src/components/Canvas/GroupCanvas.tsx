@@ -306,8 +306,6 @@ export function GroupCanvas() {
   const pendingTransformRef = useRef<{ x: number; y: number; scale: number } | null>(null)
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    
     if (!containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
     const vw = viewBoxSize.width
@@ -409,6 +407,11 @@ export function GroupCanvas() {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onWheel={handleWheel}
+        onDoubleClick={(e) => {
+          if (e.target instanceof SVGElement && e.target.tagName === 'svg') {
+            setCanvasTransform({ x: 0, y: 0, scale: 1 })
+          }
+        }}
         style={{ 
           cursor: isDragging ? 'grabbing' : 'grab',
           overflow: 'hidden',

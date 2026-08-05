@@ -1,7 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResult, Subset, FloatingView, MultiplyType, CayleyAction, Layout3D, Homomorphism, HomomorphismResult, GroupActionArrow, GroupActionComputation, GroupActionKind } from '../core/types'
 import { isGroupDirectProduct, type CayleyShape2D } from '../core/types'
-import type { PolyhedronType } from '../core/polyhedra'
 import { getViewBoxSize, type ViewBoxSize } from '../core/viewBox'
 import { type CosetInfo } from '../core/algebra/subgroups'
 import { forceLayout, forceLayoutAsync, planarCycleLayout, computeCycleSubgroups, computeMaximalCycles } from '../core/algebra/forceLayout'
@@ -90,15 +89,13 @@ interface GroupContextState {
   isValidHomo: boolean | null
   kernelLabel: string
   actionKind: GroupActionKind | null
-  actionGeometry: PolyhedronType | null
   actionSetSize: number | null
   actionArrows: GroupActionArrow[]
   actionEditing: boolean
   actionComputation: GroupActionComputation | null
-  actionError: { generatorId: string | null; from: number; to: number; type: string } | null
+  actionError: { generatorId: string | null; from: number; to: number; g?: string; type: string } | null
   actionSelectedElement: number | null
   actionHoverElement: string | null
-  actionShowEdges: boolean
 }
 
 interface GroupContextActions {
@@ -193,16 +190,15 @@ interface GroupContextActions {
   setTheoremMode: (value: boolean) => void
   setTheoremPhase: (phase: number) => void
   createConjugationAction: (group: Group) => void
-  createGeometryAction: (group: Group, geometry: PolyhedronType) => void
   startCustomAction: (group: Group, n: number) => void
   addArrow: (from: number, to: number) => void
   bindArrow: (from: number, generatorId: string) => void
   removeArrow: (from: number) => void
+  replaceGenArrows: (generatorId: string | null, pairs: [number, number][]) => void
   clearArrows: () => void
   completeCustomAction: (group: Group) => void
   setActionSelectedElement: (x: number | null) => void
   setActionHoverElement: (id: string | null) => void
-  setActionShowEdges: (show: boolean) => void
   clearAction: () => void
 }
 
@@ -551,7 +547,6 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     kernelLabel: homo.kernelLabel,
 
     actionKind: action.actionKind,
-    actionGeometry: action.actionGeometry,
     actionSetSize: action.actionSetSize,
     actionArrows: action.actionArrows,
     actionEditing: action.actionEditing,
@@ -559,7 +554,6 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     actionError: action.actionError,
     actionSelectedElement: action.actionSelectedElement,
     actionHoverElement: action.actionHoverElement,
-    actionShowEdges: action.actionShowEdges,
 
     setCurrentGroup: core.setCurrentGroup,
     setCurrentView,
@@ -657,16 +651,15 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setTheoremPhase: homo.setTheoremPhase,
 
     createConjugationAction: action.createConjugationAction,
-    createGeometryAction: action.createGeometryAction,
     startCustomAction: action.startCustomAction,
     addArrow: action.addArrow,
     bindArrow: action.bindArrow,
     removeArrow: action.removeArrow,
+    replaceGenArrows: action.replaceGenArrows,
     clearArrows: action.clearArrows,
     completeCustomAction: action.completeCustomAction,
     setActionSelectedElement: action.setActionSelectedElement,
     setActionHoverElement: action.setActionHoverElement,
-    setActionShowEdges: action.setActionShowEdges,
     clearAction: action.clearAction,
 
     toggleMultiViewMode: multiView.toggleMultiViewMode,

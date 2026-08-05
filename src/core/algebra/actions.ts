@@ -1,17 +1,11 @@
 import type { Group, GroupActionArrow, GroupActionComputation, GroupActionDef, GroupElement, OrbitInfo } from '../types'
-import { computeElementRotation } from '../elementRotation'
-import {
-  truncatedTetrahedron, truncatedCube, rhombicuboctahedron, truncatedOctahedron,
-  truncatedIcosahedron, truncatedDodecahedron, type PolyhedronType,
-} from '../polyhedra'
-
-export type Vec3 = [number, number, number]
 
 export interface CustomArrowError {
   generatorId: string | null
   from: number
   to: number
-  type: 'range' | 'unbound' | 'duplicate-source' | 'conflict-target' | 'missing-target' | 'unknown-generator'
+  g?: string
+  type: 'range' | 'unbound' | 'duplicate-source' | 'conflict-target' | 'missing-target' | 'unknown-generator' | 'homomorphism'
 }
 
 export interface ActionBuildResult {
@@ -67,31 +61,6 @@ export function firstDiffIndex(a: number[], b: number[]): number {
   return n < Math.max(a.length, b.length) ? n : -1
 }
 
-// Rodrigues rotation matrix for axis (unit-ish) and angle
-export function rotationMatrix(axis: Vec3, angleRad: number): number[][] {
-  const [ux, uy, uz] = axis
-  const len = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1
-  const x = ux / len
-  const y = uy / len
-  const z = uz / len
-  const c = Math.cos(angleRad)
-  const s = Math.sin(angleRad)
-  const t = 1 - c
-  return [
-    [c + x * x * t, x * y * t - z * s, x * z * t + y * s],
-    [y * x * t + z * s, c + y * y * t, y * z * t - x * s],
-    [z * x * t - y * s, z * y * t + x * s, c + z * z * t],
-  ]
-}
-
-export function applyRotationMatrix(m: number[][], v: Vec3): Vec3 {
-  return [
-    m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
-    m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
-    m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
-  ]
-}
-
 export function indexById(group: Group): Map<string, number> {
   const m = new Map<string, number>()
   group.elements.forEach((el, i) => m.set(el.id, i))
@@ -114,71 +83,6 @@ export function computeConjugationPerms(group: Group): Map<string, number[]> {
     perms.set(g.id, perm)
   }
   return perms
-}
-
-export function getGeometryVertices(geometry: PolyhedronType): Vec3[] {
-  switch (geometry) {
-    case 'truncatedTetrahedron': return truncatedTetrahedron()
-    case 'truncatedCube': return truncatedCube()
-    case 'rhombicuboctahedron': return rhombicuboctahedron()
-    case 'truncatedOctahedron': return truncatedOctahedron()
-    case 'truncatedIcosahedron': return truncatedIcosahedron()
-    case 'truncatedDodecahedron': return truncatedDodecahedron()
-  }
-}
-
-export interface GeometryPermResult {
-  perms: Map<string, number[]>
-  ok: boolean
-  badGenerator?: string
-}
-
-function rotateSnapToVertices(m: number[][], verts: Vec3[]): number[] {
-  const n = verts.length
-  const perm = new Array<number>(n)
-  for (let i = 0; i < n; i++) {
-    const rotated = applyRotationMatrix(m, verts[i])
-    let best = 0
-    let bestDist = Infinity
-    for (let j = 0; j < n; j++) {
-      const dx = rotated[0] - verts[j][0]
-      const dy = rotated[1] - verts[j][1]
-      const dz = rotated[2] - verts[j][2]
-      const d = dx * dx + dy * dy + dz * dz
-      if (d < bestDist) {
-        bestDist = d
-        best = j
-      }
-    }
-    perm[i] = best
-  }
-  return perm
-}
-
-// Geometry action: generator permutations come from rotating the vertices and
-// snapping to the nearest vertex; the full action is extended word-by-word via
-// BFS so the multiplication table is respected by construction.
-export function computeGeometryPerms(group: Group, geometry: PolyhedronType): GeometryPermResult {
-  const verts = getGeometryVertices(geometry)
-  const n = verts.length
-  const genPerms = new Map<string, number[]>()
-  for (const gen of group.generators) {
-    const genEl = gen.apply(group.identity)
-    const rotation = computeElementRotation(group, genEl)
-    if (!rotation || rotation.angleRad === 0) {
-      genPerms.set(gen.symbol, identityPermutation(n))
-    } else {
-      const m = rotationMatrix(rotation.axis as Vec3, rotation.angleRad)
-      genPerms.set(gen.symbol, rotateSnapToVertices(m, verts))
-    }
-  }
-  for (const [sym, p] of genPerms) {
-    if (new Set(p).size !== n) {
-      return { perms: new Map(), ok: false, badGenerator: sym }
-    }
-  }
-  const ext = extendAndVerifyPerms(group, genPerms, n)
-  return { perms: ext.perms, ok: ext.ok }
 }
 
 // Verify Φ(g·a) = Φ(g)∘Φ(a) for all g and every generator a
@@ -346,6 +250,69 @@ export function computeFixedPoints(perms: Map<string, number[]>, n: number): num
   return fixed
 }
 
+export interface CycleCandidate {
+  length: number
+  label: string
+  pairs: [number, number][]
+}
+
+// Given a partial chain of arrows (per generator), suggest the cycles that
+// extend it: from the shortest (a 2-cycle) up to a full n-cycle, filling the
+// remaining elements in ascending order. If the arrows already close a cycle,
+// only that cycle is returned.
+export function computeCycleCandidates(arrows: { from: number; to: number }[], n: number): CycleCandidate[] {
+  if (arrows.length === 0 || n < 2) return []
+  const out = new Map<number, number>()
+  for (const a of arrows) out.set(a.from, a.to)
+  const inCount = new Map<number, number>()
+  for (const a of arrows) inCount.set(a.to, (inCount.get(a.to) ?? 0) + 1)
+
+  let start = -1
+  for (const a of arrows) {
+    if (!inCount.has(a.from)) { start = a.from; break }
+  }
+  if (start === -1) {
+    const chain: number[] = []
+    let cur = arrows[0].from
+    const seen = new Set<number>()
+    while (!seen.has(cur) && out.has(cur)) {
+      seen.add(cur)
+      chain.push(cur)
+      cur = out.get(cur)!
+    }
+    if (chain.length > 1 && out.get(chain[chain.length - 1]) === chain[0]) {
+      return [{
+        length: chain.length,
+        label: `(${chain.map(x => x + 1).join(' ')})`,
+        pairs: chain.map((x, i) => [x, chain[(i + 1) % chain.length]] as [number, number]),
+      }]
+    }
+    return []
+  }
+
+  const chain: number[] = [start]
+  const seen = new Set<number>([start])
+  while (out.has(chain[chain.length - 1])) {
+    const nx = out.get(chain[chain.length - 1])!
+    if (seen.has(nx)) break
+    seen.add(nx)
+    chain.push(nx)
+  }
+
+  const rest: number[] = []
+  for (let i = 0; i < n; i++) if (!seen.has(i)) rest.push(i)
+  const len = chain.length
+  const candidates: CycleCandidate[] = []
+  for (let L = Math.max(2, len); L <= n; L++) {
+    const extra = L - len
+    const seq = [...chain, ...rest.slice(0, extra)]
+    const pairs: [number, number][] = []
+    for (let i = 0; i < seq.length; i++) pairs.push([seq[i], seq[(i + 1) % seq.length]])
+    candidates.push({ length: L, label: `(${seq.map(x => x + 1).join(' ')})`, pairs })
+  }
+  return candidates
+}
+
 export function buildActionComputation(group: Group, def: GroupActionDef, arrows: GroupActionArrow[] = []): ActionBuildResult {
   let perms: Map<string, number[]>
   let n: number
@@ -358,20 +325,6 @@ export function buildActionComputation(group: Group, def: GroupActionDef, arrows
     const res = verifyAllRelations(group, perms)
     ok = res.ok
     violation = res.violation
-  } else if (def.kind === 'geometry') {
-    if (!def.geometry) return { error: { generatorId: null, from: -1, to: -1, type: 'range' } }
-    const verts = getGeometryVertices(def.geometry)
-    n = verts.length
-    const geo = computeGeometryPerms(group, def.geometry)
-    perms = geo.perms
-    if (!geo.ok) {
-      ok = false
-      violation = geo.badGenerator ? { g: geo.badGenerator, a: geo.badGenerator, x: 0 } : undefined
-    } else {
-      const res = verifyAllRelations(group, perms)
-      ok = res.ok
-      violation = res.violation
-    }
   } else {
     if (!def.setSize) return { error: { generatorId: null, from: -1, to: -1, type: 'range' } }
     n = def.setSize

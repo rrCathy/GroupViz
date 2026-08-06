@@ -294,12 +294,12 @@ export function GroupHomomorphismProvider({ children }: { children: ReactNode })
     setTheoremPhaseState(phase)
   }, [])
 
-  // Reset homomorphism editing state when a new group is loaded
+  // Reset temporary homomorphism-editing state when a new group is loaded.
+  // editingSource/editingTarget are kept so a cross-group homomorphism can be
+  // defined after switching groups (e.g. import source, create a new group as target).
   useEffect(() => {
     if (!currentGroup) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEditingSourceState(null)
-    setEditingTargetState(null)
     setActiveHomomorphismId(null)
     setEditingMapping(new Map())
     setEditingGeneratorMapping(new Map())

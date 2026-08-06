@@ -13,7 +13,7 @@ import { useAutoFade } from '../../hooks/useAutoFade'
 
 const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ default: m.Cayley3DView })))
 const SymmetryViewLazy = lazy(() => import('./SymmetryView').then(m => ({ default: m.SymmetryView })))
-import { computeCayleyActionEdges, ringOrder } from '../../core/algebra/forceLayout'
+import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData, InternalEdgeData, Group } from '../../core/types'
@@ -469,52 +469,10 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
     return computeShape2DPositions(currentGroup, cayleyShape2D, viewBoxSize.width, viewBoxSize.height)
   }, [cayleyShape2D, currentGroup, viewBoxSize.width, viewBoxSize.height])
 
-  const circlePositions = useMemo(() => {
-    const m = new Map<number, { x: number; y: number }>()
-    if (!currentGroup || n === 0) return m
-    for (let i = 0; i < n; i++) {
-      const angle = (i * 2 * Math.PI / n) - Math.PI / 2
-      m.set(i, {
-        x: cx + graphRadius * Math.cos(angle),
-        y: cy + graphRadius * Math.sin(angle)
-      })
-    }
-    return m
-  }, [cx, cy, graphRadius, n, currentGroup])
-
-  const indexMap = useMemo(() => {
-    const m = new Map<string, number>()
-    if (!currentGroup) return m
-    const isPipe = currentGroup.elements.length > 0 && currentGroup.elements[0]?.id.includes('|')
-    if (isPipe) {
-      const numFactors = currentGroup.elements[0].id.split('|').length
-      const factorOrders: Map<string, number>[] = []
-      for (let col = 0; col < numFactors; col++) {
-        const keys = Array.from(new Set(currentGroup.elements.map(el => {
-          const parts = el.id.split('|')
-          return parts[col] ?? ''
-        })))
-        const ordered = ringOrder(keys)
-        factorOrders[col] = new Map(ordered.map((k, i) => [k, i]))
-      }
-      const sorted = [...currentGroup.elements].sort((a, b) => {
-        const pa = a.id.split('|')
-        const pb = b.id.split('|')
-        for (let col = 0; col < numFactors; col++) {
-          const ai = factorOrders[col].get(pa[col] ?? '') ?? 0
-          const bi = factorOrders[col].get(pb[col] ?? '') ?? 0
-          if (ai !== bi) return ai - bi
-        }
-        return 0
-      })
-      sorted.forEach((el, i) => m.set(el.id, i))
-    } else {
-      const keys = currentGroup.elements.map(e => e.id)
-      const order = ringOrder(keys)
-      order.forEach((key, i) => m.set(key, i))
-    }
-    return m
-  }, [currentGroup])
+  const circLayout = useMemo(() => {
+    if (!currentGroup || n === 0) return new Map<string, { x: number; y: number }>()
+    return cayleyCircleLayout(currentGroup, cx, cy, graphRadius)
+  }, [currentGroup, cx, cy, graphRadius, n])
 
   // Semidirect-product metadata: used by the rewiring shape to highlight
   // φ(h)-fixed points and draw the x ↦ φ(x) wiring arcs inside each ring.
@@ -578,16 +536,16 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
       if (!gp) return { x: cx, y: cy }
       defPos = gp
     } else {
-      const idx = indexMap.get(elId)
-      if (idx === undefined) return { x: cx, y: cy }
-      defPos = circlePositions.get(idx) || { x: cx, y: cy }
+      const pos = circLayout.get(elId)
+      if (!pos) return { x: cx, y: cy }
+      defPos = pos
     }
     const saved = getNodePosition(elId)
     if (saved && (Math.abs(saved.x - defPos.x) > 1 || Math.abs(saved.y - defPos.y) > 1)) {
       return saved
     }
     return defPos
-  }, [gridPositions, indexMap, circlePositions, getNodePosition, cx, cy])
+  }, [gridPositions, circLayout, getNodePosition, cx, cy])
 
   const nodePositionsCache = useMemo(() => {
     const cache = new Map<string, { x: number; y: number }>()

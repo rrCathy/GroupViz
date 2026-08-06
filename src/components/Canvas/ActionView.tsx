@@ -43,12 +43,13 @@ interface EdgeProps {
   headSize?: number
   nodeR?: number
   offset?: number
+  tFrom?: { x: number; y: number }
   onClick?: () => void
   onDrop?: (e: React.DragEvent) => void
   highlight?: boolean
 }
 
-function DirectedEdge({ sx, sy, ex, ey, color, width = 2.2, dashed, dir = 1, opacity = 0.85, headSize = 12, nodeR = 0, offset = 0, onClick, onDrop, highlight }: EdgeProps) {
+function DirectedEdge({ sx, sy, ex, ey, color, width = 2.2, dashed, dir: _dir = 1, opacity = 0.85, headSize = 12, nodeR = 0, offset = 0, tFrom, onClick, onDrop, highlight }: EdgeProps) {
   const dx = ex - sx
   const dy = ey - sy
   const dist = Math.sqrt(dx * dx + dy * dy) || 1
@@ -56,18 +57,15 @@ function DirectedEdge({ sx, sy, ex, ey, color, width = 2.2, dashed, dir = 1, opa
   const uy = dy / dist
   const headLen = Math.min(headSize * 1.25, Math.max(12, dist * 0.25))
   const arrowSize = Math.min(headSize, headLen)
-  const nx = -uy
-  const ny = ux
-  const ax = sx + ux * nodeR + nx * offset
-  const ay = sy + uy * nodeR + ny * offset
-  const bx = ex - ux * (nodeR + headLen) + nx * offset
-  const by = ey - uy * (nodeR + headLen) + ny * offset
-  const bend = 8 * dir
-  const midX = (ax + bx) / 2
-  const midY = (ay + by) / 2
-  const c1x = midX + nx * bend
-  const c1y = midY + ny * bend
-  const angle = Math.atan2(by - ay, bx - ax)
+  const fx = tFrom ? tFrom.x : -uy
+  const fy = tFrom ? tFrom.y : ux
+  const ax = sx + ux * nodeR + fx * offset
+  const ay = sy + uy * nodeR + fy * offset
+  const bx = ex - ux * (nodeR + headLen) + fx * offset
+  const by = ey - uy * (nodeR + headLen) + fy * offset
+  const c1x = (ax + bx) / 2
+  const c1y = (ay + by) / 2
+  const angle = Math.atan2(by - c1y, bx - c1x)
   const d = `M${ax},${ay} Q${c1x},${c1y} ${bx},${by}`
 
   return (
@@ -589,44 +587,65 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
     return perms.get(actionHoverElement) ?? null
   }, [actionHoverElement, perms])
 
-  const genEdges: React.ReactNode[] = []
-  const pairCount = new Map<string, number>()
+  if (isConjugation && computation.n !== group.order) return null
+
+  interface PairRec { x: number; y: number; gi: number }
+  const pairMap = new Map<string, PairRec[]>()
+  const edgeList: { key: string; rec: PairRec }[] = []
   for (let gi = 0; gi < group.generators.length; gi++) {
     const gen = group.generators[gi]
     const genEl = gen.apply(group.identity)
     const p = perms.get(genEl.id)
     if (!p) continue
-    const isLegendTarget = legendHover !== null && legendHover === gen.symbol
-    const dimmed = hoverActive || (legendHover !== null && !isLegendTarget)
     for (let x = 0; x < n; x++) {
       const y = p[x]
       if (y === x) continue
-      const key = `${x}>${y}`
-      const k = pairCount.get(key) ?? 0
-      pairCount.set(key, k + 1)
-      const side = k % 2 === 0 ? 1 : -1
-      const effDir = side * (x < y ? 1 : -1)
-      const offset = k === 0 ? 0 : side * Math.ceil((k + 1) / 2) * 28
-      const from = nodePos(x)
-      const to = nodePos(y)
-      genEdges.push(
-        <DirectedEdge
-          key={`genedge-${gi}-${x}`}
-          sx={from.x}
-          sy={from.y}
-          ex={to.x}
-          ey={to.y}
-          color={dimmed ? 'var(--node-stroke)' : (gen.color || 'var(--node-stroke)')}
-          width={dimmed ? 1.2 : (isLegendTarget ? 3.4 : 3)}
-          headSize={18}
-          nodeR={NODE_R}
-          offset={offset}
-          dashed={dimmed}
-          opacity={dimmed ? 0.18 : 0.95}
-          dir={effDir as 1 | -1}
-        />
-      )
+      const a = Math.min(x, y)
+      const b = Math.max(x, y)
+      const key = `${a}|${b}`
+      const rec: PairRec = { x, y, gi }
+      const arr = pairMap.get(key)
+      if (arr) arr.push(rec)
+      else pairMap.set(key, [rec])
+      edgeList.push({ key, rec })
     }
+  }
+
+  const genEdges: React.ReactNode[] = []
+  for (const { key, rec } of edgeList) {
+    const { x, y, gi } = rec
+    const gen = group.generators[gi]
+    const arr = pairMap.get(key)!
+    const slot = arr.indexOf(rec)
+    const total = arr.length
+    const from = nodePos(x)
+    const to = nodePos(y)
+    const edgeLen = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2) || 1
+    const step = Math.max(10, Math.min(16, edgeLen * 0.06))
+    const offset = (slot - (total - 1) / 2) * step
+    const c = centers[orbitOf[x]]
+    const ref = nodePos(arr[0].x)
+    const angA = Math.atan2(ref.y - c.y, ref.x - c.x)
+    const tFrom = { x: -Math.sin(angA), y: Math.cos(angA) }
+    const isLegendTarget = legendHover !== null && legendHover === gen.symbol
+    const dimmed = hoverActive || (legendHover !== null && !isLegendTarget)
+    genEdges.push(
+      <DirectedEdge
+        key={`genedge-${gi}-${x}`}
+        sx={from.x}
+        sy={from.y}
+        ex={to.x}
+        ey={to.y}
+        color={dimmed ? 'var(--node-stroke)' : (gen.color || 'var(--node-stroke)')}
+        width={dimmed ? 1.2 : (isLegendTarget ? 3.4 : 3)}
+        headSize={18}
+        nodeR={NODE_R}
+        offset={offset}
+        tFrom={tFrom}
+        dashed={dimmed}
+        opacity={dimmed ? 0.18 : 0.95}
+      />
+    )
   }
 
   const hoverEdges: React.ReactNode[] = []

@@ -4,6 +4,7 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { renderTex } from '../../utils/texify'
 import { verifyHomomorphism } from '../../core/algebra/homomorphisms'
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
+import { cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { COLOR_PALETTE } from '../../core/types'
 import type { GroupElement } from '../../core/types'
 
@@ -23,14 +24,6 @@ function ringPos(idx: number, total: number, cx: number, cy: number, radius: num
   if (total <= 0) return { x: cx, y: cy }
   const angle = -Math.PI / 2 + (2 * Math.PI * idx) / total
   return { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) }
-}
-
-function computeCircularPositions(
-  ids: string[], cx: number, cy: number, radius: number,
-): Map<string, { x: number; y: number }> {
-  const m = new Map<string, { x: number; y: number }>()
-  ids.forEach((id, i) => m.set(id, ringPos(i, ids.length, cx, cy, radius)))
-  return m
 }
 
 function findGeneratorElements(group: { elements: GroupElement[]; generators: { name: string; symbol: string; apply: (el: GroupElement) => GroupElement }[]; identity: GroupElement }): GroupElement[] {
@@ -171,8 +164,8 @@ export function FirstIsomorphismAnimation() {
   // ── Element positions ──
   const gCircPositions = useMemo(() => {
     if (!source) return new Map<string, { x: number; y: number }>()
-    return computeCircularPositions(source.elements.map(e => e.id), G_CX, G_CY, gR)
-  }, [source, G_CX, G_CY, gR])
+    return cayleyCircleLayout(source, G_CX, G_CY, gR)
+  }, [source, gR])
 
   const gCosetPositions = useMemo(() => {
     if (!source || fibers.length === 0) return new Map<string, { x: number; y: number }>()
@@ -183,15 +176,20 @@ export function FirstIsomorphismAnimation() {
 
   const hPositions = useMemo(() => {
     if (!target) return new Map<string, { x: number; y: number }>()
-    return computeCircularPositions(target.elements.map(e => e.id), H_CX, H_CY, hR)
-  }, [target, H_CX, H_CY, hR])
+    return cayleyCircleLayout(target, H_CX, H_CY, hR)
+  }, [target, hR])
 
   const quotientPositions = useMemo(() => {
     const qR_eff = nQuot === 1 ? 0 : qR
+    const used = new Set<number>()
     return fibers.map((f) => {
       const hPos = hPositions.get(f.targetId)
       if (!hPos || nQuot === 1) return { x: Q_CX, y: Q_CY }
-      const angle = Math.atan2(hPos.y - H_CY, hPos.x - H_CX)
+      let angle = Math.atan2(hPos.y - H_CY, hPos.x - H_CX)
+      while (used.has(Math.round(angle * 100))) {
+        angle += 0.08
+      }
+      used.add(Math.round(angle * 100))
       return { x: Q_CX + qR_eff * Math.cos(angle), y: Q_CY + qR_eff * Math.sin(angle) }
     })
   }, [fibers, hPositions, qR, nQuot, H_CX, H_CY])

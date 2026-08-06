@@ -79,11 +79,11 @@ export function HomomorphismPanel() {
         </div>
         {/* Source/Target Row */}
         <div className="homo-row">
-          <button className="homo-group-btn" onClick={() => currentGroup && currentGroup !== editingTarget && setEditingSource(currentGroup)} disabled={!currentGroup}>
+          <button className="homo-group-btn" onClick={() => currentGroup && setEditingSource(currentGroup)} disabled={!currentGroup}>
             {editingSource ? <span dangerouslySetInnerHTML={{ __html: renderTex(editingSource.symbol) }} /> : t('homo.source')}
           </button>
           <span className="homo-arrow">→</span>
-          <button className="homo-group-btn" onClick={() => currentGroup && currentGroup !== editingSource && setEditingTarget(currentGroup)} disabled={!currentGroup || currentGroup === editingSource}>
+          <button className="homo-group-btn" onClick={() => currentGroup && setEditingTarget(currentGroup)} disabled={!currentGroup}>
             {editingTarget ? <span dangerouslySetInnerHTML={{ __html: renderTex(editingTarget.symbol) }} /> : t('homo.target')}
           </button>
         </div>

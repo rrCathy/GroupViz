@@ -4,6 +4,7 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { renderTex, texify } from '../../utils/texify'
 import { verifyHomomorphism, getHomomorphismProperties } from '../../core/algebra/homomorphisms'
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
+import { cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { COLOR_PALETTE } from '../../core/types'
 import type { GroupElement } from '../../core/types'
 import { FirstIsomorphismAnimation } from './FirstIsomorphismAnimation'
@@ -17,19 +18,6 @@ const HOMO_COLORS = [
 
 const KERNEL_RED = '#ff6b6b'
 const IMAGE_CYAN = '#4ecdc4'
-
-function circularPositions(n: number, cx: number, cy: number, radius: number) {
-  const positions: { x: number; y: number }[] = []
-  const startAngle = -Math.PI / 2
-  for (let i = 0; i < n; i++) {
-    const angle = startAngle + (2 * Math.PI * i) / n
-    positions.push({
-      x: cx + radius * Math.cos(angle),
-      y: cy + radius * Math.sin(angle),
-    })
-  }
-  return positions
-}
 
 function bezierPath(x1: number, y1: number, x2: number, y2: number): string {
   const dx = Math.abs(x2 - x1) * 0.3
@@ -161,37 +149,61 @@ export function HomomorphismView() {
 
   const srcR = Math.min(140, Math.max(65, source.order * 4.5))
   const tgtR = Math.min(140, Math.max(65, target.order * 4.5))
-  const sourcePositions = circularPositions(source.order, leftCx, midY, srcR)
-  const targetPositions = circularPositions(target.order, rightCx, midY, tgtR)
+  const sourcePositions = cayleyCircleLayout(source, leftCx, midY, srcR)
+  const targetPositions = cayleyCircleLayout(target, rightCx, midY, tgtR)
 
   function renderEdge(
-    posMap: { x: number; y: number }[],
+    posMap: Map<string, { x: number; y: number }>,
     fromId: string, toId: string, color: string, key: string,
-    fromIds: string[], toIds: string[],
-    width = 1.5, opacity = 0.5, selfLoop = false,
+    width = 1.5, opacity = 0.5, selfLoop = false, _isBidirectional = false,
+    pairOffset = 0,
   ) {
-    const fromIdx = fromIds.indexOf(fromId)
-    const toIdx = toIds.indexOf(toId)
-    if (fromIdx < 0 || toIdx < 0) return null
-    const from = posMap[fromIdx]
-    const to = posMap[toIdx]
+    const from = posMap.get(fromId)
+    const to = posMap.get(toId)
     if (!from || !to) return null
     if (selfLoop) return null
     const dx = to.x - from.x; const dy = to.y - from.y
     const dist = Math.sqrt(dx * dx + dy * dy)
     if (dist < 0.5) return null
-    const mx = (from.x + to.x) / 2; const my = (from.y + to.y) / 2 - dist * 0.12
+    if (pairOffset === 0) {
+      return (
+        <line key={key} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+          stroke={color} strokeWidth={width} opacity={opacity} />
+      )
+    }
+    const len = dist || 1
+    const nx = -dy / len; const ny = dx / len
+    const mx = (from.x + to.x) / 2 + nx * pairOffset
+    const my = (from.y + to.y) / 2 + ny * pairOffset
     return (
       <path key={key} d={`M ${from.x} ${from.y} Q ${mx} ${my} ${to.x} ${to.y}`}
         stroke={color} strokeWidth={width} fill="none" opacity={opacity} />
     )
   }
 
+  function buildPairOffsets(edges: { fromId: string; toId: string }[]) {
+    const pairMap = new Map<string, number[]>()
+    edges.forEach((e, i) => {
+      const pair = [e.fromId, e.toId].sort()
+      const key = `${pair[0]}|${pair[1]}`
+      const arr = pairMap.get(key)
+      if (arr) arr.push(i)
+      else pairMap.set(key, [i])
+    })
+    const offsets = new Array<number>(edges.length).fill(0)
+    pairMap.forEach((indices) => {
+      if (indices.length < 2) return
+      const total = indices.length
+      indices.forEach((idx, slot) => {
+        offsets[idx] = (slot - (total - 1) / 2) * 14
+      })
+    })
+    return offsets
+  }
+
   const mappingLines: {
     srcId: string
     tgtId: string
-    fromIdx: number
-    toIdx: number
     color: string
     pathD: string
     isKernel: boolean
@@ -199,12 +211,10 @@ export function HomomorphismView() {
   }[] = []
 
   mapping.forEach((targetId, sourceId) => {
-    const fromIdx = source.elements.findIndex(e => e.id === sourceId)
-    const toIdx = target.elements.findIndex(e => e.id === targetId)
-    if (fromIdx < 0 || toIdx < 0) return
+    const from = sourcePositions.get(sourceId)
+    const to = targetPositions.get(targetId)
+    if (!from || !to) return
 
-    const from = sourcePositions[fromIdx]
-    const to = targetPositions[toIdx]
     const isKernel = kernelSet.has(sourceId)
     const tgtIdx = target.elements.findIndex(e => e.id === targetId)
     const baseColor = isKernel ? KERNEL_RED : HOMO_COLORS[tgtIdx >= 0 ? tgtIdx % HOMO_COLORS.length : 0]
@@ -214,8 +224,6 @@ export function HomomorphismView() {
     mappingLines.push({
       srcId: sourceId,
       tgtId: targetId,
-      fromIdx,
-      toIdx,
       color: baseColor,
       pathD: bezierPath(from.x, from.y, to.x, to.y),
       isKernel,
@@ -247,22 +255,26 @@ export function HomomorphismView() {
       </foreignObject>
 
       {/* ═══ G Cayley edges ═══ */}
-      {gCayleyEdges.map((e, i) =>
-        renderEdge(
-          sourcePositions, e.fromId, e.toId, e.color, `gce-${i}`,
-          source.elements.map(el => el.id), source.elements.map(el => el.id),
-          1.8, 0.7, e.isSelfLoop,
+      {(() => {
+        const gOffsets = buildPairOffsets(gCayleyEdges)
+        return gCayleyEdges.map((e, i) =>
+          renderEdge(
+            sourcePositions, e.fromId, e.toId, e.color, `gce-${i}`,
+            1.8, 0.7, e.isSelfLoop, e.isBidirectional, gOffsets[i],
+          )
         )
-      )}
+      })()}
 
       {/* ═══ H Cayley edges ═══ */}
-      {hCayleyEdges.map((e, i) =>
-        renderEdge(
-          targetPositions, e.fromId, e.toId, e.color, `hce-${i}`,
-          target.elements.map(el => el.id), target.elements.map(el => el.id),
-          1.4, 0.65, e.isSelfLoop,
+      {(() => {
+        const hOffsets = buildPairOffsets(hCayleyEdges)
+        return hCayleyEdges.map((e, i) =>
+          renderEdge(
+            targetPositions, e.fromId, e.toId, e.color, `hce-${i}`,
+            1.4, 0.65, e.isSelfLoop, e.isBidirectional, hOffsets[i],
+          )
         )
-      )}
+      })()}
 
       {/* Mapping Lines — layered: non-highlighted first, highlighted on top */}
       {mappingLines.filter(l => !l.isHighlighted).map((line, i) => (
@@ -288,8 +300,9 @@ export function HomomorphismView() {
       ))}
 
       {/* Source Nodes */}
-      {source.elements.map((el, i) => {
-        const pos = sourcePositions[i]
+      {source.elements.map((el) => {
+        const pos = sourcePositions.get(el.id)
+        if (!pos) return null
         const inKernel = kernelSet.has(el.id)
         const isMapped = mapping.has(el.id)
         const isHL = highlightedSource === el.id || highlightPreimageIds.has(el.id)
@@ -347,8 +360,9 @@ export function HomomorphismView() {
       })}
 
       {/* Target Nodes */}
-      {target.elements.map((el, i) => {
-        const pos = targetPositions[i]
+      {target.elements.map((el) => {
+        const pos = targetPositions.get(el.id)
+        if (!pos) return null
         const inImage = imageSet.has(el.id)
         const isHL = highlightedTargetId === el.id
         const dimmed = highlightedTargetId && !isHL

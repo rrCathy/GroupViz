@@ -16,7 +16,7 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，27 文件 / 514 tests）
+## 3. 测试文件清单（src/__tests__，27 文件 / 519 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -24,7 +24,7 @@
 | actions.test.ts | 25 | 群作用：置换工具（compose 方向/逆/恒等）、共轭作用（S₃/C₆/D₄/S₅ 同态+轨道=共轭类+OST 校验）、自定义作用（C₃ 循环合法、missing-target/conflict/duplicate/range 报错、无箭头生成元恒等初始化、非法阶绑定 → violation） |
 | automorphisms.test.ts | 28 | findAllAutomorphisms（已知数量：Z3→2、Z4→2、Z5→4、S3→6、V4→6、Q8→24、D3→6、D4→8；Z₂⁴ 守卫返回 []）、createAutomorphismGroup 群律、Aut 群 Cayley 边连通性、标签/映射 |
 | homomorphisms.test.ts | 24 | verifyHomomorphism（含 violation）、naturalProjectionMapping、getHomomorphismProperties、subgroupInclusionMapping、directProductProjectionMapping、extendFromGenerators、formatKernelLabel、isElementIdentity |
-| layouts.test.ts | 25 | computeShape2DPositions（10 形状 size=order、circular→null、grid 需直积）、compute3DPositions（17 布局）、ringOrder 数字感知排序、computeElementOrder |
+| layouts.test.ts | 30 | computeShape2DPositions（10 形状 size=order、circular→null、grid 需直积）、compute3DPositions（17 布局）、ringOrder 数字感知排序、computeElementOrder、cayleyCircleLayout（S3-perm 六边形 0 交叉、D3/D4 双环 0 交叉 + 配对断言、V4 未误入双环、直积覆盖） |
 | subgroups.test.ts | 19 | findAllSubgroups/getConjugacyClasses/getGroupCenter/computeQuotientGroup/isSimpleGroup |
 | directProduct.test.ts | 15 | 直积群律（C2×C2≅V4、C2×C3≅C6 等）、pipe id、逐分量乘法/逆元、紧凑符号（C3×C3→`C_{3}^{2}`、C4×C2→`C_{4} \times C_{2}`）、生成元提升 |
 | cayleyEdges.test.ts | 14 | computeCayleyActionEdges：空 actions→[]、右乘/左乘、自逆→双向、单位元→自环、去重、order>60 限流 max(120, order*3)、阿贝尔群左右相同 |

@@ -90,7 +90,7 @@
 - **Hybrid computation** — local TypeScript for small groups (≤60), FastAPI backend for large ones (>60)
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 27 test files, 514 tests (Vitest)
+- **Test suite** — 27 test files, 519 tests (Vitest)
 
 ---
 
@@ -154,7 +154,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 27 test files (514 tests)
+├── __tests__/            # 27 test files (519 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/floating windows)
@@ -243,7 +243,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (27 files, 514 tests)
+- [x] Test suite (27 files, 519 tests)
 - [ ] Group operation law verification animations
 - [ ] Custom finite group input
 - [ ] Tutorial mode

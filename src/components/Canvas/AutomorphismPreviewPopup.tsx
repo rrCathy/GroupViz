@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState, useRef, useCallback } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { texify, renderTex } from '../../utils/texify'
 import { createGroupFromSymbol } from '../../utils/groupFactory'
-import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
+import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import type { CayleyEdgeData, CayleyAction, Group, GroupElement } from '../../core/types'
 import type { Automorphism } from '../../core/algebra/automorphisms'
 
@@ -16,14 +16,7 @@ function buildFixedPositions(parentGroup: Group): Map<string, NodePos> {
   const cx = POPUP_SIZE / 2
   const cy = POPUP_SIZE / 2
   const graphRadius = POPUP_SIZE * 0.32
-  const n = parentGroup.order
-  const pos = new Map<string, NodePos>()
-  for (let i = 0; i < n; i++) {
-    const el = parentGroup.elements[i]
-    const angle = (i * 2 * Math.PI / n) - Math.PI / 2
-    pos.set(el.id, { x: cx + graphRadius * Math.cos(angle), y: cy + graphRadius * Math.sin(angle) })
-  }
-  return pos
+  return cayleyCircleLayout(parentGroup, cx, cy, graphRadius)
 }
 
 interface StableFrame {

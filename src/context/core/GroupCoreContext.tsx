@@ -274,18 +274,24 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
   }, [addOperationHistory, t])
 
   const selectNextElement = useCallback(() => {
-    if (!currentGroup || selectedElements.size === 0) return
-    const currentId = Array.from(selectedElements)[0]
-    const currentIdx = currentGroup.elements.findIndex(el => el.id === currentId)
+    if (!currentGroup || currentGroup.elements.length === 0) return
+    let currentIdx = -1
+    if (selectedElements.size > 0) {
+      const currentId = Array.from(selectedElements)[0]
+      currentIdx = currentGroup.elements.findIndex(el => el.id === currentId)
+    }
     const nextIdx = (currentIdx + 1) % currentGroup.elements.length
     setSelectedElements(new Set([currentGroup.elements[nextIdx].id]))
   }, [currentGroup, selectedElements])
 
   const selectPrevElement = useCallback(() => {
-    if (!currentGroup || selectedElements.size === 0) return
-    const currentId = Array.from(selectedElements)[0]
-    const currentIdx = currentGroup.elements.findIndex(el => el.id === currentId)
-    const prevIdx = (currentIdx - 1 + currentGroup.elements.length) % currentGroup.elements.length
+    if (!currentGroup || currentGroup.elements.length === 0) return
+    let currentIdx = -1
+    if (selectedElements.size > 0) {
+      const currentId = Array.from(selectedElements)[0]
+      currentIdx = currentGroup.elements.findIndex(el => el.id === currentId)
+    }
+    const prevIdx = currentIdx < 0 ? currentGroup.elements.length - 1 : (currentIdx - 1 + currentGroup.elements.length) % currentGroup.elements.length
     setSelectedElements(new Set([currentGroup.elements[prevIdx].id]))
   }, [currentGroup, selectedElements])
 

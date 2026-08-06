@@ -1,7 +1,7 @@
 import type { Group, GroupElement, NodePosition, Layout3D } from '../types'
-import { getDefaultLayout3D, isGroupDirectProduct, isCyclicFactorKeys } from '../types'
+import { getDefaultLayout3D, isGroupDirectProduct, isCyclicFactorKeys, isGroupDihedral } from '../types'
 import { compute3DPositions } from './layout3D'
-import { parseProductFactors, matrixGridLayout, nestedFactorLayout2D, ringOrder } from './ringOrder'
+import { parseProductFactors, matrixGridLayout, nestedFactorLayout2D, ringOrder, detectS3PermSet, S3_PERM_IDS } from './ringOrder'
 
 // Re-export everything from submodules for backward compatibility
 export {
@@ -212,10 +212,15 @@ export function dualRingLayout(
   }
 
   if (rotations.length === 0 || reflections.length === 0) {
+    // Fallback: plain circle. For S₃-as-permutations use the ring order so the
+    // hexagon Cayley graph (generators (12),(23)) is drawn without crossings.
+    const keys = group.elements.map(e => e.id)
+    const s3Order = detectS3PermSet(keys) ? S3_PERM_IDS : null
     for (let i = 0; i < n; i++) {
       const angle = (i * 2 * Math.PI) / n - Math.PI / 2
       const r = Math.min(width, height) * 0.38
-      result.set(group.elements[i].id, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+      const el = s3Order ? (group.elements.find(e => e.id === s3Order[i]) ?? group.elements[i]) : group.elements[i]
+      result.set(el.id, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
     }
     return result
   }
@@ -257,6 +262,109 @@ export function dualRingLayout(
     }
   }
 
+  return result
+}
+
+// ─── Cayley Circle Layout (crossing-free for dihedral / S₃ structures) ──
+
+/**
+ * Single-circle Cayley layout that avoids edge crossings for the classic
+ * dihedral structures:
+ *
+ * - D* groups (element value = [r, s] with s ∈ {0,1}): rotations on the outer
+ *   ring, reflections on the inner ring. Each reflection is placed radially
+ *   under its s-edge partner (multiply convention: r_j · s = s_j) so the
+ *   spokes and both triangles never cross.
+ * - S₃ as permutations: ring order gives the plain 6-cycle (generators
+ *   (12), (23)) drawn as a crossing-free hexagon.
+ * - Direct-product ids ('a|b'): factor-wise ring order (legacy behavior).
+ * - Everything else: ring order on a single circle.
+ */
+export function cayleyCircleLayout(
+  group: Group,
+  cx: number,
+  cy: number,
+  radius: number
+): Map<string, NodePosition> {
+  const result = new Map<string, NodePosition>()
+  const n = group.order
+  if (n === 0) return result
+
+  const angleAt = (idx: number) => (idx * 2 * Math.PI) / n - Math.PI / 2
+
+  const isPipe = group.elements.length > 0 && group.elements[0].id.includes('|')
+  if (isPipe) {
+    const numFactors = group.elements[0].id.split('|').length
+    const factorOrders: Map<string, number>[] = []
+    for (let col = 0; col < numFactors; col++) {
+      const keys = Array.from(new Set(group.elements.map(el => {
+        const parts = el.id.split('|')
+        return parts[col] ?? ''
+      })))
+      const ordered = ringOrder(keys)
+      factorOrders[col] = new Map(ordered.map((k, i) => [k, i]))
+    }
+    const sorted = [...group.elements].sort((a, b) => {
+      const pa = a.id.split('|')
+      const pb = b.id.split('|')
+      for (let col = 0; col < numFactors; col++) {
+        const ai = factorOrders[col].get(pa[col] ?? '') ?? 0
+        const bi = factorOrders[col].get(pb[col] ?? '') ?? 0
+        if (ai !== bi) return ai - bi
+      }
+      return 0
+    })
+    sorted.forEach((el, i) => {
+      const angle = angleAt(i)
+      result.set(el.id, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) })
+    })
+    return result
+  }
+
+  const rotations: GroupElement[] = []
+  const reflections: GroupElement[] = []
+  let dihedralLike = isGroupDihedral(group)
+  if (dihedralLike) {
+    for (const el of group.elements) {
+      const v = el.value
+      if (Array.isArray(v) && v.length >= 2 && (v[1] === 0 || v[1] === 1)) {
+        if (v[1] === 0) rotations.push(el)
+        else reflections.push(el)
+      } else {
+        dihedralLike = false
+        break
+      }
+    }
+  }
+  if (dihedralLike && rotations.length > 0 && reflections.length > 0) {
+    const m = rotations.length
+    const outerR = radius
+    const innerR = radius * 0.55
+    const rotAngle = new Map<number, number>()
+    for (const el of rotations) {
+      const j = el.value[0] as number
+      const angle = (j * 2 * Math.PI) / m - Math.PI / 2
+      rotAngle.set(j, angle)
+      result.set(el.id, { x: cx + outerR * Math.cos(angle), y: cy + outerR * Math.sin(angle) })
+    }
+    for (const ref of reflections) {
+      const k = ref.value[0] as number
+      const partner = k % m
+      const angle = rotAngle.get(partner) ?? 0
+      result.set(ref.id, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
+    }
+    return result
+  }
+
+  const keys = group.elements.map(e => e.id)
+  const order = ringOrder(keys)
+  const idxOf = new Map(order.map((k, i) => [k, i]))
+  for (const el of group.elements) {
+    const idx = idxOf.get(el.id)
+    if (idx === undefined) continue
+    const angle = angleAt(idx)
+    result.set(el.id, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) })
+  }
   return result
 }
 

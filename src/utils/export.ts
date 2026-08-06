@@ -23,7 +23,12 @@ function collectStyleText(): string {
       continue
     }
   }
-  return css
+  // Rewrite dev-server KaTeX font paths to a CDN so exported SVG renders
+  // math correctly outside the local dev server.
+  return css.replace(
+    /url\(["']?\/node_modules\/katex\/dist\/fonts\/([^"')]+)["']?\)/g,
+    'url("https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/fonts/$1")',
+  )
 }
 
 function serializeSvg(svgEl: SVGElement): Blob {

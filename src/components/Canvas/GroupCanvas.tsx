@@ -8,6 +8,7 @@ import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
 import { ActionView } from './ActionView'
+import { SylowView } from './SylowView'
 import { isTooLarge } from '../../core/viewBox'
 import { useAutoFade } from '../../hooks/useAutoFade'
 
@@ -207,6 +208,7 @@ export function GroupCanvas() {
     currentY: 0
   })
   const [isDragging, setIsDragging] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   
   const { t } = useTranslation()
   const {
@@ -393,6 +395,8 @@ export function GroupCanvas() {
         return <CosetStripView />
       case 'action':
         return <ActionView />
+      case 'sylow':
+        return <SylowView />
       default:
         return <SetView />
     }
@@ -435,19 +439,28 @@ export function GroupCanvas() {
         </div>
       )}
       
+      {operationHistory.length > 0 && (
       <div
         className="history-panel"
-        style={{ opacity: historyFade.visible ? 1 : 0 }}
+        style={{ opacity: historyOpen || historyFade.visible ? 1 : 0.85, pointerEvents: 'auto' }}
         onMouseEnter={historyFade.onMouseEnter}
         onMouseLeave={historyFade.onMouseLeave}
       >
-        <h4>{t('canvas.history')}</h4>
-        <div className="history-list">
-          {operationHistory.slice(-5).map((op, i) => (
-            <div key={i} className="history-item">{op}</div>
-          ))}
-        </div>
+        <button
+          className="history-toggle"
+          onClick={() => setHistoryOpen(o => !o)}
+        >
+          {`🕘 ${t('canvas.history')} (${operationHistory.length}) ${historyOpen ? '▾' : '▸'}`}
+        </button>
+        {historyOpen && (
+          <div className="history-list">
+            {operationHistory.slice(-5).map((op, i) => (
+              <div key={i} className="history-item">{op}</div>
+            ))}
+          </div>
+        )}
       </div>
+      )}
     </div>
   )
 }

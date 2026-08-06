@@ -89,6 +89,7 @@ interface GroupContextState {
   isValidHomo: boolean | null
   kernelLabel: string
   actionKind: GroupActionKind | null
+  actionPrime: number | null
   actionSetSize: number | null
   actionArrows: GroupActionArrow[]
   actionEditing: boolean
@@ -190,6 +191,7 @@ interface GroupContextActions {
   setTheoremMode: (value: boolean) => void
   setTheoremPhase: (phase: number) => void
   createConjugationAction: (group: Group) => void
+  createSylowAction: (group: Group, prime: number) => void
   startCustomAction: (group: Group, n: number) => void
   addArrow: (from: number, to: number) => void
   bindArrow: (from: number, generatorId: string) => void
@@ -547,6 +549,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     kernelLabel: homo.kernelLabel,
 
     actionKind: action.actionKind,
+    actionPrime: action.actionPrime,
     actionSetSize: action.actionSetSize,
     actionArrows: action.actionArrows,
     actionEditing: action.actionEditing,
@@ -651,6 +654,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setTheoremPhase: homo.setTheoremPhase,
 
     createConjugationAction: action.createConjugationAction,
+    createSylowAction: action.createSylowAction,
     startCustomAction: action.startCustomAction,
     addArrow: action.addArrow,
     bindArrow: action.bindArrow,

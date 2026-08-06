@@ -45,6 +45,9 @@ export function isTooLarge(order: number, view: ViewMode): boolean {
   if (view === 'symmetry' || view === 'sublattice' || view === 'action') {
     return order > 120
   }
+  if (view === 'sylow') {
+    return order > 240
+  }
   if (view === '3d') {
     return order > 100
   }

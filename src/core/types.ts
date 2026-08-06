@@ -1,4 +1,4 @@
-export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action'
+export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow'
 
 export type MultiplyType = 'right' | 'left'
 
@@ -101,7 +101,7 @@ export interface HomomorphismProperties {
   imageOrder: number
 }
 
-export type GroupActionKind = 'conjugation' | 'custom'
+export type GroupActionKind = 'conjugation' | 'custom' | 'sylow'
 
 export interface GroupActionArrow {
   generatorId: string | null
@@ -122,11 +122,14 @@ export interface GroupActionComputation {
   stabilizers: Map<number, string[]>
   isHomomorphism: boolean
   violation?: { g: string; a: string; x: number }
+  // Point labels for the acted-upon set (e.g. Sylow subgroups "P₁", ...)
+  setLabels?: string[]
 }
 
 export interface GroupActionDef {
   kind: GroupActionKind
   setSize?: number
+  prime?: number
 }
 
 export const COLOR_PALETTE: string[] = [

@@ -18,7 +18,6 @@ const DONE_FEATURES = [
 
 const SOON_FEATURES = [
   'welcome.soon.education',
-  'welcome.soon.sylow',
   'welcome.soon.freegroup',
   'welcome.soon.dlc',
 ]

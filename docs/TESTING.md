@@ -16,7 +16,7 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，27 文件 / 519 tests）
+## 3. 测试文件清单（src/__tests__，28 文件 / 542 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -44,6 +44,7 @@
 | semidirectProduct.test.ts | 6 | createSemidirectProduct：C3⋊C2→D3、平凡φ→直接积、幂等回退、非同态φ抛错、exponent=lcm、生成元提升 |
 | properties.test.ts | 13 | 群性质：S₃/A₄/S₄ 导出列可解非幂零、A₅ 完美不可解、D₈ 幂零/D₁₂ 非幂零、Q₈、Cₙ/V₄、S₃×C₂、>60 cutoff 返回 null、导出列均为子群 |
 | i18n.test.ts | 3 | i18n 键完整性：zh/en 键集合相等、非空字符串、占位符参数一致 |
+| sylow.test.ts | 23 | Sylow 定理：factorizeOrder、findSylowSubgroups（S₃ n₂=3/n₃=1、A₄ n₂=1/n₃=4、S₄ 3/4、D₈/Q₈/V₄/C₁₂ n_p=1、A₅ 5/10/6、S₅ 15/10/6）、子群公理、两两互共轭、sylowConjugationPerms 同态性/传递性、稳定子 = 正规化子（|G|/n_p）、findAllPSubgroups（S₃/A₄/Q₈/V₄/C₁₂ 全部 p-子群集合与阶序，Sylow 在前） |
 
 ## 4. 测试要点与约定
 

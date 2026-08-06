@@ -1,4 +1,5 @@
 import type { Group, GroupActionArrow, GroupActionComputation, GroupActionDef, GroupElement, OrbitInfo } from '../types'
+import { findSylowSubgroups, sylowConjugationPerms } from './sylow'
 
 export interface CustomArrowError {
   generatorId: string | null
@@ -318,6 +319,7 @@ export function buildActionComputation(group: Group, def: GroupActionDef, arrows
   let n: number
   let ok = true
   let violation: { g: string; a: string; x: number } | undefined
+  let setLabels: string[] | undefined
 
   if (def.kind === 'conjugation') {
     n = group.order
@@ -325,6 +327,15 @@ export function buildActionComputation(group: Group, def: GroupActionDef, arrows
     const res = verifyAllRelations(group, perms)
     ok = res.ok
     violation = res.violation
+  } else if (def.kind === 'sylow') {
+    if (def.prime === undefined) return { error: { generatorId: null, from: -1, to: -1, type: 'range' } }
+    const subgroups = findSylowSubgroups(group, def.prime)
+    n = subgroups.length
+    perms = sylowConjugationPerms(group, subgroups)
+    const res = verifyAllRelations(group, perms)
+    ok = res.ok
+    violation = res.violation
+    setLabels = subgroups.map((_, i) => `P${i + 1}`)
   } else {
     if (!def.setSize) return { error: { generatorId: null, from: -1, to: -1, type: 'range' } }
     n = def.setSize
@@ -340,6 +351,6 @@ export function buildActionComputation(group: Group, def: GroupActionDef, arrows
   const { orbits, orbitOf } = computeOrbits(perms, n)
   const stabilizers = computeStabilizers(group, perms, n)
   return {
-    computation: { n, perms, orbits, orbitOf, stabilizers, isHomomorphism: ok, violation },
+    computation: { n, perms, orbits, orbitOf, stabilizers, isHomomorphism: ok, violation, setLabels },
   }
 }

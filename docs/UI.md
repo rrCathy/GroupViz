@@ -31,7 +31,7 @@ AppWrapper (I18nProvider → ThemeProvider)
 | 1 | GroupPanel（`panel.createGroup`） | ⊕ | 内部 TabBar 2 tab：`create` 群创建（GroupCreationInner：群类型/阶滑块/按阶浏览/创建）；`dp` 直积构建（DirectProductInner：三模式 cayley/table/direct、导入当前群、存储/加载直积群） |
 | 2 | SemidirectProductPanel（`sd.title`） | ⋉ | 5 预设、进入/退出模式、导入当前群为 N/H、计算 Aut(N)、φ 生成元映射下拉、展开 φ、创建、已保存半直积列表 |
 | 3 | ViewPanel（`panel.viewMode`，默认展开） | ⊞ | 10 个视图卡片 + 多视图勾选；下方按视图显示上下文设置（见下） |
-| 4 | OperationsPanel（`panel.operations`） | ⚙ | 内部 TabBar 5 tab：general/subsets/quotient/automorphism/export |
+| 4 | OperationsPanel（`panel.operations`） | ⚙ | 内部 TabBar 4 tab：general/subsets/quotient/automorphism |
 | 5 | HomomorphismPanel（`homo.title`） | ⟷ | 同态构建与验证（源/目标选择、自动映射、生成元映射、验证结果、第一同构定理入口、已存同态列表） |
 | 6 | GroupActionPanel（`action.title`） | ➤ | 群作用：共轭/自定义两来源、\|X\| 输入、自定义箭头编辑（点击/拖放绑定）、完成并验证/退出 |
 
@@ -44,7 +44,7 @@ AppWrapper (I18nProvider → ThemeProvider)
 - **cycle 视图**：显示极大循环子群勾选
 - **symmetry 视图**：显示元素操作勾选 + 旋转速度滑块（0.2–5x）
 
-### OperationsPanel 5 tab
+### OperationsPanel 4 tab
 
 | tab | 内容 |
 |-----|------|
@@ -52,7 +52,6 @@ AppWrapper (I18nProvider → ThemeProvider)
 | subsets ⊂ | 保存子集（自动检测子群/正规子群）、子集列表、显示陪集、创建商群、左/右陪集切换、显示全部陪集 |
 | quotient G/N | 已保存商群列表（加载/删除/≅ 徽章） |
 | automorphism Aut | 计算 Aut(G)（`automorphism.compute`）+ 已保存自同构群列表（Load/删除，≅ isoSymbol 徽章） |
-| export ↓ | 导出 SVG（2D 视图）/ PNG（3D、对称性视图）/ GIF（对称性视图，自动重放旋转动画） |
 
 ## 3. 右侧面板（RightPanel）
 

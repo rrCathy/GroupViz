@@ -689,13 +689,16 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
       const row = Math.floor(ci / CHIP_PER_ROW)
       const col = ci % CHIP_PER_ROW
       const el = actionKind === 'conjugation' ? group.elements[x] : null
-      const label = el ? renderTex(texify(el.label)) : String(x + 1)
+      const label = el ? renderTex(texify(el.label)) : computation.setLabels?.[x] ?? String(x + 1)
       return (
         <g key={el ? el.id : `s-${x}`} transform={`translate(${GRP_PAD + col * (CHIP_W + CHIP_GAP)}, ${GRP_HDR + GRP_PAD + row * CHIP_ROW_H})`}>
           <ElementChip
             label={label}
             isSelected={el ? actionHoverElement === el.id : actionSelectedElement === x}
-            onClick={el ? () => selectElement(el.id, false) : () => setActionSelectedElement(actionSelectedElement === x ? null : x)}
+            onClick={el ? () => selectElement(el.id, false) : () => {
+              const next = actionSelectedElement === x ? null : x
+              setActionSelectedElement(next)
+            }}
             onHover={el ? (on) => setActionHoverElement(on ? el.id : null) : undefined}
           />
         </g>
@@ -747,8 +750,8 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
             key={x}
             x={p.x}
             y={p.y}
-            label={isConjugation ? renderTex(texify(group.elements[x].label)) : ''}
-            showNumber={isConjugation ? undefined : x + 1}
+            label={isConjugation ? renderTex(texify(group.elements[x].label)) : computation.setLabels?.[x] ?? ''}
+            showNumber={isConjugation ? undefined : (computation.setLabels ? undefined : x + 1)}
             isSelected={actionSelectedElement === x}
             isFixed={fixed.has(x)}
             onClick={() => setActionSelectedElement(actionSelectedElement === x ? null : x)}
@@ -760,7 +763,7 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
 }
 
 export function ActionView() {
-  const { currentGroup, actionComputation, actionEditing, canvasTransform, viewBoxSize, actionKind, actionHoverElement, actionSelectedElement, actionSetSize } = useGroup()
+  const { currentGroup, actionComputation, actionEditing, canvasTransform, viewBoxSize, actionKind, actionPrime, actionHoverElement, actionSelectedElement, actionSetSize } = useGroup()
   const { t } = useTranslation()
   const [legendHover, setLegendHover] = useState<string | null>(null)
 
@@ -777,7 +780,9 @@ export function ActionView() {
   const showBanner = !!actionComputation && !actionEditing
   const titleLine = isConjugation
     ? t('action.viewTitle.conjugation')
-    : t('action.viewTitle.custom')
+    : actionKind === 'sylow'
+      ? t('action.viewTitle.sylow', { p: actionPrime ?? '' })
+      : t('action.viewTitle.custom')
   const edgeLine = hoverEl
     ? t('action.hoverElEdges', { el: hoverEl.label })
     : legendHover

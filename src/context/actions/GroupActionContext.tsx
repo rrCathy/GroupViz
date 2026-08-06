@@ -7,6 +7,7 @@ import { buildActionComputation, type CustomArrowError } from '../../core/algebr
 
 interface GroupActionState {
   actionKind: GroupActionKind | null
+  actionPrime: number | null
   actionSetSize: number | null
   actionArrows: GroupActionArrow[]
   actionEditing: boolean
@@ -18,6 +19,7 @@ interface GroupActionState {
 
 interface GroupActionActions {
   createConjugationAction: (group: Group) => void
+  createSylowAction: (group: Group, prime: number) => void
   startCustomAction: (group: Group, n: number) => void
   addArrow: (from: number, to: number) => void
   bindArrow: (from: number, generatorId: string) => void
@@ -39,6 +41,7 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   const { currentGroup, setHintMessage } = useGroupCore()
 
   const [actionKind, setActionKind] = useState<GroupActionKind | null>(null)
+  const [actionPrime, setActionPrime] = useState<number | null>(null)
   const [actionSetSize, setActionSetSize] = useState<number | null>(null)
   const [actionArrows, setActionArrows] = useState<GroupActionArrow[]>([])
   const [actionEditing, setActionEditing] = useState(false)
@@ -56,6 +59,7 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
 
     queueMicrotask(() => {
       setActionKind(null)
+      setActionPrime(null)
       setActionSetSize(null)
       setActionArrows([])
       setActionEditing(false)
@@ -77,6 +81,21 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
       setActionError(null)
       setActionSelectedElement(null)
       setHintMessage(t('action.created', { kind: t('action.kind.conjugation') }))
+    }
+  }, [setHintMessage, t])
+
+  const createSylowAction = useCallback((group: Group, prime: number) => {
+    const result = buildActionComputation(group, { kind: 'sylow', prime })
+    if (result.computation) {
+      setActionKind('sylow')
+      setActionPrime(prime)
+      setActionComputation(result.computation)
+      setActionSetSize(null)
+      setActionArrows([])
+      setActionEditing(false)
+      setActionError(null)
+      setActionSelectedElement(null)
+      setHintMessage(t('action.created', { kind: t('action.kind.sylow', { p: prime }) }))
     }
   }, [setHintMessage, t])
 
@@ -166,6 +185,7 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
 
   const clearAction = useCallback(() => {
     setActionKind(null)
+    setActionPrime(null)
     setActionSetSize(null)
     setActionArrows([])
     setActionEditing(false)
@@ -176,9 +196,9 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value: GroupActionContextType = {
-    actionKind, actionSetSize, actionArrows, actionEditing,
+    actionKind, actionPrime, actionSetSize, actionArrows, actionEditing,
     actionComputation, actionError, actionSelectedElement, actionHoverElement,
-    createConjugationAction, startCustomAction,
+    createConjugationAction, createSylowAction, startCustomAction,
     addArrow, bindArrow, removeArrow, replaceGenArrows, clearArrows, completeCustomAction,
     setActionSelectedElement: setActionSelectedElementCb,
     setActionHoverElement: setActionHoverElementCb,

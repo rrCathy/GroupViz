@@ -22,14 +22,15 @@
 
 作用图约定（图 9.3）：顶点 = X 的元素，箭头 = **生成元**的作用（非全部元素）；轨道 = 作用图的不连通分量；布局上**稳定元在左、大轨道在右**。
 
-## 2. 作用来源（两种）
+## 2. 作用来源（三种）
 
 | Kind | 描述 | 集合 X | 置换构造 |
 |------|------|--------|---------|
 | `conjugation` | 共轭作用 | X = G 自身（0..\|G\|-1） | Φ(g)[x] = index(g·G[x]·g⁻¹)，O(\|G\|²) 用 Map 索引 |
 | `custom` | 用户自定义 | 用户指定大小 \|X\|（1..20） | 箭头 + 补全 + BFS 扩展（见 §3） |
+| `sylow` | Sylow 共轭作用 | X = Syl_p(G)（Sylow p-子群集合，0..n_p-1） | 来自 `sylowConjugationPerms`（findSylowSubgroups 的共轭置换）；轨道大小 = n_p（传递），稳定子 = 正规化子 \|N_G(P)\| = \|G\|/n_p |
 
-共轭作用中：轨道 = 共轭类、固定点 = 中心 Z(G)、Stab(x) = 中心化子 C_G(x)。（共轭特化标注为后续待办。）
+共轭作用中：轨道 = 共轭类、固定点 = 中心 Z(G)、Stab(x) = 中心化子 C_G(x)。（共轭特化标注为后续待办。）Sylow 作用由 `createSylowAction(group, p)` 创建（API 保留供未来 UI 入口复用，当前无面板按钮），`setLabels = P1..Pn`，点标签为 Sylow 子群序号。
 
 ## 3. 自定义作用（箭头 + 补全 + 校验）
 
@@ -69,11 +70,12 @@ generatorPermsFromArrows(arrows, n, genSymbols)  // 无箭头生成元初始化�
 extendAndVerifyPerms(group, generatorPerms) → { perms, ok, violation? }
 computeOrbits / computeStabilizers / verifyOrbitStabilizer / computeFixedPoints
 buildActionComputation(group, def, arrows=[]) → ActionBuildResult
+findSylowSubgroups / sylowConjugationPerms（src/core/algebra/sylow.ts，Sylow 作用专用）
 ```
 
-**类型**（`src/core/types.ts`）：`GroupActionKind`('conjugation'|'custom')、`GroupActionArrow`{generatorId|null, from, to}、`OrbitInfo`{representative, elements}、`GroupActionComputation`{n, perms: Map<elId, number[]>, orbits, orbitOf, stabilizers, isHomomorphism, violation?}、`GroupActionDef`{kind, setSize?}。
+**类型**（`src/core/types.ts`）：`GroupActionKind`('conjugation'|'custom'|'sylow')、`GroupActionArrow`{generatorId|null, from, to}、`OrbitInfo`{representative, elements}、`GroupActionComputation`{n, perms: Map<elId, number[]>, orbits, orbitOf, stabilizers, isHomomorphism, violation?, setLabels?}、`GroupActionDef`{kind, setSize?, prime?}。
 
-**状态**（`src/context/actions/GroupActionContext.tsx`）：actionKind/actionSetSize/actionArrows/actionEditing/actionComputation/actionError/actionSelectedElement/actionHoverElement；动作 createConjugationAction/startCustomAction/addArrow/bindArrow/removeArrow/replaceGenArrows/clearArrows/completeCustomAction/setActionSelectedElement/setActionHoverElement/clearAction。群切换时 prevGroupRef 重置（queueMicrotask）。
+**状态**（`src/context/actions/GroupActionContext.tsx`）：actionKind/actionSetSize/actionArrows/actionEditing/actionComputation/actionError/actionSelectedElement/actionHoverElement/actionPrime；动作 createConjugationAction/startCustomAction/addArrow/bindArrow/removeArrow/replaceGenArrows/clearArrows/completeCustomAction/setActionSelectedElement/setActionHoverElement/createSylowAction/clearAction。群切换时 prevGroupRef 重置（queueMicrotask）。
 
 ## 6. 视图（轨道视图，`src/components/Canvas/ActionView.tsx`）
 
@@ -83,7 +85,7 @@ buildActionComputation(group, def, arrows=[]) → ActionBuildResult
 - 图例可 hover：高亮该生成元边、淡化其余（genEdges 三态）
 - hover 群元素 chip → 临时显示该元素全部作用箭头（金色，含自环小圆）
 - 点击集合元素 x → 所在簇发光 + 右侧面板显示 |Orb(x)|、|Stab(x)|、OST 等式、Stab(x) 成员
-- 显示模式元素用 TeX 标签（共轭作用，元素=群元素）或数字 1..n（自定义）
+- 显示模式元素用 TeX 标签（共轭作用，元素=群元素）或数字 1..n（自定义）或 setLabels P₁..Pₙ（Sylow 作用，标签由 `computation.setLabels` 提供）
 - 自定义编辑模式：|X| 元素围圈、生成元 chips 左侧竖排（可拖拽/点击）、虚线未绑定箭头、红字错误提示
 - 视图 2000×2000 viewBox，随 GroupCanvas 平移缩放；FloatingViewWindow 中包 SvgPanZoom
 - isTooLarge 阈值 120（与 symmetry/sublattice 同级）

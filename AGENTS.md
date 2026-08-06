@@ -15,7 +15,7 @@
 
 > **可视化方案参考**：若对可视化方案不理解（元素如何摆放、边如何连接、视图长什么样），请阅读 `refer/` 目录下的参考书籍，尤其《群论彩图版》（Visual Group Theory，Nathan Carter 著）——Cayley 图、群作用、陪集等约定均以其为准。
 
-> **界面模式（硬核模式）**：当前 UI 定位为**硬核模式**（面向研究者/数学用户，欢迎页 + 三栏工作台）。后续计划开发**教育模式**（引导式学习欢迎页与教学视图），届时按模式切换入口与样式。欢迎页"即将推出"列表：教育模式、Sylow 型可视化、自由群、DLC（空间群/点群可视化）。
+> **界面模式（硬核模式）**：当前 UI 定位为**硬核模式**（面向研究者/数学用户，欢迎页 + 三栏工作台）。后续计划开发**教育模式**（引导式学习欢迎页与教学视图），届时按模式切换入口与样式。欢迎页"即将推出"列表：教育模式、自由群、DLC（空间群/点群可视化）。
 
 ## 2. 文档导航
 
@@ -25,11 +25,11 @@
 |------|------|
 | [docs/GROUPS.md](docs/GROUPS.md) | 群实现：核心类型、群族表、直积/半直积/自同构、小群注册表、群工厂、代数函数、数学参考 |
 | [docs/CAYLEY.md](docs/CAYLEY.md) | Cayley 图系统：边计算、2D/3D 渲染、17 种 3D 形状模板、10 种 2D 形状布局 |
-| [docs/VIEWS.md](docs/VIEWS.md) | 9 种视图模式：集合/凯莱图/圆圈图/乘法表/3D/对称性/子群格/同态/陪集条带 + 多视图 |
+| [docs/VIEWS.md](docs/VIEWS.md) | 11 种视图模式：集合/凯莱图/圆圈图/乘法表/3D/对称性/子群格/同态/陪集条带/轨道/Sylow + 多视图 |
 | [docs/STATE.md](docs/STATE.md) | 状态管理：9 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端） |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 5 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：27 文件 519 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：28 文件 542 tests、vitest 配置、覆盖率、测试约定 |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/自定义两来源、同态校验、轨道/稳定化子/OST、轨道视图、几何作用暂缓记录 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期 → 中期 FGVE 引擎化 → 远期 GVL 教学实验室 |
 
@@ -52,7 +52,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 27 个测试文件（519 tests），见 docs/TESTING.md
+│   ├── __tests__/              # 28 个测试文件（542 tests），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
@@ -78,7 +78,7 @@ GroupViz/
 │   │   └── viewBox.ts
 │   ├── context/                # 10 个 Provider 分层（见 docs/STATE.md）
 │   │   ├── core/ backend/ cayley/ subsets/ symmetry/ directProduct/
-│   │   ├── multiview/ homomorphism/ semidirectProduct/ actions/
+│   │   ├── multiview/ homomorphism/ semidirectProduct/ actions/ sylow/
 │   │   ├── GroupContext.tsx    # 组合容器（注册 window.__groupVizExport__ 导出桥）
 │   │   ├── useGroup.ts
 │   │   └── cayleyActions.ts cosetActions.ts directProductActions.ts positionUtils.ts
@@ -95,7 +95,7 @@ GroupViz/
 
 ## 5. 当前状态
 
-- ✅ 10 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action
+- ✅ 11 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow
 - ✅ 群族：Sₙ(2-5)、Cₙ(2-120)、Dₙ(3-8)、Aₙ(3-5)、V₄、Q₈、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（UI 上限出于性能：S₅=120 在本地兜底 FALLBACK_CUTOFF=240 内，S₆=720 超限故不提供）
 - ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、10 种 2D 形状（含 rewiring）、17 种 3D 形状模板（按群性质自动分配）
 - ✅ 对称性视图：多面体几何 + 元素操作动画 + 旋转轴/交点标记（运行时从几何数据计算）
@@ -107,8 +107,9 @@ GroupViz/
 - ✅ KaTeX 全应用渲染、i18n 中英文、深/浅主题、会话保存与恢复
 - ✅ 视图导出：SVG/PNG/GIF + 批量导出 CLI（`npm run export`）
 - ✅ 群作用系统：共轭/自定义两来源、同态校验（violation 定位）、轨道/稳定化子/轨道-稳定化子定理验证、轨道视图（簇布局 + 生成元作用边 + hover 全箭头 + 固定点 ★）、自定义作用交互式箭头编辑（点击/拖放绑定 + 退出编辑）（见 docs/ACTIONS.md）
+- ✅ Sylow 型视图：以群元素为最小节点（节点 = 元素），p 可选素数（|G| 素因子）；展示 p-元素、全部 p-子群（p-元素 → 循环 p-子群 → pair-join 闭合，专用算法本地算到 S₅=120，SYLOW_MAX_ORDER=240 守卫）、Sylow p-子群（★ 标记，n_p 计数 + `n_p ≡ 1 (mod p)` / `n_p | m` 验证 + 正规化子阶 `|N_G(P)| = |G|/n_p`）；默认凯莱图布局（边 = 群生成元作用，点击子群切换为该子群生成元作用，颜色对应）；单选子群 → 陪集条带布局（Lagrange `|G| = |H|·[G:H]`）；Ctrl/⌘ 或 ⊕ 复选两个子群 → 上下布局 + 竖直共轭箭头（Sylow 第二定理，自动求共轭元 g 满足 gPg⁻¹ = Q）+ 两子群内部生成元边（P 青 / Q 紫）；其他 p-子群默认收起；右侧子群列表可收起；G 共轭作用在 Syl_p(G) 上（轨道大小 = n_p，稳定子 = 正规化子）经轨道视图验证
 - ✅ 凯莱图圆形布局无交叉：cayleyCircleLayout 对 S₃（六边形）/二面体结构（双环）自动免交叉布局（同态/同构动画/Aut 弹窗/主视图共用）
-- ✅ 测试体系：27 文件 519 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
+- ✅ 测试体系：28 文件 542 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
 
 ## 6. 运行命令
 
@@ -131,7 +132,7 @@ uvicorn main:app --reload --port 8000
 
 - 组件：函数式 + Hooks；命名 PascalCase 组件 / camelCase 函数与 Hook / UPPER_SNAKE_CASE 常量
 - 数学符号：统一 KaTeX（`texify()` + `<Tex>` / `renderTex()`），不用 Unicode 上下标显示
-- 状态：遵循 9 Provider 分层架构，新状态按领域放入对应子 Provider，经 `useGroup()` 聚合暴露
+- 状态：遵循 10 Provider 分层架构，新状态按领域放入对应子 Provider，经 `useGroup()` 聚合暴露
 - 测试：改代码必写/更新测试并跑 `npm run test` + `npm run lint`；纯计算逻辑（core/algebra、core/groups）优先补测试
 - 风险分级：鉴权/数据库/资金/核心架构改动需人工审查；常规改动（UI、内部逻辑、测试）自测自审后直接推进
 - ESLint + TypeScript 严格检查，提交前保证 `npm run lint` 无错误
@@ -143,12 +144,12 @@ uvicorn main:app --reload --port 8000
 ### 阶段 1：扫（Scan）— 找 bug 与体验问题
 
 1. **静态基线**：`npm run lint` + `npm run test` + `npm run build` 必须全绿，作为出发点。
-2. **动态扫描**：dev server + Playwright 实测核心路径——8 视图切换、操作面板 4 tab、直积/半直积/同态创建流程、会话恢复、导出（SVG/PNG/GIF）、多视图浮动窗口；全程观察 console error/warning（快照含属性计数，如 `[marker-end]` 计数无向边会误判为 0）。
+2. **动态扫描**：dev server + Playwright 实测核心路径——11 视图切换、操作面板 4 tab、直积/半直积/同态创建流程、会话恢复、导出（SVG/PNG/GIF）、多视图浮动窗口；全程观察 console error/warning（快照含属性计数，如 `[marker-end]` 计数无向边会误判为 0）。
 3. **专项扫描**（本项目反复踩坑的检查项）：
    - **BOM 检查**：Windows 下 write 工具可能写入 UTF-8 BOM，使 vite/postcss（JSON.parse package.json）崩溃。改动文件首字节应为 `7B`（`{`），package.json 必须无 BOM。
    - **硬编码版本**：欢迎页 `welcome.version`（translations.ts zh/en 两处）须与 package.json 版本一致。
    - **i18n 缺失键**：`i18n.test.ts` 自动断言 zh/en 键集合一致；新增 `t()` 调用必须 zh/en 成对补键。
-   - **文档一致性**：grep 全仓 `.md` 的测试计数（519）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
+   - **文档一致性**：grep 全仓 `.md` 的测试计数（542）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
 
 ### 阶段 2：修（Fix）— 修复并验证
 
@@ -199,5 +200,5 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-*文档版本: 1.8.1*
+*文档版本: 1.9.0*
 *最后更新: 2026-08-06*

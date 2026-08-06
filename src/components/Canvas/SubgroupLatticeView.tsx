@@ -1,6 +1,7 @@
 import { useMemo, useCallback, useState } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
+import { useTheme } from '../../theme/useTheme'
 import {
   computeSubgroupLattice,
   type SubgroupLatticeNode,
@@ -45,6 +46,54 @@ export function SubgroupLatticeView() {
     isLargeGroup,
   } = useGroup()
   const { t } = useTranslation()
+  const { theme } = useTheme()
+
+  const palette = useMemo(() => {
+    if (theme === 'light') {
+      return {
+        edge: '#a9adbc',
+        edgeOpacity: 0.95,
+        edgeWidth: 2.5,
+        pathEdge: '#d4a017',
+        pathEdgeWidth: 4,
+        nodeFill: '#eef1f5',
+        nodeStroke: '#2d8f85',
+        nodeStrokeNormal: '#7c5cc0',
+        nodeText: '#1c1c28',
+        nodeSubText: '#5a5a6a',
+        pathFill: '#fbf1d0',
+        pathStroke: '#d4a017',
+        pathText: '#7a5d00',
+        pathSubText: '#8a6d00cc',
+        activeFill: '#d8ecda',
+        trivialFill: '#e8e8f1',
+        trivialStroke: '#9a9ab0',
+        fullFill: '#e7edf7',
+        fullStroke: '#3a6fb0',
+      }
+    }
+    return {
+      edge: '#4a4a7a',
+      edgeOpacity: 0.85,
+      edgeWidth: 2.5,
+      pathEdge: '#ffd93d',
+      pathEdgeWidth: 4,
+      nodeFill: '#151f1a',
+      nodeStroke: '#3ea89e',
+      nodeStrokeNormal: '#8968c8',
+      nodeText: '#ddd',
+      nodeSubText: '#777',
+      pathFill: '#1e3a1e',
+      pathStroke: '#ffd93d',
+      pathText: '#ffd93d',
+      pathSubText: '#ffd93dcc',
+      activeFill: '#2a4a2a',
+      trivialFill: '#1a1a2e',
+      trivialStroke: '#555',
+      fullFill: '#1a1f30',
+      fullStroke: '#5588cc',
+    }
+  }, [theme])
 
   const [activeNodeIdx, setActiveNodeIdx] = useState<number | null>(null)
 
@@ -175,9 +224,9 @@ export function SubgroupLatticeView() {
         y1={fromPos.y + nodeRy}
         x2={toPos.x}
         y2={toPos.y - nodeRy}
-        stroke={onPath ? '#ffd93d' : 'var(--border-primary)'}
-        strokeWidth={onPath ? 4 : 2}
-        opacity={onPath ? 1 : 0.45}
+        stroke={onPath ? palette.pathEdge : palette.edge}
+        strokeWidth={onPath ? palette.pathEdgeWidth : palette.edgeWidth}
+        opacity={onPath ? 1 : palette.edgeOpacity}
       />
     )
   })
@@ -191,29 +240,29 @@ export function SubgroupLatticeView() {
     const isTrivial = node.order === 1
     const isFull = node.order === (currentGroup.order)
 
-    let fillColor = '#151f1a'
-    let strokeColor = node.isNormal ? '#8968c8' : '#3ea89e'
+    let fillColor = palette.nodeFill
+    let strokeColor = node.isNormal ? palette.nodeStrokeNormal : palette.nodeStroke
     let strokeWidth = 2.5
-    let textColor = '#ddd'
+    let textColor = palette.nodeText
 
     if (onPath) {
-      fillColor = '#1e3a1e'
-      strokeColor = '#ffd93d'
+      fillColor = palette.pathFill
+      strokeColor = palette.pathStroke
       strokeWidth = 4
-      textColor = '#ffd93d'
+      textColor = palette.pathText
     }
     if (isActive) {
-      fillColor = '#2a4a2a'
+      fillColor = palette.activeFill
       strokeWidth = 4
     }
     if (isTrivial && !onPath) {
-      fillColor = '#1a1a2e'
-      strokeColor = '#555'
+      fillColor = palette.trivialFill
+      strokeColor = palette.trivialStroke
       strokeWidth = 2
     }
     if (isFull && !onPath) {
-      fillColor = '#1a1f30'
-      strokeColor = '#5588cc'
+      fillColor = palette.fullFill
+      strokeColor = palette.fullStroke
     }
 
     const parentSubset = subsets.find(s =>
@@ -284,7 +333,7 @@ export function SubgroupLatticeView() {
         <text
           y={13}
           textAnchor="middle"
-          fill={onPath ? '#ffd93dcc' : node.isNormal ? '#8968c8' : '#777'}
+          fill={onPath ? palette.pathSubText : node.isNormal ? palette.nodeStrokeNormal : palette.nodeSubText}
           fontSize="11px"
           fontFamily="monospace"
           style={{ pointerEvents: 'none', userSelect: 'none' }}

@@ -860,13 +860,14 @@
 
 .history-panel {
   position: absolute;
-  top: 12px;
+  bottom: 12px;
   right: 12px;
-  width: 200px;
+  width: 160px;
+  max-width: 40%;
   background-color: var(--bg-tooltip);
   border: 1px solid var(--border-primary);
   border-radius: 6px;
-  padding: 10px;
+  padding: 4px;
   font-size: 12px;
   transition: opacity 0.4s ease;
 }
@@ -877,6 +878,22 @@
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.history-toggle {
+  display: block;
+  width: 100%;
+  font-size: 11px !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--bg-hover) !important;
+  border: 1px solid var(--border-primary) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer;
+  text-align: left;
 }
 
 .hint-box {

@@ -11,6 +11,7 @@ import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
 import { ActionView } from './ActionView'
+import { SylowView } from './SylowView'
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
@@ -372,6 +373,8 @@ function renderViewContent(view: ViewMode) {
       return <SvgPanZoom><CosetStripView /></SvgPanZoom>
     case 'action':
       return <SvgPanZoom><ActionView /></SvgPanZoom>
+    case 'sylow':
+      return <SvgPanZoom><SylowView /></SvgPanZoom>
     default:
       return <SvgPanZoom><SetView /></SvgPanZoom>
   }

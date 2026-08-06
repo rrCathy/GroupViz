@@ -2,7 +2,7 @@
 
 > 所属文档集：GroupViz 开发文档。入口见 [AGENTS.md](../AGENTS.md)。
 
-10 种视图模式（`ViewMode`：'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action'），主画布 `GroupCanvas.tsx` 按 `currentView` 分发渲染。
+11 种视图模式（`ViewMode`：'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow'），主画布 `GroupCanvas.tsx` 按 `currentView` 分发渲染。
 
 ## 1. 集合视图 (SetView.tsx)
 
@@ -89,7 +89,18 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 
 详见 [ACTIONS.md](ACTIONS.md)。轨道簇布局（大小升序左→右，固定点 ★ 最左）、生成元作用边、hover 群元素显示全部箭头、点击元素 → 右侧面板 OST/Stab 详情；自定义作用编辑模式（元素围圈 + 生成元 chips + 虚线未绑定箭头）。isTooLarge 阈值 120。
 
-## 11. 多视图模式
+## 11. Sylow 视图 (SylowView.tsx)
+
+以群元素为最小节点（节点 = 元素）的 p-子群浏览器：p 可选素数（|G| 素因子），工具栏统计 p-元素数 / p-子群数 / n_p / `|G| = p^k·m`。
+
+- **默认凯莱图布局**：圆环排列（`cayleyCircleLayout`），边 = 群生成元作用（右乘，颜色对应）；点击子群 → 边切换为该子群生成元作用
+- **单选子群 → 陪集条带布局**：`cosetStripLayout` + 底部 Lagrange 验证 `|G| = |H|·[G:H]`
+- **Ctrl/⌘ 或 ⊕ 复选两个子群 → 共轭视图（Sylow 第二定理）**：上下两行布局（公共元素 P∩Q 中间拉链交错列），自动求共轭元 g 满足 gPg⁻¹ = Q，竖直双向金色共轭箭头 + 图上标注 `共轭: g = …`；两子群内部生成元边（P 青 / Q 紫）
+- **子群列表**：Sylow p-子群（★ + ◁ 正规标记，|H|=p^i + ⟨生成元⟩ TeX）+ 其他 p-子群（默认收起）；⊕ 复选按钮；列表可整体收起（▶/◀）
+- 节点配色：选中金色 → P∩Q 金色 → P 青 → Q 紫 → p-元素青描边 → 其他灰化（opacity 0.3）；legend 随模式切换
+- 数据：`findAllPSubgroups`（专用 p-子群枚举算法，SYLOW_MAX_ORDER=240 守卫，isTooLarge 阈值 240）
+
+## 12. 多视图模式
 
 `toggleMultiViewMode()` 开启后可通过 `openFloatingView(view)` 打开浮动窗口（`FloatingViewWindow.tsx`）：
 
@@ -97,11 +108,9 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 - 主画布与浮动窗口可同时对比不同视图
 - 缩放上限 8x（乘法表 10x）
 
-## 12. 直积/半直积构建视图
-
-- `DirectProductView.tsx`：直积群构建画布（isDirectProductMode 时替换主画布）
+## 13. 直积/半直积构建视图- `DirectProductView.tsx`：直积群构建画布（isDirectProductMode 时替换主画布）
 - `SemidirectProductView.tsx`：半直积设置 + 4 步教学动画（详见 [GROUPS.md](GROUPS.md) 第 4 节）
 
-## 13. 大群视图守卫
+## 14. 大群视图守卫
 
 `forceShowLargeGroupViews`：order > 60 的群对计算密集视图（cycle/sublattice/symmetry/homomorphism/cosetstrip）提供守卫与后端降级。

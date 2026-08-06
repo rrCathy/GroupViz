@@ -17,7 +17,7 @@ GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
   ├── GroupSemidirectProductContext — 半直积构建（N ⋊_φ H）
   ├── GroupMultiViewContext   — 多视图浮动窗口
   ├── GroupHomomorphismContext — 同态映射创建与验证
-  └── GroupActionContext      — 群作用（共轭/自定义 + 轨道计算，最外层）
+  ├── GroupActionContext      — 群作用（共轭/自定义/Sylow + 轨道计算，最外层）
 ```
 
 - 每个子 Provider 通过 `useGroupCore()` 获取核心状态，实现关注点分离
@@ -33,7 +33,7 @@ GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
 ```typescript
 interface GroupContextState {
   currentGroup: Group | null
-  currentView: ViewMode           // 10 种
+  currentView: ViewMode           // 11 种
   selectedElements: Set<string>
   canvasTransform: { x; y; scale }
   operationHistory: string[]

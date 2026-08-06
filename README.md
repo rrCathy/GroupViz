@@ -7,7 +7,7 @@
   <strong>English</strong> | <a href="./README_zh-CN.md">简体中文</a>
 </p>
 
-**GroupViz** is an interactive web application for visualizing and exploring finite group theory. It provides 9 visualization modes, supports multiple classical group families plus a group construction system (direct/semidirect products, automorphism groups, quotient groups, homomorphisms), and renders all mathematical notation with KaTeX.
+**GroupViz** is an interactive web application for visualizing and exploring finite group theory. It provides 11 visualization modes, supports multiple classical group families plus a group construction system (direct/semidirect products, automorphism groups, quotient groups, homomorphisms), and renders all mathematical notation with KaTeX.
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-19.2-blue" alt="React 19">
@@ -52,6 +52,7 @@
 |------|-------------|
 | Conjugation | Action of G on itself by conjugation; orbits = conjugacy classes, fixed points = center Z(G) |
 | Custom | Draw arrows between set elements, bind generators (click or drag & drop), auto-completion + homomorphism verification Φ: G → Sym(X) with violation pinpointing |
+| Sylow | Sylow-type view: p-elements & p-subgroups (p selectable among \|G\| prime factors), Cayley-graph layout (click a subgroup → edges switch to its generators), single select → coset strips (Lagrange), Ctrl/⌘ or ⊕ two subgroups → conjugation view (Sylow II, vertical arrows + P/Q internal edges); G acts on Syl_p(G) with orbit size = n_p and stabilizer = normalizer (verified in the orbit view) |
 
 ### Group Construction System
 | Construction | Description |
@@ -90,7 +91,7 @@
 - **Hybrid computation** — local TypeScript for small groups (≤60), FastAPI backend for large ones (>60)
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 27 test files, 519 tests (Vitest)
+- **Test suite** — 28 test files, 542 tests (Vitest)
 
 ---
 
@@ -154,7 +155,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 27 test files (519 tests)
+├── __tests__/            # 28 test files (542 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/floating windows)
@@ -243,7 +244,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (27 files, 519 tests)
+- [x] Test suite (28 files, 542 tests)
 - [ ] Group operation law verification animations
 - [ ] Custom finite group input
 - [ ] Tutorial mode

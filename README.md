@@ -252,7 +252,7 @@ Edge semantics:
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
 - [x] Test suite (33 files, 659 tests)
 - [ ] Group operation law verification animations
-- [ ] Custom finite group input
+- [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode
 
 ---

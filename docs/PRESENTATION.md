@@ -7,7 +7,7 @@
 任意群展示 `⟨S | R⟩`（自由群商群，`f(a,b) = e` 简写为 `f(a,b)`）的完整支持：
 
 - **数学内核** `src/core/algebra/presentations.ts`：解析器、Todd–Coxeter 陪集枚举、由展示构建群、`presentationOf` 标准展示分发、通用关系发现器
-- **UI**：左侧「群展示」面板（**直接创建**：完整展示文本/持久化/草稿；**可视化创建**：模板 + 单条关系逐步粘合 + 实时构建校验）、群信息栏展示 TeX 行、**树视图**（退化树 = 商群凯莱图 BFS 生成树，实线树边/金色虚线粘合边，布局规则化：直线/网格/十字/3D）、**展示乘法表视图**
+- **UI**：左侧「群展示」面板（**直接创建**：完整展示文本/持久化/草稿；**可视化创建**：模板 + 单条关系逐步粘合 + 实时构建校验）、群信息栏展示 TeX 行、**树视图**（退化树 = 商群凯莱图 BFS 生成树，实线生成树边按生成元着色 / 粘合边不绘制仅 bar 计数，布局规则化：直线/网格/十字/3D）、**展示乘法表视图**
 - 仅处理**有限群**：Todd–Coxeter 步数与陪集上限守卫，超限判定为无限/溢出
 
 ## 2. 核心类型（types.ts）
@@ -79,7 +79,7 @@
   - 已保存列表（点击加载/× 删除）；「✕ 清空当前群（回到模板树）」清除展示群 + 当前群 + 可视化草稿
 - **持久化** `presentationStorage.ts`：key `groupviz-presentation-groups`（仅存 generators/relators，加载时重建）+ `groupviz-presentation-draft`（textarea 原文自动保存）
 - **RightPanel 群信息栏**：`right.presentation` 行，`presentationOf(currentGroup)` 的 TeX（try/catch 降级隐藏）
-- **树视图（退化树）**（`FreeGroupTreeView.tsx` + `cayleyTree.ts`）：商群凯莱图的 BFS 生成树——**实线=生成树边**（首次到达）、**金色虚线=粘合边**（指向已访问元素，每对节点一条防重叠）；**布局按群结构规则化**：1 生成元直线（不衰减）、2 生成元交换格（词全形如 a* b*）→ 正方形网格（不衰减）、非交换/自由积 → 谢尔宾斯基十字（层距减半防遮挡）、3 生成元 → 3D（R3F，立方体方向）；**幂折叠**：幂关系（a²=e）下指数按 mod 折叠到同一网格点（a²,b³,ab=ba → 2×3 网格）；**层距**：路径状树（max child ≤ 2）用 0.7 衰减保细节、稠密树用 0.5 防交叉（`stepForDepth(depth, ratio)`）；**genElsOverride**：展示生成元数与群自带生成元不一致时用 `pres.generatorElements` 求值（修复 S₄ Coxeter 3 生成元）；有限群全元素展示（fit 缩放），无群时自由模板树（深度随缩放自适应）；点击节点显示词、缩放/平移/双击复位
+- **树视图（退化树）**（`FreeGroupTreeView.tsx` + `cayleyTree.ts`）：商群凯莱图的 BFS 生成树——**实线=生成树边**（首次到达，按生成元 a/b/c 着色）；**粘合边不绘制**（指向已访问元素的边被省略，顶部 bar 以金色「粘合边 ×N」计数呈现——计数越大树「塌缩」越明显）；**布局按群结构规则化**：1 生成元直线（不衰减）、2 生成元交换格（词全形如 a* b*）→ 正方形网格（不衰减）、非交换/自由积 → 谢尔宾斯基十字（层距减半防遮挡）、3 生成元 → 3D（R3F，立方体方向）；**幂折叠**：幂关系（a²=e）下指数按 mod 折叠到同一网格点（a²,b³,ab=ba → 2×3 网格）；**层距**：路径状树（max child ≤ 2）用 0.7 衰减保细节、稠密树用 0.5 防交叉（`stepForDepth(depth, ratio)`）；**genElsOverride**：展示生成元数与群自带生成元不一致时用 `pres.generatorElements` 求值（修复 S₄ Coxeter 3 生成元）；有限群全元素展示（fit 缩放），无群时自由模板树（深度随缩放自适应）；点击节点显示词、缩放/平移/双击复位
 - **展示乘法表视图**（`PresentationTableView.tsx`）：乘法表式浏览（列×行），顶部静态展示式 bar；order > 36 采样（cap 20）并显示大群警告
 - 创建成功设置 `activePresentationGroup`（独立状态，`?? currentGroup` 回退） + 切 tree 视图 + hint（含 ≅ 同构提示）；失败按 reason 显示对应错误
 

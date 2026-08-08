@@ -52,7 +52,7 @@
 | actionStorage.test.ts | 6 | 已完成群作用持久保存（groupviz-actions）：空返回 []、round-trip（含 unbound 箭头）、多群多条、损坏 JSON 返回 []、非法记录过滤（setSize 字符串）、覆盖保存 |
 | series.test.ts | 24 | 子群列（series.ts）：导列（S₃/S₄/A₄/S₅ 阶链与 reachesTrivial/可解性）、下中心列（D₈→{e} 幂零、D₁₂ 非幂零）、上中心列（D₁₂ Z∞=⟨r³⟩ 阶 4 非幂零、S₃ 平凡中心）、合成列（S₄/S₅/V₄/Q₈/D₈ 15 条/C₆/C₁₂ 2 条链、A₅ 单因子）、因子判定（Cₙ/V₄/Q₈/D₄/D₆/A₄/A₅ 标签、简单性）、isNormalSubgroupIn、SERIES_MAX_ORDER 守卫、computeChainFactors（备选链 S₅ 唯一链/D₈ V₄ 分支/A₄ 标签） |
 | presentations.test.ts | 36 | 群展示：解析器（简化/指数/括号/零指数/非法字符/长符号 + Unicode 上标 a²/a⁻¹）、parsePresentation、parseRelationEquation（f1=f2 等式）、Todd–Coxeter（finite/infinite/overflow）、buildGroupFromPresentation（C₄/D₄/V₄/S₃/A₅ 构建 + multiply/inverse 一致性 + 无限/溢出 + f1=f2 归一化 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合/stored 原样） |
-| cayleyTree.test.ts | 25 | 树视图核心（cayleyTree.ts）：computeCayleyTree BFS 生成树（实线/粘合边划分）、computeFreeTree 自由模板树、computeFoldTree（幂折叠网格：a²,b³,ab=ba → C₂×C₃ 2×3 网格 0 交叉；genElsOverride 修复 S₄ Coxeter 3 生成元不崩溃；D∞ 0.7 路径状衰减、C₂*ℤ 0.5 稠密衰减 + 0 交叉、Sierpinski 0 交叉回归）、countEdgeCrossings 严格交叉计数、parseRelationEquation |
+| cayleyTree.test.ts | 25 | 树视图核心（cayleyTree.ts）：computeCayleyTree BFS 生成树（生成树边/粘合边划分，粘合边不渲染仅计数）、computeFreeTree 自由模板树、computeFoldTree（幂折叠网格：a²,b³,ab=ba → C₂×C₃ 2×3 网格 0 交叉；genElsOverride 修复 S₄ Coxeter 3 生成元不崩溃；D∞ 0.7 路径状衰减、C₂*ℤ 0.5 稠密衰减 + 0 交叉、Sierpinski 0 交叉回归）、countEdgeCrossings 严格交叉计数、parseRelationEquation |
 
 ## 4. 测试要点与约定
 

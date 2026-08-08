@@ -14,6 +14,7 @@ const DONE_FEATURES = [
   'welcome.item.table',
   'welcome.item.build',
   'welcome.item.homomorphism',
+  'welcome.item.presentation',
 ]
 
 const SOON_FEATURES = [

@@ -28,8 +28,11 @@
 ### Group Structure Visualization
 - **Subgroups** — compute, list, and highlight all cyclic subgroups
 - **Conjugacy classes** — automatic partition analysis
-- **Center** — identify central elements
+- **Center** — identify central elements; highlighted in the subgroup lattice (gold + Z(G) badge), in the subgroup list, and in the group info panel
+- **Generate subgroup ⟨E⟩** — one-click closure of any subset E ⊂ G, jumps to the coset strip view showing `|G| = |H|·[G:H]`
+- **Normalizer / Centralizer** — one-click `N_G(E) = {g | gEg⁻¹ = E}` and `C_G(E) = {g | gx = xg, ∀x ∈ E}` for any subset E, both subgroups, jumps to the coset strip view
 - **Subgroup lattice (Hasse diagram)** — nodes arranged by layer with normal subgroups highlighted
+- **Subgroup series** — derived / upper & lower central / composition series overlaid on the lattice (colored term strokes + ordinal badges, non-series nodes dimmed, bold series edges); bottom panel with TeX chain `G ⊵ N₁ ⊵ … ⊵ ⟨e⟩`, orders, factors `Nᵢ/Nᵢ₊₁ ≅ …`, solvable/nilpotent badges, composition-factor multiset + Jordan–Hölder note; all composition series enumerated for small groups (≤20 chains, chain switcher); `SERIES_MAX_ORDER = 240` guard
 - **Coset decomposition** — left/right cosets, color-coded, Lagrange's theorem verification in the coset strip view
 - **Simple group detection** — automatic property checking
 
@@ -44,14 +47,14 @@
 | **Symmetry View** | Polyhedra geometry + element rotation animations + rotation axis markers |
 | **Subgroup Lattice** | Hasse diagram with layer-based layout |
 | **Homomorphism View** | Source/target dual Cayley graphs + mapping edges, kernel/image highlighting, first isomorphism theorem animation |
-| **Coset Strip** | Cosets as colored columns with `|G| = |H|·[G:H]` Lagrange verification |
+| **Coset Strip** | Cosets as colored columns with `|G| = |H|·[G:H]` Lagrange verification, plus the circular Cayley graph of ⟨H⟩ above the subgroup strip |
 | **Orbit View** | Group action orbits as clusters (fixed points ★ leftmost), generator edges, hover shows full action, orbit-stabilizer verification |
 
 ### Group Action System
 | Source | Description |
 |------|-------------|
 | Conjugation | Action of G on itself by conjugation; orbits = conjugacy classes, fixed points = center Z(G) |
-| Custom | Draw arrows between set elements, bind generators (click or drag & drop), auto-completion + homomorphism verification Φ: G → Sym(X) with violation pinpointing |
+| Custom | Draw arrows between set elements, bind generators (click or drag & drop), auto-completion + homomorphism verification Φ: G → Sym(X) with violation pinpointing; **draft auto-saved** to localStorage and restored per group symbol (refresh or switch away and back); **finished actions persist** in a panel list (visible per group, click to reactivate, deletable) |
 | Sylow | Sylow-type view: p-elements & p-subgroups (p selectable among \|G\| prime factors), Cayley-graph layout (click a subgroup → edges switch to its generators), single select → coset strips (Lagrange), Ctrl/⌘ or ⊕ two subgroups → conjugation view (Sylow II, vertical arrows + P/Q internal edges); G acts on Syl_p(G) with orbit size = n_p and stabilizer = normalizer (verified in the orbit view) |
 
 ### Group Construction System
@@ -76,6 +79,7 @@
 | Semidirect products | N⋊_φ H (e.g. Z₃⋊Z₂ ≅ S₃) | ≤144 | ✅ |
 | Automorphism groups | Aut(G) (e.g. Aut(Z₈) ≅ C₂) | — | ✅ |
 | Quotient groups | G/N | \|G\|/\|N\| | ✅ |
+| Presentation-defined | ⟨S \| R⟩ (Todd–Coxeter, e.g. A₅, V₄, Q₈) | ≤240 | ✅ |
 
 ### Key Features
 - **Cayley graph by element action** — edges defined by any group element (generalized Cayley graph), right/left multiply switchable
@@ -89,9 +93,10 @@
 - **View export** — SVG (2D views), PNG (3D views), GIF (symmetry animation) + batch export CLI (`npm run export`)
 - **i18n** — Chinese / English UI with localStorage persistence
 - **Hybrid computation** — local TypeScript for small groups (≤60), FastAPI backend for large ones (>60)
+- **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; relator-loop view (3D torus Cayley graph, click a relator to highlight its closed loop) + presentation table view with word-evaluation paths; draft autosave
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 28 test files, 542 tests (Vitest)
+- **Test suite** — 31 test files, 598 tests (Vitest)
 
 ---
 
@@ -124,7 +129,7 @@ npm run preview
 ## 📖 Usage
 
 1. **Select a group** from the left panel (Cyclic, Dihedral, Symmetric, Alternating, or Special groups), or use the construction system (direct/semidirect product, Aut(G), quotient)
-2. **Switch among 9 views** in the view panel
+2. **Switch views** in the view panel (the two presentation views — relator loops & presentation table — open from the Group Presentation panel)
 3. **Interact with the canvas** — pan (drag background), zoom (scroll), select elements (click), lasso-select (Ctrl+drag)
 4. **Explore Cayley graphs** — enable/disable element actions, switch right/left multiplication, pick 2D/3D shapes, run force layout
 5. **Explore group theory** — save subsets to detect subgroups, show cosets, build quotient groups; construct homomorphisms and run the first isomorphism animation
@@ -155,12 +160,13 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 28 test files (542 tests)
+├── __tests__/            # 32 test files (644 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
-│   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/floating windows)
+│   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
+│   │                    #   Relators/PresentationTable/floating windows)
 │   ├── Panels/           # Left panels (BasicGroup/View/Operations/DirectProduct/
-│   │                    #   Homomorphism/SemidirectProduct) + RightPanel + TabBar + constants
+│   │                    #   Homomorphism/SemidirectProduct/Presentation) + RightPanel + TabBar + constants
 │   ├── Tex.tsx           # KaTeX React component
 │   └── WelcomePage.tsx   # Hardcore-mode splash (features list, coming soon, sponsors)
 ├── core/
@@ -244,7 +250,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (28 files, 542 tests)
+- [x] Test suite (32 files, 644 tests)
 - [ ] Group operation law verification animations
 - [ ] Custom finite group input
 - [ ] Tutorial mode

@@ -25,11 +25,12 @@
 |------|------|
 | [docs/GROUPS.md](docs/GROUPS.md) | 群实现：核心类型、群族表、直积/半直积/自同构、小群注册表、群工厂、代数函数、数学参考 |
 | [docs/CAYLEY.md](docs/CAYLEY.md) | Cayley 图系统：边计算、2D/3D 渲染、17 种 3D 形状模板、10 种 2D 形状布局 |
-| [docs/VIEWS.md](docs/VIEWS.md) | 11 种视图模式：集合/凯莱图/圆圈图/乘法表/3D/对称性/子群格/同态/陪集条带/轨道/Sylow + 多视图 |
-| [docs/STATE.md](docs/STATE.md) | 状态管理：9 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
+| [docs/VIEWS.md](docs/VIEWS.md) | 13 种视图模式（ViewPanel 9 卡片 + 群展示面板 2 专用视图：tree/展示乘法表）+ 多视图 |
+| [docs/PRESENTATION.md](docs/PRESENTATION.md) | 群展示系统：解析器、Todd–Coxeter 陪集枚举、presentationOf 分发、通用关系发现器、创建/持久化、tree与展示乘法表视图 |
+| [docs/STATE.md](docs/STATE.md) | 状态管理：12 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端） |
-| [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 5 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：28 文件 542 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 6 面板、右侧双模式、组件清单、i18n 键缺口 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：32 文件 644 tests、vitest 配置、覆盖率、测试约定 |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/自定义两来源、同态校验、轨道/稳定化子/OST、轨道视图、几何作用暂缓记录 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期 → 中期 FGVE 引擎化 → 远期 GVL 教学实验室 |
 
@@ -52,7 +53,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 28 个测试文件（542 tests），见 docs/TESTING.md
+│   ├── __tests__/              # 32 个测试文件（644 tests），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
@@ -95,7 +96,7 @@ GroupViz/
 
 ## 5. 当前状态
 
-- ✅ 11 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow
+- ✅ 13 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow / tree / prestable（其中 tree / prestable 两个群展示专用视图的入口在左侧「群展示」面板底部，不在视图面板卡片中）
 - ✅ 群族：Sₙ(2-5)、Cₙ(2-120)、Dₙ(3-8)、Aₙ(3-5)、V₄、Q₈、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（UI 上限出于性能：S₅=120 在本地兜底 FALLBACK_CUTOFF=240 内，S₆=720 超限故不提供）
 - ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、10 种 2D 形状（含 rewiring）、17 种 3D 形状模板（按群性质自动分配）
 - ✅ 对称性视图：多面体几何 + 元素操作动画 + 旋转轴/交点标记（运行时从几何数据计算）
@@ -103,13 +104,18 @@ GroupViz/
 - ✅ 半直积构建：5 预设、φ 映射 UI、4 步构建动画、rewiring 布局与不动点高亮
 - ✅ 混合计算：小群本地 TS（≤60），大群 FastAPI 后端（>60）+ 缓存；**后端不可用时前端本地兜底**（FALLBACK_CUTOFF=240 内全量重算，S₅ 约 2.6s），大群计算 >3s 显示顶部进度条（TopProgressBar）
 - ✅ 小群预计算注册表（阶 1-15，27 条）
-- ✅ 多视图浮动窗口、子集保存与分析、陪集分解（Lagrange 验证）、自逆元素检测
+- ✅ 多视图浮动窗口、子集保存与分析、陪集分解（Lagrange 验证，子群条带上方展示 ⟨H⟩ 圆形凯莱图）、自逆元素检测
 - ✅ KaTeX 全应用渲染、i18n 中英文、深/浅主题、会话保存与恢复
 - ✅ 视图导出：SVG/PNG/GIF + 批量导出 CLI（`npm run export`）
-- ✅ 群作用系统：共轭/自定义两来源、同态校验（violation 定位）、轨道/稳定化子/轨道-稳定化子定理验证、轨道视图（簇布局 + 生成元作用边 + hover 全箭头 + 固定点 ★）、自定义作用交互式箭头编辑（点击/拖放绑定 + 退出编辑）（见 docs/ACTIONS.md）
+- ✅ 群作用系统：共轭/自定义两来源、同态校验（violation 定位）、轨道/稳定化子/轨道-稳定化子定理验证、轨道视图（簇布局 + 生成元作用边 + hover 全箭头 + 固定点 ★）、自定义作用交互式箭头编辑（点击/拖放绑定 + 退出编辑）、自定义作用草稿自动保存（localStorage，刷新/切群按群符号自动恢复，清除时删除）、**已完成作用持久保存（groupviz-actions，面板列表可见/切群保留/点击激活恢复，同同态模式）**（见 docs/ACTIONS.md）
 - ✅ Sylow 型视图：以群元素为最小节点（节点 = 元素），p 可选素数（|G| 素因子）；展示 p-元素、全部 p-子群（p-元素 → 循环 p-子群 → pair-join 闭合，专用算法本地算到 S₅=120，SYLOW_MAX_ORDER=240 守卫）、Sylow p-子群（★ 标记，n_p 计数 + `n_p ≡ 1 (mod p)` / `n_p | m` 验证 + 正规化子阶 `|N_G(P)| = |G|/n_p`）；默认凯莱图布局（边 = 群生成元作用，点击子群切换为该子群生成元作用，颜色对应）；单选子群 → 陪集条带布局（Lagrange `|G| = |H|·[G:H]`）；Ctrl/⌘ 或 ⊕ 复选两个子群 → 上下布局 + 竖直共轭箭头（Sylow 第二定理，自动求共轭元 g 满足 gPg⁻¹ = Q）+ 两子群内部生成元边（P 青 / Q 紫）；其他 p-子群默认收起；右侧子群列表可收起；G 共轭作用在 Syl_p(G) 上（轨道大小 = n_p，稳定子 = 正规化子）经轨道视图验证
+- ✅ 群中心 Z(G) 集成：子群格高亮中心节点（金色 + 右上角 Z(G) 角标）、右侧子群列表中心突出（金色边框 + 中心徽章）、群信息面板「中心 Z(G)」行（元素 TeX 展示）
+- ✅ 由子集生成子群：任意子集 E ⊂ G 一键生成 ⟨E⟩（closeUnderMultiply 闭包），跳转陪集条带展示 Lagrange `|G| = |H|·[G:H]`
+- ✅ 正规化子/中心化子：任意子集 E ⊂ G 一键求 `N_G(E) = {g | gEg⁻¹ = E}` 与 `C_G(E) = {g | gx = xg, ∀x ∈ E}`（getNormalizer/getCentralizer 纯函数），两者均为子群，跳转陪集条带展示 Lagrange
 - ✅ 凯莱图圆形布局无交叉：cayleyCircleLayout 对 S₃（六边形）/二面体结构（双环）自动免交叉布局（同态/同构动画/Aut 弹窗/主视图共用）
-- ✅ 测试体系：28 文件 542 tests 全绿（`npm run test`），core/utils 覆盖率 75.8%（`npm run test:coverage`）
+- ✅ 子群列（Series）：子群格视图集成四种子群列——**导列**（derived series）、**上/下中心列**（upper/lower central series）、**合成列**（composition series，Jordan–Hölder）；系列项节点彩色描边（金/青/紫）+ 序数角标，非系列节点调暗（opacity 0.22），系列路径边加粗；底部系列面板 TeX 链式展示 `G ⊵ N₁ ⊵ … ⊵ ⟨e⟩` + 各级阶 + 因子 `Nᵢ/Nᵢ₊₁ ≅ …` + 可解/幂零徽标；合成列额外显示合成因子多重集 + Jordan–Hölder 说明；小群枚举全部合成列（≤20 条守卫，面板链选择器切换）；核心算法 `src/core/algebra/series.ts`（SERIES_MAX_ORDER=240 守卫，大群二期后端）；状态在 `context/series/GroupSeriesContext`（随群切换自动重置）
+- ✅ 群展示（Presentation）系统：任意展示 ⟨a,b | f(a,b), …⟩ 输入创建有限群（Todd–Coxeter 陪集枚举，TC_MAX_COSETS=3000 守卫判有限/无限/溢出），乘法表构建 + `presentationOf` 自动识别标准展示（Cₙ/Dₙ/Sₙ Coxeter/Aₙ/V₄/Q₈，直积/半直积/商群/Aut 走通用关系发现器，PRESENTATION_MAX_ORDER=240）；群信息栏展示 TeX 行；左侧「群展示」面板（**两种创建方式**：直接创建 = 完整展示文本/8 预设 + 防抖预览迷你凯莱图 + ≅ 同构提示 + 持久保存/草稿自动保存 localStorage；**可视化创建** = 1/2/3 生成元模板 ⟨a|⟩/⟨a,b|⟩/⟨a,b,c|⟩ + 逐步输入单条关系（严格 f=e 或 f1=f2 校验，`parseRelationEquation`）+ 已添加关系列表实时构建校验（|G|、≅、无限判定）+ 「结束并创建群」；创建成功自动切树视图）；**tree视图**（退化树 = 商群凯莱图的 BFS 生成树：实线=首次到达边、金色虚线=粘合边/断头，直观呈现「关系 = 砍树」；布局按群结构规则化——1 生成元直线、2 生成元交换格 → 正方形网格（不衰减）、非交换/自由积 → 谢尔宾斯基十字（层距减半防遮挡）、3 生成元 → **3D**（Three.js 立方体方向）；点击节点显示词、缩放/平移/双击复位；无群时展示自由模板树）、**展示乘法表视图**（行/列=群元素，顶部静态展示式 bar，order>36 自动采样）；核心算法 `src/core/algebra/presentations.ts` + `src/core/algebra/cayleyTree.ts`（见 docs/PRESENTATION.md）
+- ✅ 测试体系：32 文件 644 tests 全绿（`npm run test`），core/utils 覆盖率 81.9%（`npm run test:coverage`）
 
 ## 6. 运行命令
 
@@ -149,7 +155,7 @@ uvicorn main:app --reload --port 8000
    - **BOM 检查**：Windows 下 write 工具可能写入 UTF-8 BOM，使 vite/postcss（JSON.parse package.json）崩溃。改动文件首字节应为 `7B`（`{`），package.json 必须无 BOM。
    - **硬编码版本**：欢迎页 `welcome.version`（translations.ts zh/en 两处）须与 package.json 版本一致。
    - **i18n 缺失键**：`i18n.test.ts` 自动断言 zh/en 键集合一致；新增 `t()` 调用必须 zh/en 成对补键。
-   - **文档一致性**：grep 全仓 `.md` 的测试计数（542）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
+   - **文档一致性**：grep 全仓 `.md` 的测试计数（560）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
 
 ### 阶段 2：修（Fix）— 修复并验证
 
@@ -200,5 +206,5 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-*文档版本: 1.9.0*
-*最后更新: 2026-08-06*
+*文档版本: 1.10.0*
+*最后更新: 2026-08-08*

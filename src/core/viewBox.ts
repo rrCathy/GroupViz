@@ -10,7 +10,11 @@ const TABLE_CELL_GAP = 2
 const TABLE_PADDING = 60
 
 export function getViewBoxSize(order: number, view: ViewMode, force = false): ViewBoxSize {
-  if (view === 'table') {
+  if (view === 'tree') {
+    return { width: 1600, height: 1000 }
+  }
+
+  if (view === 'table' || view === 'prestable') {
     const cells = Math.min(order, 20)
     const tableSize = cells * (TABLE_CELL_SIZE + TABLE_CELL_GAP)
     const size = tableSize + TABLE_PADDING * 2 + 60
@@ -47,6 +51,9 @@ export function isTooLarge(order: number, view: ViewMode): boolean {
   }
   if (view === 'sylow') {
     return order > 240
+  }
+  if (view === 'tree') {
+    return false
   }
   if (view === '3d') {
     return order > 100

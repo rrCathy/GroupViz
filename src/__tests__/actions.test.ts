@@ -143,6 +143,51 @@ describe('custom action', () => {
     expect(result.error?.type).toBe('unbound')
   })
 
+  it('self-loop arrows represent fixed points and are accepted', () => {
+    // C2 generator s = (0 1)(2)(3): transposition on 0,1 and fixed points on 2,3
+    const C2 = createCyclicGroup(2)
+    const genSymbol = C2.generators[0].symbol
+    const arrows = [
+      { generatorId: genSymbol, from: 0, to: 1 },
+      { generatorId: genSymbol, from: 1, to: 0 },
+      { generatorId: genSymbol, from: 2, to: 2 },
+      { generatorId: genSymbol, from: 3, to: 3 },
+    ]
+    const result = buildActionComputation(C2, { kind: 'custom', setSize: 4 }, arrows)
+    expect(result.error).toBeUndefined()
+    expect(result.computation!.isHomomorphism).toBe(true)
+    const sizes = result.computation!.orbits.map(o => o.elements.length).sort((a, b) => a - b)
+    expect(sizes).toEqual([1, 1, 2])
+    const checks = verifyOrbitStabilizer(C2, result.computation!.orbits, result.computation!.stabilizers)
+    expect(checks.every(c => c.valid)).toBe(true)
+    expect(computeFixedPoints(result.computation!.perms, 4)).toEqual([2, 3])
+  })
+
+  it('natural action of S3 with self-loops yields one orbit and Stab(1) of size 2', () => {
+    // generators (12): 0<->1, 2 fixed; (23): 1<->2, 0 fixed (self-loops)
+    const S3 = createS3()
+    const g0 = S3.generators[0].symbol
+    const g1 = S3.generators[1].symbol
+    const arrows = [
+      { generatorId: g0, from: 0, to: 1 },
+      { generatorId: g0, from: 1, to: 0 },
+      { generatorId: g0, from: 2, to: 2 },
+      { generatorId: g1, from: 1, to: 2 },
+      { generatorId: g1, from: 2, to: 1 },
+      { generatorId: g1, from: 0, to: 0 },
+    ]
+    const result = buildActionComputation(S3, { kind: 'custom', setSize: 3 }, arrows)
+    expect(result.error).toBeUndefined()
+    expect(result.computation!.isHomomorphism).toBe(true)
+    expect(result.computation!.orbits.length).toBe(1)
+    expect(result.computation!.orbits[0].elements.length).toBe(3)
+    const checks = verifyOrbitStabilizer(S3, result.computation!.orbits, result.computation!.stabilizers)
+    const rep0 = checks.find(c => c.representative === 0)!
+    expect(rep0.orbitSize).toBe(3)
+    expect(rep0.stabSize).toBe(2)
+    expect(rep0.valid).toBe(true)
+  })
+
   it('homomorphism violation is detected when generator perm has wrong order', () => {
     // D4 relation r^4 = e; give r a transposition (order 2) → violation
     const D4 = createDihedralGroup(4)

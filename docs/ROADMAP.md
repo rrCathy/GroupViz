@@ -123,3 +123,4 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 |------|------|
 | 2026-08-04 | 确定三阶段命名与范围；近期优先级 = 群作用系统 + Sylow 定理可视化（其余列 P1/暂缓）；FGVE 先做仓库内独立引擎层（npm 包化推迟到 GVL 阶段）；GVL 定位大学抽象代数课程配套 |
 | 2026-08-06 | Sylow 定理可视化落地：core/algebra/sylow.ts 专用查找算法 + Sylow 型视图（元素节点/凯莱图/陪集条带/共轭双选/子群边）+ ActionView Sylow 共轭作用验证；28 文件 542 tests 全绿；版本 1.9.0 |
+| 2026-08-07 | 群展示系统落地：core/algebra/presentations.ts（解析器 + Todd–Coxeter 陪集枚举 TC_MAX_COSETS=3000 + 构建 + presentationOf 标准展示分发 + 通用关系发现器）、左侧「群展示」面板（8 预设/防抖预览/持久化+草稿）、关系回路视图（Van Kampen 图 + 关系动画）、展示乘法表视图（单词求值路径）；32 文件 630 tests 全绿；版本 1.10.0 |

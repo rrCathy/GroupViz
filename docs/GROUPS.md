@@ -161,6 +161,8 @@ interface Automorphism { id: string; map: Map<string,string>; label: string; app
 | `findAllNormalSubgroups(group)` | 正规子群 |
 | `getConjugacyClasses(group, allowLarge?)` | 共轭类（order > 60 时每元素单独成类，allowLarge 强制计算） |
 | `getGroupCenter(group, allowLarge?)` | 群中心 |
+| `getCentralizer(group, elements)` | 中心化子 C_G(E) = {g \| gx = xg, ∀x ∈ E} |
+| `getNormalizer(group, elements)` | 正规化子 N_G(E) = {g \| gEg⁻¹ = E} |
 | `computeQuotientGroup(group, normalSubgroup)` | 商群 G/N |
 | `computeCosets(group, subgroup, type)` | 左/右陪集（CosetInfo） |
 | `computeSubgroupLattice(group)` | 子群格（Hasse 图节点/边） |

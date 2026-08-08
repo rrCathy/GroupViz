@@ -17,6 +17,7 @@ const GRP_PAD = 8
 const GRP_HDR = 18
 const GRP_GAP = 14
 const HOVER_COLOR = '#ffd93d'
+const SNAP_R = 44
 
 function clusterRadius(size: number): number {
   // 相邻节点弦长 = 2r·sin(π/size) ≈ 220，两端各收缩 ~50（nodeR+headLen）后边仍 ~120 可见
@@ -115,7 +116,7 @@ function DirectedEdge({ sx, sy, ex, ey, color, width = 2.2, dashed, dir: _dir = 
 }
 
 function ClusterNode({
-  x, y, label, isSelected, isFixed, nodeR = NODE_R, onClick, showNumber,
+  x, y, label, isSelected, isFixed, nodeR = NODE_R, onClick, onPointerDown, showNumber,
 }: {
   x: number
   y: number
@@ -124,6 +125,7 @@ function ClusterNode({
   isFixed: boolean
   nodeR?: number
   onClick?: () => void
+  onPointerDown?: (e: React.PointerEvent) => void
   showNumber?: number
 }) {
   const fill = isSelected ? 'var(--node-fill-selected)' : 'var(--node-fill)'
@@ -132,7 +134,8 @@ function ClusterNode({
     <g
       transform={`translate(${x}, ${y})`}
       onClick={(e) => { e.stopPropagation(); onClick?.() }}
-      style={{ cursor: onClick ? 'pointer' : 'default' }}
+      onPointerDown={onPointerDown}
+      style={{ cursor: onClick || onPointerDown ? 'pointer' : 'default' }}
     >
       <circle r={nodeR} fill={fill} stroke={stroke} strokeWidth={isSelected ? 3 : 2} filter="url(#node-shadow)" />
       {isFixed && (
@@ -237,10 +240,12 @@ function distToArrow(from: { x: number; y: number }, to: { x: number; y: number 
 function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: number }) {
   const { actionSetSize, actionArrows, addArrow, bindArrow, removeArrow, replaceGenArrows, actionError } = useGroup()
   const { t } = useTranslation()
-  const [editSel, setEditSel] = useState<number | null>(null)
   const [selectedGen, setSelectedGen] = useState<string | null>(null)
   const [drag, setDrag] = useState<{ symbol: string; x: number; y: number } | null>(null)
   const [hoverArrow, setHoverArrow] = useState<number | null>(null)
+  const [draw, setDraw] = useState<{ from: number; x: number; y: number; snap: number | null } | null>(null)
+  const drawInfoRef = useRef<{ from: number; origin: { x: number; y: number }; snap: number | null; justStarted: boolean; justPicked: boolean } | null>(null)
+  const movedRef = useRef(false)
   const dragRef = useRef<{ symbol: string; from: number } | null>(null)
   const downPosRef = useRef<{ x: number; y: number } | null>(null)
   const dragMovedRef = useRef(false)
@@ -317,9 +322,64 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
     setHoverArrow(null)
     if (moved && targetIdx !== null) {
       const a = actionArrows[targetIdx]
-      if (a && a.generatorId === null) bindArrow(a.from, symbol)
+      if (a && a.generatorId === null) bindArrow(a.from, a.to, symbol)
     }
     window.setTimeout(() => { dragMovedRef.current = false }, 0)
+  }
+
+  const startArrowDraw = (e: React.PointerEvent, i: number) => {
+    if (e.button !== 0) return
+    if (drawInfoRef.current) return
+    const svg = (e.currentTarget as SVGElement).ownerSVGElement
+    if (!svg) return
+    e.preventDefault()
+    e.stopPropagation()
+    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+    const p = toViewBox(e.clientX, e.clientY, svg)
+    movedRef.current = false
+    drawInfoRef.current = { from: i, origin: p, snap: null, justStarted: true, justPicked: false }
+    setDraw({ from: i, x: p.x, y: p.y, snap: null })
+  }
+
+  const onArrowMove = (e: React.PointerEvent) => {
+    const info = drawInfoRef.current
+    if (!info) return
+    const svg = (e.currentTarget as SVGElement).ownerSVGElement
+    if (!svg) return
+    const p = toViewBox(e.clientX, e.clientY, svg)
+    if (Math.hypot(p.x - info.origin.x, p.y - info.origin.y) > 6) movedRef.current = true
+    let snap: number | null = null
+    for (let j = 0; j < n; j++) {
+      const q = pos(j)
+      if (Math.hypot(p.x - q.x, p.y - q.y) < SNAP_R) {
+        snap = j
+        break
+      }
+    }
+    drawInfoRef.current = { ...info, snap }
+    setDraw(d => (d ? { ...d, x: p.x, y: p.y, snap } : d))
+  }
+
+  const deployArrow = (from: number, to: number) => {
+    addArrow(from, to, selectedGen)
+    drawInfoRef.current = null
+    setDraw(null)
+  }
+
+  const onArrowUp = () => {
+    const info = drawInfoRef.current
+    if (!info) return
+    if (movedRef.current) {
+      drawInfoRef.current = null
+      setDraw(null)
+      if (info.snap !== null && info.snap !== info.from) {
+        addArrow(info.from, info.snap, selectedGen)
+      }
+      return
+    }
+    if (info.justStarted) {
+      drawInfoRef.current = { ...info, justStarted: false, justPicked: true }
+    }
   }
 
   const k = group.generators.length
@@ -345,11 +405,53 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
     )
   })
 
+  const dirCount = new Map<string, number>()
+  const dirIndex = new Map<number, number>()
+  actionArrows.forEach((a, i) => {
+    if (a.from === a.to) return
+    const key = `${Math.min(a.from, a.to)}|${Math.max(a.from, a.to)}`
+    const dk = a.from < a.to ? `${key}f` : `${key}b`
+    const c = dirCount.get(dk) ?? 0
+    dirCount.set(dk, c + 1)
+    dirIndex.set(i, c)
+  })
+
+  const loopGroups = new Map<number, number[]>()
+  actionArrows.forEach((a, i) => {
+    if (a.from !== a.to) return
+    const arr = loopGroups.get(a.from)
+    if (arr) arr.push(i)
+    else loopGroups.set(a.from, [i])
+  })
+  const loopSlot = new Map<number, number>()
+  loopGroups.forEach(arr => arr.forEach((idx, slot) => loopSlot.set(idx, slot)))
+
   const arrows = actionArrows.map((a, i) => {
     const from = pos(a.from)
     const to = pos(a.to)
     const isUnbound = a.generatorId === null
     const color = a.generatorId === null ? UNBOUND_COLOR : genColor(a.generatorId)
+    const handleClick = () => {
+      if (dragMovedRef.current) return
+      if (isUnbound) {
+        if (selectedGen) bindArrow(a.from, a.to, selectedGen)
+        else removeArrow(a.from, null, a.to)
+      } else {
+        removeArrow(a.from, a.generatorId)
+      }
+    }
+    if (a.from === a.to) {
+      const slot = loopSlot.get(i) ?? 0
+      const cy = from.y - 32 + slot * 24
+      return (
+        <g key={`loop-${a.generatorId ?? 'u'}-${a.from}`} style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); handleClick() }}>
+          <circle cx={from.x} cy={cy} r={16} fill="none" stroke="transparent" strokeWidth={16} />
+          <circle cx={from.x} cy={cy} r={12} fill="none" stroke={color} strokeWidth={isUnbound ? 4.5 : 3} strokeDasharray={isUnbound ? '5 4' : undefined} opacity={1} />
+          <polygon points={`${from.x},${cy - 14} ${from.x - 6},${cy - 23} ${from.x + 6},${cy - 23}`} fill={color} opacity={1} />
+        </g>
+      )
+    }
+    const offset = 8 + (dirIndex.get(i) ?? 0) * 18
     return (
       <DirectedEdge
         key={`${a.from}-${i}`}
@@ -361,18 +463,11 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
         width={isUnbound ? 4.5 : 3}
         headSize={isUnbound ? 13 : 12}
         nodeR={20}
+        offset={offset}
         dashed={isUnbound}
         opacity={1}
         highlight={hoverArrow === i}
-        onClick={() => {
-          if (dragMovedRef.current) return
-          if (isUnbound) {
-            if (selectedGen) bindArrow(a.from, selectedGen)
-            else removeArrow(a.from)
-          } else {
-            removeArrow(a.from)
-          }
-        }}
+        onClick={handleClick}
       />
     )
   })
@@ -388,7 +483,18 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
   const candidates = computeCycleCandidates(chainArrows, n)
 
   return (
-    <>
+    <g onPointerMove={onArrowMove} onPointerUp={onArrowUp}>
+      <rect
+        x={0}
+        y={0}
+        width={vw}
+        height={vh}
+        fill="transparent"
+        onClick={() => {
+          drawInfoRef.current = null
+          setDraw(null)
+        }}
+      />
       {genChips}
       {candidates.length > 0 && (
         <foreignObject x={0} y={24} width={vw} height={46} style={{ pointerEvents: 'none' }}>
@@ -433,6 +539,20 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
         {t('action.genSelectHint')}
       </text>
       {arrows}
+      {draw && (
+        <DirectedEdge
+          sx={pos(draw.from).x}
+          sy={pos(draw.from).y}
+          ex={draw.snap !== null ? pos(draw.snap).x : draw.x}
+          ey={draw.snap !== null ? pos(draw.snap).y : draw.y}
+          color={HOVER_COLOR}
+          width={3}
+          headSize={13}
+          nodeR={20}
+          dashed
+          opacity={0.9}
+        />
+      )}
       {Array.from({ length: n }, (_, i) => (
         <ClusterNode
           key={i}
@@ -440,19 +560,18 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
           y={pos(i).y}
           label=""
           showNumber={i + 1}
-          isSelected={editSel === i}
+          isSelected={draw?.snap === i}
           isFixed={false}
           nodeR={20}
+          onPointerDown={(e) => startArrowDraw(e, i)}
           onClick={() => {
-            if (dragMovedRef.current) return
-            if (editSel === null) {
-              setEditSel(i)
-            } else if (editSel === i) {
-              setEditSel(null)
-            } else {
-              addArrow(editSel, i)
-              setEditSel(i)
+            const info = drawInfoRef.current
+            if (!info) return
+            if (info.justPicked) {
+              drawInfoRef.current = { ...info, justPicked: false }
+              return
             }
+            deployArrow(info.from, i)
           }}
         />
       ))}
@@ -469,11 +588,6 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
           </text>
         </g>
       )}
-      {editSel !== null && (
-        <text x={cx} y={cy + ringR + 60} textAnchor="middle" fill={HOVER_COLOR} fontSize={16}>
-          {t('action.editingSource', { x: String(editSel + 1) })}
-        </text>
-      )}
       {actionError && (
         <text x={cx} y={cy + ringR + 92} textAnchor="middle" fill="#f43f5e" fontSize={14}>
           {actionError.type === 'homomorphism'
@@ -489,7 +603,7 @@ function CustomActionEditor({ group, vw, vh }: { group: Group; vw: number; vh: n
               })}
         </text>
       )}
-    </>
+    </g>
   )
 }
 
@@ -567,7 +681,7 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
   const vOffset = Math.max(30, (vh - contentH) / 2)
 
   const centers: { x: number; y: number; r: number }[] = []
-  let cursorX = Math.max(200, (vw - totalW) / 2)
+  let cursorX = Math.max(0, (vw - totalW) / 2)
   for (let i = 0; i < orbits.length; i++) {
     const r = clusterRadius(orbits[i].elements.length)
     centers.push({ x: cursorX + widths[i] / 2, y: vOffset + topRegion + 60 + maxH / 2, r })
@@ -763,7 +877,7 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
 }
 
 export function ActionView() {
-  const { currentGroup, actionComputation, actionEditing, canvasTransform, viewBoxSize, actionKind, actionPrime, actionHoverElement, actionSelectedElement, actionSetSize } = useGroup()
+  const { currentGroup, actionComputation, actionEditing, canvasTransform, viewBoxSize, actionKind, actionPrime, actionHoverElement, actionSelectedElement, actionSetSize, setActionSelectedElement } = useGroup()
   const { t } = useTranslation()
   const [legendHover, setLegendHover] = useState<string | null>(null)
 
@@ -796,6 +910,18 @@ export function ActionView() {
   const editRingR = Math.max(220, (actionSetSize ?? 1) * 22)
   const editVH = Math.max(900, 2 * editRingR + 520)
   const vb = actionEditing ? { width: 1200, height: editVH } : fitVB ?? viewBoxSize
+
+  const stabElements = actionComputation && actionSelectedElement !== null
+    ? (actionComputation.stabilizers.get(actionSelectedElement) ?? [])
+        .map(id => currentGroup.elements.find(e => e.id === id))
+        .filter((el): el is NonNullable<typeof el> => !!el)
+    : []
+  const selLabel = actionComputation && actionSelectedElement !== null
+    ? (actionKind === 'conjugation'
+        ? renderTex(texify(currentGroup.elements[actionSelectedElement]?.label ?? ''))
+        : actionComputation.setLabels?.[actionSelectedElement] ?? String(actionSelectedElement + 1))
+    : ''
+  const showStabBox = !!actionComputation && !actionEditing && actionSelectedElement !== null && stabElements.length > 0
 
   return (
     <>
@@ -839,6 +965,51 @@ export function ActionView() {
           )}
         </g>
       </svg>
+      {showStabBox && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 8,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 5,
+            maxWidth: '92%',
+            background: 'var(--panel-bg)',
+            opacity: 0.96,
+            padding: '8px 14px',
+            borderRadius: 8,
+            border: '1px solid var(--border-color, rgba(128,128,128,0.35))',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+              <span dangerouslySetInnerHTML={{ __html: t('action.stabilizerFor', { el: selLabel }) }} /> <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>|G_x| = {stabElements.length}</span>
+            </span>
+            <button
+              onClick={() => setActionSelectedElement(null)}
+              style={{
+                marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer',
+                color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1, padding: '2px 4px',
+              }}
+              title={t('action.closeStab')}
+            >×</button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, maxHeight: 160, overflowY: 'auto' }}>
+            {stabElements.map(el => (
+              <span
+                key={el.id}
+                style={{
+                  padding: '2px 8px', borderRadius: 10, fontSize: 12,
+                  background: 'var(--bg-interactive)', border: '1px solid var(--border-primary)',
+                  color: 'var(--text-primary)', whiteSpace: 'nowrap',
+                }}
+                dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </>
   )
 }

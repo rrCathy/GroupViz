@@ -300,7 +300,7 @@ export function closeUnderMultiply(group: Group, seed: GroupElement[]): GroupEle
     changed = false
     const cur = result.slice()
     for (let i = 0; i < cur.length; i++) {
-      for (let j = i; j < cur.length; j++) {
+      for (let j = 0; j < cur.length; j++) {
         const prod = group.multiply(cur[i], cur[j])
         if (!resultSet.has(prod.id)) {
           resultSet.add(prod.id)
@@ -442,6 +442,42 @@ export function getGroupCenter(group: Group, allowLarge = false): GroupElement[]
   }
   
   return center
+}
+
+export function getCentralizer(group: Group, elements: GroupElement[]): GroupElement[] {
+  if (elements.length === 0) return [...group.elements]
+  const result: GroupElement[] = []
+  
+  for (const g of group.elements) {
+    let centralizes = true
+    for (const x of elements) {
+      if (group.multiply(g, x).id !== group.multiply(x, g).id) {
+        centralizes = false
+        break
+      }
+    }
+    if (centralizes) result.push(g)
+  }
+  
+  return result
+}
+
+export function getNormalizer(group: Group, elements: GroupElement[]): GroupElement[] {
+  if (elements.length === 0) return [...group.elements]
+  const eSet = new Set(elements.map(e => e.id))
+  const result: GroupElement[] = []
+  
+  for (const g of group.elements) {
+    const conjSet = new Set<string>()
+    for (const x of elements) {
+      conjSet.add(group.multiply(group.multiply(g, x), group.inverse(g)).id)
+    }
+    if (conjSet.size === eSet.size && [...conjSet].every(id => eSet.has(id))) {
+      result.push(g)
+    }
+  }
+  
+  return result
 }
 
 export function getConjugacyClasses(group: Group, allowLarge = false): GroupElement[][] {

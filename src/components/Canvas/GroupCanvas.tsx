@@ -9,6 +9,8 @@ import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
 import { ActionView } from './ActionView'
 import { SylowView } from './SylowView'
+import { FreeGroupTreeView } from './FreeGroupTreeView'
+import { PresentationTableView } from './PresentationTableView'
 import { isTooLarge } from '../../core/viewBox'
 import { useAutoFade } from '../../hooks/useAutoFade'
 
@@ -310,13 +312,15 @@ export function GroupCanvas() {
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (!containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
-    const vw = viewBoxSize.width
-    const vh = viewBoxSize.height
-    
-    const scaleX = vw / rect.width
-    const scaleY = vh / rect.height
-    const mouseX = (e.clientX - rect.left) * scaleX
-    const mouseY = (e.clientY - rect.top) * scaleY
+    const svgEl = containerRef.current.querySelector('svg')
+    const vb = svgEl?.viewBox?.baseVal
+    const vw = vb && vb.width > 0 ? vb.width : viewBoxSize.width
+    const vh = vb && vb.height > 0 ? vb.height : viewBoxSize.height
+    const scale = Math.min(rect.width / vw, rect.height / vh)
+    const offX = (rect.width - vw * scale) / 2
+    const offY = (rect.height - vh * scale) / 2
+    const mouseX = (e.clientX - rect.left - offX) / scale
+    const mouseY = (e.clientY - rect.top - offY) / scale
     
     const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1
     const curX = pendingTransformRef.current?.x ?? canvasTransform.x
@@ -397,6 +401,10 @@ export function GroupCanvas() {
         return <ActionView />
       case 'sylow':
         return <SylowView />
+      case 'tree':
+        return <FreeGroupTreeView key={currentGroup?.symbol ?? 'free'} />
+      case 'prestable':
+        return <PresentationTableView />
       default:
         return <SetView />
     }

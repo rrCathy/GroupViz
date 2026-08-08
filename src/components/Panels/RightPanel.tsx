@@ -1,13 +1,14 @@
 import { useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
-import { findAllSubgroups, getConjugacyClasses, isSimpleGroup } from '../../core/algebra/subgroups'
+import { findAllSubgroups, getConjugacyClasses, isSimpleGroup, getGroupCenter } from '../../core/algebra/subgroups'
 import { getPrecomputed } from '../../core/groups/SmallGroups'
 import { texify, renderTex } from '../../utils/texify'
 import { verifyHomomorphism, getHomomorphismProperties, formatKernelLabel } from '../../core/algebra/homomorphisms'
 import { createGroupFromSymbol } from '../../utils/groupFactory'
 import { isAutomorphismGroup } from '../../core/algebra/automorphisms'
 import { computeGroupProperties } from '../../utils/hybridCompute'
+import { presentationOf, formatPresentation } from '../../core/algebra/presentations'
 import { AccordionSection } from './AccordionSection'
 
 function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { currentGroup: { _automorphismById?: Map<string, { map: Map<string, string>; label: string }>; automorphismParentSymbol?: string }, selectedElementId: string }) {
@@ -146,6 +147,13 @@ export function RightPanel() {
     if (isLargeGroup) return backendCache.subgroups ?? []
     return findAllSubgroups(currentGroup)
   }, [currentGroup, precomputed, isLargeGroup, backendCache.subgroups])
+
+  const centerElements = useMemo(() => {
+    if (!currentGroup) return null
+    return backendCache.center ?? getGroupCenter(currentGroup, isLargeGroup)
+  }, [currentGroup, backendCache.center, isLargeGroup])
+
+  const centerIdSet = centerElements ? new Set(centerElements.map(e => e.id)) : null
   
   const conjugacyClasses = useMemo(() => {
     if (!currentGroup) return []
@@ -165,6 +173,15 @@ export function RightPanel() {
     if (!currentGroup) return null
     return computeGroupProperties(currentGroup, isLargeGroup ? backendCache : undefined)
   }, [currentGroup, isLargeGroup, backendCache])
+
+  const currentPresentation = useMemo(() => {
+    if (!currentGroup) return null
+    try {
+      return presentationOf(currentGroup)
+    } catch {
+      return null
+    }
+  }, [currentGroup])
 
   const subsetByElements = useMemo(() => {
     const map = new Map<string, typeof subsets[0]>()
@@ -428,6 +445,16 @@ export function RightPanel() {
                 {currentGroup.isAbelian ? t('right.yes') : t('right.no')}
               </span>
             </div>
+            <div className="info-row">
+              <span className="info-label">{t('right.center')}</span>
+              <span
+                className="info-value"
+                style={{ color: 'var(--accent-yellow)', fontWeight: 600 }}
+                dangerouslySetInnerHTML={{
+                  __html: renderTex(texify((centerElements ?? []).map(e => e.label).join(', '))),
+                }}
+              />
+            </div>
             {groupProps ? (
               <>
                 <div className="property-chips">
@@ -480,6 +507,16 @@ export function RightPanel() {
                     if (isoGroup) setCurrentGroup(isoGroup)
                   }}
                   dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.isoSymbol!)) }}
+                />
+              </div>
+            )}
+            {currentPresentation && (
+              <div className="info-row">
+                <span className="info-label">{t('right.presentation')}</span>
+                <span
+                  className="info-value"
+                  style={{ color: 'var(--accent-teal)', fontSize: '10px' }}
+                  dangerouslySetInnerHTML={{ __html: renderTex(formatPresentation(currentPresentation.generators, currentPresentation.relators)) }}
                 />
               </div>
             )}
@@ -628,10 +665,13 @@ export function RightPanel() {
                 (cosetSubgroupElementIds !== null && [...cosetSubgroupElementIds].sort().join(',') === key)
               const subgroupLabel = sg.elements.map(e => e.label).join(', ')
               const inCosetStripMode = currentView === 'cosetstrip'
+              const isCenter = centerIdSet !== null &&
+                sg.elements.length === centerIdSet.size &&
+                sg.elements.every(e => centerIdSet.has(e.id))
               return (
                 <div
                   key={key}
-                  className={`subgroup-item ${sg.isNormal ? 'normal' : ''} ${inCosetStripMode && isCosetActive ? 'coset-active' : ''}`}
+                  className={`subgroup-item ${sg.isNormal ? 'normal' : ''} ${isCenter ? 'center' : ''} ${inCosetStripMode && isCosetActive ? 'coset-active' : ''}`}
                   onClick={() => {
                     const ids = sg.elements.map(el => el.id)
                     clearSelection()
@@ -645,6 +685,7 @@ export function RightPanel() {
                     <span className="sg-order">{sg.order}</span>
                     <span className="sg-info" dangerouslySetInnerHTML={{ __html: renderTex(texify(subgroupLabel)) }} />
                     {sg.isNormal && <span className="sg-badge">{t('badge.normal')}</span>}
+                    {isCenter && <span className="sg-badge center">{t('badge.center')}</span>}
                   </div>
                   {!inCosetStripMode && (
                     <div className="sg-actions" style={{ display: 'flex', gap: '4px' }} onClick={(e) => e.stopPropagation()}>

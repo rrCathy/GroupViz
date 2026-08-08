@@ -1,4 +1,4 @@
-export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow'
+export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow' | 'tree' | 'prestable'
 
 export type MultiplyType = 'right' | 'left'
 
@@ -35,6 +35,17 @@ export interface Generator {
   inverse: Generator
 }
 
+export interface PresentationTerm {
+  g: number
+  e: number
+}
+
+export interface GroupPresentation {
+  generators: string[]
+  relators: string[]
+  generatorElements?: GroupElement[]
+}
+
 export interface Group {
   name: string
   symbol: string
@@ -51,6 +62,7 @@ export interface Group {
   automorphismParentSymbol?: string     // Only for automorphism groups: parent group symbol
   _automorphismById?: Map<string, import('./algebra/automorphisms').Automorphism> // Only for automorphism groups
   _semidirectProduct?: { normal: Group; acting: Group; phiMap: Map<string, import('./algebra/automorphisms').Automorphism> } // Only for semidirect products
+  presentation?: GroupPresentation // Only for groups built from / carrying a group presentation
 }
 
 export interface CayleyAction {
@@ -201,10 +213,15 @@ export function analyzeDPFactors(group: Group): DPFactorInfo | null {
 
 export function isGroupDirectProduct(group: Group): boolean {
   const sym = group.symbol
+  if (sym.startsWith('\\langle')) return false
   if (sym.includes('\\rtimes')) return false
   if (sym.includes('\\times') || sym.includes('^{')) return true
   if (group.elements.length > 0 && group.elements[0].id.includes('|')) return true
   return false
+}
+
+export function isGroupPresentation(group: Group): boolean {
+  return group.symbol.startsWith('\\langle')
 }
 
 export function isGroupSemidirectProduct(group: Group): boolean {

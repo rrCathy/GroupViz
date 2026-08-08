@@ -433,6 +433,7 @@ export function cosetStripLayout(
   cosetElementMap?: Map<string, number>,
   cosetCount?: number,
   cosetColors?: string[],
+  topPadding?: number,
 ): CosetStripData {
   const n = group.order
   const result = new Map<string, NodePosition>()
@@ -467,7 +468,7 @@ export function cosetStripLayout(
 
     const maxCosetSize = Math.max(...cosetBuckets.map(b => b.length))
     const marginX = 32
-    const marginTop = 44
+    const marginTop = topPadding ?? 44
     const marginBottom = 14
     const labelGap = 12
     const usableW = width - 2 * marginX
@@ -565,7 +566,7 @@ export function cosetStripLayout(
   }
 
   const marginX = 32
-  const marginTop = 44
+  const marginTop = topPadding ?? 44
   const marginBottom = 14
   const labelGap = 12
   const usableW = width - 2 * marginX

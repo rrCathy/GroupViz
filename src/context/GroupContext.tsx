@@ -20,6 +20,9 @@ import { GroupMultiViewProvider, useGroupMultiView } from './multiview/GroupMult
 import { GroupHomomorphismProvider, useGroupHomomorphism } from './homomorphism/GroupHomomorphismContext'
 import { GroupSemidirectProductProvider, useGroupSemidirectProduct } from './semidirectProduct/GroupSemidirectProductContext'
 import { GroupActionProvider, useGroupAction } from './actions/GroupActionContext'
+import { GroupSeriesProvider, useGroupSeries } from './series/GroupSeriesContext'
+import { GroupPresentationProvider, useGroupPresentation } from './presentation/GroupPresentationContext'
+import type { SeriesType, SubgroupSeries } from '../core/algebra/series'
 import type { Automorphism } from '../core/algebra/automorphisms'
 
 interface GroupContextState {
@@ -97,10 +100,22 @@ interface GroupContextState {
   actionError: { generatorId: string | null; from: number; to: number; g?: string; type: string } | null
   actionSelectedElement: number | null
   actionHoverElement: string | null
+  seriesType: SeriesType | null
+  activeChainIdx: number
+  seriesData: SubgroupSeries | null
+  compositionChains: GroupElement[][][] | null
+  compositionTruncated: boolean
+  seriesFlags: { solvable: boolean; nilpotent: boolean } | null
+  presentationGroups: Group[]
+  presentationDraft: string
+  templateGenCount: number
+  visualDraft: { gens: string[]; relators: string[]; group: Group | null } | null
+  presentationError: string | null
 }
 
 interface GroupContextActions {
   setCurrentGroup: (group: Group) => void
+  clearCurrentGroup: () => void
   setCurrentView: (view: ViewMode) => void
   selectElement: (id: string, additive?: boolean) => void
   clearSelection: () => void
@@ -193,15 +208,28 @@ interface GroupContextActions {
   createConjugationAction: (group: Group) => void
   createSylowAction: (group: Group, prime: number) => void
   startCustomAction: (group: Group, n: number) => void
-  addArrow: (from: number, to: number) => void
-  bindArrow: (from: number, generatorId: string) => void
-  removeArrow: (from: number) => void
+  addArrow: (from: number, to: number, generatorId?: string | null) => void
+  bindArrow: (from: number, to: number, generatorId: string) => void
+  removeArrow: (from: number, generatorId?: string | null, to?: number) => void
+  removeArrowAll: (from: number) => void
   replaceGenArrows: (generatorId: string | null, pairs: [number, number][]) => void
   clearArrows: () => void
   completeCustomAction: (group: Group) => void
   setActionSelectedElement: (x: number | null) => void
   setActionHoverElement: (id: string | null) => void
   clearAction: () => void
+  savedActions: import('./actions/actionStorage').StoredGroupAction[]
+  activateSavedAction: (id: string) => void
+  deleteSavedAction: (id: string) => void
+  setSeriesType: (type: SeriesType | null) => void
+  setActiveChainIdx: (idx: number) => void
+  setPresentationDraft: (text: string) => void
+  setVisualDraft: (draft: { gens: string[]; relators: string[]; group: Group | null } | null) => void
+  setTemplateGenCount: (n: number) => void
+  createPresentationGroupFromText: (text: string) => Group | null
+  storePresentationGroup: (group: Group) => void
+  removePresentationGroup: (symbol: string) => void
+  loadPresentationGroup: (symbol: string) => void
 }
 
 export type GroupContextType = GroupContextState & GroupContextActions
@@ -220,6 +248,8 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
   const homo = useGroupHomomorphism()
   const sd = useGroupSemidirectProduct()
   const action = useGroupAction()
+  const series = useGroupSeries()
+  const presentation = useGroupPresentation()
 
   const exportSetGroupRef = useRef(core.setCurrentGroup)
   const exportSetViewRef = useRef(core.setCurrentView)
@@ -289,6 +319,10 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
       core.setHintMessage(t('hint.sublattice'))
     } else if (view === 'cycle') {
       core.setHintMessage(t('hint.cycle'))
+    } else if (view === 'tree') {
+      core.setHintMessage(t('hint.tree'))
+    } else if (view === 'prestable') {
+      core.setHintMessage(t('hint.prestable'))
     } else {
       const label = core.getViewLabel(view)
       core.setHintMessage(t('hint.switchedTo', { viewLabel: label }).replace(label, `<span class="hint-highlight">${label}</span>`))
@@ -558,7 +592,21 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     actionSelectedElement: action.actionSelectedElement,
     actionHoverElement: action.actionHoverElement,
 
+    seriesType: series.seriesType,
+    activeChainIdx: series.activeChainIdx,
+    seriesData: series.seriesData,
+    compositionChains: series.compositionChains,
+    compositionTruncated: series.compositionTruncated,
+    seriesFlags: series.seriesFlags,
+
+    presentationGroups: presentation.presentationGroups,
+    presentationDraft: presentation.presentationDraft,
+    templateGenCount: presentation.templateGenCount,
+    visualDraft: presentation.visualDraft,
+    presentationError: presentation.presentationError,
+
     setCurrentGroup: core.setCurrentGroup,
+    clearCurrentGroup: core.clearCurrentGroup,
     setCurrentView,
     selectElement,
     clearSelection: core.clearSelection,
@@ -659,18 +707,33 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     addArrow: action.addArrow,
     bindArrow: action.bindArrow,
     removeArrow: action.removeArrow,
+    removeArrowAll: action.removeArrowAll,
     replaceGenArrows: action.replaceGenArrows,
     clearArrows: action.clearArrows,
     completeCustomAction: action.completeCustomAction,
     setActionSelectedElement: action.setActionSelectedElement,
     setActionHoverElement: action.setActionHoverElement,
     clearAction: action.clearAction,
+    savedActions: action.savedActions,
+    activateSavedAction: action.activateSavedAction,
+    deleteSavedAction: action.deleteSavedAction,
+
+    setSeriesType: series.setSeriesType,
+    setActiveChainIdx: series.setActiveChainIdx,
+
+    setPresentationDraft: presentation.setPresentationDraft,
+    setTemplateGenCount: presentation.setTemplateGenCount,
+    setVisualDraft: presentation.setVisualDraft,
+    createPresentationGroupFromText: presentation.createPresentationGroupFromText,
+    storePresentationGroup: presentation.storePresentationGroup,
+    removePresentationGroup: presentation.removePresentationGroup,
+    loadPresentationGroup: presentation.loadPresentationGroup,
 
     toggleMultiViewMode: multiView.toggleMultiViewMode,
     openFloatingView: multiView.openFloatingView,
     closeFloatingView: multiView.closeFloatingView,
   }), [
-    core, backend, cayley, subset, symmetry, directProduct, multiView, homo, sd, action,
+    core, backend, cayley, subset, symmetry, directProduct, multiView, homo, sd, action, series, presentation,
     setCurrentView, selectElement, computeInverse, clearCanvas,
     resetNodePositions, runForceLayout, setForceShowLargeGroupForView, saveSubset,
     createQuotientGroupWithHomomorphism,
@@ -696,9 +759,13 @@ export function GroupProvider({ children }: { children: ReactNode }) {
                   <GroupMultiViewProvider>
                     <GroupHomomorphismProvider>
                       <GroupActionProvider>
-                        <GroupContextCombiner>
-                          {children}
-                        </GroupContextCombiner>
+                        <GroupSeriesProvider>
+                          <GroupPresentationProvider>
+                            <GroupContextCombiner>
+                              {children}
+                            </GroupContextCombiner>
+                          </GroupPresentationProvider>
+                        </GroupSeriesProvider>
                       </GroupActionProvider>
                     </GroupHomomorphismProvider>
                   </GroupMultiViewProvider>

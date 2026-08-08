@@ -26,6 +26,7 @@ interface GroupCoreState {
 
 interface GroupCoreActions {
   setCurrentGroup: (group: Group) => void
+  clearCurrentGroup: () => void
   setCurrentView: (view: ViewMode) => void
   selectElement: (id: string, additive?: boolean) => void
   clearSelection: () => void
@@ -65,7 +66,8 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
       table: 'view.table', '3d': 'view.3d', symmetry: 'view.symmetry',
       sublattice: 'view.sublattice', homomorphism: 'view.homomorphism',
       cosetstrip: 'view.cosetstrip', action: 'view.action',
-      sylow: 'view.sylow',
+      sylow: 'view.sylow', tree: 'view.tree',
+      prestable: 'view.prestable',
     }
     return t(keyMap[view])
   }, [t])
@@ -118,6 +120,19 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
       addOperationHistory(t('op.loadGroup', { name: group.name, order: group.order }))
     })
   }, [addOperationHistory, startTransition, t])
+
+  const clearCurrentGroup = useCallback(() => {
+    startTransition(() => {
+      setCurrentGroupState(null)
+      setCurrentViewState('tree')
+      setSelectedElements(new Set())
+      setOperationHistory([])
+      setCanvasTransformState({ x: 0, y: 0, scale: 1 })
+      setForceShowLargeGroupViewsState(new Set())
+      setNodePositions(new Map())
+      setHintMessage(t('hint.groupCleared'))
+    })
+  }, [startTransition, t])
 
   const setCurrentView = useCallback((view: ViewMode) => {
     setCurrentViewState(view)
@@ -330,7 +345,7 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
     currentGroup, currentView, selectedElements, canvasTransform, operationHistory,
     nodePositions, viewTabs, activeTabId, hoverElement, showMaximalCycles,
     hintMessage, forceShowLargeGroupViews, viewBoxSize, isPending, isLargeGroup,
-    setCurrentGroup, setCurrentView, selectElement, clearSelection, setCanvasTransform,
+    setCurrentGroup, clearCurrentGroup, setCurrentView, selectElement, clearSelection, setCanvasTransform,
     resetCanvasTransform, addOperationHistory, setNodePosition, batchSetNodePositions,
     getNodePosition, addViewTab, closeViewTab, setActiveTab, setHoverElement,
     checkSubsetProperty, generateSubgroups, selectNextElement, selectPrevElement,

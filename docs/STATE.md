@@ -4,7 +4,7 @@
 
 ## 1. 模块化 Provider 架构
 
-GroupViz 采用 **10 个独立 Provider** 的分层架构（`src/context/`）：
+GroupViz 采用 **12 个独立 Provider** 的分层架构（`src/context/`）：
 
 ```
 GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
@@ -17,13 +17,15 @@ GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
   ├── GroupSemidirectProductContext — 半直积构建（N ⋊_φ H）
   ├── GroupMultiViewContext   — 多视图浮动窗口
   ├── GroupHomomorphismContext — 同态映射创建与验证
-  ├── GroupActionContext      — 群作用（共轭/自定义/Sylow + 轨道计算，最外层）
+  ├── GroupSeriesContext      — 子群列（导列/上·下中心列/合成列，链 换）
+  ├── GroupPresentationContext — 群展示（创建/持久化/草稿，内层）
+  └── GroupActionContext      — 群作用（共轭/自定义/Sylow + 轨道计算，最外层）
 ```
 
 - 每个子 Provider 通过 `useGroupCore()` 获取核心状态，实现关注点分离
-- `GroupContext.tsx` 作为组合层，嵌套渲染 10 个子 Provider
+- `GroupContext.tsx` 作为组合层，嵌套渲染 12 个子 Provider
 - `useGroup()`（useGroup.ts）聚合所有子 Provider 的 hook 返回值，对外提供统一接口
-- 群切换时通过 `useRef` 追踪变更，子 Provider 用 `queueMicrotask` 在微任务中重置相关状态
+- 群 换时通过 `useRef` 追踪变更，子 Provider 用 `queueMicrotask` 在微任务中重置相关状态
 - `GroupContext.tsx` ~L223 注册 `window.__groupVizExport__` 导出桥
 
 **Actions 模块**：`cayleyActions.ts`（getCayleyShapeConfig/getSpecialCayleyActions/addAllCayleyActionsHelper）、`cosetActions.ts`、`directProductActions.ts`、`positionUtils.ts`（节点位置初始化）。
@@ -33,7 +35,7 @@ GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
 ```typescript
 interface GroupContextState {
   currentGroup: Group | null
-  currentView: ViewMode           // 11 种
+  currentView: ViewMode           // 13 种
   selectedElements: Set<string>
   canvasTransform: { x; y; scale }
   operationHistory: string[]
@@ -58,7 +60,7 @@ interface GroupContextState {
   isSemidirectProductMode / sd* 状态（见 GROUPS.md §4）
   homomorphisms / activeHomomorphismId / quotientGroups
   automorphismGroups / theoremPhase
-  action* 状态（actionKind/actionArrows/actionComputation/actionSelectedElement 等，见 ACTIONS.md §5）
+  action* 状态（actionKind/actionArrows/actionComputation/actionSelectedElement 等，见 ACTIONS.md §5）；自定义作用草稿自动保存 `actionDraftStorage.ts`，key `'groupviz-action-custom-draft'`（含 symbol/setSize/arrows， 群或刷新后按 symbol 匹配恢复，清除时删除）；已完成作用持久保存 `actionStorage.ts`，key `'groupviz-actions'`（同态模式：全局列表按 symbol 过滤显示，点击激活恢复，可删除）
 }
 ```
 
@@ -70,7 +72,7 @@ interface GroupContextState {
 
 ## 4. 陪集可视化
 
-- `cosetSubsetId` 激活陪集展示；`cosetType` 左/右切换；`showAllCosets` 显示全部陪集（验证 Lagrange）
+- `cosetSubsetId` 激活陪集展示；`cosetType` 左/右 换；`showAllCosets` 显示全部陪集（验证 Lagrange）
 - `cosetData`（CosetInfo：陪集索引/颜色/计数）+ `cosetElementMap` + `cosetHighlightSet` + 16 色陪集调色盘
 - 乘法表矩形条纹高亮同一陪集
 
@@ -92,6 +94,10 @@ interface GroupContextState {
 ## 8. 直积群
 
 - `GroupDirectProductContext`，key `'groupviz-dp-groups'`，三种构建模式（cayley/table/direct）
+
+## 8.5 群展示
+
+- `GroupPresentationContext` + `presentationStorage.ts`，key `'groupviz-presentation-groups'`（仅存 generators/relators 元数据，加载时 buildGroupFromPresentation 重建）；草稿 key `'groupviz-presentation-draft'`（textarea 原文，随输入自动保存）；创建成功自动 换当前群与 cayley 视图（详见 docs/PRESENTATION.md）
 
 ## 9. 会话保存与恢复
 

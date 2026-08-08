@@ -2,7 +2,7 @@
 
 > 所属文档集：GroupViz 开发文档。入口见 [AGENTS.md](../AGENTS.md)。
 
-11 种视图模式（`ViewMode`：'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow'），主画布 `GroupCanvas.tsx` 按 `currentView` 分发渲染。
+13 种视图模式（`ViewMode`：'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow' | 'tree' | 'prestable'），主画布 `GroupCanvas.tsx` 按 `currentView` 分发渲染。其中 ViewPanel 显示 9 个视图卡片；**tree / prestable 两个群展示专用视图的入口在左侧「群展示」面板底部按钮**（不在视图卡片中）。
 
 ## 1. 集合视图 (SetView.tsx)
 
@@ -70,6 +70,12 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 - Hasse 图：节点按层级排列，边表示包含关系
 - 正规子群高亮
 - 大群（order>60）：显示后端 `backendCache.lattice` 结果
+- **子群列（series）**：ViewPanel 子群格分支的「子群列」选择器（关/导列/上中心列/下中心列/合成列，`GroupSeriesContext` 提供状态）：
+  - 系列项节点彩色描边（导列金 / 中心列青 / 合成列紫）+ 左下角圆形序数角标；系列路径边加粗同色；不在系列中的节点调暗（opacity 0.22）
+  - 底部系列面板：TeX 链式 `G ⊵ N₁ ⊵ … ⊵ ⟨e⟩`、各级阶 `|Nᵢ| = n`、因子 `Nᵢ/Nᵢ₊₁ ≅ …`（导列/中心列共用 `computeSubgroupSeries`；合成列用枚举链 `computeChainFactors`）
+  - 判语徽标：可解（绿）/幂零（蓝）chip；合成列显示合成因子多重集 + Jordan–Hölder 说明
+  - 合成列多链切换：小群枚举全部合成列（≤20 条守卫），面板出现链选择器（`i / n`）+ 链数文案；截断时黄色警示
+  - 大群守卫：`SERIES_MAX_ORDER = 240`，超限显示提示文案（后端二期）
 
 ## 8. 同态视图 (HomomorphismView.tsx)
 
@@ -83,6 +89,7 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 - `cosetStripLayout()` 带标签的彩色列（条带）
 - 子群列实线粗标签，其余虚线；节点按陪集着色，点击/ctrl 选中
 - 底部 `|G|=n = |H|·[G:H]` Lagrange 定理验证
+- **子群凯莱图（圆形）**：子群条带上方展示 ⟨H⟩ 的圆形凯莱图（`cayleyCircleLayout` + 子群最小生成元作用边，箭头按生成元着色，自逆无向；|H| ∈ [2,12] 时显示，布局自动加顶部留白 `topPadding`）
 - 空态提示目前为硬编码英文
 
 ## 10. 轨道视图 / 群作用 (ActionView.tsx)
@@ -100,7 +107,23 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 - 节点配色：选中金色 → P∩Q 金色 → P 青 → Q 紫 → p-元素青描边 → 其他灰化（opacity 0.3）；legend 随模式切换
 - 数据：`findAllPSubgroups`（专用 p-子群枚举算法，SYLOW_MAX_ORDER=240 守卫，isTooLarge 阈值 240）
 
-## 12. 多视图模式
+## 12. 树视图 / 退化树 (FreeGroupTreeView.tsx)
+
+展示当前群（或模板）的**退化树**：商群凯莱图的 BFS 生成树（`computeCayleyTree`）——从 e 出发按生成元 BFS，每个元素只保留首次到达的边；**实线 = 生成树边**（首次到达，按生成元 a/b/c 着色），**金色虚线 = 粘合边**（指向已访问元素的边，即"被砍掉的延申"；每对节点只画一条边，避免重叠）。用户看到断头/虚线即知发生了关系（"关系 = 砍树"）。
+
+**布局按群结构规则化**（`cayleyTree.ts`）：
+- **1 生成元 → 直线**（不衰减）：如 ⟨a|a³⟩ = 直线 e-a-a⁻¹ + 1 条金色虚线 a→a⁻¹（a³ 回到 e）
+- **2 生成元交换格**（全部元素词形如 a* b*，如 V₄、Z×Z、⟨a,b|ab⟩）→ **正方形网格**（不衰减，无遮挡）
+- **2 生成元非交换/自由积**（D₃、⟨a,b|a²⟩=C₂*ℤ）→ 谢尔宾斯基十字（层距逐层减半防遮挡）
+- **3 生成元 → 3D**（R3F Canvas，立方体方向 ±x/±y/±z 层距减半；OrbitControls 旋转/缩放，点击节点显示词）
+
+有限群全部元素一次展示（`computeBaseZoom` 自动 fit）；无群时展示自由模板树（`computeFreeTree`，深度随缩放自适应 0–8）。交互：滚轮缩放、拖拽平移、双击复位、点击节点显示词（金色高亮 + 顶部 bar）。顶部 `.relator-bar` 显示 ⟨S|R⟩ TeX + |G| 或 ∞ + 粘合边计数。
+
+## 13. 展示乘法表视图 (PresentationTableView.tsx)
+
+乘法表式展示浏览：行/列 = 群元素（列×行，同 TableView），顶部 `.relator-bar` 静态展示 `⟨生成元|关系词⟩` TeX。order > 36 自动采样（identity + 选中 + 等距，cap 20 格），显示大群警告。行/列头点击可加选元素，单元格点击/悬停选中结果元素。
+
+## 14. 多视图模式
 
 `toggleMultiViewMode()` 开启后可通过 `openFloatingView(view)` 打开浮动窗口（`FloatingViewWindow.tsx`）：
 
@@ -108,9 +131,9 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 - 主画布与浮动窗口可同时对比不同视图
 - 缩放上限 8x（乘法表 10x）
 
-## 13. 直积/半直积构建视图- `DirectProductView.tsx`：直积群构建画布（isDirectProductMode 时替换主画布）
+## 15. 直积/半直积构建视图- `DirectProductView.tsx`：直积群构建画布（isDirectProductMode 时替换主画布）
 - `SemidirectProductView.tsx`：半直积设置 + 4 步教学动画（详见 [GROUPS.md](GROUPS.md) 第 4 节）
 
-## 14. 大群视图守卫
+## 16. 大群视图守卫
 
 `forceShowLargeGroupViews`：order > 60 的群对计算密集视图（cycle/sublattice/symmetry/homomorphism/cosetstrip）提供守卫与后端降级。

@@ -6,6 +6,7 @@ import { exportView, exportSymmetryAsGif } from '../../utils/export'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
+import type { SeriesType } from '../../core/algebra/series'
 
 export function ViewPanel() {
   const {
@@ -34,9 +35,22 @@ export function ViewPanel() {
     setCayleyShape3D,
     setCayleyShape2D,
     runForceLayout,
+    seriesType,
+    setSeriesType,
+    activeChainIdx,
+    setActiveChainIdx,
+    compositionChains,
   } = useGroup()
   const { t } = useTranslation()
   const VIEW_MODES = useMemo(() => buildViewModes(t), [t])
+
+  const SERIES_OPTIONS: { value: SeriesType | null; labelKey: string }[] = [
+    { value: null, labelKey: 'series.off' },
+    { value: 'derived', labelKey: 'series.derived' },
+    { value: 'upperCentral', labelKey: 'series.upperCentral' },
+    { value: 'lowerCentral', labelKey: 'series.lowerCentral' },
+    { value: 'composition', labelKey: 'series.composition' },
+  ]
 
   const canonical3DEdgeIds = ((): string[] => {
     if (!currentGroup || currentView !== '3d') return []
@@ -191,6 +205,39 @@ export function ViewPanel() {
           <input type="checkbox" checked={showMaximalCycles} onChange={(e) => setShowMaximalCycles(e.target.checked)} disabled={!currentGroup} />
           <span>{t('panel.showMaximalCycles')}</span>
         </label>
+      )}
+
+      {currentView === 'sublattice' && currentGroup && (
+        <div className="series-settings" style={{ marginTop: '8px' }}>
+          <span className="settings-label">{t('panel.series')}</span>
+          <div className="toggle-group" style={{ flexWrap: 'wrap' }}>
+            {SERIES_OPTIONS.map(opt => (
+              <button
+                key={opt.value ?? 'off'}
+                className={`toggle-btn ${seriesType === opt.value ? 'active' : ''}`}
+                onClick={() => setSeriesType(opt.value)}
+              >
+                {t(opt.labelKey)}
+              </button>
+            ))}
+          </div>
+          {seriesType === 'composition' && compositionChains && compositionChains.length > 1 && (
+            <div className="series-chain-switch" style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="settings-label">{t('series.chain')}</span>
+              <select
+                value={Math.min(activeChainIdx, compositionChains.length - 1)}
+                onChange={e => setActiveChainIdx(Number(e.target.value))}
+                className="shape-select"
+                style={{ flex: 1 }}
+              >
+                {compositionChains.map((_, i) => (
+                  <option key={i} value={i}>{i + 1} / {compositionChains.length}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('series.alternativeChains', { n: String(compositionChains.length) })}</span>
+            </div>
+          )}
+        </div>
       )}
 
       {currentView === 'symmetry' && (

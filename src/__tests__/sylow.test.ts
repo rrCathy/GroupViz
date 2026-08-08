@@ -9,6 +9,8 @@ import {
   findMinimalGenerators,
 } from '../core/algebra/sylow'
 import { verifyAllRelations } from '../core/algebra/actions'
+import { computeCayleyActionEdges } from '../core/algebra/cayleyEdges'
+import { findAllSubgroups } from '../core/algebra/subgroups'
 import { createS3, createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
@@ -183,6 +185,48 @@ describe('Sylow subgroup structure', () => {
     const conj = conjugateSubgroup(S3, subs[0].elements, g)
     const isOneOf = subs.some(sg => sameSet(conj.map(e => e.id), sg.elements.map(e => e.id)))
     expect(isOneOf).toBe(true)
+  })
+})
+
+describe('Subgroup Cayley graph edges', () => {
+  it('S_3 ⟨(23)⟩ generator edges stay inside the subgroup', () => {
+    const S3 = createS3()
+    const sg = findAllSubgroups(S3).find(s => s.order === 2)!
+    const hSet = new Set(sg.elements.map(e => e.id))
+    const gens = findMinimalGenerators(sg.elements, S3)
+    expect(gens.length).toBe(1)
+    const edges = computeCayleyActionEdges(
+      S3,
+      gens.map(g => ({ elementId: g.id, enabled: true, color: '#fff' })),
+      'right'
+    ).filter(e => !e.isSelfLoop && hSet.has(e.fromId) && hSet.has(e.toId))
+    expect(edges.length).toBe(1)
+    for (const e of edges) {
+      expect(hSet.has(e.fromId)).toBe(true)
+      expect(hSet.has(e.toId)).toBe(true)
+    }
+  })
+
+  it('D_4 ⟨r⟩ forms a directed 4-cycle', () => {
+    const D4 = createDihedralGroup(4)
+    const sub = findAllSubgroups(D4).find(s => s.order === 4)!
+    const hSet = new Set(sub.elements.map(e => e.id))
+    const gens = findMinimalGenerators(sub.elements, D4)
+    expect(gens.length).toBe(1)
+    const edges = computeCayleyActionEdges(
+      D4,
+      gens.map(g => ({ elementId: g.id, enabled: true, color: '#fff' })),
+      'right'
+    ).filter(e => !e.isSelfLoop && hSet.has(e.fromId) && hSet.has(e.toId))
+    expect(edges.length).toBe(4)
+    const outDeg = new Map<string, number>()
+    for (const e of edges) {
+      outDeg.set(e.fromId, (outDeg.get(e.fromId) ?? 0) + 1)
+      expect(hSet.has(e.toId)).toBe(true)
+    }
+    for (const id of sub.elements.map(e => e.id)) {
+      expect(outDeg.get(id)).toBe(1)
+    }
   })
 })
 

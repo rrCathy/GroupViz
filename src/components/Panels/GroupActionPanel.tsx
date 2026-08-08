@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
+import { renderTex } from '../../utils/texify'
 import { AccordionSection } from './AccordionSection'
 
 export function GroupActionPanel() {
@@ -17,6 +18,9 @@ export function GroupActionPanel() {
     completeCustomAction,
     clearArrows,
     clearAction,
+    savedActions,
+    activateSavedAction,
+    deleteSavedAction,
     setCurrentView,
   } = useGroup()
   const { t } = useTranslation()
@@ -127,6 +131,29 @@ export function GroupActionPanel() {
                 <button className="panel-btn" onClick={clearAction} style={{ flex: 1, fontSize: '11px' }}>{t('action.clear')}</button>
               )}
             </div>
+
+            {savedActions.length > 0 && (
+              <div className="homo-saved">
+                <div className="homo-saved-header">
+                  {t('action.savedList')} ({savedActions.length})
+                </div>
+                <div className="homo-saved-list scrollable-list">
+                  {savedActions.map(a => (
+                    <div key={a.id} className="homo-saved-item">
+                      <span className="homo-saved-name">
+                        <span dangerouslySetInnerHTML={{ __html: renderTex(a.symbol) }} />
+                        {' '}✓ |X| = {a.setSize}
+                        <span className="homo-saved-order">({a.arrows.length} arrows)</span>
+                      </span>
+                      <div className="homo-saved-actions">
+                        <button className="panel-btn" onClick={() => { activateSavedAction(a.id); setCurrentView('action') }}>{t('action.activate')}</button>
+                        <button onClick={() => deleteSavedAction(a.id)} className="subset-remove">×</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

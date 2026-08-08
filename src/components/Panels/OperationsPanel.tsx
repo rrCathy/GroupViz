@@ -2,6 +2,8 @@ import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import { TabBar, type TabDef } from './TabBar'
+import { closeUnderMultiply, getNormalizer, getCentralizer } from '../../core/algebra/subgroups'
+import type { GroupElement } from '../../core/types'
 
 export function OperationsPanel() {
   const {
@@ -30,6 +32,9 @@ export function OperationsPanel() {
     computeAutomorphismGroup,
     removeAutomorphismGroup,
     setCurrentGroup,
+    setCurrentView,
+    checkSubsetProperty,
+    showCosetsFromElements,
   } = useGroup()
   const { t } = useTranslation()
 
@@ -116,6 +121,81 @@ export function OperationsPanel() {
                   {subset.isNormalSubgroup && (<span className="subset-badge normal">{t('badge.normal')}</span>)}
                   {subset.isSubgroup && !subset.isNormalSubgroup && (<span className="subset-badge subgroup">{t('badge.subgroup')}</span>)}
                   <button onClick={() => removeSubset(subset.id)} className="subset-remove">×</button>
+                  {!subset.isSubgroup && subset.elementIds.length > 0 && (
+                    <button
+                      className="panel-btn"
+                      onClick={() => {
+                        if (!currentGroup) return
+                        const seed = subset.elementIds
+                          .map(id => currentGroup.elements.find(e => e.id === id))
+                          .filter((e): e is GroupElement => e !== undefined)
+                        if (seed.length === 0) return
+                        const closure = closeUnderMultiply(currentGroup, seed)
+                        const closureIds = closure.map(e => e.id)
+                        const prop = checkSubsetProperty(closureIds)
+                        showCosetsFromElements(closureIds, `⟨${subset.label}⟩`, prop.type === 'normal-subgroup')
+                        setCurrentView('cosetstrip')
+                      }}
+                      style={{
+                        width: '100%', fontSize: '10px', padding: '2px 6px', marginTop: '4px',
+                        backgroundColor: 'var(--accent-teal)',
+                        color: '#0f0f1a',
+                        borderColor: 'var(--accent-teal)'
+                      }}
+                    >
+                      {t('panel.generateSubgroup')}
+                    </button>
+                  )}
+                  {subset.elementIds.length > 0 && (
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                      <button
+                        className="panel-btn"
+                        onClick={() => {
+                          if (!currentGroup) return
+                          const seed = subset.elementIds
+                            .map(id => currentGroup.elements.find(e => e.id === id))
+                            .filter((e): e is GroupElement => e !== undefined)
+                          if (seed.length === 0) return
+                          const norm = getNormalizer(currentGroup, seed)
+                          const normIds = norm.map(e => e.id)
+                          const prop = checkSubsetProperty(normIds)
+                          showCosetsFromElements(normIds, `N_G(${subset.label})`, prop.type === 'normal-subgroup')
+                          setCurrentView('cosetstrip')
+                        }}
+                        style={{
+                          flex: 1, fontSize: '10px', padding: '2px 6px',
+                          backgroundColor: 'var(--accent-purple)',
+                          color: '#0f0f1a',
+                          borderColor: 'var(--accent-purple)'
+                        }}
+                      >
+                        {t('panel.normalizer')}
+                      </button>
+                      <button
+                        className="panel-btn"
+                        onClick={() => {
+                          if (!currentGroup) return
+                          const seed = subset.elementIds
+                            .map(id => currentGroup.elements.find(e => e.id === id))
+                            .filter((e): e is GroupElement => e !== undefined)
+                          if (seed.length === 0) return
+                          const cent = getCentralizer(currentGroup, seed)
+                          const centIds = cent.map(e => e.id)
+                          const prop = checkSubsetProperty(centIds)
+                          showCosetsFromElements(centIds, `C_G(${subset.label})`, prop.type === 'normal-subgroup')
+                          setCurrentView('cosetstrip')
+                        }}
+                        style={{
+                          flex: 1, fontSize: '10px', padding: '2px 6px',
+                          backgroundColor: 'var(--accent-yellow)',
+                          color: '#0f0f1a',
+                          borderColor: 'var(--accent-yellow)'
+                        }}
+                      >
+                        {t('panel.centralizer')}
+                      </button>
+                    </div>
+                  )}
                   {subset.isSubgroup && (
                     <button
                       className={`panel-btn ${cosetSubsetId === subset.id ? 'active-coset' : ''}`}

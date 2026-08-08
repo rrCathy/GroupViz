@@ -16,7 +16,7 @@ export interface GroupProperties {
 }
 
 // [x, y] = x·y·x⁻¹·y⁻¹ for every pair, closed under multiplication.
-function commutatorClosure(group: Group, left: GroupElement[], right: GroupElement[]): GroupElement[] {
+export function commutatorClosure(group: Group, left: GroupElement[], right: GroupElement[]): GroupElement[] {
   const seeds: GroupElement[] = []
   const seedSet = new Set<string>()
   for (const a of left) {

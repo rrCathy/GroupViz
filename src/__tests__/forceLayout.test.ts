@@ -137,6 +137,19 @@ describe('cosetStripLayout', () => {
     expect(data.positions.size).toBe(6)
     expect(data.strips.length).toBe(2)
   })
+
+  it('respects an explicit top padding', () => {
+    const s3 = createS3()
+    const a3 = findAllSubgroups(s3).find(s => s.order === 3)!
+    const a3Ids = a3.elements.map(e => e.id)
+    const a3Set = new Set(a3Ids)
+    const cosetMap = new Map<string, number>()
+    for (const el of s3.elements) cosetMap.set(el.id, a3Set.has(el.id) ? 0 : 1)
+
+    const base = cosetStripLayout(s3, 800, 400, a3Ids, cosetMap, 2)
+    const padded = cosetStripLayout(s3, 800, 400, a3Ids, cosetMap, 2, undefined, 160)
+    expect(padded.strips[0].y).toBeGreaterThan(base.strips[0].y)
+  })
 })
 
 describe('projection3DLayout', () => {

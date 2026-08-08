@@ -49,6 +49,21 @@ describe('parseWord / simplifyWord / wordToCanonicalString', () => {
     ])
   })
 
+  it('supports Unicode superscripts (a², b³, a⁻¹)', () => {
+    expect(parseWord('a²b³', ['a', 'b'])).toEqual([
+      { g: 0, e: 2 },
+      { g: 1, e: 3 },
+    ])
+    expect(parseWord('a⁻¹', ['a'])).toEqual([{ g: 0, e: -1 }])
+    expect(parseWord('a⁰ b', ['a', 'b'])).toEqual([{ g: 1, e: 1 }])
+    expect(parseWord('(ab)²', ['a', 'b'])).toEqual([
+      { g: 0, e: 1 },
+      { g: 1, e: 1 },
+      { g: 0, e: 1 },
+      { g: 1, e: 1 },
+    ])
+  })
+
   it('handles parenthesized groups with exponents', () => {
     expect(parseWord('(ab)^2', ['a', 'b'])).toEqual([
       { g: 0, e: 1 },
@@ -160,6 +175,20 @@ describe('buildGroupFromPresentation', () => {
 
   it('builds V_4 from ⟨a, b | a^2, b^2, abab⟩', () => {
     const res = buildGroupFromPresentation(parsePresentation('⟨a, b | a^2, b^2, abab⟩'))
+    expect(res.ok).toBe(true)
+    expect(res.order).toBe(4)
+    expect(res.group!.isoSymbol).toBe('C_{2}\\times C_{2}')
+  })
+
+  it('f1=f2 归一化 + Unicode 上标：⟨a, b | a²=e, b³=e, ab=ba⟩ 创建成功（C₂×C₃，阶 6）', () => {
+    const res = buildGroupFromPresentation(parsePresentation('a, b | a²=e, b³=e, ab=ba'))
+    expect(res.ok).toBe(true)
+    expect(res.order).toBe(6)
+    expect(res.group!.isAbelian).toBe(true)
+  })
+
+  it('f1=f2 归一化 + Unicode 上标：⟨a, b | a²=e, b²=e, ab=ba⟩ 创建成功（V₄，阶 4）', () => {
+    const res = buildGroupFromPresentation(parsePresentation('a, b | a²=e, b²=e, ab=ba'))
     expect(res.ok).toBe(true)
     expect(res.order).toBe(4)
     expect(res.group!.isoSymbol).toBe('C_{2}\\times C_{2}')

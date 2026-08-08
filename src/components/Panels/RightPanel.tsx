@@ -104,12 +104,12 @@ function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { current
 
 export function RightPanel() {
   const { 
-    currentGroup, 
+    currentGroup: coreCurrentGroup, 
+    activePresentationGroup,
     selectedElements,
     selectElement,
     clearSelection,
     backendCache,
-    isLargeGroup,
     editingSource,
     editingTarget,
     editingMapping,
@@ -132,6 +132,9 @@ export function RightPanel() {
   } = useGroup()
   const { t } = useTranslation()
   
+  const currentGroup = activePresentationGroup ?? coreCurrentGroup
+  const largeGroup = (currentGroup?.order ?? 0) > 60
+  
   const selectedElement = selectedElements.size === 1 && currentGroup
     ? currentGroup.elements.find(e => e.id === Array.from(selectedElements)[0]) 
     : null
@@ -144,35 +147,35 @@ export function RightPanel() {
   const subgroups = useMemo(() => {
     if (!currentGroup) return []
     if (precomputed) return precomputed.subgroups
-    if (isLargeGroup) return backendCache.subgroups ?? []
+    if (largeGroup) return backendCache.subgroups ?? []
     return findAllSubgroups(currentGroup)
-  }, [currentGroup, precomputed, isLargeGroup, backendCache.subgroups])
+  }, [currentGroup, precomputed, largeGroup, backendCache.subgroups])
 
   const centerElements = useMemo(() => {
     if (!currentGroup) return null
-    return backendCache.center ?? getGroupCenter(currentGroup, isLargeGroup)
-  }, [currentGroup, backendCache.center, isLargeGroup])
+    return backendCache.center ?? getGroupCenter(currentGroup, largeGroup)
+  }, [currentGroup, backendCache.center, largeGroup])
 
   const centerIdSet = centerElements ? new Set(centerElements.map(e => e.id)) : null
   
   const conjugacyClasses = useMemo(() => {
     if (!currentGroup) return []
     if (precomputed) return precomputed.conjugacyClasses
-    if (isLargeGroup) return backendCache.conjugacyClasses ?? []
+    if (largeGroup) return backendCache.conjugacyClasses ?? []
     return getConjugacyClasses(currentGroup)
-  }, [currentGroup, precomputed, isLargeGroup, backendCache.conjugacyClasses])
+  }, [currentGroup, precomputed, largeGroup, backendCache.conjugacyClasses])
   
   const simpleGroup = useMemo(() => {
     if (!currentGroup) return false
     if (precomputed) return precomputed.isSimple
-    if (isLargeGroup) return backendCache.isSimple ?? false
+    if (largeGroup) return backendCache.isSimple ?? false
     return isSimpleGroup(currentGroup)
-  }, [currentGroup, precomputed, isLargeGroup, backendCache.isSimple])
+  }, [currentGroup, precomputed, largeGroup, backendCache.isSimple])
 
   const groupProps = useMemo(() => {
     if (!currentGroup) return null
-    return computeGroupProperties(currentGroup, isLargeGroup ? backendCache : undefined)
-  }, [currentGroup, isLargeGroup, backendCache])
+    return computeGroupProperties(currentGroup, largeGroup ? backendCache : undefined)
+  }, [currentGroup, largeGroup, backendCache])
 
   const currentPresentation = useMemo(() => {
     if (!currentGroup) return null
@@ -654,7 +657,7 @@ export function RightPanel() {
       })()}
 
       <AccordionSection title={t('right.subgroups', { n: subgroups.length })} defaultOpen={false}>
-        {backendCache.loading && isLargeGroup ? (
+        {backendCache.loading && largeGroup ? (
           <p className="info-placeholder">{t('right.loadingBackend')}</p>
         ) : subgroups.length > 0 ? (
           <div className="subgroup-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
@@ -722,7 +725,7 @@ export function RightPanel() {
       </AccordionSection>
       
       <AccordionSection title={t('right.conjugacyClasses', { n: conjugacyClasses.length })} defaultOpen={false}>
-        {backendCache.loading && isLargeGroup ? (
+        {backendCache.loading && largeGroup ? (
           <p className="info-placeholder">{t('right.loadingBackend')}</p>
         ) : conjugacyClasses.length > 0 ? (
           <div className="class-list" style={{ maxHeight: '150px', overflowY: 'auto' }}>

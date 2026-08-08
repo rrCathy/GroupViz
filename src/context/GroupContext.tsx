@@ -111,6 +111,7 @@ interface GroupContextState {
   templateGenCount: number
   visualDraft: { gens: string[]; relators: string[]; group: Group | null } | null
   presentationError: string | null
+  activePresentationGroup: Group | null
 }
 
 interface GroupContextActions {
@@ -230,6 +231,7 @@ interface GroupContextActions {
   storePresentationGroup: (group: Group) => void
   removePresentationGroup: (symbol: string) => void
   loadPresentationGroup: (symbol: string) => void
+  clearActivePresentationGroup: () => void
 }
 
 export type GroupContextType = GroupContextState & GroupContextActions
@@ -604,6 +606,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     templateGenCount: presentation.templateGenCount,
     visualDraft: presentation.visualDraft,
     presentationError: presentation.presentationError,
+    activePresentationGroup: presentation.activePresentationGroup,
 
     setCurrentGroup: core.setCurrentGroup,
     clearCurrentGroup: core.clearCurrentGroup,
@@ -728,6 +731,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     storePresentationGroup: presentation.storePresentationGroup,
     removePresentationGroup: presentation.removePresentationGroup,
     loadPresentationGroup: presentation.loadPresentationGroup,
+    clearActivePresentationGroup: presentation.clearActivePresentationGroup,
 
     toggleMultiViewMode: multiView.toggleMultiViewMode,
     openFloatingView: multiView.openFloatingView,

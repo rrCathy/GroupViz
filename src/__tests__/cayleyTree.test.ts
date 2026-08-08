@@ -1,8 +1,36 @@
 import { describe, it, expect } from 'vitest'
-import { computeCayleyTree, computeFreeTree, computeFoldTree } from '../core/algebra/cayleyTree'
+import { computeCayleyTree, computeFreeTree, computeFoldTree, type CayleyTree } from '../core/algebra/cayleyTree'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
-import { buildGroupFromPresentation, parseRelationEquation } from '../core/algebra/presentations'
+import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
+import { buildGroupFromPresentation, parseRelationEquation, presentationOf } from '../core/algebra/presentations'
+
+/** 严格交叉（排除共点/共线）计数：两线段各跨另一线段两侧 */
+function countEdgeCrossings(tree: CayleyTree): number {
+  const cross = (o: number[], a: number[], b: number[]) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  let crossings = 0
+  for (let i = 0; i < tree.edges.length; i++) {
+    for (let j = i + 1; j < tree.edges.length; j++) {
+      const e1 = tree.edges[i]
+      const e2 = tree.edges[j]
+      const a = tree.nodes[e1.from]
+      const b = tree.nodes[e1.to]
+      const c = tree.nodes[e2.from]
+      const d = tree.nodes[e2.to]
+      const p = [a.x, a.y]
+      const q = [b.x, b.y]
+      const r = [c.x, c.y]
+      const s = [d.x, d.y]
+      const d1 = cross(r, s, p)
+      const d2 = cross(r, s, q)
+      const d3 = cross(p, q, r)
+      const d4 = cross(p, q, s)
+      if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) crossings++
+    }
+  }
+  return crossings
+}
 
 describe('computeCayleyTree', () => {
   it('⟨a | a³⟩ 退化树：直线 e-a-a⁻¹，a 的 a 边粘合回 a⁻¹', () => {
@@ -160,6 +188,27 @@ describe('computeFoldTree', () => {
     expect(aDir).toBeGreaterThanOrEqual(2)
   })
 
+  it('⟨a,b | a², b³, ab=ba⟩：幂关系折叠进网格（C₂×C₃ 标准形 2×3 = 6 点，非无限网格）', () => {
+    const tree = computeFoldTree(2, ['aa=e', 'bbb=e', 'ab=ba'], 5)
+    expect(tree.isInfinite).toBe(true)
+    expect(tree.layout).toBe('grid')
+    const shown = tree.nodes.filter(n => n.rep === undefined)
+    expect(shown).toHaveLength(6)
+    expect(shown.map(n => n.label)).toEqual(expect.arrayContaining(['e', 'a', 'b', 'ab']))
+    expect(shown.map(n => n.label)).not.toContain('aa')
+    expect(shown.map(n => n.label)).not.toContain('a⁻¹')
+    const pos = (label: string) => {
+      const n = shown.find(x => x.label === label)!
+      return [n.x, n.y]
+    }
+    expect(pos('e')).toEqual([0, 0])
+    expect(pos('a')).toEqual([100, 0])
+    expect(pos('b')).toEqual([0, 100])
+    expect(pos('b⁻¹')).toEqual([0, -100])
+    expect(pos('ab')).toEqual([100, 100])
+    expect(pos('ab⁻¹')).toEqual([100, -100])
+  })
+
   it('有限群精确折叠：⟨a,b|a³,b²,(ab)²⟩ ≅ S₃ → 6 个代表，无负次幂词', () => {
     const res = buildGroupFromPresentation({ generators: ['a', 'b'], relators: ['a^3', 'b^2', '(ab)^2'] })
     expect(res.ok).toBe(true)
@@ -178,6 +227,44 @@ describe('computeFoldTree', () => {
     const tree = computeFoldTree(1, ['a^3 = e'], 5, res.group!)
     const shown = tree.nodes.filter(n => n.rep === undefined).map(n => n.label)
     expect(shown.sort()).toEqual(['a', 'aa', 'e'])
+  })
+
+  it('genElsOverride：展示生成元数与群自带生成元数不一致时不崩溃（S₄ Coxeter 展示 3 生成元 / 自带 2 生成元）', () => {
+    const s4 = createSymmetricGroup(4)
+    expect(s4.generators.length).toBeLessThan(3)
+    const pres = presentationOf(s4)!
+    expect(pres.generators.length).toBeGreaterThan(s4.generators.length)
+    expect(() => computeFoldTree(pres.generators.length, pres.relators, 8, s4)).toThrow()
+    const tree = computeFoldTree(pres.generators.length, pres.relators, 8, s4, pres.generatorElements)
+    const shown = tree.nodes.filter(n => n.rep === undefined).map(n => n.label)
+    expect(shown).toHaveLength(s4.order)
+    expect(shown).toContain('e')
+  })
+
+  it('⟨a,b | a²,b²⟩（无限二面体 D∞）：0.7 层距衰减，边保持 90° 直角', () => {
+    const tree = computeFoldTree(2, ['a^2 = e', 'b^2 = e'], 4)
+    expect(tree.isInfinite).toBe(true)
+    const pos = (label: string) => {
+      const n = tree.nodes.find(n => n.label === label)!
+      return [n.x, n.y]
+    }
+    expect(pos('e')).toEqual([0, 0])
+    expect(pos('a')).toEqual([100, 0])
+    expect(pos('b')).toEqual([0, -100])
+    expect(pos('ab')).toEqual([100, -70])
+    expect(pos('aba')).toEqual([149, -70])
+  })
+
+  it('⟨a,b | a²⟩（C₂ * ℤ，稠密树）：保持 0.5 衰减防交叉，ab=(100,-50)', () => {
+    const tree = computeFoldTree(2, ['a^2 = e'], 5)
+    expect(tree.isInfinite).toBe(true)
+    const pos = (label: string) => {
+      const n = tree.nodes.find(n => n.label === label)!
+      return [n.x, n.y]
+    }
+    expect(pos('ab')).toEqual([100, -50])
+    expect(pos('aba')).toEqual([125, -50])
+    expect(countEdgeCrossings(tree)).toBe(0)
   })
 })
 
@@ -203,5 +290,10 @@ describe('computeFreeTree', () => {
     const tree = computeFreeTree(3, 3)
     expect(tree.layout).toBe('tree3d')
     expect(tree.nodes).toHaveLength(187)
+  })
+
+  it('2 生成元 D=6：0.5 层距衰减 → Sierpinski 十字 0 边交叉（回归：0.7 曾导致 5616 处交叉）', () => {
+    const tree = computeFreeTree(2, 6)
+    expect(countEdgeCrossings(tree)).toBe(0)
   })
 })

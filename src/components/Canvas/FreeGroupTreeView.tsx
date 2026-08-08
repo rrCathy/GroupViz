@@ -6,6 +6,7 @@ import { texify, renderTex } from '../../utils/texify'
 import { computeFreeTree, computeFoldTree } from '../../core/algebra/cayleyTree'
 import type { CayleyTree, CayleyTreeNode } from '../../core/algebra/cayleyTree'
 import { presentationOf, formatPresentation } from '../../core/algebra/presentations'
+import type { GroupPresentation } from '../../core/types'
 
 const GEN_COLORS = ['#ff6b6b', '#4ecdc4', '#a78bfa']
 const GLUE_COLOR = '#ffd93d'
@@ -83,7 +84,7 @@ function Tree3DScene({ tree, selectedWord, onSelect }: {
 }
 
 export function FreeGroupTreeView() {
-  const { viewBoxSize, currentGroup, templateGenCount, visualDraft } = useGroup()
+  const { viewBoxSize, currentGroup, activePresentationGroup, templateGenCount, visualDraft } = useGroup()
   const [zoom, setZoom] = useState(HOME_ZOOM)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -91,37 +92,45 @@ export function FreeGroupTreeView() {
   const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const dragMovedRef = useRef(false)
 
-  const pres = useMemo(() => {
-    if (visualDraft) return { generators: visualDraft.gens, relators: visualDraft.relators }
-    if (!currentGroup) return null
-    if (currentGroup.presentation) return currentGroup.presentation
+  const pres = useMemo<GroupPresentation | null>(() => {
+    if (visualDraft) {
+      const group = visualDraft.group
+      return {
+        generators: visualDraft.gens,
+        relators: visualDraft.relators,
+        generatorElements: group ? group.generators.map(g => g.apply(group.identity)) : [],
+      }
+    }
+    const group = activePresentationGroup ?? currentGroup
+    if (!group) return null
+    if (group.presentation) return group.presentation
     try {
-      return presentationOf(currentGroup)
+      return presentationOf(group)
     } catch {
       return null
     }
-  }, [currentGroup, visualDraft])
+  }, [currentGroup, activePresentationGroup, visualDraft])
 
-  const genCount = pres ? pres.generators.length : (currentGroup ? currentGroup.generators.length : templateGenCount)
+  const genCount = pres ? pres.generators.length : ((activePresentationGroup ?? currentGroup) ? (activePresentationGroup ?? currentGroup)!.generators.length : templateGenCount)
 
   const depthCap = useMemo(() => {
     return Math.min(8, Math.max(0, Math.round(Math.log2(zoom)) + 3))
   }, [zoom])
 
   const tree = useMemo<CayleyTree>(() => {
-    if (currentGroup || visualDraft) {
+    if (currentGroup || activePresentationGroup || visualDraft) {
       const rels = pres ? pres.relators : []
-      const group = currentGroup ?? visualDraft?.group ?? null
-      const order = currentGroup?.order ?? visualDraft?.group?.order
+      const group = visualDraft ? (visualDraft.group ?? null) : (activePresentationGroup ?? currentGroup ?? null)
+      const order = visualDraft ? visualDraft.group?.order : (activePresentationGroup ?? currentGroup)?.order
       const fixedD = order !== undefined
         ? Math.min(14, Math.ceil(Math.log2(order + 1)) + 3)
         : 6
-      const D = order !== undefined ? fixedD : depthCap
+      const D = order !== undefined ? fixedD : (rels.length > 0 ? depthCap + 1 : depthCap)
       if (rels.length === 0) return computeFreeTree(genCount, D)
-      return computeFoldTree(genCount, rels, D, group)
+      return computeFoldTree(genCount, rels, D, group, pres?.generatorElements)
     }
     return computeFreeTree(templateGenCount, depthCap)
-  }, [currentGroup, visualDraft, templateGenCount, depthCap, pres, genCount])
+  }, [currentGroup, activePresentationGroup, visualDraft, templateGenCount, depthCap, pres, genCount])
 
   const vw = viewBoxSize.width
   const vh = viewBoxSize.height
@@ -240,7 +249,7 @@ export function FreeGroupTreeView() {
             </>
           )}
           <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>
-            {currentGroup?.order ?? visualDraft?.group?.order ?? '∞'}
+            {visualDraft ? (visualDraft.group?.order ?? '∞') : ((activePresentationGroup ?? currentGroup)?.order ?? '∞')}
           </span>
           <span style={{ marginLeft: 8, color: GLUE_COLOR }}>粘合边 ×{glueCount}</span>
           {!(currentGroup || visualDraft) && <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>模板树 · 去「群展示」面板创建</span>}

@@ -21,6 +21,7 @@ interface GroupPresentationState {
   presentationError: string | null
   templateGenCount: number
   visualDraft: { gens: string[]; relators: string[]; group: Group | null } | null
+  activePresentationGroup: Group | null
 }
 
 interface GroupPresentationActions {
@@ -31,6 +32,7 @@ interface GroupPresentationActions {
   loadPresentationGroup: (symbol: string) => void
   setTemplateGenCount: (n: number) => void
   setVisualDraft: (draft: { gens: string[]; relators: string[]; group: Group | null } | null) => void
+  clearActivePresentationGroup: () => void
 }
 
 export type GroupPresentationContextType = GroupPresentationState & GroupPresentationActions
@@ -39,7 +41,7 @@ const GroupPresentationContext = createContext<GroupPresentationContextType | nu
 
 export function GroupPresentationProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation()
-  const { setCurrentGroup, setCurrentView, setHintMessage, addOperationHistory } = useGroupCore()
+  const { setCurrentView, setHintMessage, addOperationHistory } = useGroupCore()
 
   const [presentationGroups, setPresentationGroups] = useState<Group[]>(() => {
     const specs = loadPresentationSpecsFromStorage()
@@ -62,6 +64,8 @@ export function GroupPresentationProvider({ children }: { children: ReactNode })
   const [templateGenCount, setTemplateGenCount] = useState(2)
 
   const [visualDraft, setVisualDraft] = useState<{ gens: string[]; relators: string[]; group: Group | null } | null>(null)
+
+  const [activePresentationGroup, setActivePresentationGroup] = useState<Group | null>(null)
 
   const setPresentationDraft = useCallback((text: string) => {
     setPresentationDraftState(text)
@@ -103,10 +107,10 @@ export function GroupPresentationProvider({ children }: { children: ReactNode })
   const loadPresentationGroup = useCallback((symbol: string) => {
     const group = presentationGroups.find(g => g.symbol === symbol)
     if (!group) return
-    setCurrentGroup(group)
+    setActivePresentationGroup(group)
     setHintMessage(t('pres.loadHint', { symbol: group.symbol, order: group.order }).replace(group.symbol, `<span class="hint-highlight">${group.symbol}</span>`))
     addOperationHistory(t('pres.loadHint', { symbol: group.symbol, order: group.order }))
-  }, [presentationGroups, setCurrentGroup, setHintMessage, addOperationHistory, t])
+  }, [presentationGroups, setHintMessage, addOperationHistory, t])
 
   const createPresentationGroupFromText = useCallback((text: string): Group | null => {
     let pres: GroupPresentation
@@ -138,7 +142,7 @@ export function GroupPresentationProvider({ children }: { children: ReactNode })
     }
     const group = res.group
     storePresentationGroup(group)
-    setCurrentGroup(group)
+    setActivePresentationGroup(group)
     setCurrentView('tree')
     removePresentationDraft()
     setPresentationDraftState('')
@@ -149,7 +153,11 @@ export function GroupPresentationProvider({ children }: { children: ReactNode })
     setHintMessage(msg.replace(group.symbol, `<span class="hint-highlight">${group.symbol}</span>`))
     addOperationHistory(msg)
     return group
-  }, [storePresentationGroup, setCurrentGroup, setCurrentView, setHintMessage, addOperationHistory, t])
+  }, [storePresentationGroup, setCurrentView, setHintMessage, addOperationHistory, t])
+
+  const clearActivePresentationGroup = useCallback(() => {
+    setActivePresentationGroup(null)
+  }, [])
 
   const value: GroupPresentationContextType = {
     presentationGroups,
@@ -157,6 +165,7 @@ export function GroupPresentationProvider({ children }: { children: ReactNode })
     presentationError,
     templateGenCount,
     visualDraft,
+    activePresentationGroup,
     setTemplateGenCount,
     setVisualDraft,
     setPresentationDraft,
@@ -164,6 +173,7 @@ export function GroupPresentationProvider({ children }: { children: ReactNode })
     storePresentationGroup,
     removePresentationGroup,
     loadPresentationGroup,
+    clearActivePresentationGroup,
   }
 
   return (

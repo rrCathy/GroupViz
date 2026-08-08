@@ -34,7 +34,7 @@ AppWrapper (I18nProvider → ThemeProvider)
 | 4 | OperationsPanel（`panel.operations`） | ⚙ | 内部 TabBar 4 tab：general/subsets/quotient/automorphism |
 | 5 | HomomorphismPanel（`homo.title`） | ⟷ | 同态构建与验证（源/目标选择、自动映射、生成元映射、验证结果、第一同构定理入口、已存同态列表） |
 | 6 | GroupActionPanel（`action.title`） | ➤ | 群作用：共轭/自定义两来源、\|X\| 输入、自定义箭头编辑（点击/拖放绑定）、完成并验证/退出 |
-| 7 | PresentationPanel（`pres.title`） | ⟨⟩ | 群展示：textarea 输入 ⟨生成元\|关系词⟩（或完整语法）+ 8 预设、创建按钮、防抖预览迷你凯莱图 + ≅ 同构提示、已保存展示列表（点击加载/× 删除）、草稿自动保存 |
+| 7 | PresentationPanel（`pres.title`） | ⟨⟩ | 群展示：两种创建方式 tab（直接创建 = textarea 输入 ⟨生成元\|关系词⟩ 完整语法 + 创建群；可视化创建 = 模板逐步粘合）、「✕ 清空当前群（回到模板树）」、已保存展示列表（点击加载/× 删除）、草稿自动保存 |
 
 > 注：直积构建入口在 GroupPanel 的 `dp` tab；BasicGroupPanel（`panel.basicGroup`）为按群类型/按阶创建（含交错群 Aₙ）。
 

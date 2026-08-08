@@ -116,8 +116,30 @@ function parseSequence(
   return { terms, next: i }
 }
 
+/** Unicode 上标（a²、b³、a⁻¹）归一为 ASCII 幂记号（a^2、b^3、a^-1） */
+const UNICODE_SUPERSCRIPT: Record<string, string> = {
+  '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
+  '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+  '⁺': '+', '⁻': '-',
+}
+
+export function normalizeSuperscripts(text: string): string {
+  let out = ''
+  for (const ch of text) {
+    const ascii = UNICODE_SUPERSCRIPT[ch]
+    if (ascii === undefined) {
+      out += ch
+      continue
+    }
+    const last = out.length > 0 ? out[out.length - 1] : ''
+    if (last !== '^' && last !== '{' && last !== '-' && last !== '+' && !/\d/.test(last)) out += '^'
+    out += ascii
+  }
+  return out
+}
+
 export function parseWord(text: string, gens: string[]): PresentationTerm[] {
-  const trimmed = text.trim()
+  const trimmed = normalizeSuperscripts(text).trim()
   const res = parseSequence(trimmed, 0, gens)
   if (res.next !== trimmed.length) {
     throw new Error(`Unexpected character at position ${res.next}`)
@@ -386,7 +408,17 @@ export function buildGroupFromPresentation(
 
   let relTerms: PresentationTerm[][]
   try {
-    relTerms = pres.relators.map(r => parseWord(r, gens))
+    // 归一化：f1=f2 型关系转成 f1·f2⁻¹（如 ab=ba → aba⁻¹b⁻¹），e=f / f=e 取另一侧
+    relTerms = pres.relators.map(r => {
+      const eq = r.indexOf('=')
+      if (eq < 0) return parseWord(r, gens)
+      const lhs = r.slice(0, eq).trim()
+      const rhs = r.slice(eq + 1).trim()
+      if (lhs === 'e') return parseWord(rhs, gens)
+      if (rhs === 'e') return parseWord(lhs, gens)
+      const rhsInv = parseWord(rhs, gens).map(t => ({ g: t.g, e: -t.e })).reverse()
+      return simplifyWord([...parseWord(lhs, gens), ...rhsInv])
+    })
   } catch {
     return { ok: false, reason: 'parse' }
   }

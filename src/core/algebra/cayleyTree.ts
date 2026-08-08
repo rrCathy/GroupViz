@@ -33,8 +33,9 @@ export interface CayleyTree {
 const GEN_NAMES = ['a', 'b', 'c']
 const STEP_BASE = 100
 
-function stepForDepth(depth: number): number {
-  return Math.pow(2, 1 - depth) * STEP_BASE
+/** 层距衰减：默认 0.5 逐层减半（Sierpinski 十字免交叉）；折叠树仅当路径状（最大子节点 ≤ 2）时用 0.7 提升细节可见性，稠密折叠树保持 0.5 防交叉；90° 方向不变 */
+function stepForDepth(depth: number, ratio = 0.5): number {
+  return Math.pow(ratio, depth - 1) * STEP_BASE
 }
 
 function dirLabel(gen: number, negative: boolean): string {
@@ -388,7 +389,7 @@ function normalizePositivePowers(w: string, powerRel: number[], genNames: string
  * - 否则 → 重写系统化简（幂块归一 + 子串规则，教学近似）
  * 折叠节点 rep 指向树内代表节点；边 (u, w) 若 rep(w)≠w 则断头（不画）。
  */
-export function computeFoldTree(genCount: number, relatorTexts: string[], maxDepth: number, group?: Group | null): CayleyTree {
+export function computeFoldTree(genCount: number, relatorTexts: string[], maxDepth: number, group?: Group | null, genElsOverride?: GroupElement[]): CayleyTree {
   const base = computeFreeTree(genCount, maxDepth)
   const genNames = GEN_NAMES.slice(0, genCount)
 
@@ -396,7 +397,9 @@ export function computeFoldTree(genCount: number, relatorTexts: string[], maxDep
   base.nodes.forEach((n, i) => idxByLabel.set(n.label, i))
 
   if (group) {
-    const genEls = group.generators.map(g => g.apply(group.identity))
+    const genEls = genElsOverride && genElsOverride.length >= genCount
+      ? genElsOverride.slice(0, genCount)
+      : group.generators.map(g => g.apply(group.identity))
     const idToIdx = new Map(group.elements.map((el, i) => [el.id, i]))
     const best: (number | undefined)[] = []
     const wordToElem = (label: string): number => {
@@ -411,7 +414,9 @@ export function computeFoldTree(genCount: number, relatorTexts: string[], maxDep
           if (label.startsWith(genNames[gi], i)) { g = gi; break }
         }
         if (g < 0) { i++; continue }
-        cur = group.multiply(cur, neg ? group.inverse(genEls[g]) : genEls[g])
+        const el = neg ? group.inverse(genEls[g]) : genEls[g]
+        if (!el) return idToIdx.get(group.identity.id) ?? 0
+        cur = group.multiply(cur, el)
         i += neg ? genNames[g].length + 2 : genNames[g].length
       }
       return idToIdx.get(cur.id) ?? 0
@@ -515,9 +520,17 @@ export function computeFoldTree(genCount: number, relatorTexts: string[], maxDep
     const dirCount = 2 * genCount
     const fNodes: CayleyTreeNode[] = [{ id: 'e', label: 'e', depth: 0, x: 0, y: 0, z: 0, dir: -1, parent: -1 }]
     const fEdges: CayleyTreeEdge[] = []
+    // 交换折叠键：指数按幂关系取模（a²=e → 指数 mod 2；b³=e → 指数 mod 3），
+    // 使 aa/aaa、bbb/bbbb 等折叠到同一网格点，避免幂关系下出现无限网格
     const idxKeyOf = (label: string): string =>
-      genNames.map((g, gi) => indexSum(label, gi, `${g}⁻¹`)).join(',')
-    const seenNorm = new Map<string, number>([['e', 0]])
+      genNames
+        .map((g, gi) => {
+          const n = indexSum(label, gi, `${g}⁻¹`)
+          const m = powerRel[gi]
+          return m ? ((n % m) + m) % m : n
+        })
+        .join(',')
+    const seenNorm = new Map<string, number>([['e', 0], [idxKeyOf('e'), 0]])
     let head = 0
     while (head < fNodes.length) {
       const u = fNodes[head]
@@ -578,6 +591,10 @@ export function computeFoldTree(genCount: number, relatorTexts: string[], maxDep
         n.z = 0
       }
     } else if (base.layout === 'tree' || base.layout === 'tree3d') {
+      // 路径状折叠树（最大子节点 ≤ 2，如 a²,b² 之字）用 0.7 衰减保证细节可见；稠密树（如 a² 单关系）必须 0.5 防交叉
+      const childCount = new Array<number>(fNodes.length).fill(0)
+      for (const e of fEdges) childCount[e.from]++
+      const ratio = Math.max(...childCount, 0) <= 2 ? 0.7 : 0.5
       const dirs2 = base.layout === 'tree' ? DIR2D : DIR3D
       for (const n of base.nodes) {
         if (n.label === 'e') {
@@ -600,7 +617,7 @@ export function computeFoldTree(genCount: number, relatorTexts: string[], maxDep
           }
           if (g < 0) { i++; continue }
           const d = g * 2 + (neg ? 1 : 0)
-          const step = stepForDepth(k + 1)
+          const step = stepForDepth(k + 1, ratio)
           x += dirs2[d].dx * step
           y += dirs2[d].dy * step
           z += dirs2[d].dz * step

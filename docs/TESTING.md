@@ -16,16 +16,16 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 2. 测试文件清单（src/__tests__，22 文件 / 621 tests）
+## 3. 测试文件清单（src/__tests__，33 文件 / 659 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
 | groups.test.ts | 154 | 群公理：createCyclicGroup/createS2/createSymmetricGroup/createDihedralGroup/createAlternatingGroup/createKleinFour/createQuaternion（单位元/逆元/闭包/结合律） |
-| actions.test.ts | 22 | 群作用：置换工具（compose 方向/逆/恒等）、共轭作用（S₃/C₆/D₄/S₅ 同态+轨道=共轭类+OST 校验）、自定义作用（C₃ 循环合法、missing-target/conflict/duplicate/range 报错、无箭头生成元恒等初始化、非法阶绑定 → violation、自环固定点、多生成元同节点箭头共存） |
+| actions.test.ts | 33 | 群作用：置换工具（compose 方向/逆/恒等）、共轭作用（S₃/C₆/D₄/S₅ 同态+轨道=共轭类+OST 校验）、自定义作用（C₃ 循环合法、missing-target/conflict/duplicate/range 报错、无箭头生成元恒等初始化、非法阶绑定 → violation、自环固定点、多生成元同节点箭头共存） |
 | automorphisms.test.ts | 29 | findAllAutomorphisms（已知数量：Z2→2、Z4→2、Z5→4、S2→6、V4→6、Q8→24、D2→6、D4→8；Z₂⁴ 守卫返回 []）、createAutomorphismGroup 群律、Aut 群 Cayley 边连通性、标签/映射 |
 | homomorphisms.test.ts | 25 | verifyHomomorphism（含 violation）、naturalProjectionMapping、getHomomorphismProperties、subgroupInclusionMapping、directProductProjectionMapping、extendFromGenerators、formatKernelLabel、isElementIdentity |
-| layouts.test.ts | 20 | computeShape2DPositions（10 形状 size=order、circular→null、grid 需直积）、compute2DPositions（17 布局）、ringOrder 数字感知排序、computeElementOrder、cayleyCircleLayout（S2-perm 六边形 0 交叉、D2/D4 双环 0 交叉 + 配对断言、V4 未误入双环、直积覆盖） |
-| subgroups.test.ts | 27 | findAllSubgroups/getConjugacyClasses/getGroupCenter/computeQuotientGroup/isSimpleGroup/getNormalizer/getCentralizer/closeUnderMultiply（含非交换闭包双向、中心出现在子群格节点） |
+| layouts.test.ts | 30 | computeShape2DPositions（10 形状 size=order、circular→null、grid 需直积）、compute2DPositions（17 布局）、compute3DPositions、ringOrder 数字感知排序、computeElementOrder、cayleyCircleLayout（S2-perm 六边形 0 交叉、D2/D4 双环 0 交叉 + 配对断言、V4 未误入双环、直积覆盖） |
+| subgroups.test.ts | 37 | findAllSubgroups/getConjugacyClasses/getGroupCenter/computeQuotientGroup/isSimpleGroup/getNormalizer/getCentralizer/closeUnderMultiply（含非交换闭包双向、中心出现在子群格节点）、findAllNormalSubgroups |
 | directProduct.test.ts | 15 | 直积群律（C2×C2≅V4、C2×C2≅C6 等）、pipe id、逐分量乘法/逆元、紧凑符号（C2×C2→`C_{2}^{2}`、C4×C2→`C_{4} \times C_{2}`）、生成元提升 |
 | cayleyEdges.test.ts | 14 | computeCayleyActionEdges：空 actions→[]、右乘/左乘、自逆→双向、单位元→自环、去重、order>60 限流 max(120, order*2)、阿贝尔群左右相同 |
 | utils.test.ts | 14 | texify（Unicode→TeX 全规则、裸命令后 ASCII 字母加空格、幂等）、renderTex、createGroupFromSymbol |
@@ -33,7 +33,7 @@
 | polyhedra.test.ts | 14 | 多面体顶点数（12/24/24/24/60/60）、半径缩放、computeSkeletonEdges、computeElementRotation（identity 角 0、Cₙ/Dₙ 轴、A₄/S₄/A₅ 轴类型） |
 | forceLayout.test.ts | 20 | forceLayout/planarCycleLayout/子群格布局、cosetStripLayout（空群、S₃ A₃ 两条带、topPadding）、节点位置稳定性 |
 | elementRotation.test.ts | 6 | 群元素 → 几何旋转映射（Cₙ/Dₙ/A₄/S₄/A₅ 轴与角） |
-| layout2D.test.ts | 4 | projection2D 布局（群形状映射、球面/环面投影） |
+| layout3D.test.ts | 4 | compute3DPositions：3D 形状模板布局（群形状映射、球面/环面投影） |
 | quotientS4.test.ts | 2 | S₄/V₄ 商群创建与 Cayley 边 |
 | quotientFlow.test.ts | 1 | 商群流程 |
 | quotientRendering.test.ts | 1 | 商群渲染数据 |
@@ -45,13 +45,14 @@
 | ringOrder.test.ts | 17 | S2 排列/Z₂ 位向量/整数/eN 排序、parseProductFactors、matrixGridLayout、nestedFactorLayout2D |
 | viewBox.test.ts | 8 | getViewBoxSize（table clamp、sublattice、force 放大）、isTooLarge 各视图阈值 |
 | semidirectProduct.test.ts | 6 | createSemidirectProduct：C2⋊C2→D2、平凡φ→直接积、幂等回退、非同态φ抛错、exponent=lcm、生成元提升 |
-| properties.test.ts | 12 | 群性质：S₃/A₄/S₄ 导出列可解非幂零、A₅ 完美不可解、D₈ 幂零/D₁₂ 非幂零、Q₈、Cₙ/V₄、S₃×C₂、>60 cutoff 返回 null、导出列均为子群 |
-| i18n.test.ts | 2 | i18n 键完整性：zh/en 键集合相等、非空字符串、占位符参数一致 |
+| properties.test.ts | 13 | 群性质：S₃/A₄/S₄ 导出列可解非幂零、A₅ 完美不可解、D₈ 幂零/D₁₂ 非幂零、Q₈、Cₙ/V₄、S₃×C₂、>60 cutoff 返回 null、导出列均为子群 |
+| i18n.test.ts | 3 | i18n 键完整性：zh/en 键集合相等、非空字符串、占位符参数一致 |
 | sylow.test.ts | 25 | Sylow 定理：factorizeOrder、findSylowSubgroups（S₃ n₂=2/n₃=1、A₄ n₂=1/n₃=4、S₄ 2/4、D₈/Q₈/V₄/C₁₂ n_p=1、A₅ 5/10/6、S₅ 15/10/6）、子群公理、两两互共轭、sylowConjugationPerms 同态性/传递性、稳定子 = 正规化子（|G|/n_p）、findAllPSubgroups（S₃/A₄/Q₈/V₄/C₁₂ 全部 p-子群集合与阶序，Sylow 在前）、findMinimalGenerators |
 | actionDraftStorage.test.ts | 6 | 自定义群作用草稿持久化：round-trip（含 unbound 箭头）、无存储/损坏 JSON/结构非法返回 null、remove、覆盖保存 |
 | actionStorage.test.ts | 6 | 已完成群作用持久保存（groupviz-actions）：空返回 []、round-trip（含 unbound 箭头）、多群多条、损坏 JSON 返回 []、非法记录过滤（setSize 字符串）、覆盖保存 |
 | series.test.ts | 24 | 子群列（series.ts）：导列（S₃/S₄/A₄/S₅ 阶链与 reachesTrivial/可解性）、下中心列（D₈→{e} 幂零、D₁₂ 非幂零）、上中心列（D₁₂ Z∞=⟨r³⟩ 阶 4 非幂零、S₃ 平凡中心）、合成列（S₄/S₅/V₄/Q₈/D₈ 15 条/C₆/C₁₂ 2 条链、A₅ 单因子）、因子判定（Cₙ/V₄/Q₈/D₄/D₆/A₄/A₅ 标签、简单性）、isNormalSubgroupIn、SERIES_MAX_ORDER 守卫、computeChainFactors（备选链 S₅ 唯一链/D₈ V₄ 分支/A₄ 标签） |
-| presentations.test.ts | 22 | 群展示：解析器（简化/指数/括号/零指数/非法字符/长符号）、parsePresentation、Todd–Coxeter（finite/infinite/overflow）、buildGroupFromPresentation（C₄/D₄/V₄/S₃/A₅ 构建 + multiply/inverse 一致性 + 无限/溢出）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合/stored 原样） |
+| presentations.test.ts | 36 | 群展示：解析器（简化/指数/括号/零指数/非法字符/长符号 + Unicode 上标 a²/a⁻¹）、parsePresentation、parseRelationEquation（f1=f2 等式）、Todd–Coxeter（finite/infinite/overflow）、buildGroupFromPresentation（C₄/D₄/V₄/S₃/A₅ 构建 + multiply/inverse 一致性 + 无限/溢出 + f1=f2 归一化 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合/stored 原样） |
+| cayleyTree.test.ts | 25 | 树视图核心（cayleyTree.ts）：computeCayleyTree BFS 生成树（实线/粘合边划分）、computeFreeTree 自由模板树、computeFoldTree（幂折叠网格：a²,b³,ab=ba → C₂×C₃ 2×3 网格 0 交叉；genElsOverride 修复 S₄ Coxeter 3 生成元不崩溃；D∞ 0.7 路径状衰减、C₂*ℤ 0.5 稠密衰减 + 0 交叉、Sierpinski 0 交叉回归）、countEdgeCrossings 严格交叉计数、parseRelationEquation |
 
 ## 4. 测试要点与约定
 

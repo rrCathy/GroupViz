@@ -219,6 +219,7 @@ export function GroupCanvas() {
     operationHistory,
     setCanvasTransform,
     currentGroup,
+    activePresentationGroup,
     hintMessage,
     viewBoxSize,
     forceShowLargeGroupViews,
@@ -402,7 +403,7 @@ export function GroupCanvas() {
       case 'sylow':
         return <SylowView />
       case 'tree':
-        return <FreeGroupTreeView key={currentGroup?.symbol ?? 'free'} />
+        return <FreeGroupTreeView key={activePresentationGroup?.symbol ?? currentGroup?.symbol ?? 'free'} />
       case 'prestable':
         return <PresentationTableView />
       default:

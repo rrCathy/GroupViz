@@ -97,7 +97,7 @@ interface GroupContextState {
 
 ## 8.5 群展示
 
-- `GroupPresentationContext` + `presentationStorage.ts`，key `'groupviz-presentation-groups'`（仅存 generators/relators 元数据，加载时 buildGroupFromPresentation 重建）；草稿 key `'groupviz-presentation-draft'`（textarea 原文，随输入自动保存）；创建成功自动 换当前群与 cayley 视图（详见 docs/PRESENTATION.md）
+- `GroupPresentationContext` + `presentationStorage.ts`，key `'groupviz-presentation-groups'`（仅存 generators/relators 元数据，加载时 buildGroupFromPresentation 重建）；草稿 key `'groupviz-presentation-draft'`（textarea 原文，随输入自动保存）；创建成功设置独立 `activePresentationGroup`（不替换 currentGroup，`?? currentGroup` 回退）+ 切树视图（详见 docs/PRESENTATION.md）
 
 ## 9. 会话保存与恢复
 

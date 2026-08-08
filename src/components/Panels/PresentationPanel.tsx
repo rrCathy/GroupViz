@@ -1,27 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import { renderTex, texify } from '../../utils/texify'
-import { parsePresentation, buildGroupFromPresentation, formatPresentation, parseRelationEquation } from '../../core/algebra/presentations'
-import { COLOR_PALETTE, type Group, type GroupPresentation } from '../../core/types'
-
-interface PresentationPreset {
-  key: string
-  label: string
-  text: string
-}
-
-const PRESENTATION_PRESETS: PresentationPreset[] = [
-  { key: 'C4', label: '\\langle a \\mid a^{4} \\rangle', text: '⟨a | a^4⟩' },
-  { key: 'C6', label: '\\langle a \\mid a^{6} \\rangle', text: '⟨a | a^6⟩' },
-  { key: 'D4', label: '\\langle r, s \\mid r^{4}, s^{2}, srsr \\rangle', text: '⟨r, s | r^4, s^2, srsr⟩' },
-  { key: 'V4', label: '\\langle a, b \\mid a^{2}, b^{2}, abab \\rangle', text: '⟨a, b | a^2, b^2, abab⟩' },
-  { key: 'S3', label: '\\langle a, b \\mid a^{2}, b^{2}, (ab)^{3} \\rangle', text: '⟨a, b | a^2, b^2, (ab)^3⟩' },
-  { key: 'Q8', label: '\\langle i, j \\mid i^{4}, i^{2}j^{2}, jij^{-1}i \\rangle', text: '⟨i, j | i^4, i^2 j^2, j i j^{-1} i⟩' },
-  { key: 'A5', label: '\\langle a, b \\mid a^{2}, b^{3}, (ab)^{5} \\rangle', text: '⟨a, b | a^2, b^3, (ab)^5⟩' },
-  { key: 'C3xC2', label: '\\langle a, b \\mid a^{3}, b^{2}, aba^{-1}b^{-1} \\rangle', text: '⟨a, b | a^3, b^2, a b a^{-1} b^{-1}⟩' },
-]
+import { parsePresentation, buildGroupFromPresentation, parseRelationEquation } from '../../core/algebra/presentations'
 
 const TEMPLATE_NAMES = ['a', 'a, b', 'a, b, c']
 
@@ -39,7 +21,8 @@ function PresentationInner() {
     presentationDraft, presentationError,
     setPresentationDraft, createPresentationGroupFromText,
     presentationGroups, removePresentationGroup, loadPresentationGroup,
-    currentGroup, setCurrentView, clearCurrentGroup, setTemplateGenCount, setVisualDraft,
+    currentGroup, activePresentationGroup, setCurrentView, clearCurrentGroup, clearActivePresentationGroup,
+    setTemplateGenCount, setVisualDraft,
   } = useGroup()
   const { t } = useTranslation()
 
@@ -48,32 +31,6 @@ function PresentationInner() {
   const [relDraft, setRelDraft] = useState('')
   const [relError, setRelError] = useState<string | null>(null)
   const [relators, setRelators] = useState<string[]>([])
-  const [preview, setPreview] = useState<{ group: Group; pres: GroupPresentation; order: number } | null>(null)
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!presentationDraft.trim()) {
-        setPreview(null)
-        return
-      }
-      try {
-        const pres = parsePresentation(presentationDraft)
-        if (pres.generators.length === 0) {
-          setPreview(null)
-          return
-        }
-        const res = buildGroupFromPresentation(pres)
-        if (res.ok && res.group) {
-          setPreview({ group: res.group, pres, order: res.order ?? res.group.order })
-        } else {
-          setPreview(null)
-        }
-      } catch {
-        setPreview(null)
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [presentationDraft])
 
   const visualGroup = useMemo(() => {
     if (relators.length === 0) return null
@@ -124,7 +81,11 @@ function PresentationInner() {
     }
   }
 
-  const shown = preview ?? (currentGroup?.presentation ? { group: currentGroup, pres: currentGroup.presentation, order: currentGroup.order } : null)
+  const returnToTemplateTree = () => {
+    clearActivePresentationGroup()
+    clearCurrentGroup()
+    setVisualDraft(null)
+  }
 
   return (
     <div>
@@ -137,8 +98,8 @@ function PresentationInner() {
         </button>
       </div>
 
-      {currentGroup && (
-        <button className="panel-btn" onClick={() => { clearCurrentGroup(); setVisualDraft(null) }} style={{ width: '100%', fontSize: '11px', color: 'var(--accent-red)', marginBottom: '6px' }}>
+      {(currentGroup || activePresentationGroup) && (
+        <button className="panel-btn" onClick={returnToTemplateTree} style={{ width: '100%', fontSize: '11px', color: 'var(--accent-red)', marginBottom: '6px' }}>
           ✕ {t('pres.clearGroup')}
         </button>
       )}
@@ -153,15 +114,6 @@ function PresentationInner() {
             style={{ width: '100%', boxSizing: 'border-box', fontSize: '11px', fontFamily: 'inherit', resize: 'vertical', minHeight: '52px' }}
           />
 
-          <div className="subset-section-header" style={{ marginTop: '8px' }}>{t('pres.presets')}</div>
-          <div className="sd-presets-grid">
-            {PRESENTATION_PRESETS.map(p => (
-              <button key={p.key} className="sd-preset-btn" title={p.text} onClick={() => setPresentationDraft(p.text)}>
-                <span dangerouslySetInnerHTML={{ __html: renderTex(p.label) }} />
-              </button>
-            ))}
-          </div>
-
           <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
             <button className="panel-btn dp-create-btn" onClick={() => createPresentationGroupFromText(presentationDraft)} disabled={!presentationDraft.trim()} style={{ flex: 1, backgroundColor: presentationDraft.trim() ? 'var(--accent-orange)' : undefined, color: presentationDraft.trim() ? '#0f0f1a' : undefined, borderColor: presentationDraft.trim() ? 'var(--accent-orange)' : undefined }}>
               {t('pres.create')}
@@ -173,18 +125,6 @@ function PresentationInner() {
 
           {presentationError && (
             <div style={{ fontSize: '11px', marginTop: '4px', color: 'var(--accent-red)' }}>{presentationError}</div>
-          )}
-
-          {shown && (
-            <div className="dp-group-list" style={{ marginTop: '8px' }}>
-              <div className="subset-section-header">{t('pres.preview')}</div>
-              <div style={{ fontSize: '11px', marginBottom: '4px', textAlign: 'center' }} dangerouslySetInnerHTML={{ __html: renderTex(formatPresentation(shown.pres.generators, shown.pres.relators)) }} />
-              <PresentationMiniView group={shown.group} />
-              <div style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '4px' }}>
-                |G| = {shown.order}
-                {shown.group.isoSymbol && <span style={{ color: 'var(--accent-purple)' }}> ≅ <span dangerouslySetInnerHTML={{ __html: renderTex(texify(shown.group.isoSymbol)) }} /></span>}
-              </div>
-            </div>
           )}
         </>
       ) : (
@@ -255,59 +195,10 @@ function PresentationInner() {
         <button className="panel-btn" onClick={() => setCurrentView('tree')} style={{ flex: 1, fontSize: '11px' }}>
           ⌁ {t('view.tree')}
         </button>
-        <button className="panel-btn" onClick={() => setCurrentView('prestable')} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>
+        <button className="panel-btn" onClick={() => setCurrentView('prestable')} disabled={!currentGroup && !activePresentationGroup} style={{ flex: 1, fontSize: '11px' }}>
           ◧ {t('view.prestable')}
         </button>
       </div>
     </div>
-  )
-}
-
-const MINI_W = 300
-const MINI_H = 220
-
-function PresentationMiniView({ group }: { group: Group }) {
-  const cx = MINI_W / 2
-  const cy = MINI_H / 2
-  const R = Math.min(cx, cy) - 28
-
-  const idToIdx = useMemo(() => new Map(group.elements.map((e, i) => [e.id, i])), [group])
-  const genElements = useMemo(() => group.generators.map(gen => gen.apply(group.identity)), [group])
-  const idIdx = useMemo(() => idToIdx.get(group.identity.id) ?? 0, [idToIdx, group])
-
-  const positions = useMemo(() => {
-    const n = group.order
-    return group.elements.map((_, i) => {
-      const angle = (2 * Math.PI * i) / n - Math.PI / 2
-      return { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) }
-    })
-  }, [group, cx, cy, R])
-
-  const edges = useMemo(() => {
-    const out: { from: number; to: number; color: string }[] = []
-    for (const el of group.elements) {
-      const fi = idToIdx.get(el.id) ?? 0
-      genElements.forEach((gen, gi) => {
-        const target = group.multiply(el, gen)
-        const ti = idToIdx.get(target.id)
-        if (ti === undefined) return
-        out.push({ from: fi, to: ti, color: COLOR_PALETTE[gi % COLOR_PALETTE.length] })
-      })
-    }
-    return out
-  }, [group, idToIdx, genElements])
-
-  return (
-    <svg viewBox={`0 0 ${MINI_W} ${MINI_H}`} style={{ width: '100%', height: 'auto' }}>
-      {edges.map((ed, i) => (
-        <line key={i} x1={positions[ed.from].x} y1={positions[ed.from].y} x2={positions[ed.to].x} y2={positions[ed.to].y} stroke={ed.color} strokeWidth={1} opacity={0.5} />
-      ))}
-      {group.elements.map((el, i) => (
-        <g key={el.id}>
-          <circle cx={positions[i].x} cy={positions[i].y} r={i === idIdx ? 7 : 5} fill={COLOR_PALETTE[i % COLOR_PALETTE.length]} />
-          <title>{el.label}</title>
-        </g>
-      ))}
-    </svg>
   )
 }

@@ -14,6 +14,7 @@ const elementColors = [
 export function PresentationTableView() {
   const {
     currentGroup,
+    activePresentationGroup,
     selectedElements,
     selectElement,
     setHoverElement,
@@ -23,37 +24,39 @@ export function PresentationTableView() {
   } = useGroup()
   const { t } = useTranslation()
 
+  const group = activePresentationGroup ?? currentGroup
+
   const pres = useMemo(() => {
-    if (!currentGroup) return null
+    if (!group) return null
     try {
-      return presentationOf(currentGroup)
+      return presentationOf(group)
     } catch {
       return null
     }
-  }, [currentGroup])
+  }, [group])
 
   const idToIdx = useMemo(() => {
-    if (!currentGroup) return new Map<string, number>()
+    if (!group) return new Map<string, number>()
     const m = new Map<string, number>()
-    currentGroup.elements.forEach((el, i) => m.set(el.id, i))
+    group.elements.forEach((el, i) => m.set(el.id, i))
     return m
-  }, [currentGroup])
+  }, [group])
 
-  const isLargeTable = useMemo(() => (currentGroup ? currentGroup.order > 36 : false), [currentGroup])
+  const isLargeTable = useMemo(() => (group ? group.order > 36 : false), [group])
 
   const visibleIndices = useMemo(() => {
-    if (!currentGroup || !isLargeTable) return currentGroup ? currentGroup.elements.map((_, i) => i) : [] as number[]
+    if (!group || !isLargeTable) return group ? group.elements.map((_, i) => i) : [] as number[]
     const indices = new Set<number>([0])
     for (const id of selectedElements) {
       const idx = idToIdx.get(id)
       if (idx !== undefined && indices.size < 12) indices.add(idx)
     }
-    const step = Math.max(1, Math.ceil(currentGroup.order / 12))
-    for (let i = 0; i < currentGroup.order; i += step) indices.add(i)
+    const step = Math.max(1, Math.ceil(group.order / 12))
+    for (let i = 0; i < group.order; i += step) indices.add(i)
     return [...indices].sort((a, b) => a - b).slice(0, 20)
-  }, [currentGroup, isLargeTable, selectedElements, idToIdx])
+  }, [group, isLargeTable, selectedElements, idToIdx])
 
-  if (!currentGroup) {
+  if (!group) {
     return (
       <div className="view-empty">
         <p>{t('canvas.noGroup')}</p>
@@ -69,10 +72,10 @@ export function PresentationTableView() {
     )
   }
 
-  if (isTooLarge(currentGroup.order, 'prestable') && !forceShowLargeGroupViews.has('prestable')) {
+  if (isTooLarge(group.order, 'prestable') && !forceShowLargeGroupViews.has('prestable')) {
     return (
       <div className="large-group-warning">
-        <p>{t('canvas.orderTooLarge', { n: currentGroup.order })}</p>
+        <p>{t('canvas.orderTooLarge', { n: group.order })}</p>
         <button className="panel-btn" onClick={() => setForceShowLargeGroupForView('prestable', true)}>
           {t('canvas.show')}
         </button>
@@ -80,7 +83,7 @@ export function PresentationTableView() {
     )
   }
 
-  const { elements, multiply } = currentGroup
+  const { elements, multiply } = group
 
   const cellSize = 50
   const gridN = isLargeTable ? visibleIndices.length : elements.length

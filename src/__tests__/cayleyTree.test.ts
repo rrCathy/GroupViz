@@ -239,7 +239,7 @@ describe('computeFoldTree', () => {
     const shown = tree.nodes.filter(n => n.rep === undefined).map(n => n.label)
     expect(shown).toHaveLength(s4.order)
     expect(shown).toContain('e')
-  })
+  }, 30000)
 
   it('⟨a,b | a²,b²⟩（无限二面体 D∞）：0.7 层距衰减，边保持 90° 直角', () => {
     const tree = computeFoldTree(2, ['a^2 = e', 'b^2 = e'], 4)

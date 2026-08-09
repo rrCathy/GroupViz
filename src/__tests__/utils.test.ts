@@ -109,4 +109,46 @@ describe('createGroupFromSymbol', () => {
       byGenerator.multiply(byGenerator.elements[1], byGenerator.elements[2]).id
     )
   })
+
+  it('parses nested direct products and unicode separators', () => {
+    expect(createGroupFromSymbol('C_{2}\\times C_{3}')!.order).toBe(6)
+    expect(createGroupFromSymbol('Z₆×Z₂')!.order).toBe(12)
+    expect(createGroupFromSymbol('C_{2}\\times C_{2}\\times C_{3}')!.order).toBe(12)
+  })
+
+  it('supports superscript powers on any group symbol', () => {
+    expect(createGroupFromSymbol('C_{2}^{2}')!.order).toBe(4)
+    expect(createGroupFromSymbol('D_{3}^{2}')!.order).toBe(36)
+  })
+
+  it('rejects invalid powers and unresolved product parts', () => {
+    expect(createGroupFromSymbol('Z_{2}^{1}')!.order).toBe(2)
+    expect(createGroupFromSymbol('X_{9}^{2}')).toBeNull()
+    expect(createGroupFromSymbol('C_{2}\\times X_{9}')).toBeNull()
+    expect(createGroupFromSymbol('X_{9}\\times C_{2}')).toBeNull()
+  })
+
+  it('rejects out-of-range symbols', () => {
+    expect(createGroupFromSymbol('C_{0}')).toBeNull()
+    expect(createGroupFromSymbol('D_{2}')).toBeNull()
+    expect(createGroupFromSymbol('S_{1}')).toBeNull()
+    expect(createGroupFromSymbol('S_{7}')).toBeNull()
+    expect(createGroupFromSymbol('A_{2}')).toBeNull()
+    expect(createGroupFromSymbol('A_{7}')).toBeNull()
+    expect(createGroupFromSymbol('Z_{31}')).toBeNull()
+  })
+
+  it('resolves previously out-of-range symbols via the SmallGroups registry', () => {
+    expect(createGroupFromSymbol('C_{31}')!.order).toBe(31)
+    expect(createGroupFromSymbol('D_{13}')!.order).toBe(26)
+    expect(createGroupFromSymbol('SmallGroup(16,13)')!.order).toBe(16)
+  })
+
+  it('accepts unicode legacy symbols', () => {
+    expect(createGroupFromSymbol('Z₂³')!.order).toBe(8)
+    expect(createGroupFromSymbol('Z₃×Z₃')!.order).toBe(9)
+    expect(createGroupFromSymbol('Z₃²')!.order).toBe(9)
+    expect(createGroupFromSymbol('V₄')!.order).toBe(4)
+    expect(createGroupFromSymbol('Q₈')!.order).toBe(8)
+  })
 })

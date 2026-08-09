@@ -4,11 +4,11 @@ import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../core/groups/SpecialGroup'
-import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3, createZ6xZ2 } from '../core/groups/SmallGroups'
+import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3, createZ6xZ2, getSmallGroupBySymbol } from '../core/groups/SmallGroups'
 import { createDirectProduct } from '../core/groups/DirectProduct'
 
 function parseTexSubscript(symbol: string, prefix: string): number | null {
-  const re = new RegExp(`^${prefix}_\\{(\\d+)\\}`, '')
+  const re = new RegExp(`^${prefix}_\\{(\\d+)\\}$`, '')
   const m = symbol.match(re)
   if (!m) return null
   return parseInt(m[1], 10)
@@ -18,7 +18,7 @@ function parseTexSuperscript(symbol: string): { base: string; exponent: number }
   const m = symbol.match(/^(.+)\^\{(\d+)\}$/)
   if (!m) return null
   const exponent = parseInt(m[2], 10)
-  if (exponent < 2) return null
+  if (exponent < 1) return null
   return { base: m[1], exponent }
 }
 
@@ -68,6 +68,9 @@ export function createGroupFromSymbol(symbol: string): Group | null {
 
   // Superscript power notation: C_{2}^{2}, Z_{2}^{3}, etc.
   const supPower = parseTexSuperscript(symbol)
+  if (supPower && supPower.exponent === 1) {
+    return createGroupFromSymbol(supPower.base)
+  }
   if (supPower) {
     const baseGroup = createGroupFromSymbol(supPower.base)
     if (baseGroup) {
@@ -104,13 +107,13 @@ export function createGroupFromSymbol(symbol: string): Group | null {
 
   // Dihedral groups: D_{n}
   const dN = parseTexSubscript(symbol, 'D')
-  if (dN !== null && dN >= 3 && dN <= 12) {
+  if (dN !== null && dN >= 3 && dN <= 15) {
     return createDihedralGroup(dN)
   }
   const dMatch = /^D(\d+)$/.exec(symbol)
   if (dMatch) {
     const n = parseInt(dMatch[1], 10)
-    if (n >= 3 && n <= 12) return createDihedralGroup(n)
+    if (n >= 3 && n <= 15) return createDihedralGroup(n)
   }
 
   // Symmetric groups: S_{n}
@@ -135,5 +138,14 @@ export function createGroupFromSymbol(symbol: string): Group | null {
     if (n >= 3 && n <= 6) return createAlternatingGroup(n)
   }
 
-  return null
+  // SmallGroup(n,i) identifier (GAP convention, i is 1-based)
+  const sgMatch = /^SmallGroup\((\d+),(\d+)\)$/.exec(symbol)
+  if (sgMatch) {
+    const n = parseInt(sgMatch[1], 10)
+    const i = parseInt(sgMatch[2], 10)
+    return getSmallGroupBySymbol(`SmallGroup(${n},${i})`)?.group ?? null
+  }
+
+  // Fallback: look up the SmallGroups registry by symbol (orders 16-31, Dic3, ...)
+  return getSmallGroupBySymbol(symbol)?.group ?? null
 }

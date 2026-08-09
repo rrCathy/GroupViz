@@ -5,7 +5,7 @@ import { createCyclicGroup } from '../../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../../core/groups/SpecialGroup'
-import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3 } from '../../core/groups/SmallGroups'
+import { getAllSmallGroups } from '../../core/groups/SmallGroups'
 
 export interface GroupTypeConfig {
   key: string
@@ -67,34 +67,19 @@ export function buildViewModes(t: (key: string) => string): ViewModeEntry[] {
   ]
 }
 
-export function buildOrderGroupsMap(t: (key: string) => string): Map<number, OrderEntry[]> {
-  const factorial = (n: number): number => {
-    let r = 1
-    for (let i = 2; i <= n; i++) r *= i
-    return r
-  }
+export function buildOrderGroupsMap(_t: (key: string) => string): Map<number, OrderEntry[]> {
   const map = new Map<number, OrderEntry[]>()
-  const add = (order: number, entry: OrderEntry) => {
+  // All groups of order 1..31 from the SmallGroups registry (GAP data)
+  for (const entry of getAllSmallGroups()) {
+    const order = entry.order
     if (!map.has(order)) map.set(order, [])
-    map.get(order)!.push(entry)
+    map.get(order)!.push({
+      symbol: entry.group.symbol,
+      label: entry.group.symbol,
+      desc: `SmallGroup(${order},${entry.index + 1})`,
+      create: () => entry.group
+    })
   }
-  for (let n = 2; n <= 30; n++) {
-    add(n, { symbol: `Z_{${n}}`, label: `Z_{${n}}`, desc: t('group.cyclic'), create: () => createCyclicGroup(n) })
-  }
-  for (let n = 3; n <= 5; n++) {
-    add(factorial(n), { symbol: `S_{${n}}`, label: `S_{${n}}`, desc: t('group.symmetric'), create: () => createSymmetricGroup(n) })
-  }
-  for (let n = 4; n <= 8; n++) {
-    add(2 * n, { symbol: `D_{${n}}`, label: `D_{${n}}`, desc: t('group.dihedral'), create: () => createDihedralGroup(n) })
-  }
-  for (let n = 4; n <= 5; n++) {
-    add(factorial(n) / 2, { symbol: `A_{${n}}`, label: `A_{${n}}`, desc: t('group.alternating'), create: () => createAlternatingGroup(n) })
-  }
-  add(4, { symbol: 'V_{4}', label: 'V_{4}', desc: t('group.klein'), create: createKleinFour })
-  add(8, { symbol: 'Q_{8}', label: 'Q_{8}', desc: t('group.quaternion'), create: createQuaternion })
-  add(8, { symbol: 'Z_{4}\\times Z_{2}', label: 'Z_{4}\\times Z_{2}', desc: t('group.direct.z4z2'), create: createZ4xZ2 })
-  add(8, { symbol: 'Z_{2}^{3}', label: 'Z_{2}^{3}', desc: t('group.direct.z2cubed'), create: createZ2xZ2xZ2 })
-  add(9, { symbol: 'Z_{3}\\times Z_{3}', label: 'Z_{3}\\times Z_{3}', desc: t('group.direct.z3z3'), create: createZ3xZ3 })
   return map
 }
 

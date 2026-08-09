@@ -116,26 +116,23 @@ interface Automorphism { id: string; map: Map<string,string>; label: string; app
 
 ## 6. 小群预计算注册表
 
-`src/core/groups/SmallGroups.ts` 维护**懒加载预计算注册表**（全部阶 ≤ 15 的群，共 27 条）：
+`src/core/groups/SmallGroups.ts` 维护**懒加载预计算注册表**——阶 1..31 的全部 93 个群（GAP 4.16 SmallGroups 库全量导入）：
 
-| 阶 | 群 |
+| 阶 | 群（数量） |
 |----|-----|
-| 1 | C₁ |
-| 2 | C₂ |
-| 3 | C₃ |
-| 4 | C₄, V₄ |
-| 5 | C₅ |
-| 6 | C₆, S₃ |
-| 7 | C₇ |
-| 8 | C₈, Z₄×Z₂, Z₂³, D₄, Q₈ |
-| 9 | C₉, Z₃×Z₃ |
-| 10 | C₁₀, D₅ |
-| 11 | C₁₁ |
-| 12 | C₁₂, Z₆×Z₂, D₆, A₄ |
-| 13 | C₁₃ |
-| 14 | C₁₄, D₇ |
-| 15 | C₁₅ |
+| 1-7 | C₁, C₂, C₃, C₄, V₄, C₅, C₆, S₃, C₇（9） |
+| 8 | C₈, Z₄×Z₂, Z₂³, D₄, Q₈（5） |
+| 9-11 | C₉, Z₃×Z₃, C₁₀, D₅, C₁₁（5） |
+| 12 | C₁₂, Z₆×Z₂, D₆, A₄, Dic₃（Z₃:C₄）（5） |
+| 13-15 | C₁₃, C₁₄, D₇, C₁₅（4） |
+| 16 | 14 个（C₁₆, Z₄×Z₄, Z₄×Z₂×Z₂, D₈, QD₁₆, Q₁₆, Z₈×Z₂, Z₄:C₄, Z₈:C₂, Z₂×D₄, Z₂×Q₈, Z₂⁴, (Z₄×Z₂):Z₂, SmallGroup(16,13)） |
+| 17-23 | C₁₇, D₉, C₁₈, C₃×S₃, Z₃:C₆, Z₆×Z₃, C₁₉, Z₅:C₄, C₂₀, Z₅:C₄, D₁₀, Z₁₀×Z₂, Z₇:C₃, C₂₁, D₁₁, C₂₂, C₂₃（17） |
+| 24 | 15 个（C₂₄, Z₃:C₈, SL(2,3), Z₃:Q₈, Z₄×S₃, D₁₂, Z₂×(Z₃:C₄), (Z₆×Z₂):C₂, Z₁₂×Z₂, Z₃×D₄, Z₃×Q₈, S₄, Z₂×A₄, Z₂×Z₂×S₃, Z₆×Z₂×Z₂） |
+| 25-31 | C₂₅, Z₅×Z₅, D₁₃, C₂₆, C₂₇, Z₉×Z₃, (Z₃×Z₃):C₃, Z₉:C₃, Z₃³, Z₇:C₄, C₂₈, D₁₄, Z₁₄×Z₂, C₂₉, Z₅×S₃, Z₃×D₁₀, D₁₅, C₃₀, C₃₁（19） |
 
+数据来源 `src/core/groups/smallGroupData.ts`（`SMALL_GROUP_DATA`，93 条，一次性由 GAP 导出：n=1..31、i=1..NrSmallGroups(n)，字段 {n, i, structure=StructureDescription, abelian, exponent, gens=MinimalGeneratingSet 元素位置, table=乘法表}，元素序 = SortedList(Elements) 且恒等元置首）。阶 1..15 的 27 条沿用原手写工厂（符号/行为不变），阶 16..31 的 65 条 + (12,4) Dic₃ 由 `createTableGroup(order, gapIndex)` 按乘法表构建（元素 label `g_{i}`，生成元名 a/b/c…，apply 右乘）。
+
+- **符号生成 `structureToSymbol(n, i, structure)`**：StructureDescription TeX 化（C8→`C_{8}`、D16→`D_{8}`（二面体阶÷2 旋转约定）、C4 x C4→`Z_{4}\times Z_{4}`）；非循环群描述以 C 开头则 C→Z 替换（防 isGroupCyclic 误判）；`:` 保留字面量（不触发 `\rtimes` 判定）。结构描述重复（GAP 无法区分同构类型）时符号回退为 `SmallGroup(n,i)`（(16,3)/(16,13) 与 (20,1)/(20,3)）；(12,4) 的 GAP 描述 'D12' 与 D₁₂ 冲突，强制为 `Z_{3}:C_{4}`（Dic₃）。ensureTable 遇到符号冲突时后注册者改符号（先注册者优先）。
 - `getAllSmallGroups()` / `getSmallGroup(order, index=0)` / `getSmallGroupBySymbol(symbol)` / `getPrecomputed(group)`
 - `PrecomputedData {subgroups, normalSubgroups, conjugacyClasses, center, isSimple}`——由 `compile()` 预计算（findAllSubgroups/findAllNormalSubgroups/getConjugacyClasses/getGroupCenter/isSimpleGroup）
 - 便捷工厂：`createZ4xZ2` / `createZ2xZ2xZ2` / `createZ3xZ3` / `createZ6xZ2`

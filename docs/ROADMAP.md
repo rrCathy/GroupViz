@@ -40,7 +40,7 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 - **群结构分析升级**：换位子群 [G,G]、合成列（composition series）、可解/幂零判定——合成列是"子群格 × 商群"的深度组合，是 FGVE 的核心能力之一。
 - **群族扩充**：GL(2,p)（小 p）、小群注册表扩至阶 16-30 按同构类组织。
-- **质量**：覆盖率 75.8% → 85%+；后端计算与前端本地兜底功能对齐（S₆ 全通）。
+- **质量**：覆盖率 75.8% → 85%+（✅ 2026-08-09：88.64% stmts / 91.18% lines，35 文件 695 tests，export.ts/exportApi.ts 补测）；后端计算与前端本地兜底功能对齐（S₆ 全通）。
 
 ### 1.4 本期明确暂缓
 
@@ -124,3 +124,5 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 | 2026-08-04 | 确定三阶段命名与范围；近期优先级 = 群作用系统 + Sylow 定理可视化（其余列 P1/暂缓）；FGVE 先做仓库内独立引擎层（npm 包化推迟到 GVL 阶段）；GVL 定位大学抽象代数课程配套 |
 | 2026-08-06 | Sylow 定理可视化落地：core/algebra/sylow.ts 专用查找算法 + Sylow 型视图（元素节点/凯莱图/陪集条带/共轭双选/子群边）+ ActionView Sylow 共轭作用验证；28 文件 542 tests 全绿；版本 1.9.0 |
 | 2026-08-07 | 群展示系统落地：core/algebra/presentations.ts（解析器 + Todd–Coxeter 陪集枚举 TC_MAX_COSETS=3000 + 构建 + presentationOf 标准展示分发 + 通用关系发现器）、左侧「群展示」面板（8 预设/防抖预览/持久化+草稿）、关系回路视图（Van Kampen 图 + 关系动画）、展示乘法表视图（单词求值路径）；32 文件 630 tests 全绿；版本 1.10.0 |
+| 2026-08-09 | 测试补齐：覆盖率 84.02% → 88.64% stmts（91.18% lines），新增 export.test.ts（15 tests，GIF 编码/SVG/canvas 导出全路径）、exportApi.test.ts（16 tests，导出桥单例 + DOM stub）、utils.test.ts 补 9 用例（groupFactory 嵌套直积/上标幂/回退/越界）；修复 cayleyTree genElsOverride 测试 coverage 下 5s 超时（30s）；35 文件 695 tests 全绿 |
+| 2026-08-09 | 小群全量导入：GAP 4.16 SmallGroups 库导出阶 1-31 全部 93 个群（smallGroupData.ts 乘法表数据 + createTableGroup 构建 + structureToSymbol 符号化，结构冲突回退 SmallGroup(n,i)，Dic₃ 强制 Z₃:C₄）；按阶创建面板改为注册表驱动（阶 1-31）；createGroupFromSymbol 支持 D₈-D₁₅/新符号/SmallGroup(n,i)/注册表兜底（会话恢复兼容）；35 文件 704 tests 全绿 |

@@ -12,11 +12,11 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`{ test: { globals: true, environment: 'node' } }` — Node 环境，无 jsdom、无 setupFiles
-- **coverage**：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`（基线 Stmts 58.74% → 现 81.91%，core 92.07% / utils 41.67%，series.ts 91.86%）
+- **coverage**：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`（基线 Stmts 58.74% → 现 88.64%，core 91.74% / utils 86.68%，exportApi.ts 95.41%）
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，33 文件 / 659 tests）
+## 3. 测试文件清单（src/__tests__，35 文件 / 704 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -28,8 +28,8 @@
 | subgroups.test.ts | 37 | findAllSubgroups/getConjugacyClasses/getGroupCenter/computeQuotientGroup/isSimpleGroup/getNormalizer/getCentralizer/closeUnderMultiply（含非交换闭包双向、中心出现在子群格节点）、findAllNormalSubgroups |
 | directProduct.test.ts | 15 | 直积群律（C2×C2≅V4、C2×C2≅C6 等）、pipe id、逐分量乘法/逆元、紧凑符号（C2×C2→`C_{2}^{2}`、C4×C2→`C_{4} \times C_{2}`）、生成元提升 |
 | cayleyEdges.test.ts | 14 | computeCayleyActionEdges：空 actions→[]、右乘/左乘、自逆→双向、单位元→自环、去重、order>60 限流 max(120, order*2)、阿贝尔群左右相同 |
-| utils.test.ts | 14 | texify（Unicode→TeX 全规则、裸命令后 ASCII 字母加空格、幂等）、renderTex、createGroupFromSymbol |
-| smallGroups.test.ts | 12 | 注册表 27 条完整性、getSmallGroup/getSmallGroupBySymbol/getPrecomputed、子群阶整除、isSimple 与素数一致、center/共轭类与 subgroups.ts 一致 |
+| utils.test.ts | 19 | texify（Unicode→TeX 全规则、裸命令后 ASCII 字母加空格、幂等）、renderTex、createGroupFromSymbol（嵌套直积/Unicode 直积/上标幂/无效幂回退/越界拒绝/legacy Unicode 符号） |
+| smallGroups.test.ts | 20 | 注册表 93 条（阶 1-31 GAP 全量）完整性/分布、每条 GAP 数据都有对应条目、符号唯一、getSmallGroup/getSmallGroupBySymbol/getPrecomputed、Dic₃、16-31 符号抽查（含冲突回退 SmallGroup(n,i)）、全量公理验证（恒等/逆元/结合律直查数据表/生成元闭包）、子群阶整除、isSimple 与素数一致、center/共轭类与 subgroups.ts 一致、createGroupFromSymbol 解析新符号 |
 | polyhedra.test.ts | 14 | 多面体顶点数（12/24/24/24/60/60）、半径缩放、computeSkeletonEdges、computeElementRotation（identity 角 0、Cₙ/Dₙ 轴、A₄/S₄/A₅ 轴类型） |
 | forceLayout.test.ts | 20 | forceLayout/planarCycleLayout/子群格布局、cosetStripLayout（空群、S₃ A₃ 两条带、topPadding）、节点位置稳定性 |
 | elementRotation.test.ts | 6 | 群元素 → 几何旋转映射（Cₙ/Dₙ/A₄/S₄/A₅ 轴与角） |
@@ -53,6 +53,8 @@
 | series.test.ts | 24 | 子群列（series.ts）：导列（S₃/S₄/A₄/S₅ 阶链与 reachesTrivial/可解性）、下中心列（D₈→{e} 幂零、D₁₂ 非幂零）、上中心列（D₁₂ Z∞=⟨r³⟩ 阶 4 非幂零、S₃ 平凡中心）、合成列（S₄/S₅/V₄/Q₈/D₈ 15 条/C₆/C₁₂ 2 条链、A₅ 单因子）、因子判定（Cₙ/V₄/Q₈/D₄/D₆/A₄/A₅ 标签、简单性）、isNormalSubgroupIn、SERIES_MAX_ORDER 守卫、computeChainFactors（备选链 S₅ 唯一链/D₈ V₄ 分支/A₄ 标签） |
 | presentations.test.ts | 36 | 群展示：解析器（简化/指数/括号/零指数/非法字符/长符号 + Unicode 上标 a²/a⁻¹）、parsePresentation、parseRelationEquation（f1=f2 等式）、Todd–Coxeter（finite/infinite/overflow）、buildGroupFromPresentation（C₄/D₄/V₄/S₃/A₅ 构建 + multiply/inverse 一致性 + 无限/溢出 + f1=f2 归一化 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合/stored 原样） |
 | cayleyTree.test.ts | 25 | 树视图核心（cayleyTree.ts）：computeCayleyTree BFS 生成树（生成树边/粘合边划分，粘合边不渲染仅计数）、computeFreeTree 自由模板树、computeFoldTree（幂折叠网格：a²,b³,ab=ba → C₂×C₃ 2×3 网格 0 交叉；genElsOverride 修复 S₄ Coxeter 3 生成元不崩溃；D∞ 0.7 路径状衰减、C₂*ℤ 0.5 稠密衰减 + 0 交叉、Sierpinski 0 交叉回归）、countEdgeCrossings 严格交叉计数、parseRelationEquation |
+| export.test.ts | 15 | 视图导出（export.ts）：encodeGif（GIF89a 魔数/多帧）、triggerDownload、exportView（SVG/3D canvas/无 viewport/svg/canvas 分支）、captureSvgFrame（像素解析/加载失败 reject）、exportSymmetryAsGifBlob（无 viewport null/多帧捕获 + 重启回调）、exportSymmetryAsGif（各 alert 分支） |
+| exportApi.test.ts | 16 | 导出桥（exportApi.ts）：registerExportBridge 与 waitReady 时序、getSymmetryInfo（C/D/A₄/S₄/A₅/V₄ 映射）、getAvailableShapes2D/3D、getAvailableViewsForExport（大群去 table/直积去 symmetry）、hideOverlays/showOverlays、exportSVGContent（CSS 变量注入）、exportCanvasDataUrl、recordGIF（base64 解析） |
 
 ## 4. 测试要点与约定
 

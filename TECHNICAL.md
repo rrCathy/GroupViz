@@ -256,7 +256,7 @@ interface Group {
 
 #### 小群预计算注册表 `SmallGroups.ts`
 
-阶 < 12 的所有群（含阶 12-15）懒加载预计算：
+阶 1-31 的全部 93 个群懒加载预计算（阶 16-31 的 65 条 + Dic₃(12,4) 由 GAP 4.16 SmallGroups 库导出的乘法表数据 `smallGroupData.ts` 经 `createTableGroup` 构建；阶 1-15 沿用原 27 条手写工厂）：
 
 | 阶 | 群 |
 |----|-----|
@@ -271,8 +271,9 @@ interface Group {
 | 9 | C₉, Z₃×Z₃ |
 | 10 | C₁₀, D₅ |
 | 11 | C₁₁ |
-| 12 | C₁₂, Z₆×Z₂, D₆, A₄ |
+| 12 | C₁₂, Z₆×Z₂, D₆, A₄, Dic₃（Z₃:C₄） |
 | 13-15 | C₁₃, C₁₄, D₇, C₁₅ |
+| 16-31 | 65 条（GAP 数据驱动，符号 = StructureDescription TeX 化，结构冲突回退 SmallGroup(n,i)） |
 
 `PrecomputedData` 包含子群、正规子群、共轭类、中心、单群判定。
 

@@ -5,9 +5,11 @@ import {
   getSmallGroupBySymbol,
   getPrecomputed,
 } from '../core/groups/SmallGroups'
+import { SMALL_GROUP_DATA } from '../core/groups/smallGroupData'
 import { createS3 } from '../core/groups/SymmetricGroup'
 import { createDirectProduct } from '../core/groups/DirectProduct'
 import { getGroupCenter, isSimpleGroup } from '../core/algebra/subgroups'
+import { createGroupFromSymbol } from '../utils/groupFactory'
 
 function isPrime(n: number): boolean {
   if (n < 2) return false
@@ -15,14 +17,27 @@ function isPrime(n: number): boolean {
   return true
 }
 
+// Number of groups of each order 1..31 (GAP NrSmallGroups)
+const EXPECTED_COUNTS: Record<number, number> = {
+  1: 1, 2: 1, 3: 1, 4: 2, 5: 1, 6: 2, 7: 1, 8: 5, 9: 2, 10: 2, 11: 1, 12: 5,
+  13: 1, 14: 2, 15: 1, 16: 14, 17: 1, 18: 5, 19: 1, 20: 5, 21: 2, 22: 2,
+  23: 1, 24: 15, 25: 2, 26: 2, 27: 5, 28: 4, 29: 1, 30: 4, 31: 1
+}
+
 describe('SmallGroups registry', () => {
-  it('contains all groups of order < 16', () => {
+  it('contains all groups of order < 32', () => {
     const all = getAllSmallGroups()
-    // 27 entries: 1,2,3,4x2,5,6x2,7,8x5,9x2,10x2,11,12x4,13,14x2,15
-    expect(all.length).toBe(27)
-    const orders = all.map(e => e.order)
-    for (let o = 1; o < 16; o++) {
-      expect(orders).toContain(o)
+    expect(all.length).toBe(93)
+    for (let o = 1; o <= 31; o++) {
+      const count = all.filter(e => e.order === o).length
+      expect(count).toBe(EXPECTED_COUNTS[o])
+    }
+  })
+
+  it('registry covers every GAP SmallGroup(1..31,i) data record', () => {
+    for (const rec of SMALL_GROUP_DATA) {
+      const entry = getSmallGroup(rec.n, rec.i - 1)
+      expect(entry, `SmallGroup(${rec.n},${rec.i})`).not.toBeNull()
     }
   })
 
@@ -41,9 +56,35 @@ describe('SmallGroups registry', () => {
     expect(getSmallGroup(12, 3)!.group.symbol).toBe('A_{4}')
   })
 
+  it('Dic3 (GAP 12,4) is registered with its own symbol', () => {
+    const entry = getSmallGroup(12, 4)!
+    expect(entry.group.symbol).toBe('Z_{3}:C_{4}')
+    expect(entry.group.order).toBe(12)
+    expect(entry.group.isAbelian).toBe(false)
+  })
+
+  it('orders 16-31 use GAP-derived TeX symbols', () => {
+    expect(getSmallGroup(16, 0)!.group.symbol).toBe('C_{16}')
+    expect(getSmallGroup(16, 1)!.group.symbol).toBe('Z_{4}\\times Z_{4}')
+    expect(getSmallGroup(16, 6)!.group.symbol).toBe('D_{8}')
+    expect(getSmallGroup(16, 8)!.group.symbol).toBe('Q_{16}')
+    expect(getSmallGroup(18, 0)!.group.symbol).toBe('D_{9}')
+    expect(getSmallGroup(24, 11)!.group.symbol).toBe('S_{4}')
+    expect(getSmallGroup(24, 2)!.group.symbol).toBe('SL(2,3)')
+    expect(getSmallGroup(30, 0)!.group.symbol).toBe('Z_{5}\\times S_{3}')
+  })
+
+  it('GAP structure-description collisions fall back to SmallGroup(n,i)', () => {
+    expect(getSmallGroup(16, 2)!.group.symbol).toBe('(Z_{4}\\times Z_{2}):Z_{2}')
+    expect(getSmallGroup(16, 12)!.group.symbol).toBe('SmallGroup(16,13)')
+    expect(getSmallGroup(20, 0)!.group.symbol).toBe('Z_{5}:Z_{4}')
+    expect(getSmallGroup(20, 2)!.group.symbol).toBe('SmallGroup(20,3)')
+  })
+
   it('getSmallGroup returns null for out-of-range index', () => {
     expect(getSmallGroup(4, 5)).toBeNull()
     expect(getSmallGroup(999)).toBeNull()
+    expect(getSmallGroup(16, 14)).toBeNull()
   })
 
   it('getSmallGroupBySymbol finds entries', () => {
@@ -52,10 +93,14 @@ describe('SmallGroups registry', () => {
     expect(getSmallGroupBySymbol('Z_{2}^{3}')!.order).toBe(8)
     expect(getSmallGroupBySymbol('Z_{3}^{2}')!.order).toBe(9)
     expect(getSmallGroupBySymbol('Z_{6}\\times Z_{2}')!.order).toBe(12)
+    expect(getSmallGroupBySymbol('Z_{3}:C_{4}')!.order).toBe(12)
+    expect(getSmallGroupBySymbol('D_{8}')!.order).toBe(16)
+    expect(getSmallGroupBySymbol('SmallGroup(16,13)')!.order).toBe(16)
   })
 
   it('getSmallGroupBySymbol returns null for unknown symbol', () => {
     expect(getSmallGroupBySymbol('X_{7}')).toBeNull()
+    expect(getSmallGroupBySymbol('D_{16}')).toBeNull()
   })
 
   it('getPrecomputed matches a group instance by symbol', () => {
@@ -74,6 +119,74 @@ describe('SmallGroups registry', () => {
     expect(getPrecomputed(DP)).toBeNull()
   })
 
+  it('every table-driven group satisfies the group axioms', () => {
+    for (const entry of getAllSmallGroups()) {
+      const g = entry.group
+      const id = g.identity
+      const order = g.order
+      // identity laws
+      for (let a = 0; a < order; a++) {
+        expect(g.multiply(id, g.elements[a]).id).toBe(g.elements[a].id)
+        expect(g.multiply(g.elements[a], id).id).toBe(g.elements[a].id)
+      }
+      // inverses
+      for (let a = 0; a < order; a++) {
+        const inv = g.inverse(g.elements[a])
+        expect(g.multiply(g.elements[a], inv).id).toBe(id.id)
+        expect(g.multiply(inv, g.elements[a]).id).toBe(id.id)
+      }
+    }
+    // Full associativity verified directly on the GAP multiplication tables
+    // (table cells are 1-based positions; a,b,c are 0-based indices)
+    for (const rec of SMALL_GROUP_DATA) {
+      const t = rec.table
+      for (let a = 0; a < rec.n; a++) {
+        for (let b = 0; b < rec.n; b++) {
+          for (let c = 0; c < rec.n; c++) {
+            const ab = t[a][b] - 1
+            const bc = t[b][c] - 1
+            if (t[ab][c] !== t[a][bc]) {
+              throw new Error(`associativity failed for SmallGroup(${rec.n},${rec.i}) at (${a},${b},${c})`)
+            }
+          }
+        }
+      }
+    }
+    // Spot-check associativity through the Group API
+    for (const entry of getAllSmallGroups()) {
+      const g = entry.group
+      const order = g.order
+      for (let k = 0; k < 30; k++) {
+        const a = (k * 7 + 3) % order
+        const b = (k * 5 + 1) % order
+        const c = (k * 3 + 2) % order
+        const ab = g.multiply(g.elements[a], g.elements[b])
+        const bc = g.multiply(g.elements[b], g.elements[c])
+        expect(g.multiply(ab, g.elements[c]).id).toBe(g.multiply(g.elements[a], bc).id)
+      }
+    }
+    // generators generate the whole group
+    for (const entry of getAllSmallGroups()) {
+      const g = entry.group
+      const id = g.identity
+      const order = g.order
+      const generated = new Set<string>([id.id])
+      const frontier = [id.id]
+      while (frontier.length > 0) {
+        const curId = frontier.pop()!
+        const cur = g.elements.find(e => e.id === curId)!
+        for (const gen of g.generators) {
+          const next = gen.apply(cur)
+          if (!generated.has(next.id)) {
+            generated.add(next.id)
+            frontier.push(next.id)
+          }
+        }
+      }
+      expect(generated.size, `${g.symbol} generators`).toBe(order)
+    }
+  })
+
   it('precomputed subgroup orders satisfy Lagrange', () => {
     for (const entry of getAllSmallGroups()) {
       for (const sub of entry.precomputed.subgroups) {
@@ -82,7 +195,7 @@ describe('SmallGroups registry', () => {
     }
   })
 
-  it('simplicity matches primality of order for orders < 16', () => {
+  it('simplicity matches primality of order for orders < 32', () => {
     for (const entry of getAllSmallGroups()) {
       expect(entry.precomputed.isSimple).toBe(isPrime(entry.order))
       expect(entry.precomputed.isSimple).toBe(isSimpleGroup(entry.group))
@@ -103,5 +216,26 @@ describe('SmallGroups registry', () => {
       const ids = new Set(entry.precomputed.conjugacyClasses.flatMap(c => c.map(e => e.id)))
       expect(ids.size).toBe(entry.group.order)
     }
+  })
+})
+
+describe('createGroupFromSymbol with GAP-derived symbols', () => {
+  it('parses dihedral symbols for orders 16-30', () => {
+    expect(createGroupFromSymbol('D_{8}')!.order).toBe(16)
+    expect(createGroupFromSymbol('D_{9}')!.order).toBe(18)
+    expect(createGroupFromSymbol('D_{13}')!.order).toBe(26)
+    expect(createGroupFromSymbol('D_{15}')!.order).toBe(30)
+  })
+
+  it('parses registry symbols via fallback', () => {
+    expect(createGroupFromSymbol('Z_{4}\\times Z_{4}')!.order).toBe(16)
+    expect(createGroupFromSymbol('SL(2,3)')!.order).toBe(24)
+    expect(createGroupFromSymbol('Z_{3}:C_{4}')!.order).toBe(12)
+    expect(createGroupFromSymbol('SmallGroup(16,13)')!.order).toBe(16)
+  })
+
+  it('returns null for unknown symbols', () => {
+    expect(createGroupFromSymbol('D_{16}')).toBeNull()
+    expect(createGroupFromSymbol('X_{7}')).toBeNull()
   })
 })

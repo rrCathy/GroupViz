@@ -1,4 +1,5 @@
 import type { Group, GroupElement, Generator } from '../types'
+import { COLOR_PALETTE } from '../types'
 import { findAllSubgroups, findAllNormalSubgroups, getConjugacyClasses, getGroupCenter, isSimpleGroup } from '../algebra/subgroups'
 import type { Subgroup } from '../algebra/subgroups'
 import { createCyclicGroup } from './CyclicGroup'
@@ -6,6 +7,7 @@ import { createSymmetricGroup } from './SymmetricGroup'
 import { createDihedralGroup } from './DihedralGroup'
 import { createAlternatingGroup } from './AlternatingGroup'
 import { createKleinFour, createQuaternion } from './SpecialGroup'
+import { SMALL_GROUP_DATA } from './smallGroupData'
 
 // ─── Precomputed Data Interface ────────────────────────────────────────────
 
@@ -244,7 +246,93 @@ export function createZ6xZ2(): Group {
   }
 }
 
-// ─── Registry: All Groups of Order < 16 ────────────────────────────────────
+// ─── Table-Driven Group from GAP SmallGroups Data (orders 16-31) ──────────
+
+// Convert a GAP StructureDescription into a front-end TeX symbol.
+// Rules:
+//   - Cyclic C_{n} keeps 'C'; any other leading C-family token maps to Z
+//     (guards isGroupCyclic() misdetection, e.g. C4 x C4, C5 : C4).
+//   - Dihedral Dk (GAP order k) maps to the front-end rotation convention
+//     D_{k/2} (front-end D_{n} has order 2n), e.g. D16 -> D_{8}.
+//   - ' x ' -> '\times ', ' : ' kept verbatim.
+//   - GAP cannot distinguish some isomorphism types (e.g. two groups with
+//     StructureDescription "(C4 x C2) : C2"); ensureTable() disambiguates
+//     symbol collisions by falling back to 'SmallGroup(n,i)'.
+function structureToSymbol(n: number, i: number, structure: string): string {
+  // Dic3: GAP reports 'D12' (collides with the dihedral D_{12} of order 12)
+  if (n === 12 && i === 4) return 'Z_{3}:C_{4}'
+  let s = structure
+  if (!/^C\d+$/.test(s)) {
+    s = s.replace(/\bC(?=\d)/g, 'Z')
+  }
+  s = s.replace(/(^|[^A-Za-z])D(\d+)/g, (_m, pre: string, k: string) => {
+    const kk = parseInt(k, 10)
+    if (kk % 2 === 0 && kk >= 6) return `${pre}D_{${kk / 2}}`
+    return `${pre}D${k}`
+  })
+  s = s.replace(/([A-Za-z]+)(\d+)/g, '$1_{$2}')
+  s = s.replace(/ x /g, '\\times ')
+  s = s.replace(/ : /g, ':')
+  return s
+}
+
+function createTableGroup(order: number, gapIndex: number): Group {
+  const rec = SMALL_GROUP_DATA.find(r => r.n === order && r.i === gapIndex)
+  if (!rec) {
+    throw new Error(`SmallGroups: no data for SmallGroup(${order},${gapIndex})`)
+  }
+  const n = order
+  const elements: GroupElement[] = []
+  for (let k = 0; k < n; k++) {
+    elements.push({ id: `g${k}`, label: `g_{${k}}`, value: [k] })
+  }
+  const symbol = structureToSymbol(n, gapIndex, rec.structure)
+  const table = rec.table
+
+  function mul(x: GroupElement, y: GroupElement): GroupElement {
+    return elements[table[x.value[0]][y.value[0]] - 1]
+  }
+
+  function inv(el: GroupElement): GroupElement {
+    const row = table[el.value[0]]
+    for (let k = 0; k < n; k++) {
+      if (row[k] === 1) return elements[k]
+    }
+    return elements[0]
+  }
+
+  const generators: Generator[] = rec.gens.map((pos, idx) => {
+    const name = String.fromCharCode(97 + idx)
+    const genEl = elements[pos - 1]
+    const gen: Generator = {
+      name, symbol: name,
+      color: COLOR_PALETTE[idx % COLOR_PALETTE.length],
+      apply: (el: GroupElement) => mul(el, genEl),
+      inverse: null as unknown as Generator
+    }
+    gen.inverse = {
+      name: `${name}^{-1}`, symbol: `${name}^{-1}`, color: gen.color,
+      apply: (el: GroupElement) => mul(el, inv(genEl)),
+      inverse: gen
+    }
+    return gen
+  })
+
+  return {
+    name: symbol,
+    symbol,
+    order: n,
+    elements,
+    generators,
+    multiply: mul,
+    inverse: inv,
+    identity: elements[0],
+    isAbelian: rec.abelian,
+    exponent: rec.exponent
+  }
+}
+
+// ─── Registry: All Groups of Order < 32 ────────────────────────────────────
 
 function compile(group: Group): PrecomputedData {
   return {
@@ -286,6 +374,13 @@ const FACTORIES: { order: number; index: number; factory: GroupFactory }[] = [
   { order: 14, index: 0, factory: () => createCyclicGroup(14) },
   { order: 14, index: 1, factory: () => createDihedralGroup(7) },
   { order: 15, index: 0, factory: () => createCyclicGroup(15) },
+  { order: 12, index: 4, factory: () => createTableGroup(12, 4) },
+  // Orders 16-31 (GAP SmallGroups data, index i is GAP's 1-based index)
+  ...SMALL_GROUP_DATA.filter(r => r.n >= 16).map(r => ({
+    order: r.n,
+    index: r.i - 1,
+    factory: () => createTableGroup(r.n, r.i)
+  })),
 ]
 
 // ─── Lazy-Initialized Table ────────────────────────────────────────────────
@@ -304,9 +399,17 @@ function ensureTable(): void {
   _byOrder = new Map()
   _bySymbol = new Map()
   for (const entry of _table) {
+    let symbol = entry.group.symbol
+    if (_bySymbol.has(symbol)) {
+      // GAP StructureDescription collision (e.g. two groups described as
+      // "(C4 x C2) : C2"): disambiguate with the SmallGroup(n,i) identifier
+      symbol = `SmallGroup(${entry.order},${entry.index + 1})`
+      entry.group.symbol = symbol
+      entry.group.name = symbol
+    }
     if (!_byOrder.has(entry.order)) _byOrder.set(entry.order, [])
     _byOrder.get(entry.order)!.push(entry)
-    _bySymbol.set(entry.group.symbol, entry)
+    _bySymbol.set(symbol, entry)
   }
 }
 

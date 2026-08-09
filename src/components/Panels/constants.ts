@@ -67,19 +67,25 @@ export function buildViewModes(t: (key: string) => string): ViewModeEntry[] {
   ]
 }
 
-export function buildOrderGroupsMap(_t: (key: string) => string): Map<number, OrderEntry[]> {
+export function buildOrderGroupsMap(t: (key: string) => string): Map<number, OrderEntry[]> {
   const map = new Map<number, OrderEntry[]>()
+  const add = (order: number, entry: OrderEntry) => {
+    if (!map.has(order)) map.set(order, [])
+    map.get(order)!.push(entry)
+  }
   // All groups of order 1..31 from the SmallGroups registry (GAP data)
   for (const entry of getAllSmallGroups()) {
     const order = entry.order
-    if (!map.has(order)) map.set(order, [])
-    map.get(order)!.push({
+    add(order, {
       symbol: entry.group.symbol,
       label: entry.group.symbol,
       desc: `SmallGroup(${order},${entry.index + 1})`,
       create: () => entry.group
     })
   }
+  // Beyond the registry: keep the classic hand-built groups (order 60 / 120)
+  add(60, { symbol: 'A_{5}', label: 'A_{5}', desc: t('group.alternating'), create: () => createAlternatingGroup(5) })
+  add(120, { symbol: 'S_{5}', label: 'S_{5}', desc: t('group.symmetric'), create: () => createSymmetricGroup(5) })
   return map
 }
 

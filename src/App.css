@@ -471,6 +471,13 @@
 }
 
 /* Order list grid */
+.order-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
 .order-list {
   display: flex;
   flex-wrap: wrap;

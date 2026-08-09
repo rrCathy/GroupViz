@@ -78,6 +78,7 @@ function GroupCreationInner() {
 
       {creationMode === 'order' && (
         <>
+          <div className="order-hint">{t('panel.order.semidirectHint')}</div>
           <div className="order-list">
             {availableOrders.map(order => (
               <button key={order} className={`order-btn ${selectedOrder === order ? 'active' : ''}`} onClick={() => setSelectedOrder(selectedOrder === order ? null : order)}>{order}</button>

@@ -60,6 +60,7 @@ const zh: TranslationMap = {
   'group.order': '阶',
   'panel.createByType': '按群类型创建',
   'panel.createByOrder': '按阶创建',
+  'panel.order.semidirectHint': '符号中 ":" 表示半直积（如 Z₃:C₄ = Dic₃）',
 
   /* Left Panel — View Modes */
   'view.set': '集合视图',
@@ -647,6 +648,7 @@ const en: TranslationMap = {
   'group.order': 'Order',
   'panel.createByType': 'By Group Type',
   'panel.createByOrder': 'By Order',
+  'panel.order.semidirectHint': '" : " in a symbol denotes a semidirect product (e.g. Z₃:C₄ = Dic₃)',
 
   /* Left Panel — View Modes */
   'view.set': 'Set View',

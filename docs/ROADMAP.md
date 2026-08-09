@@ -126,3 +126,4 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 | 2026-08-07 | 群展示系统落地：core/algebra/presentations.ts（解析器 + Todd–Coxeter 陪集枚举 TC_MAX_COSETS=3000 + 构建 + presentationOf 标准展示分发 + 通用关系发现器）、左侧「群展示」面板（8 预设/防抖预览/持久化+草稿）、关系回路视图（Van Kampen 图 + 关系动画）、展示乘法表视图（单词求值路径）；32 文件 630 tests 全绿；版本 1.10.0 |
 | 2026-08-09 | 测试补齐：覆盖率 84.02% → 88.64% stmts（91.18% lines），新增 export.test.ts（15 tests，GIF 编码/SVG/canvas 导出全路径）、exportApi.test.ts（16 tests，导出桥单例 + DOM stub）、utils.test.ts 补 9 用例（groupFactory 嵌套直积/上标幂/回退/越界）；修复 cayleyTree genElsOverride 测试 coverage 下 5s 超时（30s）；35 文件 695 tests 全绿 |
 | 2026-08-09 | 小群全量导入：GAP 4.16 SmallGroups 库导出阶 1-31 全部 93 个群（smallGroupData.ts 乘法表数据 + createTableGroup 构建 + structureToSymbol 符号化，结构冲突回退 SmallGroup(n,i)，Dic₃ 强制 Z₃:C₄）；按阶创建面板改为注册表驱动（阶 1-31）；createGroupFromSymbol 支持 D₈-D₁₅/新符号/SmallGroup(n,i)/注册表兜底（会话恢复兼容）；35 文件 704 tests 全绿 |
+| 2026-08-09 | 按阶创建面板补回 A₅(60)/S₅(120)（注册表驱动化时丢失回归）；符号 ":" 半直积提示（order-hint 文案，zh/en）；35 文件 706 tests 全绿 |

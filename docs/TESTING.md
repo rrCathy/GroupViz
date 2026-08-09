@@ -16,7 +16,7 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，35 文件 / 704 tests）
+## 3. 测试文件清单（src/__tests__，35 文件 / 706 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -29,7 +29,7 @@
 | directProduct.test.ts | 15 | 直积群律（C2×C2≅V4、C2×C2≅C6 等）、pipe id、逐分量乘法/逆元、紧凑符号（C2×C2→`C_{2}^{2}`、C4×C2→`C_{4} \times C_{2}`）、生成元提升 |
 | cayleyEdges.test.ts | 14 | computeCayleyActionEdges：空 actions→[]、右乘/左乘、自逆→双向、单位元→自环、去重、order>60 限流 max(120, order*2)、阿贝尔群左右相同 |
 | utils.test.ts | 19 | texify（Unicode→TeX 全规则、裸命令后 ASCII 字母加空格、幂等）、renderTex、createGroupFromSymbol（嵌套直积/Unicode 直积/上标幂/无效幂回退/越界拒绝/legacy Unicode 符号） |
-| smallGroups.test.ts | 20 | 注册表 93 条（阶 1-31 GAP 全量）完整性/分布、每条 GAP 数据都有对应条目、符号唯一、getSmallGroup/getSmallGroupBySymbol/getPrecomputed、Dic₃、16-31 符号抽查（含冲突回退 SmallGroup(n,i)）、全量公理验证（恒等/逆元/结合律直查数据表/生成元闭包）、子群阶整除、isSimple 与素数一致、center/共轭类与 subgroups.ts 一致、createGroupFromSymbol 解析新符号 |
+| smallGroups.test.ts | 22 | 注册表 93 条（阶 1-31 GAP 全量）完整性/分布、每条 GAP 数据都有对应条目、符号唯一、getSmallGroup/getSmallGroupBySymbol/getPrecomputed、Dic₃、16-31 符号抽查（含冲突回退 SmallGroup(n,i)）、全量公理验证（恒等/逆元/结合律直查数据表/生成元闭包）、子群阶整除、isSimple 与素数一致、center/共轭类与 subgroups.ts 一致、createGroupFromSymbol 解析新符号、buildOrderGroupsMap（阶 1-31 + A₅ 60 + S₅ 120、阶 16 全 14 群、V₄ 保留） |
 | polyhedra.test.ts | 14 | 多面体顶点数（12/24/24/24/60/60）、半径缩放、computeSkeletonEdges、computeElementRotation（identity 角 0、Cₙ/Dₙ 轴、A₄/S₄/A₅ 轴类型） |
 | forceLayout.test.ts | 20 | forceLayout/planarCycleLayout/子群格布局、cosetStripLayout（空群、S₃ A₃ 两条带、topPadding）、节点位置稳定性 |
 | elementRotation.test.ts | 6 | 群元素 → 几何旋转映射（Cₙ/Dₙ/A₄/S₄/A₅ 轴与角） |

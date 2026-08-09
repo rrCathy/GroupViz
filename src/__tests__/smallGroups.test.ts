@@ -10,6 +10,7 @@ import { createS3 } from '../core/groups/SymmetricGroup'
 import { createDirectProduct } from '../core/groups/DirectProduct'
 import { getGroupCenter, isSimpleGroup } from '../core/algebra/subgroups'
 import { createGroupFromSymbol } from '../utils/groupFactory'
+import { buildOrderGroupsMap } from '../components/Panels/constants'
 
 function isPrime(n: number): boolean {
   if (n < 2) return false
@@ -237,5 +238,25 @@ describe('createGroupFromSymbol with GAP-derived symbols', () => {
   it('returns null for unknown symbols', () => {
     expect(createGroupFromSymbol('D_{16}')).toBeNull()
     expect(createGroupFromSymbol('X_{7}')).toBeNull()
+  })
+})
+
+describe('buildOrderGroupsMap (order-based creation panel)', () => {
+  it('covers every order 1..31 plus A_5 (60) and S_5 (120)', () => {
+    const map = buildOrderGroupsMap(k => k)
+    const orders = [...map.keys()].sort((a, b) => a - b)
+    for (let n = 1; n <= 31; n++) expect(orders).toContain(n)
+    expect(orders).toContain(60)
+    expect(orders).toContain(120)
+    const a5 = map.get(60)!
+    expect(a5.some(e => e.symbol === 'A_{5}')).toBe(true)
+    const s5 = map.get(120)!
+    expect(s5.some(e => e.symbol === 'S_{5}')).toBe(true)
+  })
+
+  it('lists all 14 groups of order 16 and keeps V4 at order 4', () => {
+    const map = buildOrderGroupsMap(k => k)
+    expect(map.get(16)!.length).toBe(14)
+    expect(map.get(4)!.some(e => e.symbol === 'V_{4}')).toBe(true)
   })
 })

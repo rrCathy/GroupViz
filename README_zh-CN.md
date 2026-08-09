@@ -97,7 +97,7 @@
 - **小群注册表** — 阶 1–15 全部 27 个群，预计算子群/共轭类/中心数据
 - **性能守卫** — 子群/共轭类 cutoff 60；Cayley 边限流；自同构枚举组合 >30000 放弃
 - **群展示系统** — ⟨S|R⟩ 创建任意有限群（Todd–Coxeter），群信息栏自动识别标准展示（Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈），tree/展示乘法表视图，草稿自动保存
-- **测试体系** — 35 个测试文件 704 tests（vitest）
+- **测试体系** — 35 个测试文件 706 tests（vitest）
 ---
 
 ## 🚀 快速开始
@@ -158,7 +158,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 35 个测试文件（704 tests）
+├── __tests__/            # 35 个测试文件（706 tests）
 ├── components/
 │   ├── Canvas/           # 视图组件（Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/多视图窗口）
@@ -236,7 +236,7 @@ GroupViz 可视化抽象代数与有限群论中的概念。
 - [x] 会话保存与恢复
 - [x] 视图导出（SVG/PNG/GIF）+ 批量导出 CLI
 - [x] 混合计算（本地 TS + FastAPI 后端，本地兜底 + 进度条）
-- [x] 测试体系（35 文件 704 tests）
+- [x] 测试体系（35 文件 706 tests）
 - [ ] 群运算律验证动画
 - [x] 自定义有限群输入（⟨S|R⟩ 群展示系统）
 - [ ] 教学模式

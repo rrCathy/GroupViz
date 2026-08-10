@@ -5,17 +5,21 @@ interface AccordionSectionProps {
   icon?: string
   defaultOpen?: boolean
   badge?: React.ReactNode
+  open?: boolean
+  onToggle?: () => void
   children: React.ReactNode
 }
 
-export function AccordionSection({ title, icon, defaultOpen = false, badge, children }: AccordionSectionProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
+export function AccordionSection({ title, icon, defaultOpen = false, badge, open, onToggle, children }: AccordionSectionProps) {
+  const [internalOpen, setInternalOpen] = useState(defaultOpen)
+  const isOpen = open ?? internalOpen
+  const handleToggle = onToggle ?? (() => setInternalOpen(!internalOpen))
 
   return (
     <div className="accordion-section">
       <button
         className="accordion-header"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
       >
         <span className="accordion-header-left">
           {icon && <span className="accordion-icon">{icon}</span>}

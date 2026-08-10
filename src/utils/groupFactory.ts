@@ -6,6 +6,7 @@ import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../core/groups/SpecialGroup'
 import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3, createZ6xZ2, getSmallGroupBySymbol } from '../core/groups/SmallGroups'
 import { createDirectProduct } from '../core/groups/DirectProduct'
+import { createGL2 } from '../core/groups/GeneralLinearGroup'
 
 function parseTexSubscript(symbol: string, prefix: string): number | null {
   const re = new RegExp(`^${prefix}_\\{(\\d+)\\}$`, '')
@@ -41,6 +42,9 @@ export function createGroupFromSymbol(symbol: string): Group | null {
     case 'Z₆×Z₂': return createZ6xZ2()
     case 'V₄':    return createKleinFour()
     case 'Q₈':    return createQuaternion()
+    // General linear groups GL(2,p)
+    case 'GL(2, 2)': case 'GL(2,2)': return createGL2(2)
+    case 'GL(2, 3)': case 'GL(2,3)': return createGL2(3)
   }
 
   // Direct product: parse A \times B

@@ -19,6 +19,7 @@ import { GroupDirectProductProvider, useGroupDirectProduct } from './directProdu
 import { GroupMultiViewProvider, useGroupMultiView } from './multiview/GroupMultiViewContext'
 import { GroupHomomorphismProvider, useGroupHomomorphism } from './homomorphism/GroupHomomorphismContext'
 import { GroupSemidirectProductProvider, useGroupSemidirectProduct } from './semidirectProduct/GroupSemidirectProductContext'
+import type { SemidirectDecompositionCandidate } from '../core/algebra/semidirectDecompositions'
 import { GroupActionProvider, useGroupAction } from './actions/GroupActionContext'
 import { GroupSeriesProvider, useGroupSeries } from './series/GroupSeriesContext'
 import { GroupPresentationProvider, useGroupPresentation } from './presentation/GroupPresentationContext'
@@ -70,6 +71,7 @@ interface GroupContextState {
   directProductCreationMode: 'cayley' | 'table' | 'direct'
   directProductGroups: Group[]
   isSemidirectProductMode: boolean
+  sdPanelOpen: boolean
   sdNormalSubgroup: Group | null
   sdActingGroup: Group | null
   sdAutNGroup: Group | null
@@ -78,6 +80,8 @@ interface GroupContextState {
   sdPhiFullMap: Map<string, Automorphism> | null
   sdPhiValid: boolean | null
   sdSemidirectProductGroups: Group[]
+  sdDecompositions: SemidirectDecompositionCandidate[]
+  sdActiveDecomposition: number
   backendCache: BackendCache
   isLargeGroup: boolean
   homomorphisms: Homomorphism[]
@@ -180,6 +184,9 @@ interface GroupContextActions {
   removeDirectProductGroup: (symbol: string) => void
   loadDirectProductGroup: (symbol: string) => void
   toggleSemidirectProductMode: () => void
+  setSDPanelOpen: (open: boolean) => void
+  decomposeSemidirectProduct: (group: Group) => boolean
+  selectSemidirectDecomposition: (index: number) => void
   setSDNormalSubgroup: (group: Group | null) => void
   setSDActingGroup: (group: Group | null) => void
   computeAutN: () => void
@@ -208,6 +215,8 @@ interface GroupContextActions {
   setTheoremPhase: (phase: number) => void
   createConjugationAction: (group: Group) => void
   createSylowAction: (group: Group, prime: number) => void
+  createRegularAction: (group: Group) => void
+  createCosetAction: (group: Group, subgroupElements: GroupElement[]) => void
   startCustomAction: (group: Group, n: number) => void
   addArrow: (from: number, to: number, generatorId?: string | null) => void
   bindArrow: (from: number, to: number, generatorId: string) => void
@@ -558,6 +567,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     directProductGroups: directProduct.directProductGroups,
 
     isSemidirectProductMode: sd.isSemidirectProductMode,
+    sdPanelOpen: sd.sdPanelOpen,
     sdNormalSubgroup: sd.sdNormalSubgroup,
     sdActingGroup: sd.sdActingGroup,
     sdAutNGroup: sd.sdAutNGroup,
@@ -566,6 +576,8 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     sdPhiFullMap: sd.sdPhiFullMap,
     sdPhiValid: sd.sdPhiValid,
     sdSemidirectProductGroups: sd.sdSemidirectProductGroups,
+    sdDecompositions: sd.sdDecompositions,
+    sdActiveDecomposition: sd.sdActiveDecomposition,
 
     multiViewMode: multiView.multiViewMode,
     floatingViews: multiView.floatingViews,
@@ -676,6 +688,9 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     loadDirectProductGroup: directProduct.loadDirectProductGroup,
 
     toggleSemidirectProductMode,
+    setSDPanelOpen: sd.setSDPanelOpen,
+    decomposeSemidirectProduct: sd.decomposeSemidirectProduct,
+    selectSemidirectDecomposition: sd.selectSemidirectDecomposition,
     setSDNormalSubgroup: sd.setSDNormalSubgroup,
     setSDActingGroup: sd.setSDActingGroup,
     computeAutN: sd.computeAutN,
@@ -706,6 +721,8 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
 
     createConjugationAction: action.createConjugationAction,
     createSylowAction: action.createSylowAction,
+    createRegularAction: action.createRegularAction,
+    createCosetAction: action.createCosetAction,
     startCustomAction: action.startCustomAction,
     addArrow: action.addArrow,
     bindArrow: action.bindArrow,

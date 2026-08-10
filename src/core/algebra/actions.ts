@@ -86,6 +86,47 @@ export function computeConjugationPerms(group: Group): Map<string, number[]> {
   return perms
 }
 
+// Regular action (left translation): G acts on itself by g·x = gx.
+// Transitive and free (Stab(x) = {e}); its image is the regular representation
+// realising Cayley's theorem G ≅ image ≤ Sym(G).
+export function computeLeftTranslationPerms(group: Group): Map<string, number[]> {
+  const idx = indexById(group)
+  const perms = new Map<string, number[]>()
+  for (const g of group.elements) {
+    const perm = new Array<number>(group.order)
+    for (let x = 0; x < group.order; x++) {
+      perm[x] = idx.get(group.multiply(g, group.elements[x]).id)!
+    }
+    perms.set(g.id, perm)
+  }
+  return perms
+}
+
+// Coset action: G acts on the left cosets G/H by g·(xH) = (gx)H.
+// Transitive; Stab(xH) = xHx⁻¹ (a conjugate of H).
+export function computeCosetActionPerms(group: Group, subgroupElements: GroupElement[]): { perms: Map<string, number[]>; n: number; setLabels: string[] } {
+  const cosetOf = new Map<string, number>()
+  const reps: GroupElement[] = []
+  for (const g of group.elements) {
+    if (cosetOf.has(g.id)) continue
+    const ci = reps.length
+    reps.push(g)
+    for (const h of subgroupElements) {
+      cosetOf.set(group.multiply(g, h).id, ci)
+    }
+  }
+  const n = reps.length
+  const perms = new Map<string, number[]>()
+  for (const g of group.elements) {
+    const perm = new Array<number>(n)
+    for (let x = 0; x < n; x++) {
+      perm[x] = cosetOf.get(group.multiply(g, reps[x]).id)!
+    }
+    perms.set(g.id, perm)
+  }
+  return { perms, n, setLabels: reps.map(r => `${r.label}H`) }
+}
+
 // Verify Φ(g·a) = Φ(g)∘Φ(a) for all g and every generator a
 export function verifyAllRelations(group: Group, perms: Map<string, number[]>): { ok: boolean; violation?: { g: string; a: string; x: number } } {
   for (const g of group.elements) {
@@ -251,6 +292,18 @@ export function computeFixedPoints(perms: Map<string, number[]>, n: number): num
   return fixed
 }
 
+// Burnside's lemma: |X/G| = (1/|G|) * Σ_{g∈G} |Fix(g)|
+export function computeBurnsideCount(perms: Map<string, number[]>, n: number): number {
+  let sum = 0
+  for (const p of perms.values()) {
+    for (let x = 0; x < n; x++) {
+      if (p[x] === x) sum++
+    }
+  }
+  const gSize = perms.size
+  return gSize > 0 ? sum / gSize : 0
+}
+
 export interface CycleCandidate {
   length: number
   label: string
@@ -336,6 +389,23 @@ export function buildActionComputation(group: Group, def: GroupActionDef, arrows
     ok = res.ok
     violation = res.violation
     setLabels = subgroups.map((_, i) => `P${i + 1}`)
+  } else if (def.kind === 'regular') {
+    n = group.order
+    perms = computeLeftTranslationPerms(group)
+    const res = verifyAllRelations(group, perms)
+    ok = res.ok
+    violation = res.violation
+  } else if (def.kind === 'coset') {
+    if (!def.subgroupElements || def.subgroupElements.length === 0) {
+      return { error: { generatorId: null, from: -1, to: -1, type: 'range' } }
+    }
+    const cosetRes = computeCosetActionPerms(group, def.subgroupElements)
+    n = cosetRes.n
+    perms = cosetRes.perms
+    setLabels = cosetRes.setLabels
+    const res = verifyAllRelations(group, perms)
+    ok = res.ok
+    violation = res.violation
   } else {
     if (!def.setSize) return { error: { generatorId: null, from: -1, to: -1, type: 'range' } }
     n = def.setSize

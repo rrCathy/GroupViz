@@ -19,7 +19,7 @@ GroupContext (核心容器，组合所有子 Provider + 注册导出桥)
   ├── GroupHomomorphismContext — 同态映射创建与验证
   ├── GroupSeriesContext      — 子群列（导列/上·下中心列/合成列，链 换）
   ├── GroupPresentationContext — 群展示（创建/持久化/草稿，内层）
-  └── GroupActionContext      — 群作用（共轭/自定义/Sylow + 轨道计算，最外层）
+  └── GroupActionContext      — 群作用（共轭/自定义/Sylow/正则/陪集 + 轨道计算，最外层）
 ```
 
 - 每个子 Provider 通过 `useGroupCore()` 获取核心状态，实现关注点分离
@@ -90,6 +90,7 @@ interface GroupContextState {
 ## 7. 半直积
 
 - `GroupSemidirectProductContext` + `semidirectProductStorage.ts`，key `'groupviz-sd-groups'`（详见 GROUPS.md §4）
+- 半直积分解：`sdDecompositions`（候选列表，随群切换清空）/ `sdActiveDecomposition`（当前选中下标，-1 无）；`decomposeSemidirectProduct`（操作面板按钮触发，先读 `_semidirectProduct` 记录否则跑搜索，命中自动载入第 0 个）/ `selectSemidirectDecomposition(i)`（点击切换）
 
 ## 8. 直积群
 

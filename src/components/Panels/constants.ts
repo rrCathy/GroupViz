@@ -5,6 +5,7 @@ import { createCyclicGroup } from '../../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../../core/groups/AlternatingGroup'
 import { createKleinFour, createQuaternion } from '../../core/groups/SpecialGroup'
+import { createGL2 } from '../../core/groups/GeneralLinearGroup'
 import { getAllSmallGroups } from '../../core/groups/SmallGroups'
 
 export interface GroupTypeConfig {
@@ -49,7 +50,9 @@ export function buildGroupTypeConfigs(t: (key: string) => string): GroupTypeConf
 export function buildSpecialGroups(t: (key: string) => string): SpecialGroupEntry[] {
   return [
     { label: 'V_{4}', desc: t('group.klein'), order: 4, create: createKleinFour },
-    { label: 'Q_{8}', desc: t('group.quaternion'), order: 8, create: createQuaternion }
+    { label: 'Q_{8}', desc: t('group.quaternion'), order: 8, create: createQuaternion },
+    { label: 'GL(2, 2)', desc: t('group.gl2p2'), order: 6, create: () => createGL2(2) },
+    { label: 'GL(2, 3)', desc: t('group.gl2p3'), order: 48, create: () => createGL2(3) }
   ]
 }
 

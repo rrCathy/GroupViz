@@ -113,7 +113,7 @@ export interface HomomorphismProperties {
   imageOrder: number
 }
 
-export type GroupActionKind = 'conjugation' | 'custom' | 'sylow'
+export type GroupActionKind = 'conjugation' | 'custom' | 'sylow' | 'regular' | 'coset'
 
 export interface GroupActionArrow {
   generatorId: string | null
@@ -142,6 +142,8 @@ export interface GroupActionDef {
   kind: GroupActionKind
   setSize?: number
   prime?: number
+  // For the coset action G ↷ G/H: left cosets are taken with respect to this subgroup.
+  subgroupElements?: GroupElement[]
 }
 
 export const COLOR_PALETTE: string[] = [

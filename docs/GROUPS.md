@@ -61,12 +61,13 @@ interface Group {
 | 交错群 Aₙ | Aₙ | n!/2 | (123), (12)(34) 等 | `AlternatingGroup.ts` |
 | Klein四群 V₄ | V₄ | 4 | a, b | `SpecialGroup.ts` |
 | 四元数群 Q₈ | Q₈ | 8 | i, j | `SpecialGroup.ts` |
+| 一般线性群 GL(2,p) | GL(2, p) | (p²−1)(p²−p) | a=[[1,1],[0,1]], b=[[0,1],[1,0]] | `GeneralLinearGroup.ts` |
 | 直积 G×H | G×H | \|G\|·\|H\| | g₁,...,h₁,... | `DirectProduct.ts` |
 | 半直积 N⋊H | N \rtimes H | \|N\|·\|H\| | 提升的 N/H 生成元 | `SemidirectProduct.ts` |
 | 自同构群 Aut(G) | \operatorname{Aut}(G) | \|Aut(G)\| | greedy 闭包扩张 | `automorphisms.ts` |
 | 商群 G/N | G/N | [G:N] | 陪集 | `subgroups.ts` 的 `computeQuotientGroup` |
 
-范围：C₁–C₃₀、D₃–D₁₂、S₂–S₆、A₃–A₅（UI 下拉上限 S₅，S₆ 仅工厂/会话可用）、V₄、Q₈。
+范围：C₁–C₃₀、D₃–D₁₂、S₂–S₆、A₃–A₅（UI 下拉上限 S₅，S₆ 仅工厂/会话可用）、V₄、Q₈、GL(2,2)、GL(2,3)（GL(2,5)=480 超本地兜底上限，待 E1 后端开启）。
 
 ## 3. 直积群 G×H
 
@@ -95,11 +96,16 @@ interface Group {
 - 群工厂 `createGroupFromSymbol` 不解析 `\rtimes`，会话恢复依赖 `reconstructSemidirectProduct`（`semidirectProductStorage.ts`）
 
 **半直积状态与 UI**：
-- Context：`GroupSemidirectProductContext.tsx`（9 个 Provider 之一）——isSemidirectProductMode / sdNormalSubgroup / sdActingGroup / sdAutNGroup / sdAutNList / sdPhiGenMapping / sdPhiFullMap / sdPhiValid / sdSemidirectProductGroups；Actions：toggleSemidirectProductMode / setSDNormalSubgroup / setSDActingGroup / computeAutN / setPhiGenMapping / expandPhiFull / executeSemidirectProduct / storeSemidirectProductGroup / loadSemidirectProductGroup
+- Context：`GroupSemidirectProductContext.tsx`（9 个 Provider 之一）——isSemidirectProductMode / sdPanelOpen / sdNormalSubgroup / sdActingGroup / sdAutNGroup / sdAutNList / sdPhiGenMapping / sdPhiFullMap / sdPhiValid / sdSemidirectProductGroups / sdDecompositions / sdActiveDecomposition；Actions：toggleSemidirectProductMode / setSDPanelOpen / setSDNormalSubgroup / setSDActingGroup / computeAutN / setPhiGenMapping / expandPhiFull / executeSemidirectProduct / storeSemidirectProductGroup / loadSemidirectProductGroup / decomposeSemidirectProduct / selectSemidirectDecomposition
 - 持久化：localStorage key `'groupviz-sd-groups'`，`StoredSemidirectProduct {id, symbol?, normalSymbol, actingSymbol, phiGenMapping}`
-- 面板：`SemidirectProductPanel.tsx`（5 预设：Z₃⋊Z₂≅S₃、Z₄⋊Z₂≅D₄、Z₅⋊Z₂≅D₅、Z₇⋊Z₃ Frobenius、V₄⋊Z₃≅A₄）
+- 面板：`SemidirectProductPanel.tsx`（模式切换 + N/H 选择 + φ 映射 + 创建/群列表/储存 + **半直积分解列表区**）
 - 视图：`SemidirectProductView.tsx`——设置模式（H 与 Aut(N) 双 Cayley 图 + φ 箭头）+ 4 步教学动画（H 骨架 → N 副本环重布线 → H 边连接 → 完整乘积）
 - 2D 布局：`semidirectProductLayout()`（forceLayout.ts）——|H| 个 N 副本环绕 H 主环，对应 2D 形状 `'rewiring'`；φ(h) 不动点在 GroupCanvas 中青绿高亮
+
+**半直积分解（识别方向，order≤60 守卫）**：
+- 算法：`src/core/algebra/semidirectDecompositions.ts`——`findSemidirectDecompositions(group)` 枚举正规子群 N（1<|N|<|G|）+ 互补 H（|H|=|G|/|N| 且 N∩H={e}），φ(h) = 共轭 h·n·h⁻¹（N⊴G 保证闭）；去重（N/H 元素 id 键）+ 排序（verified 优先、|N| 降序）；helper `buildSubgroupGroup`（子群即父群元素，generators 走 `minimalGenerators` 贪心闭包）/`minimalGenerators`/`findAutoByMap`/`verifyPhiHomomorphism`/`buildPhiFromGroup`（读 `_semidirectProduct`）
+- 闭环验证：重建 `createSemidirectProduct` → isoSymbol 相等，或**不变量回退**（isAbelian + 元素阶多重集）；S₃ 重建为 D₃（detect 不同名）但不变量相等 → verified
+- 面板：分解列表（`N \rtimes_{\phi} H` TeX + |N|/|H| + ✓/✗ 徽标 + 点击 `selectSemidirectDecomposition(i)` 切换）+ 活动分解分裂短正合列 `1 \to N \to G \to H \to 1`
 
 ## 5. 自同构群 Aut(G)
 
@@ -141,7 +147,7 @@ interface Automorphism { id: string; map: Map<string,string>; label: string; app
 
 `src/utils/groupFactory.ts` 的 `createGroupFromSymbol(symbol): Group | null`：
 
-- 精确匹配特例：`Z_{4}\times Z_{2}`、`Z_{2}^{3}`、`Z_{3}^{2}`、`Z_{6}\times Z_{2}`、`V_{4}`、`Q_{8}`（+旧 Unicode 形式）
+- 精确匹配特例：`Z_{4}\times Z_{2}`、`Z_{2}^{3}`、`Z_{3}^{2}`、`Z_{6}\times Z_{2}`、`V_{4}`、`Q_{8}`、`GL(2, 2)`/`GL(2,2)`、`GL(2, 3)`/`GL(2,3)`（+旧 Unicode 形式）
 - 递归解析：`\times`/`×` 直积、`^{n}` 幂（n≥2）
 - 范围：C₁–C₃₀ / Zₙ / D₃–D₁₂ / S₂–S₆ / A₃–A₅，含 `_{n}` 与裸 `n` 两种形式
 - 便捷工厂：`createS3()`、`createZ6xZ2()`

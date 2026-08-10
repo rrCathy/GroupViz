@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useRef, useCallback, type ReactNod
 import type { Group } from '../../core/types'
 import type { Automorphism } from '../../core/algebra/automorphisms'
 import { findAllAutomorphisms, createAutomorphismGroup } from '../../core/algebra/automorphisms'
+import { findAutoByMap, findSemidirectDecompositions, type SemidirectDecompositionCandidate } from '../../core/algebra/semidirectDecompositions'
 import { getGeneratorElements, extendFromGenerators, extractGeneratorMapping } from '../../core/algebra/homomorphisms'
 import { createSemidirectProduct } from '../../core/groups/SemidirectProduct'
 import { useTranslation } from '../../i18n/useTranslation'
@@ -16,6 +17,7 @@ import {
 
 interface GroupSemidirectProductState {
   isSemidirectProductMode: boolean
+  sdPanelOpen: boolean
   sdNormalSubgroup: Group | null
   sdActingGroup: Group | null
   sdAutNGroup: Group | null
@@ -25,10 +27,15 @@ interface GroupSemidirectProductState {
   sdPhiValid: boolean | null
   sdSemidirectProductGroups: Group[]
   sdStoredSpecs: StoredSemidirectProduct[]
+  sdDecompositions: SemidirectDecompositionCandidate[]
+  sdActiveDecomposition: number
 }
 
 interface GroupSemidirectProductActions {
   toggleSemidirectProductMode: () => void
+  setSDPanelOpen: (open: boolean) => void
+  decomposeSemidirectProduct: (group: Group) => boolean
+  selectSemidirectDecomposition: (index: number) => void
   setSDNormalSubgroup: (group: Group | null) => void
   setSDActingGroup: (group: Group | null) => void
   computeAutN: () => void
@@ -49,6 +56,7 @@ export function GroupSemidirectProductProvider({ children }: { children: ReactNo
   const { setCurrentGroup, setHintMessage, addOperationHistory } = useGroupCore()
 
   const [isSemidirectProductMode, setIsSemidirectProductMode] = useState(false)
+  const [sdPanelOpen, setSDPanelOpenState] = useState(false)
   const [sdNormalSubgroup, setSDNormalSubgroupState] = useState<Group | null>(null)
   const [sdActingGroup, setSDActingGroupState] = useState<Group | null>(null)
   const [sdAutNGroup, setSDAutNGroup] = useState<Group | null>(null)
@@ -57,6 +65,8 @@ export function GroupSemidirectProductProvider({ children }: { children: ReactNo
   const [sdPhiFullMap, setSDPhiFullMap] = useState<Map<string, Automorphism> | null>(null)
   const [sdPhiValid, setSDPhiValid] = useState<boolean | null>(null)
   const [sdStoredSpecs, setSDStoredSpecs] = useState<StoredSemidirectProduct[]>(loadSemidirectProductSpecsFromStorage)
+  const [sdDecompositions, setSDDecompositions] = useState<SemidirectDecompositionCandidate[]>([])
+  const [sdActiveDecomposition, setSDActiveDecomposition] = useState(-1)
 
   // Synchronous mirrors of φ state so store/execute in the same event handler stay consistent
   const sdPhiGenMappingRef = useRef<Map<string, string>>(new Map())
@@ -86,12 +96,18 @@ export function GroupSemidirectProductProvider({ children }: { children: ReactNo
         setSDPhiGenMapping(new Map())
         setSDPhiFullMap(null)
         setSDPhiValid(null)
+        setSDDecompositions([])
+        setSDActiveDecomposition(-1)
         sdPhiGenMappingRef.current = new Map()
         sdPhiFullMapRef.current = null
         return false
       }
       return true
     })
+  }, [])
+
+  const setSDPanelOpen = useCallback((open: boolean) => {
+    setSDPanelOpenState(open)
   }, [])
 
   const setSDNormalSubgroup = useCallback((group: Group | null) => {
@@ -101,6 +117,8 @@ export function GroupSemidirectProductProvider({ children }: { children: ReactNo
     setSDPhiGenMapping(new Map())
     setSDPhiFullMap(null)
     setSDPhiValid(null)
+    setSDDecompositions([])
+    setSDActiveDecomposition(-1)
     sdPhiGenMappingRef.current = new Map()
     sdPhiFullMapRef.current = null
   }, [])
@@ -110,6 +128,8 @@ export function GroupSemidirectProductProvider({ children }: { children: ReactNo
     setSDPhiGenMapping(new Map())
     setSDPhiFullMap(null)
     setSDPhiValid(null)
+    setSDDecompositions([])
+    setSDActiveDecomposition(-1)
     sdPhiGenMappingRef.current = new Map()
     sdPhiFullMapRef.current = null
   }, [])
@@ -309,12 +329,162 @@ export function GroupSemidirectProductProvider({ children }: { children: ReactNo
     }
   }, [sdSemidirectProductGroups, setCurrentGroup, setHintMessage, addOperationHistory, t])
 
+  /**
+   * Fill the panel's N / H / Aut(N) / φ state from a search candidate.
+   * Uses raw setters so the decomposition list is not cleared.
+   */
+  const populateFromCandidate = useCallback((cand: SemidirectDecompositionCandidate): void => {
+    const N = cand.normal
+    const H = cand.acting
+    setSDNormalSubgroupState(N)
+    setSDActingGroupState(H)
+
+    const autos = findAllAutomorphisms(N)
+    const autGroup = autos.length > 0 ? createAutomorphismGroup(N, autos) : null
+    if (!autGroup || autos.length === 0) {
+      setSDAutNList([])
+      setSDAutNGroup(null)
+      setSDPhiGenMapping(new Map())
+      sdPhiGenMappingRef.current = new Map()
+      setSDPhiFullMap(cand.phiMap)
+      sdPhiFullMapRef.current = cand.phiMap
+      setSDPhiValid(null)
+      return
+    }
+
+    let identityAuto: Automorphism | null = null
+    for (const auto of autos) {
+      let isIdentity = true
+      for (const [k, v] of auto.map) {
+        if (k !== v) { isIdentity = false; break }
+      }
+      if (isIdentity) { identityAuto = auto; break }
+    }
+
+    // Map each H generator to the matching automorphism (conjugation by h)
+    const genMapping = new Map<string, string>()
+    for (const { el } of getGeneratorElements(H)) {
+      const rec = cand.phiMap.get(el.id)
+      const matched = rec ? findAutoByMap(autos, rec.map) : null
+      genMapping.set(el.id, matched ? matched.id : autGroup.identity.id)
+    }
+
+    const phiFull = new Map<string, Automorphism>()
+    for (const h of H.elements) {
+      const rec = cand.phiMap.get(h.id)
+      const matched = rec ? findAutoByMap(autos, rec.map) : null
+      phiFull.set(h.id, matched ?? identityAuto ?? autos[0])
+    }
+
+    setSDAutNList(autos)
+    setSDAutNGroup(autGroup)
+    setSDPhiGenMapping(genMapping)
+    sdPhiGenMappingRef.current = genMapping
+    setSDPhiFullMap(phiFull)
+    sdPhiFullMapRef.current = phiFull
+    setSDPhiValid(true)
+  }, [])
+
+  /**
+   * Import the canonical decomposition N ⋊_φ H recorded on a semidirect product
+   * group and open the semidirect product panel with all φ state populated.
+   * For groups without construction data, runs findSemidirectDecompositions and
+   * auto-selects the first (verified-first) candidate.
+   * Returns false when no decomposition is found.
+   */
+  const decomposeSemidirectProduct = useCallback((group: Group): boolean => {
+    const spec = group._semidirectProduct
+    if (!spec) {
+      // Search direction: any group may admit a semidirect decomposition
+      const candidates = findSemidirectDecompositions(group)
+      setSDDecompositions(candidates)
+      setSDActiveDecomposition(-1)
+      if (candidates.length === 0) {
+        setHintMessage(t('sd.noDecomposition', { symbol: group.symbol }))
+        return false
+      }
+      populateFromCandidate(candidates[0])
+      setSDActiveDecomposition(0)
+      setIsSemidirectProductMode(true)
+      setSDPanelOpenState(true)
+      setHintMessage(
+        t('sd.decomposeCount', { n: candidates.length })
+          .replace(String(candidates.length), `<span class="hint-highlight">${candidates.length}</span>`)
+      )
+      return true
+    }
+    const { normal, acting, phiMap } = spec
+
+    const autos = findAllAutomorphisms(normal)
+    if (autos.length === 0) {
+      setHintMessage(t('sd.autTooLarge'))
+      return false
+    }
+    const autGroup = createAutomorphismGroup(normal, autos)
+    if (!autGroup) {
+      setHintMessage(t('sd.autTooLarge'))
+      return false
+    }
+
+    // Map each H generator to the automorphism matching the recorded φ image
+    const genMapping = new Map<string, string>()
+    for (const { el } of getGeneratorElements(acting)) {
+      const recorded = phiMap.get(el.id)
+      const matched = recorded ? findAutoByMap(autos, recorded.map) : null
+      genMapping.set(el.id, matched ? matched.id : autGroup.identity.id)
+    }
+
+    // Complete the full φ table with the recorded mappings, defaulting to identity
+    const phiFull = new Map<string, Automorphism>()
+    let identityAuto: Automorphism | null = null
+    for (const auto of autos) {
+      let isIdentity = true
+      for (const [k, v] of auto.map) {
+        if (k !== v) { isIdentity = false; break }
+      }
+      if (isIdentity) { identityAuto = auto; break }
+    }
+    for (const h of acting.elements) {
+      const recorded = phiMap.get(h.id)
+      phiFull.set(h.id, recorded ?? identityAuto ?? autos[0])
+    }
+
+    setSDNormalSubgroupState(normal)
+    setSDActingGroupState(acting)
+    setSDAutNList(autos)
+    setSDAutNGroup(autGroup)
+    setSDPhiGenMapping(genMapping)
+    sdPhiGenMappingRef.current = genMapping
+    setSDPhiFullMap(phiFull)
+    sdPhiFullMapRef.current = phiFull
+    setSDPhiValid(true)
+    setSDDecompositions([])
+    setSDActiveDecomposition(-1)
+    setIsSemidirectProductMode(true)
+    setSDPanelOpenState(true)
+    setHintMessage(
+      t('sd.decomposeHint', { symbol: group.symbol }).replace(group.symbol, `<span class="hint-highlight">${group.symbol}</span>`)
+    )
+    return true
+  }, [populateFromCandidate, setHintMessage, t])
+
+  const selectSemidirectDecomposition = useCallback((index: number): void => {
+    if (index < 0 || index >= sdDecompositions.length || index === sdActiveDecomposition) return
+    const cand = sdDecompositions[index]
+    if (!cand) return
+    populateFromCandidate(cand)
+    setSDActiveDecomposition(index)
+  }, [sdDecompositions, sdActiveDecomposition, populateFromCandidate])
+
   const value: GroupSemidirectProductContextType = {
-    isSemidirectProductMode, sdNormalSubgroup, sdActingGroup,
+    isSemidirectProductMode, sdPanelOpen, sdNormalSubgroup, sdActingGroup,
     sdAutNGroup, sdAutNList,
     sdPhiGenMapping, sdPhiFullMap, sdPhiValid,
     sdSemidirectProductGroups, sdStoredSpecs,
-    toggleSemidirectProductMode, setSDNormalSubgroup, setSDActingGroup,
+    sdDecompositions, sdActiveDecomposition,
+    toggleSemidirectProductMode, setSDPanelOpen, decomposeSemidirectProduct,
+    selectSemidirectDecomposition,
+    setSDNormalSubgroup, setSDActingGroup,
     computeAutN, setPhiGenMapping, expandPhiFull,
     executeSemidirectProduct, storeSemidirectProductGroup,
     removeSemidirectProductGroup, loadSemidirectProductGroup,

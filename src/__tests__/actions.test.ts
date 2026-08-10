@@ -4,12 +4,13 @@ import {
   firstDiffIndex, computeConjugationPerms,
   validateCustomArrows, extendAndVerifyPerms, generatorPermsFromArrows,
   verifyOrbitStabilizer, computeFixedPoints, computeCycleCandidates,
-  buildActionComputation,
+  buildActionComputation, computeBurnsideCount,
 } from '../core/algebra/actions'
 import { createS3, createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
+import { findAllSubgroups, getGroupCenter } from '../core/algebra/subgroups'
 
 describe('permutation utilities', () => {
   it('identity permutation leaves elements unchanged', () => {
@@ -362,5 +363,181 @@ describe('cycle candidates', () => {
     expect(result.computation!.orbits).toHaveLength(4)
     const sizes = result.computation!.orbits.map(o => o.elements.length).sort((a, b) => a - b)
     expect(sizes).toEqual([1, 1, 1, 3])
+  })
+})
+
+describe('regular action (left translation, Cayley theorem)', () => {
+  it('is a valid homomorphism with one orbit covering the whole group', () => {
+    for (const group of [createS3(), createCyclicGroup(6), createDihedralGroup(4)]) {
+      const result = buildActionComputation(group, { kind: 'regular' })
+      const comp = result.computation!
+      expect(comp.isHomomorphism).toBe(true)
+      expect(comp.n).toBe(group.order)
+      expect(comp.orbits.length).toBe(1)
+      expect(comp.orbits[0].elements.length).toBe(group.order)
+    }
+  })
+
+  it('is free: stabilizer of every element is just {e}', () => {
+    const S3 = createS3()
+    const result = buildActionComputation(S3, { kind: 'regular' })
+    for (let x = 0; x < S3.order; x++) {
+      const stab = result.computation!.stabilizers.get(x)!
+      expect(stab).toEqual([S3.identity.id])
+    }
+  })
+
+  it('embeds G into Sym(G) injectively (Cayley theorem)', () => {
+    const D4 = createDihedralGroup(4)
+    const result = buildActionComputation(D4, { kind: 'regular' })
+    const distinct = new Set(Array.from(result.computation!.perms.values()).map(p => p.join(',')))
+    expect(distinct.size).toBe(D4.order)
+    // identity acts trivially
+    expect(permsEqual(result.computation!.perms.get(D4.identity.id)!, identityPermutation(D4.order))).toBe(true)
+  })
+
+  it('left translation matches g·x in the group (g acts on itself)', () => {
+    const C4 = createCyclicGroup(4)
+    const genEl = C4.generators[0].apply(C4.identity)
+    const result = buildActionComputation(C4, { kind: 'regular' })
+    const perm = result.computation!.perms.get(genEl.id)!
+    for (let x = 0; x < C4.order; x++) {
+      const gx = C4.elements.findIndex(el => el.id === C4.multiply(genEl, C4.elements[x]).id)
+      expect(perm[x]).toBe(gx)
+    }
+  })
+})
+
+describe('coset action (G acts on left cosets G/H)', () => {
+  it('S3 acting on the 2-element subgroup <s> gives 3 cosets and is transitive', () => {
+    const S3 = createS3()
+    const sEl = S3.generators[1].apply(S3.identity)
+    const H = [S3.identity, sEl]
+    const result = buildActionComputation(S3, { kind: 'coset', subgroupElements: H })
+    const comp = result.computation!
+    expect(comp.isHomomorphism).toBe(true)
+    expect(comp.n).toBe(3)
+    expect(comp.orbits.length).toBe(1)
+    expect(comp.setLabels).toEqual(['eH', '12H', '132H'])
+  })
+
+  it('stabilizer of eH equals H itself', () => {
+    const S3 = createS3()
+    const sEl = S3.generators[1].apply(S3.identity)
+    const H = [S3.identity, sEl]
+    const result = buildActionComputation(S3, { kind: 'coset', subgroupElements: H })
+    const stab = new Set(result.computation!.stabilizers.get(0)!)
+    expect(stab.size).toBe(2)
+    expect(stab.has(S3.identity.id)).toBe(true)
+    expect(stab.has(sEl.id)).toBe(true)
+  })
+
+  it('stabilizer of xH is the conjugate xHx⁻¹ (x = r in D4, H = <s>)', () => {
+    const D4 = createDihedralGroup(4)
+    const rEl = D4.generators[0].apply(D4.identity)
+    const sEl = D4.generators[1].apply(D4.identity)
+    const H = [D4.identity, sEl]
+    const result = buildActionComputation(D4, { kind: 'coset', subgroupElements: H })
+    const comp = result.computation!
+    expect(comp.n).toBe(4)
+    expect(comp.orbits.length).toBe(1)
+    const rIdx = comp.setLabels!.findIndex(l => l === 'rH')
+    expect(rIdx).toBeGreaterThan(0)
+    const rInv = D4.inverse(rEl)
+    const conjugateEl = D4.multiply(D4.multiply(rEl, sEl), rInv)
+    const stab = new Set(comp.stabilizers.get(rIdx)!)
+    expect(stab.size).toBe(2)
+    expect(stab.has(D4.identity.id)).toBe(true)
+    expect(stab.has(conjugateEl.id)).toBe(true)
+  })
+
+  it('normal subgroup H (center) gives Stab(xH) = H for all cosets', () => {
+    const D4 = createDihedralGroup(4)
+    const rEl = D4.generators[0].apply(D4.identity)
+    const r2El = D4.multiply(rEl, rEl)
+    const H = [D4.identity, r2El]
+    const result = buildActionComputation(D4, { kind: 'coset', subgroupElements: H })
+    const comp = result.computation!
+    expect(comp.n).toBe(4)
+    for (let x = 0; x < comp.n; x++) {
+      const stab = new Set(comp.stabilizers.get(x)!)
+      expect(stab.size).toBe(2)
+      expect(stab.has(r2El.id)).toBe(true)
+    }
+  })
+
+  it('trivial subgroup {e} reproduces the regular action structure', () => {
+    const S3 = createS3()
+    const result = buildActionComputation(S3, { kind: 'coset', subgroupElements: [S3.identity] })
+    const comp = result.computation!
+    expect(comp.n).toBe(S3.order)
+    expect(comp.orbits.length).toBe(1)
+  })
+
+  it('empty subgroup is rejected with a range error', () => {
+    const S3 = createS3()
+    const result = buildActionComputation(S3, { kind: 'coset', subgroupElements: [] })
+    expect(result.computation).toBeUndefined()
+    expect(result.error?.type).toBe('range')
+  })
+
+  it('works with a subgroup from findAllSubgroups (D4 <r²> has index 4)', () => {
+    const D4 = createDihedralGroup(4)
+    const sg = findAllSubgroups(D4).find(s => s.order === 2 && s.isNormal)!
+    const result = buildActionComputation(D4, { kind: 'coset', subgroupElements: sg.elements })
+    expect(result.computation!.n).toBe(4)
+    expect(result.computation!.isHomomorphism).toBe(true)
+  })
+})
+
+describe('Burnside lemma self-check', () => {
+  it('conjugation on S3: orbits = classes = 3, (1/6)·Σ|Fix| = 3', () => {
+    const S3 = createS3()
+    const perms = computeConjugationPerms(S3)
+    const comp = buildActionComputation(S3, { kind: 'conjugation' }).computation!
+    expect(computeBurnsideCount(perms, S3.order)).toBeCloseTo(comp.orbits.length, 9)
+  })
+
+  it('conjugation on D4: 5 conjugacy classes, (1/8)·Σ|Fix| = 5', () => {
+    const D4 = createDihedralGroup(4)
+    const perms = computeConjugationPerms(D4)
+    const comp = buildActionComputation(D4, { kind: 'conjugation' }).computation!
+    expect(comp.orbits.length).toBe(5)
+    expect(computeBurnsideCount(perms, D4.order)).toBeCloseTo(5, 9)
+  })
+
+  it('regular action on S3: single orbit, Σ|Fix| = |G|', () => {
+    const S3 = createS3()
+    const comp = buildActionComputation(S3, { kind: 'regular' }).computation!
+    const perms = comp.perms
+    expect(comp.orbits.length).toBe(1)
+    expect(computeBurnsideCount(perms, S3.order)).toBeCloseTo(1, 9)
+  })
+
+  it('empty perms yields 0', () => {
+    expect(computeBurnsideCount(new Map(), 5)).toBe(0)
+  })
+})
+
+describe('conjugation fixed points equal the center Z(G)', () => {
+  it('S3: only identity is fixed, |Z(S3)| = 1', () => {
+    const S3 = createS3()
+    const perms = computeConjugationPerms(S3)
+    expect(computeFixedPoints(perms, S3.order).length).toBe(1)
+    expect(getGroupCenter(S3).length).toBe(1)
+  })
+
+  it('D4: center {e, r²}, fixed points = 2', () => {
+    const D4 = createDihedralGroup(4)
+    const perms = computeConjugationPerms(D4)
+    expect(computeFixedPoints(perms, D4.order).length).toBe(2)
+    expect(getGroupCenter(D4).length).toBe(2)
+  })
+
+  it('C6 (abelian): everything fixed = whole group = center', () => {
+    const C6 = createCyclicGroup(6)
+    const perms = computeConjugationPerms(C6)
+    expect(computeFixedPoints(perms, C6.order).length).toBe(6)
+    expect(getGroupCenter(C6).length).toBe(6)
   })
 })

@@ -8,6 +8,7 @@ import { verifyHomomorphism, getHomomorphismProperties, formatKernelLabel } from
 import { createGroupFromSymbol } from '../../utils/groupFactory'
 import { isAutomorphismGroup } from '../../core/algebra/automorphisms'
 import { computeGroupProperties } from '../../utils/hybridCompute'
+import { computeBurnsideCount } from '../../core/algebra/actions'
 import { presentationOf, formatPresentation } from '../../core/algebra/presentations'
 import { AccordionSection } from './AccordionSection'
 
@@ -565,8 +566,12 @@ export function RightPanel() {
         const selected = actionSelectedElement
         const selOrbit = selected !== null ? comp.orbits[comp.orbitOf[selected]] : null
         const selStab = selected !== null ? comp.stabilizers.get(selected) ?? [] : []
-        const selEl = selected !== null && actionKind === 'conjugation' ? currentGroup.elements[selected] : null
-        const selLabel = selEl ? texify(selEl.label) : String(selected !== null ? selected + 1 : 0)
+        const selEl = selected !== null && (actionKind === 'conjugation' || actionKind === 'regular') ? currentGroup.elements[selected] : null
+        const selLabel = selEl
+          ? texify(selEl.label)
+          : selected !== null && actionKind === 'coset'
+            ? texify(comp.setLabels?.[selected] ?? String(selected + 1))
+            : String(selected !== null ? selected + 1 : 0)
         const kindLabel = actionKind ? t(`action.kind.${actionKind}`) : ''
         return (
           <div className="panel-section">
@@ -599,6 +604,34 @@ export function RightPanel() {
               <span className="info-label">|X|</span>
               <span className="info-value">{comp.n}</span>
             </div>
+            {actionKind === 'regular' && (
+              <div className="info-row">
+                <span className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.math.regular')) }} />
+                <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(t('action.math.regularNote')) }} />
+              </div>
+            )}
+            {actionKind === 'coset' && (
+              <>
+                <div className="info-row">
+                  <span className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.math.cosetStab')) }} />
+                  <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(t('action.math.cosetStabNote')) }} />
+                </div>
+                <div className="info-row">
+                  <span className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.math.cosetTransitive')) }} />
+                  <span className="info-value" style={{ color: comp.orbits.length === 1 ? '#22c55e' : '#f43f5e' }}>
+                    {comp.orbits.length === 1 ? '✓' : '✗'}
+                  </span>
+                </div>
+              </>
+            )}
+            {actionKind === 'conjugation' && (
+              <div className="info-row">
+                <span className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.math.fixedCenter')) }} />
+                <span className="info-value" style={{ color: fixedCount === getGroupCenter(currentGroup).length ? '#22c55e' : '#f43f5e' }}>
+                  {fixedCount} = |Z(G)| = {getGroupCenter(currentGroup).length}
+                </span>
+              </div>
+            )}
             <div className="info-row">
               <span className="info-label">{t('action.orbitCount', { n: comp.orbits.length })}</span>
               <span className="info-value">
@@ -613,6 +646,18 @@ export function RightPanel() {
               <span className="info-label">{t('action.fixedPoints', { n: fixedCount })}</span>
               <span className="info-value">★ ×{fixedCount}</span>
             </div>
+            {comp.isHomomorphism && (() => {
+              const burnside = computeBurnsideCount(comp.perms, comp.n)
+              const burnsideOk = Math.abs(burnside - comp.orbits.length) < 1e-9
+              return (
+                <div className="info-row">
+                  <span className="info-label" dangerouslySetInnerHTML={{ __html: renderTex(t('action.math.burnside')) }} />
+                  <span className="info-value" style={{ color: burnsideOk ? '#22c55e' : '#f43f5e' }}>
+                    {comp.orbits.length} = {burnside} {burnsideOk ? '✓' : '✗'}
+                  </span>
+                </div>
+              )
+            })()}
             {selected !== null && selOrbit && (
               <div style={{ marginTop: 6, borderTop: '1px dashed var(--border-color, rgba(128,128,128,0.3))', paddingTop: 6 }}>
                 <div className="info-row">

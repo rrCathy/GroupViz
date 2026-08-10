@@ -22,15 +22,19 @@
 
 作用图约定（图 9.3）：顶点 = X 的元素，箭头 = **生成元**的作用（非全部元素）；轨道 = 作用图的不连通分量；布局上**稳定元在左、大轨道在右**。
 
-## 2. 作用来源（三种）
+## 2. 作用来源（五种）
 
 | Kind | 描述 | 集合 X | 置换构造 |
 |------|------|--------|---------|
 | `conjugation` | 共轭作用 | X = G 自身（0..\|G\|-1） | Φ(g)[x] = index(g·G[x]·g⁻¹)，O(\|G\|²) 用 Map 索引 |
 | `custom` | 用户自定义 | 用户指定大小 \|X\|（1..20） | 箭头 + 补全 + BFS 扩展（见 §3） |
 | `sylow` | Sylow 共轭作用 | X = Syl_p(G)（Sylow p-子群集合，0..n_p-1） | 来自 `sylowConjugationPerms`（findSylowSubgroups 的共轭置换）；轨道大小 = n_p（传递），稳定子 = 正规化子 \|N_G(P)\| = \|G\|/n_p |
+| `regular` | 左平移（正则表示） | X = G 自身 | `computeLeftTranslationPerms`：Φ(g)[x] = index(g·x)，O(\|G\|²)；轨道唯一（传递）且自由 ⇒ Cayley 定理 G ≅ Sym(G) 嵌入，Stab(x) = {e} |
+| `coset` | 陪集作用 | X = 左陪集 G/H（0..[G:H]-1） | `computeCosetActionPerms(group, subgroupElements)`：自写 O(\|G\|·\|H\|) 左陪集划分（cosetOf Map，取未覆盖元素为代表），Φ(g)[i] = cosetOf(g·repᵢ)；传递，Stab(xH) = xHx⁻¹ ≅ H；`setLabels` = `${rep.label}H`（如 eH / rH / sH） |
 
-共轭作用中：轨道 = 共轭类、固定点 = 中心 Z(G)、Stab(x) = 中心化子 C_G(x)。（共轭特化标注为后续待办。）Sylow 作用由 `createSylowAction(group, p)` 创建（API 保留供未来 UI 入口复用，当前无面板按钮），`setLabels = P1..Pn`，点标签为 Sylow 子群序号。
+共轭作用中：轨道 = 共轭类、固定点 = 中心 Z(G)、Stab(x) = 中心化子 C_G(x)。（右侧面板共轭标注：固定点数量与 `getGroupCenter(group)` 自检比对。）Sylow 作用由面板按钮创建（p 素数下拉 + 「Sylow p-作用」，`factorizeOrder` 素因子列表），`setLabels = P1..Pn`，点标签为 Sylow 子群序号。
+
+正则/陪集作用由面板按钮创建：`createRegularAction(group)` / `createCosetAction(group, subgroupElements)`。陪集作用的子群 H 在面板内下拉选择（`findAllSubgroups`，order>60 时不枚举）；两个作用的 UI 均以轨道视图展示（regular 显示群元素节点，coset 显示 xH 陪集节点），右侧面板标注数学事实（regular：G ≅ Sym(G) / Stab(x)={e}；coset：Stab(xH)=xHx⁻¹ ≅ H / 传递唯一轨道；conjugation：固定点 = Z(G) 自检）。所有同态作用右侧面板附 **Burnside 引理自检**行：`|X/G| = (1/|G|)·Σ|Fix(g)|`（`computeBurnsideCount(perms, n)`，与轨道数比对 ✓/✗）。
 
 ## 3. 自定义作用（箭头 + 补全 + 校验）
 
@@ -92,11 +96,13 @@ findSylowSubgroups / sylowConjugationPerms（src/core/algebra/sylow.ts，Sylow �
 
 ## 7. 面板
 
-- **左侧**（GroupActionPanel，HomomorphismPanel 之后）：两个来源按钮（共轭/自定义）+ |X| 输入（1..20）+ 编辑模式箭头列表/错误/完成并验证/清除/**退出**（clearAction）+ 非编辑模式「轨道视图 →」入口与「清除」
-- **右侧**（RightPanel，action 视图且有计算时）：作用类型、同态校验 ✓/✗、violation、|X|、轨道数+大小列表、Σ|Orb|=|X| 检查、稳定元数、选中元素 OST 详情
+- **左侧**（GroupActionPanel，HomomorphismPanel 之后）：五个来源按钮（共轭/左平移（Cayley）/陪集/自定义/Sylow p-作用）+ 陪集子群下拉（findAllSubgroups 选项 `⟨gens⟩ |H| = n [G:H] = m`，order>60 禁用）+ Sylow 素数下拉（factorizeOrder 素因子，选项 `p = k`）+ |X| 输入（1..20）+ 编辑模式箭头列表/错误/完成并验证/清除/**退出**（clearAction）+ 非编辑模式「轨道视图 →」入口与「清除」
+- **右侧**（RightPanel，action 视图且有计算时）：作用类型、同态校验 ✓/✗、violation、|X|、轨道数+大小列表、Σ|Orb|=|X| 检查、稳定元数、选中元素 OST 详情；regular 额外标注「正则表示：G ≅ Sym(G) 嵌入 / Stab(x) = {e}（自由）」，coset 额外标注「Stab(xH) = xHx⁻¹ ≅ H / 传递作用（唯一轨道）✓」
 
 ## 8. 性能守卫
 
 - 自定义 |X| ≤ 20（UI 输入限制）
 - 同态校验 O(|G|·k)，A₅ 级（60 元素）即时
 - 共轭作用 O(|G|²) Map 索引，S₅ (120) 级即时
+- 正则作用 O(|G|²)、陪集作用 O(|G|·|H|)，S₅ (120) 级即时
+- 陪集子群枚举复用 findAllSubgroups（order>60 不下拉枚举）

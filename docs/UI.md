@@ -29,11 +29,11 @@ AppWrapper (I18nProvider → ThemeProvider)
 | # | 面板 | 图标 | 内容 |
 |---|------|------|------|
 | 1 | GroupPanel（`panel.createGroup`） | ⊕ | 内部 TabBar 2 tab：`create` 群创建（GroupCreationInner：群类型/阶滑块/按阶浏览/创建）；`dp` 直积构建（DirectProductInner：三模式 cayley/table/direct、导入当前群、存储/加载直积群） |
-| 2 | SemidirectProductPanel（`sd.title`） | ⋉ | 5 预设、进入/退出模式、导入当前群为 N/H、计算 Aut(N)、φ 生成元映射下拉、展开 φ、创建、已保存半直积列表 |
+| 2 | SemidirectProductPanel（`sd.title`） | ⋉ | 进入/退出模式、导入当前群为 N/H、计算 Aut(N)、φ 生成元映射下拉、展开 φ、创建、已保存半直积列表；下方**半直积分解区**（操作面板「半直积分解」按钮触发：分解列表 N⋊_φ H + ✓/✗ 徽标 + 点击切换 + 分裂短正合列 1→N→G→H→1） |
 | 3 | ViewPanel（`panel.viewMode`，默认展开） | ⊞ | 9 个视图卡片 + 多视图勾选；下方按视图显示上下文设置（见下） |
 | 4 | OperationsPanel（`panel.operations`） | ⚙ | 内部 TabBar 4 tab：general/subsets/quotient/automorphism |
 | 5 | HomomorphismPanel（`homo.title`） | ⟷ | 同态构建与验证（源/目标选择、自动映射、生成元映射、验证结果、第一同构定理入口、已存同态列表） |
-| 6 | GroupActionPanel（`action.title`） | ➤ | 群作用：共轭/自定义两来源、\|X\| 输入、自定义箭头编辑（点击/拖放绑定）、完成并验证/退出 |
+| 6 | GroupActionPanel（`action.title`） | ➤ | 群作用：共轭/左平移（Cayley）/陪集/自定义/Sylow p-作用五来源、陪集子群下拉（findAllSubgroups）、Sylow 素数下拉（factorizeOrder）、\|X\| 输入、自定义箭头编辑（点击/拖放绑定）、完成并验证/退出 |
 | 7 | PresentationPanel（`pres.title`） | ⟨⟩ | 群展示：两种创建方式 tab（直接创建 = textarea 输入 ⟨生成元\|关系词⟩ 完整语法 + 创建群；可视化创建 = 模板逐步粘合）、「✕ 清空当前群（回到模板树）」、已保存展示列表（点击加载/× 删除）、草稿自动保存 |
 
 > 注：直积构建入口在 GroupPanel 的 `dp` tab；BasicGroupPanel（`panel.basicGroup`）为按群类型/按阶创建（含交错群 Aₙ）。

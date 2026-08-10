@@ -1,7 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { renderTex } from '../../utils/texify'
+import { findAllSubgroups } from '../../core/algebra/subgroups'
+import { factorizeOrder } from '../../core/algebra/sylow'
 import { AccordionSection } from './AccordionSection'
 
 export function GroupActionPanel() {
@@ -14,6 +16,9 @@ export function GroupActionPanel() {
     actionComputation,
     actionError,
     createConjugationAction,
+    createRegularAction,
+    createCosetAction,
+    createSylowAction,
     startCustomAction,
     completeCustomAction,
     clearArrows,
@@ -25,6 +30,19 @@ export function GroupActionPanel() {
   } = useGroup()
   const { t } = useTranslation()
   const [sizeInput, setSizeInput] = useState('6')
+  const [subgroupIdx, setSubgroupIdx] = useState(-1)
+  const [primeIdx, setPrimeIdx] = useState(0)
+
+  const subgroups = useMemo(() => {
+    if (!currentGroup) return []
+    if (currentGroup.order > 60) return []
+    return findAllSubgroups(currentGroup)
+  }, [currentGroup])
+
+  const primes = useMemo(() => {
+    if (!currentGroup) return []
+    return factorizeOrder(currentGroup.order).map(f => f.prime)
+  }, [currentGroup])
 
   const goActionView = useCallback(() => {
     setCurrentView('action')
@@ -35,6 +53,27 @@ export function GroupActionPanel() {
     createConjugationAction(currentGroup)
     goActionView()
   }, [currentGroup, createConjugationAction, goActionView])
+
+  const handleRegular = useCallback(() => {
+    if (!currentGroup) return
+    createRegularAction(currentGroup)
+    goActionView()
+  }, [currentGroup, createRegularAction, goActionView])
+
+  const handleCoset = useCallback(() => {
+    if (!currentGroup || subgroupIdx < 0) return
+    const sg = subgroups[subgroupIdx]
+    if (!sg) return
+    createCosetAction(currentGroup, sg.elements)
+    goActionView()
+  }, [currentGroup, subgroupIdx, subgroups, createCosetAction, goActionView])
+
+  const handleSylow = useCallback(() => {
+    if (!currentGroup || primes.length === 0) return
+    const p = primes[Math.max(0, Math.min(primeIdx, primes.length - 1))]
+    createSylowAction(currentGroup, p)
+    goActionView()
+  }, [currentGroup, primes, primeIdx, createSylowAction, goActionView])
 
   const handleStartCustom = useCallback(() => {
     if (!currentGroup) return
@@ -101,7 +140,43 @@ export function GroupActionPanel() {
             <div className="subset-section-header">{t('right.actionInfo')}</div>
             <div className="homo-row">
               <button className="panel-btn" onClick={handleConjugation} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.conjugation')}</button>
+              <button className="panel-btn" onClick={handleRegular} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.regular')}</button>
+            </div>
+            <div className="homo-row">
+              <button className="panel-btn" onClick={handleCoset} disabled={!currentGroup || subgroupIdx < 0} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.coset')}</button>
               <button className="panel-btn" onClick={handleStartCustom} disabled={!currentGroup} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.custom')}</button>
+            </div>
+            <select
+              className="panel-input"
+              value={subgroupIdx}
+              onChange={e => setSubgroupIdx(parseInt(e.target.value, 10))}
+              disabled={!currentGroup || subgroups.length === 0}
+              style={{ width: '100%', marginTop: 6 }}
+            >
+              <option value={-1}>
+                {subgroups.length === 0 ? t('action.coset.noSubgroups') : t('action.coset.selectSubgroup')}
+              </option>
+              {subgroups.map((sg, i) => (
+                <option key={i} value={i}>
+                  ⟨{sg.generators.map(g => g.label).join(', ')}⟩ |H| = {sg.order}  [G:H] = {sg.index}
+                </option>
+              ))}
+            </select>
+
+            <div className="homo-row" style={{ marginTop: 6 }}>
+              <select
+                className="panel-input"
+                value={primeIdx}
+                onChange={e => setPrimeIdx(parseInt(e.target.value, 10))}
+                disabled={!currentGroup || primes.length === 0}
+                style={{ width: 84 }}
+              >
+                {primes.length === 0 && <option value={0}>p</option>}
+                {primes.map((p, i) => (
+                  <option key={i} value={i}>p = {p}</option>
+                ))}
+              </select>
+              <button className="panel-btn" onClick={handleSylow} disabled={!currentGroup || primes.length === 0} style={{ flex: 1, fontSize: '11px' }}>{t('action.create.sylow')}</button>
             </div>
 
             {actionKind === 'conjugation' && actionComputation?.isHomomorphism && (

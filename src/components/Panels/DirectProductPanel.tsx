@@ -2,8 +2,6 @@ import { useGroup } from '../../context/useGroup'
 import { renderTex, texify } from '../../utils/texify'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
-import { createKleinFour } from '../../core/groups/SpecialGroup'
-import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3, createZ6xZ2 } from '../../core/groups/SmallGroups'
 
 export function DirectProductPanel() {
   const { directProductGroups } = useGroup()
@@ -75,7 +73,6 @@ function DirectProductInner() {
       </div>
 
       {currentGroup && <button className="panel-btn" onClick={() => storeDirectProductGroup(currentGroup)} style={{ width: '100%', fontSize: '11px', marginTop: '6px' }}>{t('dp.storeGroup')}</button>}
-      <button className="panel-btn" onClick={() => { const groups = [createKleinFour(), createZ4xZ2(), createZ2xZ2xZ2(), createZ3xZ3(), createZ6xZ2()]; groups.forEach(g => storeDirectProductGroup(g)) }} style={{ width: '100%', fontSize: '11px', marginTop: '6px', backgroundColor: 'var(--accent-purple)', color: '#fff', borderColor: 'var(--accent-purple)' }}>{t('dp.importAll')}</button>
     </div>
   )
 }

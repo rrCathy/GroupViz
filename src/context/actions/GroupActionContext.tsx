@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useGroupCore } from '../core/GroupCoreContext'
-import type { Group, GroupActionArrow, GroupActionComputation, GroupActionKind } from '../../core/types'
+import type { Group, GroupActionArrow, GroupActionComputation, GroupActionKind, GroupElement } from '../../core/types'
 import { buildActionComputation, type CustomArrowError } from '../../core/algebra/actions'
 import { loadCustomActionDraft, removeCustomActionDraft, saveCustomActionDraft } from './actionDraftStorage'
 import { loadGroupActionsFromStorage, saveGroupActionsToStorage, type StoredGroupAction } from './actionStorage'
@@ -25,6 +25,8 @@ interface GroupActionState {
 interface GroupActionActions {
   createConjugationAction: (group: Group) => void
   createSylowAction: (group: Group, prime: number) => void
+  createRegularAction: (group: Group) => void
+  createCosetAction: (group: Group, subgroupElements: GroupElement[]) => void
   startCustomAction: (group: Group, n: number) => void
   addArrow: (from: number, to: number, generatorId?: string | null) => void
   bindArrow: (from: number, to: number, generatorId: string) => void
@@ -177,6 +179,36 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
       setActionError(null)
       setActionSelectedElement(null)
       setHintMessage(t('action.created', { kind: t('action.kind.sylow', { p: prime }) }))
+    }
+  }, [setHintMessage, t])
+
+  const createRegularAction = useCallback((group: Group) => {
+    const result = buildActionComputation(group, { kind: 'regular' })
+    if (result.computation) {
+      setActionKind('regular')
+      setActionComputation(result.computation)
+      setActionGroupSymbol(null)
+      setActionSetSize(null)
+      setActionArrows([])
+      setActionEditing(false)
+      setActionError(null)
+      setActionSelectedElement(null)
+      setHintMessage(t('action.created', { kind: t('action.kind.regular') }))
+    }
+  }, [setHintMessage, t])
+
+  const createCosetAction = useCallback((group: Group, subgroupElements: GroupElement[]) => {
+    const result = buildActionComputation(group, { kind: 'coset', subgroupElements })
+    if (result.computation) {
+      setActionKind('coset')
+      setActionComputation(result.computation)
+      setActionGroupSymbol(null)
+      setActionSetSize(null)
+      setActionArrows([])
+      setActionEditing(false)
+      setActionError(null)
+      setActionSelectedElement(null)
+      setHintMessage(t('action.created', { kind: t('action.kind.coset') }))
     }
   }, [setHintMessage, t])
 
@@ -341,7 +373,7 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   const value: GroupActionContextType = {
     actionKind, actionPrime, actionGroupSymbol, actionSetSize, actionArrows, actionEditing,
     actionComputation, actionError, actionSelectedElement, actionHoverElement,
-    createConjugationAction, createSylowAction, startCustomAction,
+    createConjugationAction, createSylowAction, createRegularAction, createCosetAction, startCustomAction,
     addArrow, bindArrow, removeArrow, removeArrowAll, replaceGenArrows, clearArrows, completeCustomAction,
     setActionSelectedElement: setActionSelectedElementCb,
     setActionHoverElement: setActionHoverElementCb,

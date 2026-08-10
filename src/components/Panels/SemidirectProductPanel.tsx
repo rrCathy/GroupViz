@@ -1,39 +1,14 @@
-import { useRef } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { renderTex, texify } from '../../utils/texify'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
-import { createCyclicGroup } from '../../core/groups/CyclicGroup'
-import { createKleinFour } from '../../core/groups/SpecialGroup'
-import { createSemidirectProduct } from '../../core/groups/SemidirectProduct'
-import { findAllAutomorphisms, createAutomorphismGroup } from '../../core/algebra/automorphisms'
-import { getGeneratorElements, extendFromGenerators } from '../../core/algebra/homomorphisms'
-import {
-  type StoredSemidirectProduct,
-} from '../../context/semidirectProduct/semidirectProductStorage'
-
-interface SemidirectPreset {
-  key: string
-  label: string
-  desc: string
-  phiTargetPower: number
-  N: () => ReturnType<typeof createCyclicGroup> | ReturnType<typeof createKleinFour>
-  H: () => ReturnType<typeof createCyclicGroup>
-}
-
-const SEMIDIRECT_PRESETS: SemidirectPreset[] = [
-  { key: 'Z4sZ2', label: 'Z_{4} \\rtimes_{\\phi} Z_{2}', desc: 'C_4 ⋊_φ C_2 ≅ D_4 (inversion)', phiTargetPower: 3, N: () => createCyclicGroup(4), H: () => createCyclicGroup(2) },
-  { key: 'Z5sZ2', label: 'Z_{5} \\rtimes_{\\phi} Z_{2}', desc: 'C_5 ⋊_φ C_2 ≅ D_5 (inversion)', phiTargetPower: 4, N: () => createCyclicGroup(5), H: () => createCyclicGroup(2) },
-  { key: 'Z7sZ3', label: 'Z_{7} \\rtimes_{\\phi} Z_{3}', desc: 'C_7 ⋊_φ C_3 (Frobenius, x→2x)', phiTargetPower: 2, N: () => createCyclicGroup(7), H: () => createCyclicGroup(3) },
-  { key: 'Z9sZ3', label: 'Z_{9} \\rtimes_{\\phi} Z_{3}', desc: 'C_9 ⋊_φ C_3 (x→4x, nonabelian p-group)', phiTargetPower: 4, N: () => createCyclicGroup(9), H: () => createCyclicGroup(3) },
-  { key: 'Z11sZ5', label: 'Z_{11} \\rtimes_{\\phi} Z_{5}', desc: 'C_11 ⋊_φ C_5 (Frobenius, x→3x)', phiTargetPower: 3, N: () => createCyclicGroup(11), H: () => createCyclicGroup(5) },
-  { key: 'V4sZ3', label: 'V_{4} \\rtimes_{\\phi} Z_{3}', desc: 'V₄ ⋊_φ C₃ ≅ A₄ (3-cycle on non-identity)', phiTargetPower: 0, N: () => createKleinFour(), H: () => createCyclicGroup(3) },
-]
+import { getGeneratorElements } from '../../core/algebra/homomorphisms'
 
 export function SemidirectProductPanel() {
   const { t } = useTranslation()
+  const { sdPanelOpen, setSDPanelOpen } = useGroup()
   return (
-    <AccordionSection title={t('sd.title')} icon="⋉" defaultOpen={false}>
+    <AccordionSection title={t('sd.title')} icon="⋉" defaultOpen={false} open={sdPanelOpen} onToggle={() => setSDPanelOpen(!sdPanelOpen)}>
       <SemidirectProductInner />
     </AccordionSection>
   )
@@ -44,107 +19,19 @@ function SemidirectProductInner() {
     currentGroup, setCurrentGroup, setCurrentView,
     isSemidirectProductMode, sdNormalSubgroup, sdActingGroup,
     sdAutNGroup, sdAutNList, sdPhiGenMapping, sdPhiValid,
-    sdSemidirectProductGroups,
+    sdSemidirectProductGroups, sdDecompositions, sdActiveDecomposition,
     toggleSemidirectProductMode, setSDNormalSubgroup, setSDActingGroup,
     computeAutN, setPhiGenMapping, expandPhiFull, executeSemidirectProduct,
     storeSemidirectProductGroup, removeSemidirectProductGroup, loadSemidirectProductGroup,
-    isDirectProductMode, toggleDirectProductMode,
+    selectSemidirectDecomposition,
   } = useGroup()
   const { t } = useTranslation()
-  const presetsIdCounter = useRef(0)
-
-  function createPresetSD(key: string) {
-    if (isDirectProductMode) toggleDirectProductMode()
-    const preset = SEMIDIRECT_PRESETS.find(p => p.key === key)
-    if (!preset) return
-    const N = preset.N()
-    const H = preset.H()
-    setSDNormalSubgroup(N)
-    setSDActingGroup(H)
-    const autos = findAllAutomorphisms(N)
-    if (autos.length === 0) return
-    const autGroup = createAutomorphismGroup(N, autos)
-    if (!autGroup) return
-    const idAutoId = autGroup.identity.id
-
-    const hGens = getGeneratorElements(H)
-    const genMap = new Map<string, string>()
-
-    if (key === 'V4sZ3') {
-      if (hGens.length > 0) {
-        const nonId = N.elements.filter(e => e.id !== N.identity.id)
-        for (const auto of autos) {
-          if (auto.id === idAutoId) continue
-          let is3Cycle = true
-          for (const n of nonId) {
-            const n1 = auto.apply(n)
-            if (n1.id === n.id) { is3Cycle = false; break }
-            const n3 = auto.apply(auto.apply(n1))
-            if (n3.id !== n.id) { is3Cycle = false; break }
-          }
-          if (is3Cycle) {
-            genMap.set(hGens[0].el.id, auto.id)
-            break
-          }
-        }
-        if (!genMap.has(hGens[0].el.id)) genMap.set(hGens[0].el.id, idAutoId)
-      }
-    } else if (preset.phiTargetPower > 0 && N.generators.length > 0 && hGens.length > 0) {
-      const nGen = N.generators[0].apply(N.identity)
-      let target = N.identity
-      for (let i = 0; i < preset.phiTargetPower; i++) target = N.multiply(target, nGen)
-      for (const auto of autos) {
-        if (auto.apply(nGen).id === target.id) {
-          genMap.set(hGens[0].el.id, auto.id)
-          break
-        }
-      }
-      if (!genMap.has(hGens[0].el.id)) genMap.set(hGens[0].el.id, idAutoId)
-    }
-
-    if (genMap.size > 0) {
-      const fullMap = extendFromGenerators(H, autGroup, genMap)
-      if (fullMap) {
-        const autoById = new Map(autos.map(a => [a.id, a]))
-        const phiFull = new Map<string, import('../../core/algebra/automorphisms').Automorphism>()
-        for (const [hId, autoId] of fullMap) {
-          const a = autoById.get(autoId)
-          if (a) phiFull.set(hId, a)
-        }
-        const group = createSemidirectProduct(N, H, phiFull)
-
-        const genMapping: Record<string, string> = {}
-        genMap.forEach((v, k) => { genMapping[k] = v })
-        const spec: StoredSemidirectProduct = {
-          id: `sd-preset-${key}-${++presetsIdCounter.current}`,
-          symbol: group.symbol,
-          normalSymbol: N.symbol,
-          actingSymbol: H.symbol,
-          phiGenMapping: genMapping,
-        }
-        storeSemidirectProductGroup(group, spec)
-        setCurrentGroup(group)
-        setCurrentView('cayley')
-      }
-    }
-  }
 
   return (
     <div>
       <button className={`panel-btn ${isSemidirectProductMode ? 'dp-active' : ''}`} onClick={toggleSemidirectProductMode} style={{ width: '100%', backgroundColor: isSemidirectProductMode ? 'var(--accent-orange)' : undefined, color: isSemidirectProductMode ? '#0f0f1a' : undefined, borderColor: isSemidirectProductMode ? 'var(--accent-orange)' : undefined }}>
         {isSemidirectProductMode ? t('sd.exitMode') : t('sd.enterMode')}
       </button>
-
-      <div className="dp-group-list" style={{ marginTop: '8px' }}>
-        <div className="subset-section-header">{t('sd.presets')}</div>
-        <div className="sd-presets-grid">
-          {SEMIDIRECT_PRESETS.map(p => (
-            <button key={p.key} className="sd-preset-btn" onClick={() => createPresetSD(p.key)} title={p.desc}>
-              <span dangerouslySetInnerHTML={{ __html: renderTex(p.label) }} />
-            </button>
-          ))}
-        </div>
-      </div>
 
       {isSemidirectProductMode && (
         <>
@@ -201,6 +88,42 @@ function SemidirectProductInner() {
             {t('sd.create')}
           </button>
         </>
+      )}
+
+      {sdDecompositions.length > 0 && (
+        <div style={{ marginTop: '8px' }}>
+          <div className="subset-section-header">{t('sd.decomposeTitle')}</div>
+          <div className="subsets-list scrollable-list" style={{ maxHeight: '150px' }}>
+            {sdDecompositions.map((cand, i) => (
+              <div
+                key={i}
+                className="subset-item"
+                style={{
+                  flexWrap: 'wrap',
+                  cursor: 'pointer',
+                  border: i === sdActiveDecomposition ? '1px solid var(--accent-orange)' : undefined,
+                  backgroundColor: i === sdActiveDecomposition ? 'rgba(255, 165, 0, 0.12)' : undefined,
+                }}
+                title={t('sd.decomposeSelect')}
+                onClick={() => selectSemidirectDecomposition(i)}
+              >
+                <span className="subset-name" style={{ fontSize: '11px', flex: 1 }} dangerouslySetInnerHTML={{ __html: renderTex(texify(`${cand.normal.symbol} \\rtimes_{\\phi} ${cand.acting.symbol}`)) }} />
+                <span className="subset-size" title={cand.verified ? t('sd.decomposeVerified') : t('sd.decomposeUnverified')}>
+                  |N|={cand.normal.order} |H|={cand.acting.order}&nbsp;
+                  <span style={{ color: cand.verified ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                    {cand.verified ? '✓' : '✗'}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+          {sdActiveDecomposition >= 0 && sdActiveDecomposition < sdDecompositions.length && currentGroup && (
+            <div style={{ fontSize: '11px', marginTop: '5px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: '10px', marginBottom: '2px' }}>{t('sd.decomposeSES')}</div>
+              <span dangerouslySetInnerHTML={{ __html: renderTex(texify(`1 \\to ${sdDecompositions[sdActiveDecomposition].normal.symbol} \\to ${currentGroup.symbol} \\to ${sdDecompositions[sdActiveDecomposition].acting.symbol} \\to 1`)) }} />
+            </div>
+          )}
+        </div>
       )}
 
       <div className="dp-group-list">

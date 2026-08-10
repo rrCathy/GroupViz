@@ -35,6 +35,7 @@ export function OperationsPanel() {
     setCurrentView,
     checkSubsetProperty,
     showCosetsFromElements,
+    decomposeSemidirectProduct,
   } = useGroup()
   const { t } = useTranslation()
 
@@ -49,6 +50,7 @@ export function OperationsPanel() {
         <button className="panel-btn" onClick={computeInverse} disabled={!currentGroup}>{t('panel.inverse')}</button>
         <button className="panel-btn" onClick={clearCanvas} disabled={!currentGroup}>{t('panel.clearCanvas')}</button>
         <button className="panel-btn" onClick={() => resetNodePositions()} disabled={!currentGroup}>{t('panel.resetPositions')}</button>
+        <button className="panel-btn" onClick={() => { if (currentGroup) decomposeSemidirectProduct(currentGroup) }} disabled={!currentGroup} style={{ gridColumn: '1 / -1' }} title={!currentGroup ? t('panel.decomposeSDDisabled') : undefined}>{t('panel.decomposeSD')}</button>
       </div>
     ),
   }

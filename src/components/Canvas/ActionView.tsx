@@ -638,6 +638,7 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
   const { n, perms, orbits, orbitOf } = computation
   const fixed = useMemo(() => new Set(computeFixedPoints(perms, n)), [perms, n])
   const isConjugation = actionKind === 'conjugation'
+  const showsElements = isConjugation || actionKind === 'regular'
   const hoverActive = !!actionHoverElement
 
   const widths = orbits.map(o => 2 * (clusterRadius(o.elements.length) + NODE_R + CLUSTER_PAD))
@@ -802,8 +803,12 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
     const groupChips = o.elements.map((x, ci) => {
       const row = Math.floor(ci / CHIP_PER_ROW)
       const col = ci % CHIP_PER_ROW
-      const el = actionKind === 'conjugation' ? group.elements[x] : null
-      const label = el ? renderTex(texify(el.label)) : computation.setLabels?.[x] ?? String(x + 1)
+      const el = showsElements ? group.elements[x] : null
+      const label = el
+        ? renderTex(texify(el.label))
+        : computation.setLabels?.[x]
+          ? renderTex(texify(computation.setLabels[x]))
+          : String(x + 1)
       return (
         <g key={el ? el.id : `s-${x}`} transform={`translate(${GRP_PAD + col * (CHIP_W + CHIP_GAP)}, ${GRP_HDR + GRP_PAD + row * CHIP_ROW_H})`}>
           <ElementChip
@@ -864,8 +869,8 @@ function DisplayMode({ group, computation, legendHover, onLegendHover, viewBoxOv
             key={x}
             x={p.x}
             y={p.y}
-            label={isConjugation ? renderTex(texify(group.elements[x].label)) : computation.setLabels?.[x] ?? ''}
-            showNumber={isConjugation ? undefined : (computation.setLabels ? undefined : x + 1)}
+            label={showsElements ? renderTex(texify(group.elements[x].label)) : computation.setLabels?.[x] ? renderTex(texify(computation.setLabels[x])) : ''}
+            showNumber={showsElements ? undefined : (computation.setLabels ? undefined : x + 1)}
             isSelected={actionSelectedElement === x}
             isFixed={fixed.has(x)}
             onClick={() => setActionSelectedElement(actionSelectedElement === x ? null : x)}
@@ -890,13 +895,18 @@ export function ActionView() {
   }
 
   const isConjugation = actionKind === 'conjugation'
+  const showsElements = isConjugation || actionKind === 'regular'
   const hoverEl = actionHoverElement ? currentGroup.elements.find(e => e.id === actionHoverElement) : null
   const showBanner = !!actionComputation && !actionEditing
   const titleLine = isConjugation
     ? t('action.viewTitle.conjugation')
     : actionKind === 'sylow'
       ? t('action.viewTitle.sylow', { p: actionPrime ?? '' })
-      : t('action.viewTitle.custom')
+      : actionKind === 'regular'
+        ? t('action.viewTitle.regular')
+        : actionKind === 'coset'
+          ? t('action.viewTitle.coset')
+          : t('action.viewTitle.custom')
   const edgeLine = hoverEl
     ? t('action.hoverElEdges', { el: hoverEl.label })
     : legendHover
@@ -917,9 +927,11 @@ export function ActionView() {
         .filter((el): el is NonNullable<typeof el> => !!el)
     : []
   const selLabel = actionComputation && actionSelectedElement !== null
-    ? (actionKind === 'conjugation'
+    ? (showsElements
         ? renderTex(texify(currentGroup.elements[actionSelectedElement]?.label ?? ''))
-        : actionComputation.setLabels?.[actionSelectedElement] ?? String(actionSelectedElement + 1))
+        : actionComputation.setLabels?.[actionSelectedElement]
+          ? renderTex(texify(actionComputation.setLabels[actionSelectedElement]))
+          : String(actionSelectedElement + 1))
     : ''
   const showStabBox = !!actionComputation && !actionEditing && actionSelectedElement !== null && stabElements.length > 0
 

@@ -30,13 +30,17 @@ export function CosetStripView() {
   }, [subsets])
 
   const subgroupInfo = useMemo(() => {
-    if (!cosetElementMap || cosetElementMap.size === 0) return null
+    if (!currentGroup || !cosetElementMap || cosetElementMap.size === 0) return null
+    // The subgroup is the coset containing the identity (eH = H); coset index 0
+    // may correspond to any coset depending on group element ordering.
+    const hCi = cosetElementMap.get(currentGroup.identity.id)
+    if (hCi === undefined) return null
     let hSize = 0
-    for (const ci of cosetElementMap.values()) { if (ci === 0) hSize++ }
+    for (const ci of cosetElementMap.values()) { if (ci === hCi) hSize++ }
     if (hSize < 2 || hSize > 12) return null
     const r = Math.max(40, Math.min(96, hSize * 16))
     return { hSize, r, topPad: 2 * r + 64 }
-  }, [cosetElementMap])
+  }, [currentGroup, cosetElementMap])
 
   const cosetStripData = useMemo(() => {
     if (!currentGroup) return null
@@ -55,8 +59,11 @@ export function CosetStripView() {
 
   const subgroupCayley = useMemo(() => {
     if (!currentGroup || !cosetElementMap || cosetElementMap.size === 0) return null
+    // Same coset-of-identity logic as subgroupInfo: the subgroup H is the coset eH.
+    const hCi = cosetElementMap.get(currentGroup.identity.id)
+    if (hCi === undefined) return null
     const hIds: string[] = []
-    for (const [id, ci] of cosetElementMap) { if (ci === 0) hIds.push(id) }
+    for (const [id, ci] of cosetElementMap) { if (ci === hCi) hIds.push(id) }
     if (hIds.length < 2 || hIds.length > 12) return null
     const hIdSet = new Set(hIds)
     const hElements = currentGroup.elements.filter(el => hIdSet.has(el.id))
@@ -72,7 +79,13 @@ export function CosetStripView() {
     return { hIdSet, hElements, hGenerators, genIndex, edges }
   }, [currentGroup, cosetElementMap])
 
-  const nodeRadius = 28
+  const nodeRadius = useMemo(() => {
+    if (!currentGroup) return 28
+    const maxLen = Math.max(...currentGroup.elements.map(el => el.label.length))
+    if (maxLen > 15) return 20
+    if (maxLen > 8) return 24
+    return 28
+  }, [currentGroup])
   const NO_GROUP = !currentGroup
 
   return (
@@ -121,9 +134,13 @@ export function CosetStripView() {
           const cy = strip.y - subgroupInfo.r - 24
           const hGroup = { ...currentGroup!, order: subgroupInfo.hSize, elements: subgroupCayley.hElements }
           const positions = cayleyCircleLayout(hGroup, cx, cy, subgroupInfo.r)
-          const maxLabelLen = Math.max(...subgroupCayley.hElements.map(el => el.label.length))
+          const maxLabelLen = Math.max(...subgroupCayley.hElements.map(el => {
+            const l = el.label
+            if (l.startsWith('\\begin{smallmatrix}')) return 4
+            return l.length
+          }))
           const labelFs = maxLabelLen <= 4 ? 15 : maxLabelLen <= 6 ? 13 : maxLabelLen <= 8 ? 11 : 9.5
-          const hNodeR = Math.max(16, Math.min((maxLabelLen * labelFs * 0.62 + 10) / 2, subgroupInfo.r * 0.85))
+          const hNodeR = Math.max(12, Math.min((maxLabelLen * labelFs * 0.62 + 10) / 2, subgroupInfo.r * 0.35))
           return (
             <g key="subgroup-cayley">
               <text

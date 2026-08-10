@@ -75,6 +75,7 @@
 | Alternating | A₃, A₄, A₅ | 3, 12, 60 | ✅ |
 | Klein Four | V₄ | 4 | ✅ |
 | Quaternion | Q₈ | 8 | ✅ |
+| General Linear | GL(2,p): GL(2,2) ≅ S₃, GL(2,3) | 6 / 48 | ✅ |
 | Direct Products | Z₄×Z₂, Z₂³, Z₃×Z₄, Z₆×Z₂, and any G×H | ≤144 | ✅ |
 | Semidirect products | N⋊_φ H (e.g. Z₃⋊Z₂ ≅ S₃) | ≤144 | ✅ |
 | Automorphism groups | Aut(G) (e.g. Aut(Z₈) ≅ C₂) | — | ✅ |
@@ -96,7 +97,7 @@
 - **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; relator-loop view (3D torus Cayley graph, click a relator to highlight its closed loop) + presentation table view with word-evaluation paths; draft autosave
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 35 test files, 706 tests (Vitest)
+- **Test suite** — 37 test files, 763 tests (Vitest)
 
 ---
 
@@ -160,7 +161,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 35 test files (706 tests)
+├── __tests__/            # 37 test files (763 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -250,7 +251,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (35 files, 706 tests)
+- [x] Test suite (37 files, 763 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

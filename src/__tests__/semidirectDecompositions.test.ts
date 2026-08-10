@@ -4,7 +4,7 @@ import { createSemidirectProduct } from '../core/groups/SemidirectProduct'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
-import { createQuaternion } from '../core/groups/SpecialGroup'
+import { createQuaternion, createKleinFour } from '../core/groups/SpecialGroup'
 import { findAllAutomorphisms, createAutomorphismGroup } from '../core/algebra/automorphisms'
 import { extendFromGenerators } from '../core/algebra/homomorphisms'
 import {
@@ -14,6 +14,7 @@ import {
   findSemidirectDecompositions,
   minimalGenerators,
   buildSubgroupGroup,
+  detectStructureType,
 } from '../core/algebra/semidirectDecompositions'
 import type { Automorphism } from '../core/algebra/automorphisms'
 
@@ -331,5 +332,43 @@ describe('findSemidirectDecompositions', () => {
 
   it('returns [] for cyclic groups of prime order', () => {
     expect(findSemidirectDecompositions(createCyclicGroup(7))).toEqual([])
+  })
+})
+
+describe('detectStructureType', () => {
+  it('labels direct products', () => {
+    expect(detectStructureType(createCyclicGroup(6))).toBe('direct')
+    expect(detectStructureType(createKleinFour())).toBe('direct')
+    expect(detectStructureType(createDihedralGroup(6))).toBe('direct')
+  })
+
+  it('labels semidirect products', () => {
+    expect(detectStructureType(createSymmetricGroup(3))).toBe('semidirect')
+    expect(detectStructureType(createDihedralGroup(5))).toBe('semidirect')
+    expect(detectStructureType(createAlternatingGroup(4))).toBe('semidirect')
+    expect(detectStructureType(createSymmetricGroup(4))).toBe('semidirect')
+  })
+
+  it('labels indecomposable groups', () => {
+    expect(detectStructureType(createCyclicGroup(4))).toBe('indecomposable')
+    expect(detectStructureType(createCyclicGroup(7))).toBe('indecomposable')
+    expect(detectStructureType(createQuaternion())).toBe('indecomposable')
+    expect(detectStructureType(createAlternatingGroup(5))).toBe('indecomposable')
+  })
+
+  it('returns unknown beyond the search cutoff', () => {
+    expect(detectStructureType(createSymmetricGroup(5))).toBe('unknown')
+  })
+
+  it('fast-paths groups built as semidirect products', () => {
+    const N = createCyclicGroup(3)
+    const H = createCyclicGroup(4)
+    const autos = findAllAutomorphisms(N)
+    const nGen = N.generators[0].apply(N.identity)
+    const inversion = autos.find(a => a.apply(nGen).id === N.inverse(nGen).id)!
+    const h1 = H.generators[0].apply(H.identity)
+    const phiFull = buildFullPhiMap(N, H, new Map([[h1.id, inversion.id]]))
+    const built = createSemidirectProduct(N, H, phiFull)
+    expect(detectStructureType(built)).toBe('semidirect')
   })
 })

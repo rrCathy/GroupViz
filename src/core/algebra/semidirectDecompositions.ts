@@ -1,5 +1,5 @@
 import type { Group, GroupElement, Generator } from '../types'
-import { COLOR_PALETTE } from '../types'
+import { COLOR_PALETTE, isGroupDirectProduct } from '../types'
 import type { Automorphism } from './automorphisms'
 import {
   findAllNormalSubgroups,
@@ -384,4 +384,37 @@ export function findSemidirectDecompositions(
     return b.normal.order - a.normal.order
   })
   return candidates
+}
+
+export type GroupStructureType = 'direct' | 'semidirect' | 'indecomposable' | 'unknown'
+
+export function detectStructureType(group: Group): GroupStructureType {
+  if (group._semidirectProduct) return 'semidirect'
+  if (isGroupDirectProduct(group)) return 'direct'
+  if (group.order > 60) return 'unknown'
+
+  const normals = findAllNormalSubgroups(group).filter(
+    (n) => n.order > 1 && n.order < group.order,
+  )
+  for (let i = 0; i < normals.length; i++) {
+    const a = normals[i]
+    for (let j = i + 1; j < normals.length; j++) {
+      const b = normals[j]
+      if (a.order * b.order !== group.order) continue
+      if (intersectsAtIdentity(group, a.elements, b.elements)) continue
+      return 'direct'
+    }
+  }
+
+  if (findSemidirectDecompositions(group).length > 0) return 'semidirect'
+  return 'indecomposable'
+}
+
+function intersectsAtIdentity(group: Group, xs: GroupElement[], ys: GroupElement[]): boolean {
+  const ysSet = new Set(ys.map((y) => y.id))
+  const identityId = group.identity.id
+  for (const x of xs) {
+    if (x.id !== identityId && ysSet.has(x.id)) return true
+  }
+  return false
 }

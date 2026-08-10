@@ -10,6 +10,7 @@ import { isAutomorphismGroup } from '../../core/algebra/automorphisms'
 import { computeGroupProperties } from '../../utils/hybridCompute'
 import { computeBurnsideCount } from '../../core/algebra/actions'
 import { presentationOf, formatPresentation } from '../../core/algebra/presentations'
+import { detectStructureType } from '../../core/algebra/semidirectDecompositions'
 import { AccordionSection } from './AccordionSection'
 
 function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { currentGroup: { _automorphismById?: Map<string, { map: Map<string, string>; label: string }>; automorphismParentSymbol?: string }, selectedElementId: string }) {
@@ -139,6 +140,11 @@ export function RightPanel() {
   const selectedElement = selectedElements.size === 1 && currentGroup
     ? currentGroup.elements.find(e => e.id === Array.from(selectedElements)[0]) 
     : null
+
+  const structureType = useMemo(() => {
+    if (!currentGroup) return null
+    return detectStructureType(currentGroup)
+  }, [currentGroup])
   
   const precomputed = useMemo(() => {
     if (!currentGroup) return null
@@ -435,6 +441,17 @@ export function RightPanel() {
               <span className="info-label">{t('right.symbol')}</span>
               <span className="info-value" dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.symbol)) }} />
             </div>
+            {structureType && (
+              <div className="info-row">
+                <span className="info-label">{t('right.structure')}</span>
+                <span className="info-value">
+                  {structureType === 'direct' && t('right.structure.direct')}
+                  {structureType === 'semidirect' && t('right.structure.semidirect')}
+                  {structureType === 'indecomposable' && t('right.structure.indecomposable')}
+                  {structureType === 'unknown' && t('right.structure.unknown')}
+                </span>
+              </div>
+            )}
             <div className="info-row">
               <span className="info-label">{t('right.order')}</span>
               <span className="info-value">{currentGroup.order}</span>

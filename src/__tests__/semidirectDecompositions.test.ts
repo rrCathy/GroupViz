@@ -295,6 +295,19 @@ describe('findSemidirectDecompositions', () => {
     expect(findSemidirectDecompositions(createQuaternion())).toEqual([])
   })
 
+  it('D5 decomposes into C5 ⋊ C2 with recognizable subgroup symbols', () => {
+    const D5 = createDihedralGroup(5)
+    const deps = findSemidirectDecompositions(D5)
+    expect(deps.length).toBe(5)
+    for (const d of deps) {
+      expect(d.normal.order).toBe(5)
+      expect(d.acting.order).toBe(2)
+      expect(d.verified).toBe(true)
+      expect(d.normal.symbol).toBe('C_{5}')
+      expect(d.acting.symbol).toBe('C_{2}')
+    }
+  })
+
   it('finds all 19 decompositions of D12 (C6 ⋊ C2, S3 ⋊ C2, C3 ⋊ V4 ≅ S3×C2, C2 ⋊ S3)', () => {
     const D12 = createDihedralGroup(6)
     const deps = findSemidirectDecompositions(D12)

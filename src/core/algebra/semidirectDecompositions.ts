@@ -269,6 +269,18 @@ function genSymbol(gens: GroupElement[]): string {
 }
 
 /**
+ * Human-readable TeX symbol for a subgroup: cyclic subgroups get C_{order},
+ * otherwise a recognized group type (V_4, D_{3}, A_{4}, …) via
+ * detectIsomorphicGroup, falling back to the generator-angle-bracket form.
+ */
+function subgroupTypeSymbol(sub: Group): string {
+  if (sub.generators.length === 1) return `C_{${sub.order}}`
+  const detected = detectIsomorphicGroup(sub)
+  if (detected) return detected
+  return genSymbol(sub.generators.map(g => g.apply(sub.identity)))
+}
+
+/**
  * Enumerate all decompositions G ≅ N ⋊_φ H:
  *  - N ⊴ G proper nontrivial normal subgroup,
  *  - H ≤ G with |H| = |G|/|N| and N ∩ H = {e} (then NH = G automatically),
@@ -327,6 +339,12 @@ export function findSemidirectDecompositions(
       const hGens = minimalGenerators(group, hSub.elements)
       const N = buildSubgroupGroup(group, nSub.elements, genSymbol(nGens), nGens)
       const H = buildSubgroupGroup(group, hSub.elements, genSymbol(hGens), hGens)
+      const nSymbol = subgroupTypeSymbol(N)
+      const hSymbol = subgroupTypeSymbol(H)
+      N.name = nSymbol
+      N.symbol = nSymbol
+      H.name = hSymbol
+      H.symbol = hSymbol
 
       const phiMap = new Map<string, Automorphism>()
       for (const h of H.elements) {

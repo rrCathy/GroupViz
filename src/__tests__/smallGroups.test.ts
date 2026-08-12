@@ -11,6 +11,7 @@ import { createDirectProduct } from '../core/groups/DirectProduct'
 import { getGroupCenter, isSimpleGroup } from '../core/algebra/subgroups'
 import { createGroupFromSymbol } from '../utils/groupFactory'
 import { buildOrderGroupsMap } from '../components/Panels/constants'
+import type { Group, GroupElement } from '../core/types'
 
 function isPrime(n: number): boolean {
   if (n < 2) return false
@@ -278,5 +279,43 @@ describe('buildOrderGroupsMap (order-based creation panel)', () => {
     const map = buildOrderGroupsMap(k => k)
     expect(map.get(16)!.length).toBe(14)
     expect(map.get(4)!.some(e => e.symbol === 'V_{4}')).toBe(true)
+  })
+})
+
+describe('registry dihedral generators are standardized to (r, s)', () => {
+  function orderOf(g: Group, el: GroupElement): number {
+    const id = g.identity
+    let cur = el
+    let cnt = 1
+    while (cur.id !== id.id) {
+      cur = g.multiply(cur, el)
+      cnt++
+    }
+    return cnt
+  }
+
+  it('D_{8} (order 16) generators are a rotation of order 8 and a reflection of order 2', () => {
+    const g = getSmallGroupBySymbol('D_{8}')!.group
+    expect(g.generators).toHaveLength(2)
+    const a = orderOf(g, g.generators[0].apply(g.identity))
+    const b = orderOf(g, g.generators[1].apply(g.identity))
+    expect(Math.max(a, b)).toBe(8)
+    expect(Math.min(a, b)).toBe(2)
+  })
+
+  it('D_{9} (order 18) generators are a rotation of order 9 and a reflection of order 2', () => {
+    const g = getSmallGroupBySymbol('D_{9}')!.group
+    expect(g.generators).toHaveLength(2)
+    const a = orderOf(g, g.generators[0].apply(g.identity))
+    const b = orderOf(g, g.generators[1].apply(g.identity))
+    expect(Math.max(a, b)).toBe(9)
+    expect(Math.min(a, b)).toBe(2)
+  })
+
+  it('non-dihedral registry groups keep their GAP generators', () => {
+    const g = getSmallGroup(16, 7)!.group // QD16 (GAP i=8)
+    expect(g.generators).toHaveLength(2)
+    expect(g.generators[0].apply(g.identity).id).toBe('g1')
+    expect(g.generators[1].apply(g.identity).id).toBe('g2')
   })
 })

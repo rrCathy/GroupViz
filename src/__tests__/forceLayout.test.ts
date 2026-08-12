@@ -19,6 +19,7 @@ import {
   factorPipeGroups,
   parseCompactFactors,
   splitDihedralElements,
+  dihedralSnakeOrder,
 } from '../core/algebra/forceLayout'
 import { classifyDirectProduct2D } from '../core/types'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
@@ -473,6 +474,28 @@ describe('splitDihedralElements', () => {
   it('returns null for A4 (no element of order 6)', () => {
     const a4 = getSmallGroup(12, 3)!.group
     expect(splitDihedralElements(a4)).toBeNull()
+  })
+})
+
+describe('dihedralSnakeOrder', () => {
+  it('flattens registry C4 x C2 into snake order (rotations asc + reflections desc)', () => {
+    const c4 = createCyclicGroup(4)
+    const c2 = createCyclicGroup(2)
+    const c4xc2 = createDirectProduct(c4, c2)
+    const order = dihedralSnakeOrder(c4xc2)
+    expect(order).not.toBeNull()
+    expect(order).toHaveLength(8)
+    const first = order!.slice(0, 4)
+    const last = order!.slice(4)
+    expect(new Set(first).size).toBe(4)
+    expect(new Set(last).size).toBe(4)
+    expect(order![0]).toBe(c4xc2.identity.id)
+  })
+
+  it('returns null for C2^3 (not dihedral-like)', () => {
+    const c2 = createCyclicGroup(2)
+    const cube = createDirectProduct(createDirectProduct(c2, c2), c2)
+    expect(dihedralSnakeOrder(cube)).toBeNull()
   })
 })
 

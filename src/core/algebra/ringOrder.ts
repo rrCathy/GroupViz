@@ -24,7 +24,7 @@ export function ringOrder(keys: string[]): string[] {
   if (deduped.every(k => /^-?\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a) - Number(b))
   }
-  if (deduped.every(k => /^e\d+$/.test(k))) {
+  if (deduped.every(k => /^[eg]\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
   }
   return deduped.sort()
@@ -43,7 +43,7 @@ export function cayleyRingKeys(keys: string[]): string[] {
   if (deduped.every(k => /^-?\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a) - Number(b))
   }
-  if (deduped.every(k => /^e\d+$/.test(k))) {
+  if (deduped.every(k => /^[eg]\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
   }
   return deduped.sort()

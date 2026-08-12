@@ -97,7 +97,7 @@
 - **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; relator-loop view (3D torus Cayley graph, click a relator to highlight its closed loop) + presentation table view with word-evaluation paths; draft autosave
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 38 test files, 856 tests (Vitest)
+- **Test suite** — 38 test files, 862 tests (Vitest)
 
 ---
 
@@ -161,7 +161,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 38 test files (856 tests)
+├── __tests__/            # 38 test files (862 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -251,7 +251,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (38 files, 856 tests)
+- [x] Test suite (38 files, 862 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

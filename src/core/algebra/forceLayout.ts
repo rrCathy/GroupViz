@@ -627,6 +627,18 @@ export function splitDihedralElements(group: Group): {
   return null
 }
 
+// 二面体蛇形环序：rotations 幂序正排 + reflections 按配对角反排，
+// 摊平为单环（外圈旋转升序 → 内圈反射降序），使生成元边外环相邻、反射边径向。
+// 用于半直积布局的 N 盘内环序（注册表群 N 无 pipe id，powerRingOrder 不特判）。
+export function dihedralSnakeOrder(group: Group): string[] | null {
+  const split = splitDihedralElements(group)
+  if (!split) return null
+  const refsDesc = Array.from(split.reflectPair.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id)
+  return [...split.rotations.map(e => e.id), ...refsDesc]
+}
+
 export function dualRingLayout(
   group: Group,
   width: number,
@@ -1317,7 +1329,7 @@ export function semidirectProductLayout(
 
   const hKeys = powerRingOrder(H)
   const hIdxMap = new Map(hKeys.map((k, i) => [k, i]))
-  const nKeys = powerRingOrder(N)
+  const nKeys = dihedralSnakeOrder(N) ?? powerRingOrder(N)
   const nIdxMap = new Map(nKeys.map((k, i) => [k, i]))
   const m = H.order
   const minRN = (N.order * 56) / (2 * Math.PI)

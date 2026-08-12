@@ -7,7 +7,7 @@ import { createSymmetricGroup } from './SymmetricGroup'
 import { createDihedralGroup } from './DihedralGroup'
 import { createAlternatingGroup } from './AlternatingGroup'
 import { createKleinFour, createQuaternion } from './SpecialGroup'
-import { SMALL_GROUP_DATA } from './smallGroupData'
+import { SMALL_GROUP_DATA, type SmallGroupRecord } from './smallGroupData'
 
 // ─── Precomputed Data Interface ────────────────────────────────────────────
 
@@ -298,7 +298,74 @@ function createTableGroup(order: number, gapIndex: number): Group {
     return elements[0]
   }
 
-  const generators: Generator[] = rec.gens.map((pos, idx) => {
+  const generators: Generator[] = buildGenerators(rec, elements, n, table, mul, inv)
+
+  return {
+    name: symbol,
+    symbol,
+    order: n,
+    elements,
+    generators,
+    multiply: mul,
+    inverse: inv,
+    identity: elements[0],
+    isAbelian: rec.abelian,
+    exponent: rec.exponent
+  }
+}
+
+// 生成元标准化：GAP 的 rec.gens 是任意最小生成集（二面体群可能给两个反射），
+// 会破坏凯莱图布局的对称性。对 D_m 结构重建标准生成元 (r, s)：
+// r = 阶 m 元素（旋转）、s = 反射（阶 2 且不在 ⟨r⟩ 中），并验证 ⟨r, s⟩ = G。
+// 其他结构保持 rec.gens。
+function buildGenerators(
+  rec: SmallGroupRecord,
+  elements: GroupElement[],
+  n: number,
+  table: number[][],
+  mul: (x: GroupElement, y: GroupElement) => GroupElement,
+  inv: (el: GroupElement) => GroupElement
+): Generator[] {
+  const genPositions: number[] = rec.gens.slice()
+  const dm = /^D(\d+)$/.exec(rec.structure)
+  if (dm) {
+    const m = n / 2
+    let rIdx = -1
+    for (let k = 1; k < n && rIdx < 0; k++) {
+      let cur = k
+      let cnt = 1
+      while (cur !== 0) {
+        cur = table[cur][k] - 1
+        cnt++
+      }
+      if (cnt === m) rIdx = k
+    }
+    if (rIdx >= 0) {
+      const rotSet = new Set<number>()
+      let cur = 0
+      for (let i = 0; i < m; i++) {
+        rotSet.add(cur)
+        cur = table[cur][rIdx] - 1
+      }
+      const refs: number[] = []
+      for (let k = 0; k < n; k++) if (!rotSet.has(k)) refs.push(k)
+      if (refs.length === m && refs.length > 0) {
+        const s0 = refs[0]
+        const closure = new Set<number>()
+        let p = 0
+        for (let i = 0; i < m; i++) {
+          closure.add(p)
+          closure.add(table[p][s0] - 1)
+          p = table[p][rIdx] - 1
+        }
+        if (closure.size === n) {
+          genPositions.length = 0
+          genPositions.push(rIdx + 1, s0 + 1)
+        }
+      }
+    }
+  }
+  return genPositions.map((pos, idx) => {
     const name = String.fromCharCode(97 + idx)
     const genEl = elements[pos - 1]
     const gen: Generator = {
@@ -314,19 +381,6 @@ function createTableGroup(order: number, gapIndex: number): Group {
     }
     return gen
   })
-
-  return {
-    name: symbol,
-    symbol,
-    order: n,
-    elements,
-    generators,
-    multiply: mul,
-    inverse: inv,
-    identity: elements[0],
-    isAbelian: rec.abelian,
-    exponent: rec.exponent
-  }
 }
 
 // ─── Registry: All Groups of Order < 32 ────────────────────────────────────

@@ -66,6 +66,13 @@ describe('ringOrder', () => {
     expect(ringOrder(['e2', 'e10', 'e1'])).toEqual(['e1', 'e2', 'e10'])
   })
 
+  it('sorts registry gN ids numerically (C16 circular ring)', () => {
+    const g = getSmallGroup(16, 0)!.group
+    expect(ringOrder(g.elements.map(e => e.id))).toEqual(
+      Array.from({ length: 16 }, (_, k) => `g${k}`)
+    )
+  })
+
   it('falls back to lexicographic sort', () => {
     expect(ringOrder(['b', 'a', 'c'])).toEqual(['a', 'b', 'c'])
   })

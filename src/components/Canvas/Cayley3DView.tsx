@@ -1,13 +1,16 @@
-import { useRef, useMemo, useEffect } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { useRef, useMemo, useEffect, useState, useCallback } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import type { ThreeEvent } from '@react-three/fiber'
 import { OrbitControls, Html } from '@react-three/drei'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useTheme } from '../../theme/useTheme'
 import type { Group, GroupElement, Generator, CayleyEdgeData, Layout3D } from '../../core/types'
 import { computeCayleyActionEdges, ringOrder } from '../../core/algebra/forceLayout'
+import { powerRingOrder } from '../../core/algebra/ringOrder'
+import { getSemidirectProductMeta, semidirectFactorMap } from '../../core/algebra/semidirectDecompositions'
 import { texify, renderTex } from '../../utils/texify'
 import { truncatedTetrahedron } from '../../core/polyhedra'
 
@@ -308,6 +311,52 @@ function compute3DPositions(group: Group, layout: Layout3D): THREE.Vector3[] {
         const rz = x * sinA + z * cosA
         positions[i] = new THREE.Vector3(rx, y, rz)
       }
+      break
+    }
+
+    case 'semidirectCylinder': {
+      // Cylinder of coset layers for G ≅ N ⋊ H: each layer is the Cayley
+      // triangle of the normal subgroup N (power order), stacked along the
+      // cylinder axis by the acting subgroup H (power order).
+      if (n === 0) break
+
+      const sd = getSemidirectProductMeta(group)
+      const factorMap = sd ? semidirectFactorMap(group, sd) : null
+      if (!sd || !factorMap) {
+        for (let i = 0; i < n; i++) positions[i] = fibonacciSphere(n, radius)[i]
+        break
+      }
+
+      const hOrder = powerRingOrder(sd.acting)
+      const nOrder = powerRingOrder(sd.normal)
+      const sizeC = Math.max(1, sd.acting.order)
+      const sizeS = Math.max(1, sd.normal.order)
+
+      const ringRadius = Math.max(radius * 0.55, (sizeS * 0.9) / (2 * Math.PI))
+      const verticalGap = Math.max(0.9, (radius * 1.8) / sizeC)
+      const halfH = ((sizeC - 1) * verticalGap) / 2
+
+      for (let i = 0; i < n; i++) {
+        const fm = factorMap.get(group.elements[i].id)
+        if (!fm) {
+          positions[i] = fibonacciSphere(n, radius)[i]
+          continue
+        }
+        const hIdx = hOrder.indexOf(fm.h.id)
+        const nIdx = nOrder.indexOf(fm.n.id)
+        // Layer-stagger the ring so the points spread uniformly around the
+        // cylinder surface (not an aligned triangular prism). The acting
+        // subgroup H = {e, y, y², y³} then forms a visible helical 4-cycle
+        // instead of collapsing onto a single vertical column.
+        const stagger = (2 * Math.PI) / (sizeS * sizeC)
+        const angle = (Math.max(0, nIdx) * 2 * Math.PI) / sizeS + Math.max(0, hIdx) * stagger
+        positions[i] = new THREE.Vector3(
+          Math.cos(angle) * ringRadius,
+          Math.max(0, hIdx) * verticalGap - halfH,
+          Math.sin(angle) * ringRadius
+        )
+      }
+
       break
     }
 
@@ -904,6 +953,28 @@ function SceneContent() {
     hoverElement, cayleyActions, cayleyMultiplyType, cayleyShape3D, subsets
   } = useGroup()
   const { t } = useTranslation()
+  const { gl, camera } = useThree()
+  const controlsRef = useRef<OrbitControlsImpl>(null)
+  const [autoRotate, setAutoRotate] = useState(false)
+
+  const resetCamera = useCallback(() => {
+    const c = controlsRef.current
+    if (!c) return
+    const prevDamping = c.enableDamping
+    c.enableDamping = false
+    c.reset()
+    camera.position.set(0, 3, 12)
+    c.target.set(0, 0, 0)
+    c.update()
+    c.enableDamping = prevDamping
+  }, [camera])
+
+  useEffect(() => {
+    const el = gl.domElement
+    const onDoubleClick = () => resetCamera()
+    el.addEventListener('dblclick', onDoubleClick)
+    return () => el.removeEventListener('dblclick', onDoubleClick)
+  }, [gl, resetCamera])
 
   const cayleyEdges = useMemo(() => {
     if (!currentGroup) return [] as CayleyEdgeData[]
@@ -989,21 +1060,51 @@ function SceneContent() {
       <pointLight position={[0, 0, 0]} intensity={0.3} color="#ffffff" />
 
       {currentGroup && (
-        <Html fullscreen position={[0, 0, 0]}>
+        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }}>
           <div style={{
             position: 'absolute', top: 10, right: 10,
-            background: 'rgba(15, 15, 26, 0.85)', color: '#ccc',
-            padding: '6px 12px', borderRadius: 8, fontSize: 13,
-            fontFamily: 'monospace', pointerEvents: 'none'
+            display: 'flex', gap: 6, alignItems: 'center', pointerEvents: 'auto'
           }}>
-            <span style={{ fontWeight: 'bold' }} dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.symbol)) }} />
-            <span style={{ marginLeft: 8, color: '#888' }}>|G| = {currentGroup.order}</span>
+            <div style={{
+              background: 'rgba(15, 15, 26, 0.85)', color: '#ccc',
+              padding: '6px 12px', borderRadius: 8, fontSize: 13,
+              fontFamily: 'monospace', pointerEvents: 'none'
+            }}>
+              <span style={{ fontWeight: 'bold' }} dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.symbol)) }} />
+              <span style={{ marginLeft: 8, color: '#888' }}>|G| = {currentGroup.order}</span>
+            </div>
+            <button
+              onClick={() => setAutoRotate(v => !v)}
+              title={t('cayley3d.autoRotate')}
+              aria-label={t('cayley3d.autoRotate')}
+              style={{
+                background: 'rgba(15, 15, 26, 0.85)',
+                color: autoRotate ? '#4ecdc4' : '#ccc',
+                border: autoRotate ? '1px solid #4ecdc4' : '1px solid #444',
+                borderRadius: 8, padding: '6px 10px', fontSize: 13,
+                cursor: 'pointer', fontFamily: 'monospace'
+              }}
+            >
+              {autoRotate ? '❚❚' : '▶'}
+            </button>
+            <button
+              onClick={resetCamera}
+              title={t('cayley3d.resetView')}
+              aria-label={t('cayley3d.resetView')}
+              style={{
+                background: 'rgba(15, 15, 26, 0.85)', color: '#ccc',
+                border: '1px solid #444', borderRadius: 8, padding: '6px 10px',
+                fontSize: 13, cursor: 'pointer', fontFamily: 'monospace'
+              }}
+            >
+              ⟲
+            </button>
           </div>
         </Html>
       )}
 
       {currentGroup && cayleyActions.length > 0 && (
-        <Html fullscreen position={[0, 0, 0]}>
+        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }}>
           <div style={{
             position: 'absolute', top: 10, left: 10,
             background: 'rgba(15, 15, 26, 0.85)', color: '#ccc',
@@ -1072,6 +1173,8 @@ function SceneContent() {
       })}
 
       <OrbitControls
+        ref={controlsRef}
+        makeDefault
         enablePan={true}
         enableZoom={true}
         enableRotate={true}
@@ -1080,6 +1183,8 @@ function SceneContent() {
         minDistance={3}
         maxDistance={25}
         dampingFactor={0.1}
+        autoRotate={autoRotate}
+        autoRotateSpeed={1}
       />
     </>
   )

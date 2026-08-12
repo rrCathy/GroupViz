@@ -1,7 +1,8 @@
 import type { Group, GroupElement, NodePosition, Layout3D } from '../types'
-import { getDefaultLayout3D, isGroupDirectProduct, isCyclicFactorKeys, isGroupDihedral } from '../types'
+import { getDefaultLayout3D, isC2Cube, isGroupDirectProduct, isGroupDihedral } from '../types'
 import { compute3DPositions } from './layout3D'
-import { parseProductFactors, matrixGridLayout, nestedFactorLayout2D, ringOrder, detectS3PermSet, S3_PERM_IDS } from './ringOrder'
+import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
+import { parseProductFactors, matrixGridLayout, ringOrder, detectS3PermSet, S3_PERM_IDS, factorPipeGroupsOrTokens, parseCompactFactors, clusterFactorGroups, clusterIsCyclic, factorPipeGroupsGrouped, powerRingOrder } from './ringOrder'
 
 // Re-export everything from submodules for backward compatibility
 export {
@@ -13,7 +14,9 @@ export {
 export type { PlanarCycleInput } from './cycleLayouts'
 export {
   ringOrder, detectS3PermSet, S3_PERM_IDS, cayleyRingKeys, parseProductFactors,
-  type ProductFactors, matrixGridLayout, nestedFactorLayout2D,
+  type ProductFactors, matrixGridLayout, nestedFactorLayout2D, factorPipeGroups,
+  parseCompactFactors, type CompactFactorPart, clusterFactorGroups, tableGroupFactorSplit, clusterIsCyclic,
+  factorPipeGroupsGrouped, type PipeFactorGrouped,
 } from './ringOrder'
 
 // ─── Public Entry Point ─────────────────────────────────────────────────
@@ -24,32 +27,388 @@ export function directProductGridLayout2D(
   height: number
 ): Map<string, NodePosition> | null {
   if (!isGroupDirectProduct(group)) return null
-
-  const isPipeProduct = group.elements.length > 0 && group.elements[0].id.includes('|')
-
-  if (isPipeProduct) {
-    const prefixKeys = new Set<string>()
-    const suffixKeys = new Set<string>()
-    for (const el of group.elements) {
-      const p = el.id.indexOf('|')
-      if (p === -1) continue
-      prefixKeys.add(el.id.substring(0, p))
-      suffixKeys.add(el.id.substring(p + 1))
-    }
-    const prefCyclic = isCyclicFactorKeys([...prefixKeys])
-    const suffCyclic = isCyclicFactorKeys([...suffixKeys])
-
-    if (prefCyclic && suffCyclic) {
-      const factors = parseProductFactors(group)
-      if (!factors) return null
-      return matrixGridLayout(factors.colSize, factors.rowSize, factors.getCol, factors.getRow, group, width, height)
-    }
-    return nestedFactorLayout2D(group, width, height)
-  }
-
   const factors = parseProductFactors(group)
   if (!factors) return null
   return matrixGridLayout(factors.colSize, factors.rowSize, factors.getCol, factors.getRow, group, width, height)
+}
+
+// ─── Direct product factor subgroup ───────────────────────────────────
+
+/**
+ * 从直积群中提取第 factorIdx 个因子为独立临时 Group。
+ * pipe 群：固定其他因子分量为 identity，因子乘法经 group.multiply 闭包后提取对应分量。
+ * 注册表群（非 pipe）：按生成元交换性聚类划分因子，簇元素即因子元素。
+ */
+export function buildFactorSubgroup(group: Group, factorIdx: number): Group | null {
+  const isPipe = group.elements[0]?.id.includes('|')
+  if (!isPipe) {
+    const idGroups = clusterFactorGroups(group)
+    if (!idGroups) return null
+    if (factorIdx < 0 || factorIdx >= idGroups.length) return null
+    const ids = idGroups[factorIdx]
+    const byId = new Map(group.elements.map(e => [e.id, e]))
+    const factorEls = ids.map(id => byId.get(id)!)
+    const multiply = (a: GroupElement, b: GroupElement): GroupElement => {
+      const prod = group.multiply(a, b)
+      return byId.get(prod.id)!
+    }
+    const inverse = (el: GroupElement): GroupElement => byId.get(group.inverse(el).id)!
+    const parts = parseCompactFactors(group.symbol)
+    const factorName = parts[factorIdx]?.text ?? group.name
+    return {
+      name: factorName,
+      symbol: factorName,
+      order: factorEls.length,
+      elements: factorEls,
+      generators: [],
+      multiply,
+      inverse,
+      identity: byId.get(group.identity.id)!,
+      isAbelian: group.isAbelian
+    }
+  }
+
+  const perEl = factorPipeGroupsOrTokens(group)
+  if (!perEl) return null
+  const factorCount = perEl[0].length
+  if (factorIdx < 0 || factorIdx >= factorCount) return null
+
+  const keyToEl = new Map<string, GroupElement>()
+  const elToFactorKeys = new Map<string, string[]>()
+  let identityKey = ''
+  for (let i = 0; i < group.elements.length; i++) {
+    const el = group.elements[i]
+    const fk = perEl[i].map(g => g.join('|'))
+    const key = fk[factorIdx]
+    keyToEl.set(key, el)
+    elToFactorKeys.set(el.id, fk)
+    if (el.id === group.identity.id) identityKey = key
+  }
+
+  const factorKeys = Array.from(new Set(perEl.map(g => g[factorIdx].join('|'))))
+  const keyToFactorEl = new Map<string, GroupElement>()
+  const factorEls: GroupElement[] = factorKeys.map(k => {
+    const src = keyToEl.get(k)!
+    const el: GroupElement = { id: k, label: k, value: [...src.value] }
+    keyToFactorEl.set(k, el)
+    return el
+  })
+
+  const multiply = (a: GroupElement, b: GroupElement): GroupElement => {
+    const prod = group.multiply(keyToEl.get(a.id)!, keyToEl.get(b.id)!)
+    const fk = elToFactorKeys.get(prod.id)![factorIdx]
+    return keyToFactorEl.get(fk)!
+  }
+  const inverse = (el: GroupElement): GroupElement => {
+    const inv = group.inverse(keyToEl.get(el.id)!)
+    const fk = elToFactorKeys.get(inv.id)![factorIdx]
+    return keyToFactorEl.get(fk)!
+  }
+
+  const parts = parseCompactFactors(group.symbol)
+  const factorName = parts[factorIdx]?.text ?? group.name
+
+  return {
+    name: factorName,
+    symbol: factorName,
+    order: factorKeys.length,
+    elements: factorEls,
+    generators: [],
+    multiply,
+    inverse,
+    identity: keyToFactorEl.get(identityKey)!,
+    isAbelian: group.isAbelian
+  }
+}
+
+/**
+ * 布局归一化：平移至原点并按最大半宽/半高缩放到单位圆，返回单位坐标与半径。
+ */
+export function normalizeLayout2D(
+  pos: Map<string, NodePosition>
+): { unit: Map<string, NodePosition>; radius: number } {
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const p of pos.values()) {
+    minX = Math.min(minX, p.x)
+    minY = Math.min(minY, p.y)
+    maxX = Math.max(maxX, p.x)
+    maxY = Math.max(maxY, p.y)
+  }
+  if (!isFinite(minX)) return { unit: pos, radius: 1 }
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  const radius = Math.max((maxX - minX) / 2, (maxY - minY) / 2, 1e-6)
+  const unit = new Map<string, NodePosition>()
+  for (const [id, p] of pos) unit.set(id, { x: (p.x - cx) / radius, y: (p.y - cy) / radius })
+  return { unit, radius }
+}
+
+// ─── Factor copy ring (unit) ───────────────────────────────────────────
+
+/**
+ * 因子副本的单位环布局：Dₙ 因子（id 形如 r0…r_{n-1}/s0…s_{n-1}）→ 双环
+ * （外环旋转 r=1、内环反射 r=0.55，同位角），其余按 ringOrder 单环。
+ * 仅依赖元素 id，不依赖直积拼接的 value 分量。
+ */
+export function factorCopyRingLayout(tmp: Group): Map<string, NodePosition> {
+  const keys = tmp.elements.map(e => e.id)
+  const rots = keys.filter(k => /^r\d+$/.test(k)).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+  const refs = keys.filter(k => /^s\d+$/.test(k)).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+  const result = new Map<string, NodePosition>()
+  if (rots.length > 0 && refs.length === rots.length) {
+    const m = rots.length
+    rots.forEach((k, i) => {
+      const a = (i * 2 * Math.PI) / m - Math.PI / 2
+      result.set(k, { x: Math.cos(a), y: Math.sin(a) })
+      result.set(refs[i], { x: 0.55 * Math.cos(a), y: 0.55 * Math.sin(a) })
+    })
+  } else {
+    const ordered = ringOrder(keys)
+    const n = Math.max(keys.length, 1)
+    ordered.forEach((k, i) => {
+      const a = (i * 2 * Math.PI) / n - Math.PI / 2
+      result.set(k, { x: Math.cos(a), y: Math.sin(a) })
+    })
+  }
+  return result
+}
+
+// ─── Cylinder layout 2D (concentric factor copies) ────────────────────
+
+/**
+ * 圆柱 2D 形态 = 同心多环：循环因子层沿径向层叠（L 层），
+ * 每层 = 非循环因子的副本环（Dₙ 副本即双环）；各层同相位，
+ * 循环因子生成元边成径向直线母线（俯视圆柱感）。
+ * pipe 群按符号因子分组；注册表群（非 pipe）按生成元交换性聚类分组。
+ */
+export function cylinderLayout2D(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> | null {
+  const isPipe = group.elements[0]?.id.includes('|')
+  if (!isPipe) {
+    const clusters = clusterFactorGroups(group)
+    if (!clusters) return null
+    const byId = new Map(group.elements.map(e => [e.id, e]))
+    const cycClusters = clusters.filter(c => clusterIsCyclic(group, c))
+    const nonCycClusters = clusters.filter(c => !clusterIsCyclic(group, c))
+    if (cycClusters.length === 0 || nonCycClusters.length === 0) return null
+
+    // 层 = 循环簇的笛卡尔积组合；副本 = 非循环簇合并
+    const combos: string[][] = [[]]
+    for (const c of cycClusters) {
+      const next: string[][] = []
+      for (const combo of combos) for (const id of c) next.push([...combo, id])
+      combos.splice(0, combos.length, ...next)
+    }
+    const nonEls = nonCycClusters.flat().map(id => byId.get(id)!)
+    const pseudoEls = nonEls.map(e => ({ ...e }))
+    const copy = factorCopyRingLayout({ elements: pseudoEls } as Group)
+    const seen = new Map<string, { layerIdx: number; nonId: string }>()
+    for (let ci = 0; ci < combos.length; ci++) {
+      let comboEl = group.identity
+      for (const id of combos[ci]) comboEl = group.multiply(comboEl, byId.get(id)!)
+      for (const nonEl of nonEls) {
+        const el = group.multiply(comboEl, nonEl)
+        seen.set(el.id, { layerIdx: ci, nonId: nonEl.id })
+      }
+    }
+    if (seen.size !== group.elements.length) return null
+
+    const step = 2.4
+    const outerR = 1.1 + (combos.length - 1) * step
+    const scale = (Math.min(width, height) * 0.35) / outerR
+    const cx = width / 2
+    const cy = height / 2
+
+    const result = new Map<string, NodePosition>()
+    for (const el of group.elements) {
+      const s = seen.get(el.id)!
+      const layerIdx = s.layerIdx
+      const uv = copy.get(s.nonId) ?? { x: 0, y: 0 }
+      const mag = Math.hypot(uv.x, uv.y) || 1
+      const angle = Math.atan2(uv.y, uv.x)
+      const r = (1.1 + layerIdx * step) * mag
+      result.set(el.id, {
+        x: cx + r * Math.cos(angle) * scale,
+        y: cy + r * Math.sin(angle) * scale
+      })
+    }
+    return result
+  }
+
+  const grouped = factorPipeGroupsGrouped(group)
+  if (!grouped || grouped.count < 2) return null
+  const perEl = grouped.perEl
+  const cycIdxs = grouped.cyclic.map((c, i) => (c ? i : -1)).filter(i => i >= 0)
+  if (cycIdxs.length === 0) return null
+  const nonCycIdxs = grouped.cyclic.map((_, i) => i).filter(i => !grouped.cyclic[i])
+  if (nonCycIdxs.length === 0) return null
+
+  // 层 = 各循环归组因子 distinct key 的笛卡尔积组合
+  const cycKeySets = cycIdxs.map(idx => Array.from(new Set(perEl.map(g => g[idx].join('|')))))
+  const combos: string[][] = [[]]
+  for (const ks of cycKeySets) {
+    const next: string[][] = []
+    for (const combo of combos) for (const k of ks) next.push([...combo, k])
+    combos.splice(0, combos.length, ...next)
+  }
+  const layerIdxMap = new Map(combos.map((c, i) => [c.join('~'), i]))
+  const layerCount = combos.length
+
+  // 副本：单非循环归组因子走 buildFactorSubgroup（保留 Dₙ 双环），多组用组合 key 伪元素
+  let copy: Map<string, NodePosition>
+  if (nonCycIdxs.length === 1) {
+    const tmp = buildFactorSubgroup(group, grouped.offsets[nonCycIdxs[0]])
+    if (!tmp) return null
+    copy = factorCopyRingLayout(tmp)
+  } else {
+    const nonKeySet = Array.from(
+      new Set(perEl.map(g => nonCycIdxs.map(idx => g[idx].join('|')).join('~')))
+    )
+    const pseudoEls = nonKeySet.map(k => ({ id: k, label: k, value: [] as number[] }))
+    copy = factorCopyRingLayout({ elements: pseudoEls } as Group)
+  }
+
+  const step = 2.4
+  const outerR = 1.1 + (layerCount - 1) * step
+  const scale = (Math.min(width, height) * 0.35) / outerR
+  const cx = width / 2
+  const cy = height / 2
+
+  const result = new Map<string, NodePosition>()
+  for (let i = 0; i < group.elements.length; i++) {
+    const el = group.elements[i]
+    const g = perEl[i]
+    const layerKey = cycIdxs.map(idx => g[idx].join('|')).join('~')
+    const nonKey = nonCycIdxs.map(idx => g[idx].join('|')).join('~')
+    const layerIdx = layerIdxMap.get(layerKey) ?? 0
+    const uv = copy.get(nonKey) ?? { x: 0, y: 0 }
+    const mag = Math.hypot(uv.x, uv.y) || 1
+    const angle = Math.atan2(uv.y, uv.x)
+    const r = (1.1 + layerIdx * step) * mag
+    result.set(el.id, {
+      x: cx + r * Math.cos(angle) * scale,
+      y: cy + r * Math.sin(angle) * scale
+    })
+  }
+  return result
+}
+
+// ─── Torus layout 2D (factor copies hung on a main ring) ──────────────
+
+/**
+ * 甜甜圈 2D 形态 = 主轴环 + 每点挂其余因子的副本（嵌套：每层环以
+ * 上一层环点为圆心，半径按相邻点弧长收缩）。
+ * pipe 群按归组因子（factorPipeGroupsGrouped，C2×C2→C2² 视为单因子）；
+ * 注册表群按生成元交换性聚类，笛卡尔分解校验唯一性。
+ */
+export function torusLayout2D(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> | null {
+  const isPipe = group.elements[0]?.id.includes('|')
+
+  let unitRings: Map<string, NodePosition>[] | null = null
+  let perElKeys: string[][] | null = null
+
+  if (isPipe) {
+    const grouped = factorPipeGroupsGrouped(group)
+    if (grouped && grouped.count >= 2) {
+      unitRings = []
+      for (let i = 0; i < grouped.count; i++) {
+        const keys = Array.from(new Set(grouped.perEl.map(g => g[i].join('|'))))
+        const pseudoEls = keys.map(k => ({ id: k, label: k, value: [] as number[] }))
+        unitRings.push(factorCopyRingLayout({ elements: pseudoEls } as Group))
+      }
+      perElKeys = grouped.perEl.map(g => g.map(gr => gr.join('|')))
+    } else {
+      const perEl = factorPipeGroupsOrTokens(group)
+      if (!perEl || perEl[0].length !== 2) return null
+      const A = buildFactorSubgroup(group, 0)
+      const B = buildFactorSubgroup(group, 1)
+      if (!A || !B) return null
+      unitRings = [factorCopyRingLayout(A), factorCopyRingLayout(B)]
+      perElKeys = perEl.map(g => g.map(gr => gr.join('|')))
+    }
+  } else {
+    const clusters = clusterFactorGroups(group)
+    if (!clusters || clusters.length < 2) return null
+    const byId = new Map(group.elements.map(e => [e.id, e]))
+    // 笛卡尔枚举分解：每元素 = 各簇元素之积，唯一性校验
+    const combos: string[][] = [[]]
+    for (const c of clusters) {
+      const next: string[][] = []
+      for (const combo of combos) for (const id of c) next.push([...combo, id])
+      combos.splice(0, combos.length, ...next)
+    }
+    const comboToEl = new Map<string, GroupElement>()
+    for (const combo of combos) {
+      let el = group.identity
+      for (const id of combo) el = group.multiply(el, byId.get(id)!)
+      comboToEl.set(combo.join('~'), el)
+    }
+    if (comboToEl.size !== group.elements.length) return null
+    const elToCombo = new Map<string, string[]>()
+    for (const [ck, el] of comboToEl) elToCombo.set(el.id, ck.split('~'))
+    const keys: string[][] = []
+    for (const el of group.elements) {
+      const combo = elToCombo.get(el.id)
+      if (!combo) return null
+      keys.push(combo)
+    }
+    unitRings = clusters.map(c => {
+      const pseudoEls = c.map(id => ({ id, label: id, value: [] as number[] }))
+      return factorCopyRingLayout({ elements: pseudoEls } as Group)
+    })
+    perElKeys = keys
+  }
+
+  return nestedTorusPlacement(group, unitRings, perElKeys, width, height)
+}
+
+/**
+ * 嵌套甜甜圈放置：第 d 层环半径按上一层相邻点弧长收缩，
+ * 每元素 = 各层环点向量加权和（2 因子时退化为经典 torus）。
+ */
+function nestedTorusPlacement(
+  group: Group,
+  unitRings: Map<string, NodePosition>[],
+  perElKeys: string[][],
+  width: number,
+  height: number
+): Map<string, NodePosition> | null {
+  const k = unitRings.length
+  if (k < 2 || perElKeys.length !== group.elements.length || perElKeys[0].length !== k) {
+    return null
+  }
+  const radii: number[] = [Math.min(width, height) * 0.32]
+  for (let d = 1; d < k; d++) {
+    const m = Math.max(unitRings[d - 1].size, 1)
+    const arc = 2 * radii[d - 1] * Math.sin(Math.PI / m)
+    radii.push(Math.max(radii[d - 1] * 0.05, Math.min(arc * 0.32, radii[d - 1] * 0.24)))
+  }
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+  for (let i = 0; i < group.elements.length; i++) {
+    const el = group.elements[i]
+    const keys = perElKeys[i]
+    let x = 0
+    let y = 0
+    for (let d = 0; d < k; d++) {
+      const uv = unitRings[d].get(keys[d]) ?? { x: 0, y: 0 }
+      x += uv.x * radii[d]
+      y += uv.y * radii[d]
+    }
+    result.set(el.id, { x: cx + x, y: cy + y })
+  }
+  return result
 }
 
 // ─── Fibonacci 2D spherical distribution ───────────────────────────────
@@ -186,6 +545,88 @@ export function concentricLayout(
 
 // ─── Dual Ring Layout (for Dihedral groups) ───────────────────────────
 
+/**
+ * C₂³ as a D₄-style dual ring: outer square {e, a, ab, b} (generator-power
+ * order) with the inner ring {·c} at the same angles. Returns null when the
+ * generators do not produce a clean 4+4 split.
+ */
+function c2CubeDualRing(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> | null {
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+  const identity = group.identity
+  const gens = group.generators
+    .map((g) => g.apply(identity))
+    .filter((el) => el.id !== identity.id)
+  if (gens.length < 3) return null
+  const [a, b, c] = gens
+  const ab = group.multiply(a, b)
+  const outer = [identity, a, ab, b]
+  const inner = outer.map((el) => group.multiply(el, c))
+  if (outer.some((el) => !el) || inner.some((el) => !el)) return null
+  const ids = new Set([...outer.map((el) => el.id), ...inner.map((el) => el.id)])
+  if (ids.size !== group.order) return null
+  const outerR = Math.min(width, height) * 0.38
+  const innerR = outerR * 0.55
+  for (let i = 0; i < 4; i++) {
+    const angle = (i * 2 * Math.PI) / 4 - Math.PI / 2
+    result.set(outer[i].id, { x: cx + outerR * Math.cos(angle), y: cy + outerR * Math.sin(angle) })
+    result.set(inner[i].id, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
+  }
+  return result
+}
+
+/**
+ * 不依赖 value 格式的旋转/反射分类（D_m 结构，含注册表群 value=[k]）：
+ * 找阶 m 元素 r（m = |G|/2）→ rotations = ⟨r⟩ 幂序 [e, r, r², …]；
+ * reflections = 其余元素，反射 s_i 与旋转 r^i 同角配对（s_i = r^i · s₀）。
+ * 找不到阶 m 元素、或反射数 ≠ m → null（由调用方回退）。
+ */
+export function splitDihedralElements(group: Group): {
+  rotations: GroupElement[]
+  reflectPair: Map<string, number>
+} | null {
+  const n = group.order
+  const m = n / 2
+  if (n % 2 !== 0 || m < 2) return null
+  const id = group.identity
+
+  for (const el of group.elements) {
+    if (el.id === id.id) continue
+    const powers: GroupElement[] = [id, el]
+    const seen = new Set([id.id, el.id])
+    let cur = el
+    let closed = false
+    for (;;) {
+      cur = group.multiply(cur, el)
+      if (cur.id === id.id) { closed = true; break }
+      if (seen.has(cur.id)) break
+      seen.add(cur.id)
+      powers.push(cur)
+    }
+    if (!closed || powers.length !== m) continue
+    const rotIds = new Set(powers.map(e => e.id))
+    const refs = group.elements.filter(e => !rotIds.has(e.id))
+    if (refs.length !== m) continue
+    const s0 = refs[0]
+    const reflectPair = new Map<string, number>()
+    let pairOk = true
+    for (let i = 0; i < m; i++) {
+      const s_i = group.multiply(powers[i], s0)
+      if (rotIds.has(s_i.id) || reflectPair.has(s_i.id)) { pairOk = false; break }
+      reflectPair.set(s_i.id, i)
+    }
+    if (pairOk && reflectPair.size === m) {
+      return { rotations: powers, reflectPair }
+    }
+  }
+  return null
+}
+
 export function dualRingLayout(
   group: Group,
   width: number,
@@ -212,6 +653,28 @@ export function dualRingLayout(
   }
 
   if (rotations.length === 0 || reflections.length === 0) {
+    // 注册表二面体群等 value=[k] 一维元素：按元素阶分类旋转/反射
+    const split = splitDihedralElements(group)
+    if (split) {
+      const { rotations: rots, reflectPair } = split
+      const cnt = rots.length
+      const outerR = Math.min(width, height) * 0.38
+      const innerR = outerR * 0.55
+      for (let i = 0; i < cnt; i++) {
+        const angle = (i * 2 * Math.PI) / cnt - Math.PI / 2
+        result.set(rots[i].id, { x: cx + outerR * Math.cos(angle), y: cy + outerR * Math.sin(angle) })
+      }
+      for (const [refId, ri] of reflectPair) {
+        const angle = (ri * 2 * Math.PI) / cnt - Math.PI / 2
+        result.set(refId, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
+      }
+      return result
+    }
+    // C₂³: square outer ring of {e,a,ab,b} with inner ring {·c} — D₄-style dual ring
+    if (isC2Cube(group)) {
+      const cube = c2CubeDualRing(group, width, height)
+      if (cube) return cube
+    }
     // Fallback: plain circle. For S₃-as-permutations use the ring order so the
     // hexagon Cayley graph (generators (12),(23)) is drawn without crossings.
     const keys = group.elements.map(e => e.id)
@@ -354,6 +817,24 @@ export function cayleyCircleLayout(
       result.set(ref.id, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
     }
     return result
+  }
+
+  // 注册表二面体群等 value=[k] 一维元素：按元素阶分类旋转/反射（双环免交叉）
+  if (dihedralLike) {
+    const split = splitDihedralElements(group)
+    if (split) {
+      const cnt = split.rotations.length
+      const innerR = radius * 0.55
+      for (let i = 0; i < cnt; i++) {
+        const angle = (i * 2 * Math.PI) / cnt - Math.PI / 2
+        result.set(split.rotations[i].id, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) })
+      }
+      for (const [refId, ri] of split.reflectPair) {
+        const angle = (ri * 2 * Math.PI) / cnt - Math.PI / 2
+        result.set(refId, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
+      }
+      return result
+    }
   }
 
   const keys = group.elements.map(e => e.id)
@@ -691,10 +1172,14 @@ export function spiralLayout(
   const maxR = Math.min(width, height) * 0.42
   const turns = Math.max(3, Math.ceil(n / 5))
 
+  // r ∝ √t and θ ∝ √t keep arc lengths between consecutive points even
+  // (Archimedean spiral with uniform spacing), so large cycles like C16
+  // do not pile up inside and stretch apart outside.
   for (let i = 0; i < n; i++) {
     const t = n > 1 ? i / (n - 1) : 0
-    const r = maxR * t
-    const theta = t * turns * 2 * Math.PI
+    const sq = Math.sqrt(t)
+    const r = maxR * sq
+    const theta = sq * turns * 2 * Math.PI
 
     result.set(group.elements[i].id, {
       x: cx + r * Math.cos(theta - Math.PI / 2),
@@ -819,32 +1304,113 @@ export function semidirectProductLayout(
   width: number,
   height: number
 ): Map<string, NodePosition> | null {
-  const sd = group._semidirectProduct
+  const sd = getSemidirectProductMeta(group)
   if (!sd) return null
+  const factorMap = semidirectFactorMap(group, sd)
+  if (!factorMap) return null
   const { normal: N, acting: H } = sd
 
   const cx = width / 2
   const cy = height / 2
   const minDim = Math.min(width, height)
-  const rH = minDim * 0.26
-  const rN = minDim * 0.11
+  const R = minDim * 0.32
 
-  const hKeys = ringOrder(H.elements.map(e => e.id))
+  const hKeys = powerRingOrder(H)
   const hIdxMap = new Map(hKeys.map((k, i) => [k, i]))
-  const nKeys = ringOrder(N.elements.map(e => e.id))
+  const nKeys = powerRingOrder(N)
   const nIdxMap = new Map(nKeys.map((k, i) => [k, i]))
+  const m = H.order
+  const minRN = (N.order * 56) / (2 * Math.PI)
+  const minRH = (H.order * 56) / (2 * Math.PI)
+  const rN = Math.max(minRN * 1.6, R * 0.14)
+  const copyGap = Math.max(90, rN * 1.35)
+  const rH = Math.max(
+    minRH * 1.6,
+    (rN + 28 + copyGap / 2) / (m > 1 ? Math.sin(Math.PI / m) : 1)
+  )
 
   const result = new Map<string, NodePosition>()
-  for (const h of H.elements) {
-    const hIdx = hIdxMap.get(h.id) ?? 0
+  for (const el of group.elements) {
+    const f = factorMap.get(el.id)
+    if (!f) return null
+    const hIdx = hIdxMap.get(f.h.id) ?? 0
     const hAngle = (hIdx * 2 * Math.PI / H.order) - Math.PI / 2
     const hp = { x: cx + rH * Math.cos(hAngle), y: cy + rH * Math.sin(hAngle) }
-    for (const n of N.elements) {
-      const nIdx = nIdxMap.get(n.id) ?? 0
-      const nAngle = (nIdx * 2 * Math.PI / N.order) - Math.PI / 2
-      result.set(`${n.id}|${h.id}`, { x: hp.x + rN * Math.cos(nAngle), y: hp.y + rN * Math.sin(nAngle) })
-    }
+    const nIdx = nIdxMap.get(f.n.id) ?? 0
+    const nAngle = (nIdx * 2 * Math.PI / N.order) - Math.PI / 2
+    result.set(el.id, { x: hp.x + rN * Math.cos(nAngle), y: hp.y + rN * Math.sin(nAngle) })
   }
+
+  return result
+}
+
+// ─── Q8 Pythagorean Square Layout ──────────────────────────────────────────
+//
+// A 2D layout for the quaternion group Q₈ inspired by the Pythagorean theorem
+// proof diagram:
+//   - Outer square: {1, i, -1, -i} at the four corners (cyclic subgroup ⟨i⟩)
+//   - Inner rectangle: {j, k, -j, -k}
+//   - Right angle at -k = (a, -b)
+//   - Leg 1: {1, j, -k} collinear, direction (1, 3)
+//   - Leg 2: {-k, i}, direction (3, -1), perpendicular to leg 1
+//   - Parameters a, b satisfy a² + b² = c² (Pythagorean theorem verified)
+//
+// Q8 element indices: [1, -1, i, -i, j, -j, k, -k] = [0,1,2,3,4,5,6,7]
+// Position mapping:
+//   1  → ( R,  R)   top-right
+//   -1 → (-R, -R)   bottom-left
+//   i  → ( R, -R)   bottom-right
+//   -i → (-R,  R)   top-left
+//   j  → ( b,  a)   inner, on leg 1
+//   -j → (-b, -a)   inner, opposite j
+//   k  → (-a,  b)   inner
+//   -k → ( a, -b)   inner, right angle vertex
+
+export function q8PythagoreanLayout(
+  group: Group,
+  width: number,
+  height: number,
+): Map<string, NodePosition> | null {
+  const sym = group.symbol
+  if (group.order !== 8 || (sym !== 'Q_{8}' && sym !== 'Q8' && sym !== 'Q₈')) return null
+
+  const a = 1
+  const b = 2
+  const R = (a * a + b * b) / (2 * a)
+
+  const corners = [
+    { x:  R, y:  R },   // 1   top-right
+    { x: -R, y: -R },   // -1  bottom-left
+    { x:  R, y: -R },   // i   bottom-right
+    { x: -R, y:  R },   // -i  top-left
+  ]
+
+  const inner = [
+    { x:  b, y:  a },   // j
+    { x: -b, y: -a },   // -j
+    { x: -a, y:  b },   // k
+    { x:  a, y: -b },   // -k  right angle vertex
+  ]
+
+  const positions = [
+    corners[0], corners[1], corners[2], corners[3],
+    inner[0],  inner[1],  inner[2],  inner[3],
+  ]
+
+  const minDim = Math.min(width, height)
+  const scale = minDim / (2 * R * 1.15)
+  const cx = width / 2
+  const cy = height / 2
+
+  const result = new Map<string, NodePosition>()
+  group.elements.forEach((el, i) => {
+    if (i < positions.length) {
+      result.set(el.id, {
+        x: cx + positions[i].x * scale,
+        y: cy - positions[i].y * scale,
+      })
+    }
+  })
 
   return result
 }

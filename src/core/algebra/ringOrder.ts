@@ -56,6 +56,345 @@ export interface ProductFactors {
   getRow: (el: GroupElement) => number
 }
 
+export interface CompactFactorPart {
+  /** 原始 part 文本，如 'C_{2}^{2}' */
+  text: string
+  /** 去幂后的 base，如 'C_{2}' */
+  base: string
+  /** pipe id 段数：幂指数或 1 */
+  segments: number
+}
+
+/**
+ * 将紧凑直积符号拆成因子 parts。
+ * 'C_{2}^{2} \times S_{3}' → [{text:'C_{2}^{2}',base:'C_{2}',segments:2},{text:'S_{3}',base:'S_{3}',segments:1}]
+ */
+export function parseCompactFactors(symbol: string): CompactFactorPart[] {
+  return symbol.split('\\times').map(t => {
+    const trimmed = t.trim()
+    if (!trimmed) return { text: trimmed, base: trimmed, segments: 0 }
+    const m = trimmed.match(/^(.+)\^\{(\d+)\}$/)
+    if (m) return { text: trimmed, base: m[1], segments: Number(m[2]) }
+    return { text: trimmed, base: trimmed, segments: 1 }
+  })
+}
+
+/**
+ * 按紧凑符号因子对 pipe id 段分组。
+ * 例：C_{2}^{2} \times S_{3}，元素 id '0|0|1,2,3' → [['0','0'],['1,2,3']]（2 组而非 3 段）。
+ * 段数与符号因子段数不一致（或非 pipe / 符号不含 \times）时返回 null（调用方逐 token 兜底）。
+ */
+export function factorPipeGroups(group: Group): string[][][] | null {
+  if (group.elements.length === 0) return null
+  if (!group.elements[0].id.includes('|')) return null
+  const parts = parseCompactFactors(group.symbol)
+  const segTotal = parts.reduce((a, p) => a + p.segments, 0)
+  const tokenCount = group.elements[0].id.split('|').length
+  if (segTotal !== tokenCount) return null
+  return group.elements.map(el => {
+    const toks = el.id.split('|')
+    const groups: string[][] = []
+    let off = 0
+    for (const p of parts) {
+      groups.push(toks.slice(off, off + p.segments))
+      off += p.segments
+    }
+    return groups
+  })
+}
+
+export interface PipeFactorGrouped {
+  /** 每元素 → 各归组因子的 token 组 */
+  perEl: string[][][]
+  /** 每归组因子是否循环（base 为循环前缀且合并段数 === 1） */
+  cyclic: boolean[]
+  /** 每个归组因子在原符号 part 序列中的起始偏移 */
+  offsets: number[]
+  count: number
+}
+
+/**
+ * 2D 分类语义的 pipe 归组：相邻同底循环 part 合并（C_{2}×C_{2}→C_{2}^{2}，
+ * 合并段数 > 1 → 非循环，即 C2²≅V₄ 视为非循环因子）；非循环 part 永不合并。
+ * 与 types.analyzeDPFactorsGrouped2D 语义一致；段数与 token 数不符时返回 null。
+ */
+export function factorPipeGroupsGrouped(group: Group): PipeFactorGrouped | null {
+  if (group.elements.length === 0) return null
+  if (!group.elements[0].id.includes('|')) return null
+  const parts = parseCompactFactors(group.symbol)
+  const segTotal = parts.reduce((a, p) => a + p.segments, 0)
+  const tokenCount = group.elements[0].id.split('|').length
+  if (segTotal !== tokenCount) return null
+
+  interface GroupDef {
+    base: string
+    segs: number
+    cyclic: boolean
+    offset: number
+  }
+  const defs: GroupDef[] = []
+  let off = 0
+  for (const p of parts) {
+    const cyc = (p.base.startsWith('C') || p.base.startsWith('Z_')) && p.segments === 1
+    const last = defs[defs.length - 1]
+    if (cyc && last && last.base === p.base) {
+      last.segs += p.segments
+      last.cyclic = false
+    } else {
+      defs.push({ base: p.base, segs: p.segments, cyclic: cyc, offset: off })
+    }
+    off += p.segments
+  }
+
+  const perEl = group.elements.map(el => {
+    const toks = el.id.split('|')
+    const groups: string[][] = []
+    let o = 0
+    for (const d of defs) {
+      groups.push(toks.slice(o, o + d.segs))
+      o += d.segs
+    }
+    return groups
+  })
+
+  return {
+    perEl,
+    cyclic: defs.map(d => d.cyclic),
+    offsets: defs.map(d => d.offset),
+    count: defs.length
+  }
+}
+
+/**
+ * 注册表群（GAP SmallGroups 导入，id 无 '|'、value 单维）的因子聚类。
+ * 用生成元交换性聚类：直积不同因子的生成元必交换；同一非循环因子内部生成元不交换。
+ * 每簇对生成元做 BFS 幂闭包得因子元素表；簇阶乘积 ≠ 群阶 → null。
+ * 返回每簇元素 id 列表（簇 0 恒含 identity）。
+ */
+export function clusterFactorGroups(group: Group): string[][] | null {
+  const gens = group.generators
+  if (gens.length < 2) return null
+  const n = group.elements.length
+  const mul = group.multiply
+  const genElements = gens.map(g => g.apply(group.identity))
+  const k = genElements.length
+
+  const parent = genElements.map((_, i) => i)
+  const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])))
+  for (let i = 0; i < k; i++) {
+    for (let j = i + 1; j < k; j++) {
+      const a = genElements[i]
+      const b = genElements[j]
+      if (mul(a, b).id !== mul(b, a).id) parent[find(i)] = find(j)
+    }
+  }
+
+  const clusterMap = new Map<number, GroupElement[]>()
+  for (let i = 0; i < k; i++) {
+    const r = find(i)
+    if (!clusterMap.has(r)) clusterMap.set(r, [])
+    clusterMap.get(r)!.push(genElements[i])
+  }
+  const clusters = [...clusterMap.values()]
+  if (clusters.length < 2) return null
+
+  const orders: number[] = []
+  const lists: GroupElement[][] = []
+  for (const cluster of clusters) {
+    const list: GroupElement[] = [group.identity]
+    const seen = new Set([group.identity.id])
+    let head = 0
+    while (head < list.length) {
+      const cur = list[head++]
+      for (const g of cluster) {
+        const next = mul(cur, g)
+        if (!seen.has(next.id)) {
+          seen.add(next.id)
+          list.push(next)
+        }
+      }
+    }
+    orders.push(list.length)
+    lists.push(list)
+  }
+  if (orders.reduce((a, b) => a * b, 1) !== n) return null
+
+  return lists.map(list => list.map(e => e.id))
+}
+
+/**
+ * 生成元幂序：从 identity 沿生成元右乘 BFS 扩展的访问顺序。
+ * 循环群 → e, g, g², …（正多边形，边规则无交叉）；V₄ 位向量 → 正方形环序；
+ * S₃ 置换集 → 六边形序。用于半直积布局让 N/H 生成元边旋转对称。
+ * generators 缺失或 BFS 覆盖不全时回退 ringOrder。
+ */
+export function powerRingOrder(group: Group): string[] {
+  const keys = group.elements.map(e => e.id)
+  if (group.order === 0) return []
+  if (detectS3PermSet(keys)) return S3_PERM_IDS
+
+  const vecs = keys.map(k => k.split(',').map(Number))
+  if (vecs.every(v => v.every(x => x === 0 || x === 1))) {
+    if (keys.length === 4 && vecs[0].length === 2) return ['0,0', '1,0', '1,1', '0,1']
+    if (keys.length === 8 && vecs[0].length === 3) {
+      return ['0,0,0', '0,0,1', '0,1,1', '0,1,0', '1,1,0', '1,1,1', '1,0,1', '1,0,0']
+    }
+  }
+
+  // C_m × C_2（pipe 2 段、第二段仅 2 个值）：外圈环序 (0,0),(1,0),…,(m-1,0)
+  // + 内弧 (m-1,1),…,(0,1)。第一段生成元边沿外圈弧连续、第二段生成元边为径向对，
+  // 盘内不跳对角线（C4×C2 半直积盘内美观的关键）。
+  if (keys.length > 0 && keys.every(k => k.includes('|')) && keys[0].split('|').length === 2) {
+    const seg2 = new Set(keys.map(k => k.split('|')[1]))
+    if (seg2.size === 2) {
+      const seg1Vals = Array.from(new Set(keys.map(k => k.split('|')[0])))
+      const seg1Key = (v: string): number => /^-?\d+$/.test(v) ? Number(v) : /^e\d+$/.test(v) ? Number(v.slice(1)) : NaN
+      if (seg1Vals.every(v => !Number.isNaN(seg1Key(v)))) {
+        const idTok = group.identity.id.split('|')[1]
+        const [t0, t1] = [...seg2].sort((a, b) =>
+          (a === idTok ? 0 : 1) - (b === idTok ? 0 : 1))
+        const s1sorted = seg1Vals.slice().sort((a, b) => seg1Key(a) - seg1Key(b))
+        const order: string[] = []
+        for (const v of s1sorted) order.push(`${v}|${t0}`)
+        for (let i = s1sorted.length - 1; i >= 0; i--) order.push(`${s1sorted[i]}|${t1}`)
+        if (order.length === keys.length) return order
+      }
+    }
+  }
+
+  const gens = group.generators
+    .map(g => g.apply(group.identity))
+    .filter(g => g.id !== group.identity.id)
+  if (gens.length === 0) return ringOrder(keys)
+
+  const elById = new Map(group.elements.map(e => [e.id, e]))
+  const seen = new Set<string>([group.identity.id])
+  const queue: string[] = [group.identity.id]
+  const order: string[] = [group.identity.id]
+  while (queue.length > 0) {
+    const curId = queue.shift()!
+    const cur = elById.get(curId)
+    if (!cur) return ringOrder(keys)
+    for (const gen of gens) {
+      const next = group.multiply(cur, gen).id
+      if (!seen.has(next)) {
+        seen.add(next)
+        order.push(next)
+        queue.push(next)
+      }
+    }
+  }
+  if (order.length !== group.order) return ringOrder(keys)
+  return order
+}
+
+/**
+ * 注册表群（非 pipe）的混合进制因子分解：全群元素 → (因子 A 元素, 因子 B 元素) 分量。
+ * 两簇元素逐一相乘枚举全群（直积分解唯一），aIds/bIds 为两簇元素 id（含 identity）。
+ */
+export function tableGroupFactorSplit(group: Group): {
+  byElement: Map<string, { aId: string; bId: string }>
+  aIds: string[]
+  bIds: string[]
+} | null {
+  const idGroups = clusterFactorGroups(group)
+  if (!idGroups || idGroups.length !== 2) return null
+  const byId = new Map(group.elements.map(e => [e.id, e]))
+  const mul = group.multiply
+  const aList = idGroups[0].map(id => byId.get(id)!)
+  const bList = idGroups[1].map(id => byId.get(id)!)
+  const byElement = new Map<string, { aId: string; bId: string }>()
+  for (const aEl of aList) {
+    for (const bEl of bList) {
+      const el = mul(aEl, bEl)
+      byElement.set(el.id, { aId: aEl.id, bId: bEl.id })
+    }
+  }
+  if (byElement.size !== group.elements.length) return null
+  return { byElement, aIds: idGroups[0], bIds: idGroups[1] }
+}
+
+/**
+ * 簇是否循环：存在某元素（≠e）的幂闭包恰为整个簇。
+ * 阶 2 簇必循环；Dₙ/Q₈/S₃ 等非循环群的单生成闭包均小于簇阶。
+ */
+export function clusterIsCyclic(group: Group, ids: string[]): boolean {
+  const n = ids.length
+  if (n <= 2) return true
+  const byId = new Map(group.elements.map(e => [e.id, e]))
+  for (const id of ids) {
+    if (id === group.identity.id) continue
+    const el = byId.get(id)!
+    let cur = el
+    const seen = new Set([el.id, group.identity.id])
+    for (;;) {
+      cur = group.multiply(cur, el)
+      if (cur.id === group.identity.id) break
+      if (seen.has(cur.id)) break
+      seen.add(cur.id)
+    }
+    if (seen.size === n) return true
+  }
+  return false
+}
+
+/**
+ * 注册表群（GAP SmallGroups 导入，id 无 '|'、value 单维）的网格因子分解。
+ * 聚类 + 混合进制组合为行/列坐标。
+ */
+export function tableGroupGridFactors(group: Group): ProductFactors | null {
+  const idGroups = clusterFactorGroups(group)
+  if (!idGroups) return null
+  const byId = new Map(group.elements.map(e => [e.id, e]))
+  const lists = idGroups.map(ids => ids.map(id => byId.get(id)!))
+  const n = group.elements.length
+  const mul = group.multiply
+
+  const orders = lists.map(l => l.length)
+  const m = Math.floor(lists.length / 2)
+  const colOrders = orders.slice(0, m)
+  const rowOrders = orders.slice(m)
+  const colLists = lists.slice(0, m)
+  const rowLists = lists.slice(m)
+  const colSize = colOrders.reduce((a, b) => a * b, 1)
+  const rowSize = rowOrders.reduce((a, b) => a * b, 1)
+
+  const pick = (idx: number, ords: number[], l: GroupElement[][]): GroupElement[] => {
+    const res: GroupElement[] = []
+    let rem = idx
+    for (let c = 0; c < ords.length; c++) {
+      res.push(l[c][rem % ords[c]])
+      rem = Math.floor(rem / ords[c])
+    }
+    return res
+  }
+  const productOf = (parts: GroupElement[]): GroupElement => {
+    let acc = parts[0]
+    for (let c = 1; c < parts.length; c++) acc = mul(acc, parts[c])
+    return acc
+  }
+
+  const colMap = new Map<string, number>()
+  const rowMap = new Map<string, number>()
+  for (let ic = 0; ic < colSize; ic++) {
+    const colEl = productOf(pick(ic, colOrders, colLists))
+    for (let ir = 0; ir < rowSize; ir++) {
+      const rowEl = productOf(pick(ir, rowOrders, rowLists))
+      const el = mul(colEl, rowEl)
+      colMap.set(el.id, ic)
+      rowMap.set(el.id, ir)
+    }
+  }
+  if (colMap.size !== n || rowMap.size !== n) return null
+
+  return {
+    colSize,
+    rowSize,
+    getCol: (el) => colMap.get(el.id) ?? 0,
+    getRow: (el) => rowMap.get(el.id) ?? 0,
+  }
+}
+
 export function parseProductFactors(group: Group): ProductFactors | null {
   const n = group.elements.length
   if (n === 0) return null
@@ -63,29 +402,41 @@ export function parseProductFactors(group: Group): ProductFactors | null {
   const isPipeProduct = group.elements[0].id.includes('|')
 
   if (isPipeProduct) {
-    const prefixSet = new Set<string>()
-    const suffixSet = new Set<string>()
-    for (const el of group.elements) {
-      const pipeIdx = el.id.indexOf('|')
-      if (pipeIdx === -1) continue
-      prefixSet.add(el.id.substring(0, pipeIdx))
-      suffixSet.add(el.id.substring(pipeIdx + 1))
+    const perEl = factorPipeGroupsOrTokens(group)
+    const groupCount = perEl[0].length
+    if (groupCount < 2) return null
+    const m = Math.floor(groupCount / 2)
+    const colKey = (g: string[][]) => g.slice(0, m).map(x => x.join('|')).join('~')
+    const rowKey = (g: string[][]) => g.slice(m).map(x => x.join('|')).join('~')
+    const colSet = new Set<string>()
+    const rowSet = new Set<string>()
+    for (const g of perEl) {
+      colSet.add(colKey(g))
+      rowSet.add(rowKey(g))
     }
-    const colKeys = ringOrder(Array.from(prefixSet))
-    const rowKeys = ringOrder(Array.from(suffixSet))
+    const colKeys = ringOrder([...colSet])
+    const rowKeys = ringOrder([...rowSet])
     const colMap = new Map(colKeys.map((k, i) => [k, i]))
     const rowMap = new Map(rowKeys.map((k, i) => [k, i]))
+    const idToGroups = new Map<string, string[][]>()
+    for (let i = 0; i < group.elements.length; i++) idToGroups.set(group.elements[i].id, perEl[i])
     return {
       colSize: colKeys.length,
       rowSize: rowKeys.length,
-      getCol: (el) => { const p = el.id.indexOf('|'); return colMap.get(el.id.substring(0, p)) ?? 0 },
-      getRow: (el) => { const p = el.id.indexOf('|'); return rowMap.get(el.id.substring(p + 1)) ?? 0 }
+      getCol: (el) => {
+        const g = idToGroups.get(el.id)
+        return g ? colMap.get(colKey(g)) ?? 0 : 0
+      },
+      getRow: (el) => {
+        const g = idToGroups.get(el.id)
+        return g ? rowMap.get(rowKey(g)) ?? 0 : 0
+      }
     }
   }
 
   const vals = group.elements.map(el => el.value)
   const dim = vals[0]?.length || 0
-  if (dim < 2) return null
+  if (dim < 2) return tableGroupGridFactors(group)
 
   if (dim === 2) {
     const colSize = new Set(vals.map(v => v[0])).size
@@ -145,6 +496,19 @@ export function matrixGridLayout(
   return result
 }
 
+/**
+ * factorPipeGroups 的分组，符号不匹配（段数与符号因子不一致）时逐 token 兜底分组。
+ * 单组（紧凑幂合并如 C_{2}^{2}）时按 pipe 段拆分为多组，保证网格/嵌套布局可展开。
+ */
+export function factorPipeGroupsOrTokens(group: Group): string[][][] {
+  const compact = factorPipeGroups(group)
+  if (compact) {
+    if (compact[0].length >= 2) return compact
+    return group.elements.map(el => el.id.split('|').map(t => [t]))
+  }
+  return group.elements.map(el => el.id.split('|').map(t => [t]))
+}
+
 export function nestedFactorLayout2D(
   group: Group,
   width: number,
@@ -153,20 +517,23 @@ export function nestedFactorLayout2D(
   if (group.elements.length === 0) return null
   if (!group.elements[0].id.includes('|')) return null
 
-  const prefixGroups = new Map<string, GroupElement[]>()
-  const suffixSet = new Set<string>()
-  for (const el of group.elements) {
-    const p = el.id.indexOf('|')
-    if (p === -1) continue
-    const pref = el.id.substring(0, p)
-    const suf = el.id.substring(p + 1)
-    if (!prefixGroups.has(pref)) prefixGroups.set(pref, [])
-    prefixGroups.get(pref)!.push(el)
-    suffixSet.add(suf)
+  const perEl = factorPipeGroupsOrTokens(group)
+  if (perEl[0].length < 2) return null
+
+  const outerKey = (g: string[][]) => g[0].join('|')
+  const innerKey = (g: string[][]) => g.slice(1).map(x => x.join('|')).join('~')
+
+  const byKey = new Map<string, Map<string, GroupElement>>()
+  for (let i = 0; i < group.elements.length; i++) {
+    const el = group.elements[i]
+    const o = outerKey(perEl[i])
+    const s = innerKey(perEl[i])
+    if (!byKey.has(o)) byKey.set(o, new Map())
+    byKey.get(o)!.set(s, el)
   }
 
-  const prefixKeys = cayleyRingKeys([...prefixGroups.keys()])
-  const suffixKeys = cayleyRingKeys([...suffixSet])
+  const prefixKeys = cayleyRingKeys([...byKey.keys()])
+  const suffixKeys = cayleyRingKeys([...byKey.values().next().value!.keys()])
 
   const outerCount = prefixKeys.length
   const innerCount = suffixKeys.length
@@ -192,10 +559,13 @@ export function nestedFactorLayout2D(
     const oX = cx + outerR * Math.cos(pAngle)
     const oY = cy + outerR * Math.sin(pAngle)
 
+    const innerMap = byKey.get(pKey)!
     for (let ii = 0; ii < innerCount; ii++) {
       const sKey = suffixKeys[ii]
       const sAngle = (ii * 2 * Math.PI) / innerCount - Math.PI / 2
-      result.set(`${pKey}|${sKey}`, {
+      const el = innerMap.get(sKey)
+      if (!el) continue
+      result.set(el.id, {
         x: oX + innerR * Math.cos(sAngle),
         y: oY + innerR * Math.sin(sAngle)
       })

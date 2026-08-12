@@ -85,7 +85,7 @@ src/
 │       ├── cayleyEdges.ts   # Cayley 边计算
 │       ├── cycleLayouts.ts  # 圆圈图 / 循环子群布局
 │       ├── ringOrder.ts     # Cayley 环排序 / 数字感知排序
-│       └── shapeLayouts.ts  # 10 种 2D 布局函数（grid/concentric/dualRing/spiral 等）
+│       └── shapeLayouts.ts  # 12 种 2D 布局函数（grid/concentric/dualRing/spiral 等）
 ├── components/
 │   ├── Canvas/              # 视图渲染组件
 │   │   ├── GroupCanvas.tsx  # 主画布（SVG 2D Cayley 图）

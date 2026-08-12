@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { createSemidirectProduct } from '../core/groups/SemidirectProduct'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
+import { getSmallGroup } from '../core/groups/SmallGroups'
+import { createS3 } from '../core/groups/SymmetricGroup'
 import type { Group, GroupElement } from '../core/types'
 import type { Automorphism } from '../core/algebra/automorphisms'
+import {
+  getSemidirectProductMeta,
+  semidirectFactorMap,
+  semidirectFixedPoints,
+} from '../core/algebra/semidirectDecompositions'
 
 function assertGroupAxioms(G: Group, sample = 15) {
   const idSet = new Set(G.elements.map(e => e.id))
@@ -146,5 +153,112 @@ describe('createSemidirectProduct', () => {
     const g1 = D.generators[1]
     const liftedH = g1.apply(el)
     expect(liftedH.id).toBe('e2|e0')
+  })
+})
+
+describe('getSemidirectProductMeta (rewiring shape metadata)', () => {
+  it('recovers the canonical decomposition of registered semidirect products', () => {
+    const g = getSmallGroup(16, 2)! // (C₄×C₂):C₂
+    const meta = getSemidirectProductMeta(g.group)
+    expect(meta).not.toBeNull()
+    expect(meta!.normal.order * meta!.acting.order).toBe(16)
+    expect(meta!.phiMap.size).toBe(meta!.acting.order)
+  })
+
+  it('picks the decomposition matching the symbol pair (C3:C4 -> N=3, H=4)', () => {
+    const g = getSmallGroup(12, 4)! // Dic3, symbol C_{3}:C_{4}
+    const meta = getSemidirectProductMeta(g.group)
+    expect(meta).not.toBeNull()
+    expect(meta!.normal.order).toBe(3)
+    expect(meta!.acting.order).toBe(4)
+  })
+
+  it('returns null for groups without semidirect-product notation', () => {
+    expect(getSemidirectProductMeta(createS3())).toBeNull()
+    expect(getSemidirectProductMeta(createCyclicGroup(5))).toBeNull()
+  })
+
+  it('uses construction metadata for pipe semidirect products', () => {
+    const C3 = createCyclicGroup(3)
+    const C2 = createCyclicGroup(2)
+    const G = createSemidirectProduct(C3, C2, new Map<string, Automorphism>([
+      ['e0', identityAuto(C3)],
+      ['e1', identityAuto(C3)],
+    ]))
+    const meta = getSemidirectProductMeta(G!)
+    expect(meta).not.toBeNull()
+    expect(meta!.normal.order).toBe(3)
+    expect(meta!.acting.order).toBe(2)
+  })
+})
+
+describe('semidirectFactorMap', () => {
+  it('splits pipe element ids into (n, h) pairs', () => {
+    const C3 = createCyclicGroup(3)
+    const C2 = createCyclicGroup(2)
+    const G = createSemidirectProduct(C3, C2, new Map<string, Automorphism>([
+      ['e0', identityAuto(C3)],
+      ['e1', identityAuto(C3)],
+    ]))
+    const meta = getSemidirectProductMeta(G!)!
+    const fm = semidirectFactorMap(G!, meta)
+    expect(fm).not.toBeNull()
+    expect(fm!.size).toBe(6)
+    for (const [elId, pair] of fm!) {
+      expect(elId).toBe(`${pair.n.id}|${pair.h.id}`)
+      expect(meta.normal.elements.some(e => e.id === pair.n.id)).toBe(true)
+      expect(meta.acting.elements.some(e => e.id === pair.h.id)).toBe(true)
+    }
+  })
+
+  it('algebraically decomposes registered group elements (g = n·h)', () => {
+    const g = getSmallGroup(16, 2)!
+    const meta = getSemidirectProductMeta(g.group)!
+    const fm = semidirectFactorMap(g.group, meta)
+    expect(fm).not.toBeNull()
+    expect(fm!.size).toBe(16)
+    const nIds = new Set(meta.normal.elements.map(e => e.id))
+    for (const [elId, pair] of fm!) {
+      expect(pair.n.id).toBe((g.group.multiply(g.group.elements.find(e => e.id === elId)!, meta.acting.inverse(pair.h))).id)
+      expect(nIds.has(pair.n.id)).toBe(true)
+    }
+  })
+})
+
+describe('semidirectFixedPoints', () => {
+  it('leaves identity-action rings unhighlighted (all fixed)', () => {
+    const C3 = createCyclicGroup(3)
+    const C2 = createCyclicGroup(2)
+    const G = createSemidirectProduct(C3, C2, new Map<string, Automorphism>([
+      ['e0', identityAuto(C3)],
+      ['e1', identityAuto(C3)],
+    ]))
+    const meta = getSemidirectProductMeta(G!)!
+    const fm = semidirectFactorMap(G!, meta)!
+    expect(semidirectFixedPoints(G!, meta, fm).size).toBe(0)
+  })
+
+  it('highlights φ(h)-fixed points for non-identity rings', () => {
+    const C3 = createCyclicGroup(3)
+    const C2 = createCyclicGroup(2)
+    const inv: Automorphism = {
+      id: 'inv',
+      map: new Map([['e0', 'e0'], ['e1', 'e2'], ['e2', 'e1']]),
+      label: '\\rho',
+      apply: (el: GroupElement) => C3.elements[(3 - el.value[0]) % 3],
+    }
+    const G = createSemidirectProduct(C3, C2, new Map<string, Automorphism>([
+      ['e0', identityAuto(C3)],
+      ['e1', inv],
+    ]))
+    const meta = getSemidirectProductMeta(G!)!
+    const fm = semidirectFactorMap(G!, meta)!
+    const fixed = semidirectFixedPoints(G!, meta, fm)
+    // φ(e1) = inversion fixes only e0 (the identity of C3)
+    expect(fixed.get('e0|e1')).toBe(true)
+    expect(fixed.has('e1|e1')).toBe(false)
+    expect(fixed.has('e2|e1')).toBe(false)
+    // identity ring (e0) is skipped entirely
+    expect(fixed.has('e0|e0')).toBe(false)
   })
 })

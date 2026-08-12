@@ -24,13 +24,13 @@
 | 文档 | 内容 |
 |------|------|
 | [docs/GROUPS.md](docs/GROUPS.md) | 群实现：核心类型、群族表、直积/半直积/自同构、小群注册表、群工厂、代数函数、数学参考 |
-| [docs/CAYLEY.md](docs/CAYLEY.md) | Cayley 图系统：边计算、2D/3D 渲染、17 种 3D 形状模板、10 种 2D 形状布局 |
+| [docs/CAYLEY.md](docs/CAYLEY.md) | Cayley 图系统：边计算、2D/3D 渲染、17 种 3D 形状模板、12 种 2D 形状布局 |
 | [docs/VIEWS.md](docs/VIEWS.md) | 13 种视图模式（ViewPanel 9 卡片 + 群展示面板 2 专用视图：tree/展示乘法表）+ 多视图 |
 | [docs/PRESENTATION.md](docs/PRESENTATION.md) | 群展示系统：解析器、Todd–Coxeter 陪集枚举、presentationOf 分发、通用关系发现器、创建/持久化、tree与展示乘法表视图 |
 | [docs/STATE.md](docs/STATE.md) | 状态管理：12 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端） |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 6 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：37 文件 763 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：38 文件 856 tests、vitest 配置、覆盖率、测试约定 |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/正则/陪集/自定义/Sylow 五来源、同态校验、轨道/稳定化子/OST、Burnside 自检、轨道视图、几何作用暂缓记录 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期 → 中期 FGVE 引擎化 → 远期 GVL 教学实验室 |
 
@@ -53,7 +53,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 37 个测试文件（763 tests），见 docs/TESTING.md
+│   ├── __tests__/              # 38 个测试文件（856 tests），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
@@ -98,13 +98,15 @@ GroupViz/
 
 - ✅ 13 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow / tree / prestable（其中 tree / prestable 两个群展示专用视图的入口在左侧「群展示」面板底部，不在视图面板卡片中）
 - ✅ 群族：Sₙ(2-5)、Cₙ(2-120)、Dₙ(3-8)、Aₙ(3-5)、V₄、Q₈、**GL(2,2) ≅ S₃ / GL(2,3)（48 阶，矩阵群）**、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（UI 上限出于性能：S₅=120 在本地兜底 FALLBACK_CUTOFF=240 内，S₆=720 超限故不提供）
-- ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、10 种 2D 形状（含 rewiring）、17 种 3D 形状模板（按群性质自动分配）
+- ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、12 种 2D 形状（含 rewiring、直积 cylinder/torus）、17 种 3D 形状模板（按群性质自动分配）
+- ✅ 2D 凯莱图布局策略：**循环群默认 circular**（cayleyCircleLayout 兜底，注册表/基本群数字感知环序，spiral 仅作手动可选）、**注册表 Dₙ 双环**（splitDihedralElements 元素阶分类：m=|G|/2 找阶 m 元素 r → 旋转=⟨r⟩ 幂闭包、反射=其余、配对 sᵢ=rⁱ·s₀，dualRingLayout/cayleyCircleLayout 的 value 分类失败自动回退，覆盖按阶创建 16-30 阶二面体；对 C₂ₘ/Cₘ×C₂/Q₈/C₈:C₂ 也匹配，A₄/C₂³ 返回 null 走原 fallback）、**cylinder 各层同相位**（循环因子生成元边成径向直线母线，俯视圆柱感；Cₘ×C₂ 盘内环序 powerRingOrder 特判：外圈 t0 行升序 + 内圈 t1 行降序）
+- ✅ 直积 2D 形状分类（`classifyDirectProduct2D`）：全循环因子→grid 网格、恰一个循环因子→**cylinder 圆柱**（循环因子沿径向同心多层环，每层=非循环因子副本，Dₙ 因子保留双环内外层）、全非循环因子→**torus 甜甜圈**（嵌套环：主轴环 + 每点挂剩余因子乘积副本，**任意因子数**）；紧凑符号因子识别（`factorPipeGroupsOrTokens`：C₂²×S₃ = 2 因子分组、S₃² 幂合并自动按 pipe 段拆分为 2 因子），`buildFactorSubgroup` 因子临时群重建 + `factorCopyRingLayout` 副本环（Dₙ 双环 r=1/0.55）；**相邻同底循环因子归组**（`analyzeDPFactorsGrouped2D`/`factorPipeGroupsGrouped`：C₂×C₂×S₃ → [C₂², S₃]，C₂×C₂×C₂ 三连合并 C₂³ 单因子退回网格）；相邻层 stagger 错位防遮挡；形状下拉自动可用（cylinder/torus + grid）；**注册表群（16-31 阶非 pipe 直积）网格兜底**：`tableGroupGridFactors` union-find 聚类（生成元不可交换聚类→因子划分 + 混合进制枚举），C₄×C₄/Z₄×Z₂×Z₂/C₂⁴ 等 4×4 满网格；**注册表非 pipe 直积 cylinder 聚类支持（多因子）**：`clusterFactorGroups`/`tableGroupFactorSplit`/`clusterIsCyclic` 按生成元交换性聚类因子 + 循环性判定（Z₂×D₄/Z₂×Q₈ 显示 2 层同心环；C₂×C₂×S₃ 注册表聚类 3 簇 → 3 环嵌套甜甜圈）；**半直积不误判直积**：`hasTopLevelTimes` 顶层 \\times 检测——'(Z₄×Z₂):Z₂' 不误判直积（走半直积重布线）
 - ✅ 对称性视图：多面体几何 + 元素操作动画 + 旋转轴/交点标记（运行时从几何数据计算）
 - ✅ 同态映射系统：创建/验证/性质分析 + 第一同构定理动画
-- ✅ 半直积构建：φ 映射 UI、4 步构建动画、rewiring 布局与不动点高亮
+- ✅ 半直积构建：φ 映射 UI、4 步构建动画、rewiring 布局与不动点高亮；**注册表 ':' 记号半直积群默认重布线**（`getSemidirectProductMeta` 经 `findSemidirectDecompositions` 规范分解恢复 N/H/φ + `semidirectFactorMap` 每元素唯一分解 g=n·h + `semidirectFixedPoints` 固定点高亮）；**幂序摆放**（`powerRingOrder` BFS 生成元幂序：循环群正多边形 / V₄ 方形环序 / bit 向量特判，生成元边旋转对称）+ **rN/rH 自适应**（rN = max(minRN·1.6, R·0.14)、rH = max(minRH·1.6, (rN+28+copyGap/2)/sin(π/m))、copyGap = max(90, rN·1.35)、minRN/minRH = 阶·56/2π、R = minDim·0.32）防节点重叠 + 副本盘缘间隙充足
 - ✅ 半直积分解（M4）：任意群一键枚举全部半直积分解 G ≅ N⋊_φ H（N ⊴ G 正规子群 + 互补 H，φ(h) = 共轭 h·n·h⁻¹，order≤60 守卫）；createSemidirectProduct 重建闭环验证（isoSymbol 相等 + 不变量回退），面板分解列表（✓/✗ 徽标、点击切换载入）、分裂短正合列 1 → N → G → H → 1 展示；S₄ 双型（A₄⋊C₂ / V₄⋊S₃）、Q₈ 无分解
 - ✅ 混合计算：小群本地 TS（≤60），大群 FastAPI 后端（>60）+ 缓存；**后端不可用时前端本地兜底**（FALLBACK_CUTOFF=240 内全量重算，S₅ 约 2.6s），大群计算 >3s 显示顶部进度条（TopProgressBar）
-- ✅ 小群预计算注册表（阶 1-31 全部 93 个群，GAP 4.16 SmallGroups 库导入：smallGroupData.ts 乘法表数据 + structureToSymbol 符号化 + createTableGroup 构建；阶 16-31 65 条 + Dic₃(12,4)，符号冲突回退 SmallGroup(n,i)；「按阶创建」面板除阶 1-31 外含 A₅(60)/S₅(120)，符号中 ":" 表示半直积有提示）
+- ✅ 小群预计算注册表（阶 1-31 全部 93 个群，GAP 4.16 SmallGroups 库导入：smallGroupData.ts 乘法表数据 + structureToSymbol 符号化 + createTableGroup 构建；阶 16-31 65 条 + Dic₃(12,4)，符号冲突回退 SmallGroup(n,i)；「按阶创建」面板除阶 1-31 外含 A₅(60)/S₅(120)，符号中 ":" 表示半直积有提示；**循环群符号统一 C**（structureToSymbol 不再做 C→Z 替换，legacy 硬编码符号全改 C_{...}，getSmallGroupBySymbol 做 Z_→C_ 归一化兼容旧查询，isGroupCyclic 精确化：纯循环符号直判 / 复合符号按存在 n 阶元素判定）
 - ✅ 多视图浮动窗口、子集保存与分析、陪集分解（Lagrange 验证，子群条带上方展示 ⟨H⟩ 圆形凯莱图）、自逆元素检测
 - ✅ KaTeX 全应用渲染、i18n 中英文、深/浅主题、会话保存与恢复
 - ✅ 视图导出：SVG/PNG/GIF + 批量导出 CLI（`npm run export`）
@@ -117,7 +119,7 @@ GroupViz/
 - ✅ 凯莱图圆形布局无交叉：cayleyCircleLayout 对 S₃（六边形）/二面体结构（双环）自动免交叉布局（同态/同构动画/Aut 弹窗/主视图共用）
 - ✅ 子群列（Series）：子群格视图集成四种子群列——**导列**（derived series）、**上/下中心列**（upper/lower central series）、**合成列**（composition series，Jordan–Hölder）；系列项节点彩色描边（金/青/紫）+ 序数角标，非系列节点调暗（opacity 0.22），系列路径边加粗；底部系列面板 TeX 链式展示 `G ⊵ N₁ ⊵ … ⊵ ⟨e⟩` + 各级阶 + 因子 `Nᵢ/Nᵢ₊₁ ≅ …` + 可解/幂零徽标；合成列额外显示合成因子多重集 + Jordan–Hölder 说明；小群枚举全部合成列（≤20 条守卫，面板链选择器切换）；核心算法 `src/core/algebra/series.ts`（SERIES_MAX_ORDER=240 守卫，大群二期后端）；状态在 `context/series/GroupSeriesContext`（随群切换自动重置）
 - ✅ 群展示（Presentation）系统：任意展示 ⟨a,b | f(a,b), …⟩ 输入创建有限群（Todd–Coxeter 陪集枚举，TC_MAX_COSETS=3000 守卫判有限/无限/溢出），乘法表构建 + `presentationOf` 自动识别标准展示（Cₙ/Dₙ/Sₙ Coxeter/Aₙ/V₄/Q₈，直积/半直积/商群/Aut 走通用关系发现器，PRESENTATION_MAX_ORDER=240）；关系支持 **Unicode 上标（a²、a⁻¹，`normalizeSuperscripts`）与 f1=f2 等式（`ab=ba` → `aba⁻¹b⁻¹`，e=f 取另一侧）**；群信息栏展示 TeX 行；左侧「群展示」面板（**两种创建方式**：直接创建 = 完整展示文本 + 持久保存/草稿自动保存 localStorage；**可视化创建** = 1/2/3 生成元模板 ⟨a|⟩/⟨a,b|⟩/⟨a,b,c|⟩ + 逐步输入单条关系（严格 f=e 或 f1=f2 校验，`parseRelationEquation`）+ 已添加关系列表实时构建校验（|G|、≅、无限判定）+ 「结束并创建群」；创建成功设置 **`activePresentationGroup` 独立状态**（不替换左侧当前群，`?? currentGroup` 回退）+ 自动切树视图；「✕ 清空当前群（回到模板树）」）；**tree视图**（退化树 = 商群凯莱图的 BFS 生成树：实线=首次到达边（按生成元着色）；粘合边不绘制，仅顶部 bar 金色「粘合边 ×N」计数，直观呈现「关系 = 砍树」；布局按群结构规则化——1 生成元直线、2 生成元交换格 → 正方形网格（不衰减，幂关系下指数按 mod 折叠，a²,b³,ab=ba → 2×3 网格）、非交换/自由积 → 谢尔宾斯基十字（层距减半防遮挡）、3 生成元 → **3D**（Three.js 立方体方向）；路径状树 0.7/稠密树 0.5 层距衰减 `stepForDepth(depth, ratio)`；展示生成元 ≠ 群生成元时用 `pres.generatorElements` 求值（`genElsOverride`，修复 S₄ Coxeter 3 生成元）；点击节点显示词、缩放/平移/双击复位；无群时展示自由模板树）、**展示乘法表视图**（行/列=群元素，顶部静态展示式 bar，order>36 自动采样）；核心算法 `src/core/algebra/presentations.ts` + `src/core/algebra/cayleyTree.ts`（见 docs/PRESENTATION.md）
-- ✅ 测试体系：37 文件 763 tests 全绿（`npm run test`），总覆盖率 88.9% stmts / 91.3% lines（`npm run test:coverage`）
+- ✅ 测试体系：38 文件 856 tests 全绿（`npm run test`），总覆盖率 88.9% stmts / 91.3% lines（`npm run test:coverage`）
 
 ## 6. 运行命令
 
@@ -209,4 +211,4 @@ uvicorn main:app --reload --port 8000
 ---
 
 *文档版本: 1.10.0*
-*最后更新: 2026-08-10*
+*最后更新: 2026-08-12*

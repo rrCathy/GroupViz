@@ -9,6 +9,9 @@ import {
   coilLayout,
   projection3DLayout,
   semidirectProductLayout,
+  cylinderLayout2D,
+  torusLayout2D,
+  q8PythagoreanLayout,
 } from './forceLayout'
 
 export function computeShape2DPositions(
@@ -36,6 +39,12 @@ export function computeShape2DPositions(
       return projection3DLayout(group, width, height)
     case 'rewiring':
       return semidirectProductLayout(group, width, height)
+    case 'cylinder':
+      return cylinderLayout2D(group, width, height)
+    case 'torus':
+      return torusLayout2D(group, width, height)
+    case 'pythagoreanSquare':
+      return q8PythagoreanLayout(group, width, height)
     default:
       return null
   }

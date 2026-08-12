@@ -9,18 +9,18 @@ import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
 import { ActionView } from './ActionView'
 import { SylowView } from './SylowView'
-import { FreeGroupTreeView } from './FreeGroupTreeView'
 import { PresentationTableView } from './PresentationTableView'
 import { isTooLarge } from '../../core/viewBox'
 import { useAutoFade } from '../../hooks/useAutoFade'
 
 const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ default: m.Cayley3DView })))
 const SymmetryViewLazy = lazy(() => import('./SymmetryView').then(m => ({ default: m.SymmetryView })))
+const FreeGroupTreeViewLazy = lazy(() => import('./FreeGroupTreeView').then(m => ({ default: m.FreeGroupTreeView })))
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
+import { getSemidirectProductMeta, semidirectFactorMap, semidirectFixedPoints } from '../../core/algebra/semidirectDecompositions'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
 import { texify, renderTex } from '../../utils/texify'
-import type { CayleyEdgeData, InternalEdgeData, Group } from '../../core/types'
-import type { Automorphism } from '../../core/algebra/automorphisms'
+import type { CayleyEdgeData, InternalEdgeData } from '../../core/types'
 
 const INNER_NODE_COLORS = [
   '#ff6b6b','#4ecdc4','#ffd93d','#a78bfa','#f97316','#06b6d4',
@@ -403,7 +403,7 @@ export function GroupCanvas() {
       case 'sylow':
         return <SylowView />
       case 'tree':
-        return <FreeGroupTreeView key={activePresentationGroup?.symbol ?? currentGroup?.symbol ?? 'free'} />
+        return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><FreeGroupTreeViewLazy key={activePresentationGroup?.symbol ?? currentGroup?.symbol ?? 'free'} /></Suspense>
       case 'prestable':
         return <PresentationTableView />
       default:
@@ -497,32 +497,21 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
   }, [currentGroup, cx, cy, graphRadius, n])
 
   // Semidirect-product metadata: used by the rewiring shape to highlight
-  // φ(h)-fixed points and draw the x ↦ φ(x) wiring arcs inside each ring.
+  // φ(h)-fixed points. Pipe semidirect products carry _semidirectProduct;
+  // registered groups in GAP ':' notation fall back to their canonical
+  // decomposition (getSemidirectProductMeta).
   const sdMeta = useMemo(() => {
     if (!currentGroup) return null
-    return (currentGroup as Group & { _semidirectProduct?: { normal: Group; acting: Group; phiMap: Map<string, Automorphism> } })._semidirectProduct ?? null
+    return getSemidirectProductMeta(currentGroup)
   }, [currentGroup])
 
   const sdFixedMap = useMemo(() => {
     const m = new Map<string, boolean>()
-    if (!sdMeta) return m
-    for (const hEl of sdMeta.acting.elements) {
-      const phiH = sdMeta.phiMap.get(hEl.id)
-      if (!phiH) continue
-      const entries: Array<[string, boolean]> = []
-      let fixedCount = 0
-      for (const nEl of sdMeta.normal.elements) {
-        const fixed = phiH.map.get(nEl.id) === nEl.id
-        entries.push([`${nEl.id}|${hEl.id}`, fixed])
-        if (fixed) fixedCount++
-      }
-      // The reference copy (φ(h) = identity) is left unhighlighted — only
-      // rings whose φ(h) actually moves elements show their fixed points.
-      if (fixedCount === sdMeta.normal.order) continue
-      for (const [k, v] of entries) m.set(k, v)
-    }
-    return m
-  }, [sdMeta])
+    if (!currentGroup || !sdMeta) return m
+    const factorMap = semidirectFactorMap(currentGroup, sdMeta)
+    if (!factorMap) return m
+    return semidirectFixedPoints(currentGroup, sdMeta, factorMap)
+  }, [currentGroup, sdMeta])
 
   // Map enabled action elementId -> marker index so arrow colors align
   const enabledActionIndexMap = useMemo(() => {

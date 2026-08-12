@@ -40,7 +40,7 @@
 | View | Description |
 |------|-------------|
 | **Set View** | Grid layout of all group elements |
-| **Cayley Graph (2D)** | SVG-based, 10 shape layouts, draggable nodes, configurable edges |
+| **Cayley Graph (2D)** | SVG-based, 12 shape layouts, draggable nodes, configurable edges |
 | **Cycle Graph** | Cyclic subgroup visualization with maximal cycle filtering |
 | **Cayley Table** | Interactive multiplication table with row/column highlighting and coset striping |
 | **Cayley Graph (3D)** | Three.js rendering, 17 shape templates, orbit controls |
@@ -85,7 +85,7 @@
 ### Key Features
 - **Cayley graph by element action** — edges defined by any group element (generalized Cayley graph), right/left multiply switchable
 - **17 3D shape templates** — auto-assigned by group properties (truncated polyhedra for S₄, A₄, A₅); smart direct-product shapes (lattice/cylinder/torus)
-- **10 2D Cayley layout shapes** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring (semidirect-specific), intelligent default by group type
+- **12 2D Cayley layout shapes** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring (semidirect-specific)/cylinder (direct product, one cyclic factor)/torus (direct product, no cyclic factor), intelligent default by group type
 - **Multi-view floating windows** — open multiple views simultaneously for comparative analysis
 - **Subset analysis** — save element selections; auto-detect subgroup / normal subgroup via closure tests
 - **Self-inverse element detection** — highlights elements where g⁻¹ = g
@@ -97,7 +97,7 @@
 - **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; relator-loop view (3D torus Cayley graph, click a relator to highlight its closed loop) + presentation table view with word-evaluation paths; draft autosave
 - **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 37 test files, 763 tests (Vitest)
+- **Test suite** — 38 test files, 856 tests (Vitest)
 
 ---
 
@@ -161,7 +161,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 37 test files (763 tests)
+├── __tests__/            # 38 test files (856 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -246,12 +246,12 @@ Edge semantics:
 - [x] Automorphism group Aut(G)
 - [x] Homomorphism mapping + first isomorphism theorem animation
 - [x] Group action system (conjugation / custom, orbit view, OST verification)
-- [x] 2D Cayley multi-shape layouts (10, incl. rewiring)
+- [x] 2D Cayley multi-shape layouts (12, incl. rewiring/cylinder/torus)
 - [x] Dark/light theme
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (37 files, 763 tests)
+- [x] Test suite (38 files, 856 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

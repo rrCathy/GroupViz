@@ -130,7 +130,7 @@ export function ViewPanel() {
               </select>
             </div>
           )}
-          {!(cayleyShape2D === 'concentric' || cayleyShape2D === 'dualRing' || cayleyShape2D === 'projection3D' || cayleyShape2D === 'rewiring') && (
+          {!(cayleyShape2D === 'concentric' || cayleyShape2D === 'dualRing' || cayleyShape2D === 'projection3D' || cayleyShape2D === 'rewiring' || cayleyShape2D === 'pythagoreanSquare') && (
             <button className="panel-btn" onClick={runForceLayout} disabled={!currentGroup} style={{ width: '100%', marginTop: '4px' }}>{t('panel.forceLayout')}</button>
           )}
           <div className="cayley-actions-compact">

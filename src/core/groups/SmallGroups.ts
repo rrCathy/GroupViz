@@ -69,8 +69,8 @@ export function createZ4xZ2(): Group {
   genB.inverse = genB
 
   return {
-    name: 'Z_{4} \\times Z_{2}',
-    symbol: 'Z_{4}\\times Z_{2}',
+    name: 'C_{4} \\times C_{2}',
+    symbol: 'C_{4}\\times C_{2}',
     order: 8,
     elements,
     generators: [genA, genB],
@@ -119,8 +119,8 @@ export function createZ2xZ2xZ2(): Group {
   }
 
   return {
-    name: 'Z_{2} \\times Z_{2} \\times Z_{2}',
-    symbol: 'Z_{2}^{3}',
+    name: 'C_{2} \\times C_{2} \\times C_{2}',
+    symbol: 'C_{2}^{3}',
     order: 8,
     elements,
     generators: [makeGen('a', 'a', '#ff6b6b', 2), makeGen('b', 'b', '#4ecdc4', 1), makeGen('c', 'c', '#ffd93d', 0)],
@@ -175,8 +175,8 @@ export function createZ3xZ3(): Group {
   }
 
   return {
-    name: 'Z_{3}^{2}',
-    symbol: 'Z_{3}^{2}',
+    name: 'C_{3}^{2}',
+    symbol: 'C_{3}^{2}',
     order: 9,
     elements,
     generators: [genA, genB],
@@ -233,8 +233,8 @@ export function createZ6xZ2(): Group {
   genB.inverse = genB
 
   return {
-    name: 'Z_{6} \\times Z_{2}',
-    symbol: 'Z_{6}\\times Z_{2}',
+    name: 'C_{6} \\times C_{2}',
+    symbol: 'C_{6}\\times C_{2}',
     order: 12,
     elements,
     generators: [genA, genB],
@@ -258,13 +258,10 @@ export function createZ6xZ2(): Group {
 //   - GAP cannot distinguish some isomorphism types (e.g. two groups with
 //     StructureDescription "(C4 x C2) : C2"); ensureTable() disambiguates
 //     symbol collisions by falling back to 'SmallGroup(n,i)'.
-function structureToSymbol(n: number, i: number, structure: string): string {
-  // Dic3: GAP reports 'D12' (collides with the dihedral D_{12} of order 12)
-  if (n === 12 && i === 4) return 'Z_{3}:C_{4}'
+function structureToSymbol(_n: number, _i: number, structure: string): string {
   let s = structure
-  if (!/^C\d+$/.test(s)) {
-    s = s.replace(/\bC(?=\d)/g, 'Z')
-  }
+  // 循环群统一用 C 记号（isGroupCyclic 已升级为元素阶精确检测，
+  // 不再依赖符号首字母，复合符号如 'C_{2} \times C_{2} \times S_{3}' 不会误判为循环群）
   s = s.replace(/(^|[^A-Za-z])D(\d+)/g, (_m, pre: string, k: string) => {
     const kk = parseInt(k, 10)
     if (kk % 2 === 0 && kk >= 6) return `${pre}D_{${kk / 2}}`
@@ -374,7 +371,7 @@ const FACTORIES: { order: number; index: number; factory: GroupFactory }[] = [
   { order: 14, index: 0, factory: () => createCyclicGroup(14) },
   { order: 14, index: 1, factory: () => createDihedralGroup(7) },
   { order: 15, index: 0, factory: () => createCyclicGroup(15) },
-  { order: 12, index: 4, factory: () => createTableGroup(12, 4) },
+  { order: 12, index: 4, factory: () => createTableGroup(12, 1) },
   // Orders 16-31 (GAP SmallGroups data, index i is GAP's 1-based index)
   ...SMALL_GROUP_DATA.filter(r => r.n >= 16).map(r => ({
     order: r.n,
@@ -427,7 +424,9 @@ export function getSmallGroup(order: number, index: number = 0): SmallGroupEntry
 
 export function getSmallGroupBySymbol(symbol: string): SmallGroupEntry | null {
   ensureTable()
-  return _bySymbol!.get(symbol) ?? null
+  // 兼容旧 Z 记号（统一 C 之前创建的会话/查询）
+  const normalized = symbol.replace(/Z_/g, 'C_')
+  return _bySymbol!.get(normalized) ?? null
 }
 
 export function getPrecomputed(group: Group): PrecomputedData | null {

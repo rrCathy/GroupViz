@@ -135,7 +135,7 @@ describe('createGroupFromSymbol', () => {
     expect(createGroupFromSymbol('S_{7}')).toBeNull()
     expect(createGroupFromSymbol('A_{2}')).toBeNull()
     expect(createGroupFromSymbol('A_{7}')).toBeNull()
-    expect(createGroupFromSymbol('Z_{31}')).toBeNull()
+    expect(createGroupFromSymbol('Z_{32}')).toBeNull()
   })
 
   it('resolves previously out-of-range symbols via the SmallGroups registry', () => {

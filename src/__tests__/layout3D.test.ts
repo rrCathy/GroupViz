@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { compute3DPositions } from '../core/algebra/layout3D'
+import { getSmallGroup } from '../core/groups/SmallGroups'
 import type { Group } from '../core/types'
 
 function mockGroup(n: number, idPrefix = 'x'): Group {
@@ -47,5 +48,21 @@ describe('compute3DPositions', () => {
     expect(pos).toHaveLength(12)
     const distinct = new Set(pos.map(p => p.join(',')))
     expect(distinct.size).toBeGreaterThan(1)
+  })
+
+  it('fills every position for Dic3 as a semidirect cylinder (4 layers x 3)', () => {
+    const group = getSmallGroup(12, 4)!.group
+    const pos = compute3DPositions(group, 'semidirectCylinder')
+    expect(pos).toHaveLength(12)
+    for (const p of pos) {
+      expect(p).toBeDefined()
+      expect(Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2])).toBe(true)
+    }
+    const layers = new Set(pos.map(p => Math.round(p[1] * 100)))
+    expect(layers.size).toBe(4)
+    const ringR = new Set(pos.map(p => Math.round(Math.hypot(p[0], p[2]) * 100)))
+    expect(ringR.size).toBe(1)
+    const angles = new Set(pos.map(p => Math.round((Math.atan2(p[2], p[0]) * 180) / Math.PI)))
+    expect(angles.size).toBe(12)
   })
 })

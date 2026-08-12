@@ -2,9 +2,9 @@ export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' 
 
 export type MultiplyType = 'right' | 'left'
 
-export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron'
+export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron'
 
-export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring'
+export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'pythagoreanSquare'
 
 export interface InternalEdgeData {
   fromInnerIdx: number
@@ -163,7 +163,27 @@ export function isAutomorphismGroup(group: Group): boolean {
 
 export function isGroupCyclic(group: Group): boolean {
   const sym = group.symbol
-  return sym.startsWith('C')
+  // 纯循环符号直接判定（兼容无元素数据的测试群）
+  if (/^C_\{\d+\}$/.test(sym) || /^C\d+$/.test(sym)) return true
+  // 复合符号（直积/半直积等）：存在 n 阶元素 ⇔ 群循环
+  if (sym.startsWith('C') || sym.startsWith('Z_')) {
+    const n = group.order
+    if (n <= 1) return true
+    if (group.elements.length === 0) return false
+    const id = group.identity
+    for (const el of group.elements) {
+      if (el.id === id.id) continue
+      let cur = id
+      for (let k = 0; k <= n; k++) {
+        cur = group.multiply(cur, el)
+        if (cur.id === id.id) {
+          if (k + 1 === n) return true
+          break
+        }
+      }
+    }
+  }
+  return false
 }
 
 export function isGroupDihedral(group: Group): boolean {
@@ -213,11 +233,94 @@ export function analyzeDPFactors(group: Group): DPFactorInfo | null {
   }
 }
 
+export interface DPFactorGrouped2DInfo {
+  /** 归组后的因子 part 文本（不展开幂），如 'C_{2}^{2}'、'S_{3}' */
+  parts: string[]
+  /** 每归组因子是否循环（base 为循环前缀且合并段数 === 1） */
+  cyclic: boolean[]
+  count: number
+  cyclicCount: number
+  allCyclic: boolean
+}
+
+/**
+ * 2D 直积分类用的归组因子分析（规则 1：C2×C2 视为一个非循环因子）。
+ * 相邻同底循环 part 合并为紧凑幂（C_{2}×C_{2}→C_{2}^{2}，合并段数 > 1 → 非循环，
+ * 即 C2²≅V₄ 视为非循环因子）；非循环 part 永不合并（S₃×S₃ 保持 2 因子）。
+ * 不展开 '^{n}' 幂。与 ringOrder.parseCompactFactors 语义一致但不依赖其实现。
+ */
+export function analyzeDPFactorsGrouped2D(group: Group): DPFactorGrouped2DInfo | null {
+  if (!isGroupDirectProduct(group)) return null
+
+  const isPipe = group.elements.length > 0 && group.elements[0].id.includes('|')
+  const sym = group.symbol
+
+  let parts: string[] = []
+  if (sym.includes('\\times')) {
+    parts = sym.split('\\times').map(s => s.trim()).filter(Boolean)
+  } else if (sym.includes('^{')) {
+    parts = [sym]
+  }
+
+  if (parts.length === 0 && isPipe) {
+    const tokenCount = group.elements[0].id.split('|').length
+    parts = Array(tokenCount).fill('unknown')
+  }
+
+  if (parts.length === 0) return null
+
+  interface GroupedPart {
+    base: string
+    segs: number
+  }
+  const grouped: GroupedPart[] = []
+  for (const p of parts) {
+    const m = p.match(/^(.+)\^\{(\d+)\}$/)
+    const base = m ? m[1] : p
+    const segs = m ? Number(m[2]) : 1
+    const cycBase = base.startsWith('C') || base.startsWith('Z_')
+    const last = grouped[grouped.length - 1]
+    if (cycBase && segs === 1 && last && last.base === base) {
+      last.segs += segs
+    } else {
+      grouped.push({ base, segs })
+    }
+  }
+
+  const partsOut = grouped.map(g => (g.segs === 1 ? g.base : `${g.base}^{${g.segs}}`))
+  const cyclic = grouped.map(g => (g.base.startsWith('C') || g.base.startsWith('Z_')) && g.segs === 1)
+  const cyclicCount = cyclic.filter(Boolean).length
+
+  return {
+    parts: partsOut,
+    cyclic,
+    count: grouped.length,
+    cyclicCount,
+    allCyclic: cyclicCount === grouped.length,
+  }
+}
+
+/**
+ * 判断 symbol 中是否有顶层（不在括号内）的 \times。
+ * '(Z_{4} \times Z_{2}) : Z_{2}' → false（半直积记号内的直积）；
+ * 'C_{2} \times (C_{3}:C_{2})' → true（顶层直积）。
+ */
+export function hasTopLevelTimes(symbol: string): boolean {
+  let depth = 0
+  for (let i = 0; i < symbol.length; i++) {
+    const ch = symbol[i]
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') depth--
+    else if (ch === '\\' && symbol.startsWith('times', i + 1) && depth === 0) return true
+  }
+  return false
+}
+
 export function isGroupDirectProduct(group: Group): boolean {
   const sym = group.symbol
   if (sym.startsWith('\\langle')) return false
   if (sym.includes('\\rtimes')) return false
-  if (sym.includes('\\times') || sym.includes('^{')) return true
+  if (hasTopLevelTimes(sym) || sym.includes('^{')) return true
   if (group.elements.length > 0 && group.elements[0].id.includes('|')) return true
   return false
 }
@@ -226,8 +329,25 @@ export function isGroupPresentation(group: Group): boolean {
   return group.symbol.startsWith('\\langle')
 }
 
+/**
+ * 判断 symbol 中是否有顶层（不在括号内）的 ':'（GAP 半直积记号 N : H）。
+ * '(C_{4} \times C_{2}) : C_{2}' → true；
+ * 'C_{2} \times (C_{3} : C_{2})' → false（顶层是直积，':' 在括号内）。
+ */
+export function hasTopLevelColon(symbol: string): boolean {
+  let depth = 0
+  for (let i = 0; i < symbol.length; i++) {
+    const ch = symbol[i]
+    if (ch === '(' || ch === '[' || ch === '{') depth++
+    else if (ch === ')' || ch === ']' || ch === '}') depth--
+    else if (ch === ':' && depth === 0) return true
+  }
+  return false
+}
+
 export function isGroupSemidirectProduct(group: Group): boolean {
-  return group.symbol.includes('\\rtimes')
+  const sym = group.symbol
+  return sym.includes('\\rtimes') || hasTopLevelColon(sym)
 }
 
 export interface SemidirectProductSpec {
@@ -252,7 +372,7 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
   const shapes: Layout3D[] = ['spherical']
 
   if (isGroupSemidirectProduct(group)) {
-    shapes.push('lattice', 'torus', 'circular')
+    shapes.push('semidirectCylinder', 'lattice', 'torus', 'circular')
     return shapes
   }
 
@@ -313,7 +433,10 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
 
 export function getDefaultLayout3D(group: Group): Layout3D {
   if (isQuotientGroup(group)) return 'spherical'
-  if (isGroupSemidirectProduct(group)) return 'lattice'
+  if (isGroupSemidirectProduct(group)) {
+    if (group.symbol === 'C_{3}:C_{4}') return 'semidirectCylinder'
+    return 'lattice'
+  }
   if (isGroupDirectProduct(group)) {
     const info = analyzeDPFactors(group)
     if (info) {
@@ -339,19 +462,52 @@ export function getDefaultLayout3D(group: Group): Layout3D {
   return 'spherical'
 }
 
+export function classifyDirectProduct2D(group: Group): CayleyShape2D {
+  if (!isGroupDirectProduct(group)) return 'grid'
+  // 归组规则：相邻同底循环因子合并（C2×C2→C2² 视为非循环因子 V₄）
+  const info = analyzeDPFactorsGrouped2D(group)
+  if (!info) return 'grid'
+  if (info.count <= 1) return 'grid'
+  if (info.allCyclic) return 'grid'
+  // 全非循环因子 → torus（不限因子数，3+ 因子嵌套甜甜圈）
+  if (info.cyclicCount === 0) return 'torus'
+  // 含循环 + 含非循环因子 → cylinder（多循环因子沿径向层叠）
+  return 'cylinder'
+}
+
+/** C₂³ (elementary abelian 8-group): order 8, non-cyclic, every element of order 2. */
+export function isC2Cube(group: Group): boolean {
+  if (!group || group.order !== 8 || isGroupCyclic(group)) return false
+  if (!group.elements || group.elements.length !== group.order) return false
+  const id = group.identity
+  for (const el of group.elements) {
+    if (el.id === id.id) continue
+    if (group.multiply(el, el).id !== id.id) return false
+  }
+  return true
+}
+
 export function getDefaultShape2D(group: Group): CayleyShape2D {
   if (isQuotientGroup(group)) return 'circular'
+  // 7 阶（含）以内所有群只需圆形
+  if (group.order <= 7) return 'circular'
   // Semidirect product: coset layout of N across H — the "rewiring" shape
   if (isGroupSemidirectProduct(group)) return 'rewiring'
-  if (isGroupDirectProduct(group)) return 'grid'
+  // C₂³ 摆成 D₄ 风格双环（优先于直积分类）
+  if (isC2Cube(group)) return 'dualRing'
+  if (isGroupDirectProduct(group)) return classifyDirectProduct2D(group)
   const sym = group.symbol
   const n = group.order
   if (sym === 'S_{3}' || sym === 'S_{4}' || sym === 'S_{5}' || sym === 'S3' || sym === 'S4' || sym === 'S5' || sym === 'S₃' || sym === 'S₄' || sym === 'S₅') return 'projection3D'
   if (sym === 'A_{5}' || sym === 'A5') return 'projection3D'
-  if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'projection3D'
+  if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'pythagoreanSquare'
   if (sym.startsWith('S') || (sym.startsWith('A') && n >= 12)) return 'projection3D'
-  if (isGroupCyclic(group)) return 'spiral'
-  if (isGroupDihedral(group)) return 'dualRing'
+    if (isGroupCyclic(group)) {
+      // 循环群凯莱图 = 单生成元多边形，圆形布局弧长均匀无交叉；
+      // 螺旋（spiral/coil）仅作手动可选形状，不做默认（C16 等大循环会显得杂乱）
+      return 'circular'
+    }
+    if (isGroupDihedral(group)) return 'dualRing'
   if (n > 30 && !isGroupCyclic(group)) return 'archimedean'
   return 'circular'
 }
@@ -362,10 +518,21 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     if (isQuotientGroup(group)) {
       return ['circular']
     }
+    // 7 阶（含）以内所有群只需圆形
+    if (group.order <= 7) {
+      return ['circular']
+    }
     if (isGroupSemidirectProduct(group)) {
       return ['rewiring', 'circular', 'spherical', 'concentric']
     }
+    if (isC2Cube(group)) {
+      return ['circular', 'dualRing', 'grid']
+    }
     if (isGroupCyclic(group) && !isGroupDirectProduct(group)) {
+      // C9/C10 只需圆形
+      if (group.order === 9 || group.order === 10) {
+        return ['circular']
+      }
       return ['circular', 'spherical', 'spiral', 'coil']
     }
     if (isGroupDihedral(group)) {
@@ -376,9 +543,13 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     const isSA = sym.startsWith('S') || sym.startsWith('A')
     const isSpecial = sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈'
     if (isSA || isSpecial) {
-      shapes.push('projection3D')
+      shapes.push(isSpecial ? 'pythagoreanSquare' : 'projection3D')
     }
-    if (isGroupDirectProduct(group)) shapes.push('grid')
+    if (isGroupDirectProduct(group)) {
+      const cls = classifyDirectProduct2D(group)
+      if (cls !== 'grid') shapes.push(cls)
+      shapes.push('grid')
+    }
     shapes.push('spherical')
     if (!isSA && !isSpecial) shapes.push('archimedean')
     if (!isGroupDirectProduct(group) && !isSA && !isSpecial) shapes.push('concentric')

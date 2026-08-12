@@ -1,11 +1,9 @@
 import type { Group, GroupElement } from '../types'
 import { COLOR_PALETTE } from '../types'
-import { createCyclicGroup } from '../groups/CyclicGroup'
 import { createDihedralGroup } from '../groups/DihedralGroup'
 import { createSymmetricGroup } from '../groups/SymmetricGroup'
 import { createAlternatingGroup } from '../groups/AlternatingGroup'
-import { createKleinFour, createQuaternion } from '../groups/SpecialGroup'
-import { createDirectProduct } from '../groups/DirectProduct'
+import { createQuaternion } from '../groups/SpecialGroup'
 import { computeCayleyActionEdges, type ForceLayoutEdge } from './cayleyEdges'
 import { forceLayout } from './cycleLayouts'
 
@@ -850,37 +848,102 @@ function distributionsEqual(a: Map<number, number>, b: Map<number, number>): boo
   return true
 }
 
+function eulerPhi(n: number): number {
+  let result = n
+  let x = n
+  for (let p = 2; p * p <= x; p++) {
+    if (x % p === 0) {
+      while (x % p === 0) x /= p
+      result -= result / p
+    }
+  }
+  if (x > 1) result -= result / x
+  return result
+}
+
+// All chains [d1, ..., dk] with d1 | d2 | ... | dk and product = n.
+// Each chain is an abelian invariant tuple; distinct chains = distinct
+// abelian groups of order n (finite abelian classification theorem).
+function abelianFactorChains(n: number): number[][] {
+  const out: number[][] = []
+  const rec = (rem: number, upper: number, chain: number[]): void => {
+    if (rem === 1) {
+      out.push(chain)
+      return
+    }
+    for (let d = 2; d <= rem; d++) {
+      if (rem % d === 0 && upper % d === 0) {
+        rec(rem / d, d, [d, ...chain])
+      }
+    }
+  }
+  if (n === 1) return [[1]]
+  rec(n, n, [])
+  return out
+}
+
+// Order distribution of C_{d1} x ... x C_{dk}: count(o) = sum over
+// e_i | d_i with lcm(e_1..e_k) = o of prod phi(e_i).
+function abelianChainDistribution(ds: number[]): Map<number, number> {
+  const dist = new Map<number, number>()
+  const rec = (i: number, lcmVal: number, acc: number): void => {
+    if (i === ds.length) {
+      dist.set(lcmVal, (dist.get(lcmVal) ?? 0) + acc)
+      return
+    }
+    const d = ds[i]
+    for (let e = 1; e <= d; e++) {
+      if (d % e !== 0) continue
+      const g = gcd(e, lcmVal)
+      rec(i + 1, (e / g) * lcmVal, acc * eulerPhi(e))
+    }
+  }
+  rec(0, 1, 1)
+  return dist
+}
+
+function gcd(a: number, b: number): number {
+  while (b !== 0) {
+    const t = a % b
+    a = b
+    b = t
+  }
+  return a
+}
+
+// Exact identification for abelian groups via the finite abelian
+// classification theorem: a finite abelian group is determined up to
+// isomorphism by its order distribution, and chains d1|d2|...|dk with
+// product n enumerate all abelian groups of order n.
+export function detectAbelianType(group: Group): string | null {
+  if (!group.isAbelian) return null
+  const n = group.order
+  const dist = getOrderDistribution(group)
+  for (const chain of abelianFactorChains(n)) {
+    if (distributionsEqual(dist, abelianChainDistribution(chain))) {
+      return chain.map(d => `C_{${d}}`).join('\\times ')
+    }
+  }
+  return null
+}
+
 export function detectIsomorphicGroup(quotientGroup: Group): string | null {
   const qOrder = quotientGroup.order
   const qAbelian = quotientGroup.isAbelian
+
+  if (qAbelian) {
+    return detectAbelianType(quotientGroup)
+  }
+
   const qDist = getOrderDistribution(quotientGroup)
 
   const tests: Array<{ symbol: string; factory: () => Group | null }> = []
-
-  tests.push({ symbol: `C_{${qOrder}}`, factory: () => createCyclicGroup(qOrder) })
 
   if (qOrder >= 6 && qOrder % 2 === 0) {
     const dN = qOrder / 2
     tests.push({ symbol: `D_{${dN}}`, factory: () => createDihedralGroup(dN) })
   }
 
-  for (let a = 2; a * a <= qOrder; a++) {
-    if (qOrder % a !== 0) continue
-    const b = qOrder / a
-    const fa = a
-    const fb = b
-    tests.push({
-      symbol: `C_{${a}}\\times C_{${b}}`,
-      factory: () => {
-        const ga = createCyclicGroup(fa)
-        const gb = createCyclicGroup(fb)
-        if (!ga || !gb) return null
-        try { return createDirectProduct(ga, gb) } catch { return null }
-      },
-    })
-  }
-
-  if (qOrder === 4) tests.push({ symbol: 'V_{4}', factory: createKleinFour })
   if (qOrder === 8) tests.push({ symbol: 'Q_{8}', factory: createQuaternion })
   if (qOrder === 12) tests.push({ symbol: 'A_{4}', factory: () => createAlternatingGroup(4) })
   if (qOrder === 60) tests.push({ symbol: 'A_{5}', factory: () => createAlternatingGroup(5) })

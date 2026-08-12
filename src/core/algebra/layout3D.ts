@@ -1,5 +1,7 @@
 import type { Group, Layout3D } from '../types'
 import { ringOrder } from './forceLayout'
+import { powerRingOrder } from './ringOrder'
+import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
 import { truncatedTetrahedron } from '../polyhedra'
 
 type Vec3 = [number, number, number]
@@ -255,6 +257,44 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
         const rx = x * cosA - z * sinA
         const rz = x * sinA + z * cosA
         positions[i] = [rx, y, rz]
+      }
+      break
+    }
+
+    case 'semidirectCylinder': {
+      if (n === 0) break
+      const sd = getSemidirectProductMeta(group)
+      const factorMap = sd ? semidirectFactorMap(group, sd) : null
+      if (!sd || !factorMap) {
+        for (let i = 0; i < n; i++) positions[i] = fibonacciSphere(n, radius)[i]
+        break
+      }
+      const hOrder = powerRingOrder(sd.acting)
+      const nOrder = powerRingOrder(sd.normal)
+      const sizeC = Math.max(1, sd.acting.order)
+      const sizeS = Math.max(1, sd.normal.order)
+      const ringRadius = Math.max(radius * 0.55, (sizeS * 0.9) / (2 * Math.PI))
+      const verticalGap = Math.max(0.9, (radius * 1.8) / sizeC)
+      const halfH = ((sizeC - 1) * verticalGap) / 2
+      for (let i = 0; i < n; i++) {
+        const fm = factorMap.get(group.elements[i].id)
+        if (!fm) {
+          positions[i] = fibonacciSphere(n, radius)[i]
+          continue
+        }
+        const hIdx = hOrder.indexOf(fm.h.id)
+        const nIdx = nOrder.indexOf(fm.n.id)
+        // Layer-stagger the ring so the points spread uniformly around the
+        // cylinder surface (not an aligned triangular prism). The acting
+        // subgroup H = {e, y, y², y³} then forms a visible helical 4-cycle
+        // instead of collapsing onto a single vertical column.
+        const stagger = (2 * Math.PI) / (sizeS * sizeC)
+        const angle = (Math.max(0, nIdx) * 2 * Math.PI) / sizeS + Math.max(0, hIdx) * stagger
+        positions[i] = [
+          Math.cos(angle) * ringRadius,
+          Math.max(0, hIdx) * verticalGap - halfH,
+          Math.sin(angle) * ringRadius
+        ]
       }
       break
     }

@@ -7,13 +7,21 @@ import {
   isGroupDirectProduct,
   isGroupSemidirectProduct,
   analyzeDPFactors,
+  analyzeDPFactorsGrouped2D,
   isCyclicFactorKeys,
   getAvailableShapes3D,
   getDefaultLayout3D,
   getDefaultShape2D,
   getAvailableShapesForView,
+  hasTopLevelTimes,
+  classifyDirectProduct2D,
+  isC2Cube,
 } from '../core/types'
 import type { Group, GroupElement } from '../core/types'
+import { getSmallGroup } from '../core/groups/SmallGroups'
+import { createCyclicGroup } from '../core/groups/CyclicGroup'
+import { createS3 } from '../core/groups/SymmetricGroup'
+import { createDirectProduct } from '../core/groups/DirectProduct'
 
 const ID: GroupElement = { id: 'e', label: '0', value: [] }
 
@@ -51,6 +59,8 @@ describe('group property predicates', () => {
     expect(isGroupDihedral(mk({ symbol: 'C_6' }))).toBe(false)
     expect(isGroupSemidirectProduct(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe(true)
     expect(isGroupSemidirectProduct(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe(false)
+    expect(isGroupSemidirectProduct(mk({ symbol: '(C_{4}\\times C_{2}):C_{2}' }))).toBe(true)
+    expect(isGroupSemidirectProduct(mk({ symbol: 'C_{2} \\times (C_{3}:C_{2})' }))).toBe(false)
   })
 
   it('isGroupDirectProduct rules', () => {
@@ -62,6 +72,23 @@ describe('group property predicates', () => {
     }))).toBe(true)
     expect(isGroupDirectProduct(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe(false)
     expect(isGroupDirectProduct(mk({ symbol: 'S_{3}' }))).toBe(false)
+  })
+
+  it('hasTopLevelTimes ignores \\times inside brackets', () => {
+    expect(hasTopLevelTimes('C_{2} \\times C_{3}')).toBe(true)
+    expect(hasTopLevelTimes('(Z_{4} \\times Z_{2}) : Z_{2}')).toBe(false)
+    expect(hasTopLevelTimes('C_{2} \\times (C_{3}:C_{2})')).toBe(true)
+    expect(hasTopLevelTimes('Z_{2} \\times D_{8}')).toBe(true)
+    expect(hasTopLevelTimes('C_{3} \\rtimes_{\\phi} C_{2}')).toBe(false)
+  })
+
+  it('isGroupDirectProduct rejects semidirect-marked registry groups', () => {
+    const group163 = getSmallGroup(16, 2)
+    expect(group163).not.toBeNull()
+    expect(group163!.group.symbol).toBe('(C_{4}\\times C_{2}):C_{2}')
+    expect(isGroupDirectProduct(group163!.group)).toBe(false)
+    const group162 = getSmallGroup(16, 1)
+    expect(isGroupDirectProduct(group162!.group)).toBe(true)
   })
 })
 
@@ -117,7 +144,7 @@ describe('getAvailableShapes3D', () => {
 
   it('offers lattice/torus/circular for semidirect products', () => {
     const shapes = getAvailableShapes3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))
-    expect(shapes).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+    expect(shapes).toEqual(['spherical', 'semidirectCylinder', 'lattice', 'torus', 'circular'])
   })
 
   it('handles direct products by factor type', () => {
@@ -168,16 +195,108 @@ describe('getDefaultLayout3D', () => {
 describe('getDefaultShape2D', () => {
   it('assigns 2D default shapes', () => {
     expect(getDefaultShape2D(mk({ symbol: 'S_{4}/N' }))).toBe('circular')
-    expect(getDefaultShape2D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe('rewiring')
-    expect(getDefaultShape2D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe('grid')
-    expect(getDefaultShape2D(mk({ symbol: 'S_{3}' }))).toBe('projection3D')
-    expect(getDefaultShape2D(mk({ symbol: 'A_{5}' }))).toBe('projection3D')
-    expect(getDefaultShape2D(mk({ symbol: 'Q_{8}' }))).toBe('projection3D')
-    expect(getDefaultShape2D(mk({ symbol: 'S_{9}' }))).toBe('projection3D')
-    expect(getDefaultShape2D(mk({ symbol: 'C_{5}' }))).toBe('spiral')
-    expect(getDefaultShape2D(mk({ symbol: 'D_{3}' }))).toBe('dualRing')
+    expect(getDefaultShape2D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}', order: 12 }))).toBe('rewiring')
+    expect(getDefaultShape2D(mk({ symbol: 'C_{2} \\times C_{3}', order: 12 }))).toBe('grid')
+    expect(getDefaultShape2D(mk({ symbol: 'S_{3}', order: 6 }))).toBe('circular') // ≤7 阶只有圆形
+    expect(getDefaultShape2D(mk({ symbol: 'A_{5}', order: 60 }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'Q_{8}', order: 8 }))).toBe('pythagoreanSquare')
+    expect(getDefaultShape2D(mk({ symbol: 'S_{9}', order: 9 }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'C_{5}', order: 5 }))).toBe('circular') // ≤7 阶只有圆形
+    expect(getDefaultShape2D(mk({ symbol: 'D_{3}', order: 6 }))).toBe('circular') // ≤7 阶只有圆形
     expect(getDefaultShape2D(mk({ symbol: 'X_{1}', order: 40 }))).toBe('archimedean')
-    expect(getDefaultShape2D(mk({ symbol: 'S_{3} \\times C_{2}', order: 20 }))).toBe('grid')
+    expect(getDefaultShape2D(mk({ symbol: 'S_{3} \\times C_{2}', order: 20 }))).toBe('cylinder')
+  })
+
+  it('assigns rewiring to registered semidirect products (GAP : notation)', () => {
+    expect(getDefaultShape2D(getSmallGroup(16, 2)!.group)).toBe('rewiring')
+  })
+
+  it('uses circular for all groups of order <= 7', () => {
+    expect(getDefaultShape2D(createS3())).toBe('circular')
+    expect(getDefaultShape2D(createCyclicGroup(5))).toBe('circular')
+  })
+
+  it('uses circular for all cyclic groups (spiral is manual only)', () => {
+    expect(getDefaultShape2D(createCyclicGroup(9))).toBe('circular')
+    expect(getDefaultShape2D(createCyclicGroup(10))).toBe('circular')
+    expect(getDefaultShape2D(createCyclicGroup(16))).toBe('circular')
+    expect(getDefaultShape2D(createCyclicGroup(24))).toBe('circular')
+  })
+
+  it('lays out C2^3 as a dual ring (D4 style)', () => {
+    const c2 = createCyclicGroup(2)
+    const cube = createDirectProduct(createDirectProduct(c2, c2), c2)
+    expect(getDefaultShape2D(cube)).toBe('dualRing')
+  })
+})
+
+describe('analyzeDPFactorsGrouped2D', () => {
+  it('groups adjacent same-base cyclic parts (C2 x C2 -> C2^2)', () => {
+    const info = analyzeDPFactorsGrouped2D(mk({ symbol: 'C_{2} \\times C_{2} \\times S_{3}' }))
+    expect(info).not.toBeNull()
+    expect(info!.count).toBe(2)
+    expect(info!.parts).toEqual(['C_{2}^{2}', 'S_{3}'])
+    expect(info!.cyclic).toEqual([false, false])
+    expect(info!.cyclicCount).toBe(0)
+    expect(info!.allCyclic).toBe(false)
+  })
+
+  it('keeps distinct cyclic parts separate (C2 x C3 x S3)', () => {
+    const info = analyzeDPFactorsGrouped2D(mk({ symbol: 'C_{2} \\times C_{3} \\times S_{3}' }))
+    expect(info).not.toBeNull()
+    expect(info!.count).toBe(3)
+    expect(info!.parts).toEqual(['C_{2}', 'C_{3}', 'S_{3}'])
+    expect(info!.cyclic).toEqual([true, true, false])
+    expect(info!.cyclicCount).toBe(2)
+    expect(info!.allCyclic).toBe(false)
+  })
+
+  it('does not expand a compact power (C2^3 stays one factor)', () => {
+    const info = analyzeDPFactorsGrouped2D(mk({ symbol: 'C_{2}^{3}' }))
+    expect(info).not.toBeNull()
+    expect(info!.count).toBe(1)
+    expect(info!.parts).toEqual(['C_{2}^{3}'])
+    expect(info!.cyclic).toEqual([false])
+    expect(info!.allCyclic).toBe(false)
+  })
+
+  it('never merges non-cyclic parts (S3 x S3)', () => {
+    const info = analyzeDPFactorsGrouped2D(mk({ symbol: 'S_{3} \\times S_{3}' }))
+    expect(info).not.toBeNull()
+    expect(info!.count).toBe(2)
+    expect(info!.parts).toEqual(['S_{3}', 'S_{3}'])
+    expect(info!.cyclic).toEqual([false, false])
+  })
+
+  it('returns null for non-direct-product symbols', () => {
+    expect(analyzeDPFactorsGrouped2D(mk({ symbol: 'S_{3}' }))).toBeNull()
+    expect(analyzeDPFactorsGrouped2D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBeNull()
+  })
+})
+
+describe('classifyDirectProduct2D', () => {
+  it('classifies registry direct products (non-pipe) by symbol factors', () => {
+    expect(classifyDirectProduct2D(getSmallGroup(16, 1)!.group)).toBe('grid') // C₄×C₄ 全循环
+    expect(classifyDirectProduct2D(getSmallGroup(16, 10)!.group)).toBe('cylinder') // Z₂×D₄
+    expect(classifyDirectProduct2D(getSmallGroup(16, 11)!.group)).toBe('cylinder') // Z₂×Q₈
+    expect(classifyDirectProduct2D(getSmallGroup(16, 2)!.group)).toBe('grid') // (Z₄×Z₂):Z₂ 半直积防御
+    expect(classifyDirectProduct2D(getSmallGroup(24, 13)!.group)).toBe('torus') // C₂×C₂×S₃ 归组 C₂²×S₃ 全非循环
+  })
+})
+
+describe('isC2Cube', () => {
+  it('detects the elementary abelian 2-group of order 8 (C2^3)', () => {
+    const c2 = createCyclicGroup(2)
+    const cube = createDirectProduct(createDirectProduct(c2, c2), c2)
+    expect(isC2Cube(cube)).toBe(true)
+  })
+
+  it('rejects cyclic, dihedral, quaternion, and order-4 groups', () => {
+    expect(isC2Cube(createCyclicGroup(8))).toBe(false) // C8 has order-8 element
+    expect(isC2Cube(createCyclicGroup(2))).toBe(false) // order 4? no—order 2, still not 8
+    expect(isC2Cube(createS3())).toBe(false) // order 6
+    const v4 = createDirectProduct(createCyclicGroup(2), createCyclicGroup(2))
+    expect(isC2Cube(v4)).toBe(false) // order 4
   })
 })
 
@@ -188,19 +307,40 @@ describe('getAvailableShapesForView', () => {
 
   it('cayley view per family', () => {
     expect(getAvailableShapesForView(mk({ symbol: 'S_{4}/N' }), 'cayley')).toEqual(['circular'])
-    expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }), 'cayley')).toEqual(['rewiring', 'circular', 'spherical', 'concentric'])
-    expect(getAvailableShapesForView(mk({ symbol: 'C_{6}' }), 'cayley')).toEqual(['circular', 'spherical', 'spiral', 'coil'])
-    expect(getAvailableShapesForView(mk({ symbol: 'D_{3}' }), 'cayley')).toEqual(['circular', 'spherical', 'dualRing'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}', order: 12 }), 'cayley')).toEqual(['rewiring', 'circular', 'spherical', 'concentric'])
+    expect(getAvailableShapesForView(getSmallGroup(16, 2)!.group, 'cayley')).toEqual(['rewiring', 'circular', 'spherical', 'concentric'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{12}', order: 12 }), 'cayley')).toEqual(['circular', 'spherical', 'spiral', 'coil'])
+    expect(getAvailableShapesForView(mk({ symbol: 'D_{4}', order: 8 }), 'cayley')).toEqual(['circular', 'spherical', 'dualRing'])
 
-    const s3 = getAvailableShapesForView(mk({ symbol: 'S_{3}' }), 'cayley')
-    expect(s3).toContain('projection3D')
-    expect(s3).toContain('spherical')
-    expect(s3).not.toContain('archimedean')
+    const s3 = getAvailableShapesForView(mk({ symbol: 'S_{3}', order: 6 }), 'cayley')
+    expect(s3).toEqual(['circular']) // ≤7 阶只有圆形
 
-    const g = getAvailableShapesForView(mk({ symbol: 'C_{2} \\times S_{3}' }), 'cayley')
+    const s4 = getAvailableShapesForView(mk({ symbol: 'S_{4}', order: 24 }), 'cayley')
+    expect(s4).toContain('projection3D')
+    expect(s4).toContain('spherical')
+
+    const g = getAvailableShapesForView(mk({ symbol: 'C_{2} \\times S_{3}', order: 12 }), 'cayley')
     expect(g).toContain('grid')
     expect(g).toContain('archimedean')
     expect(g).not.toContain('concentric')
+
+    const gg = getAvailableShapesForView(mk({ symbol: 'C_{2} \\times C_{3}', order: 12 }), 'cayley')
+    expect(gg.filter(s => s === 'grid').length).toBe(1)
+  })
+
+  it('limits C9/C10 and C2^3 shape lists', () => {
+    expect(getAvailableShapesForView(createCyclicGroup(9), 'cayley')).toEqual(['circular'])
+    expect(getAvailableShapesForView(createCyclicGroup(10), 'cayley')).toEqual(['circular'])
+    const c2 = createCyclicGroup(2)
+    const cube = createDirectProduct(createDirectProduct(c2, c2), c2)
+    expect(getAvailableShapesForView(cube, 'cayley')).toEqual(['circular', 'dualRing', 'grid'])
+  })
+
+  it('Q8 shows pythagoreanSquare in available shapes', () => {
+    const q8 = mk({ symbol: 'Q_{8}', order: 8 })
+    const shapes = getAvailableShapesForView(q8, 'cayley')
+    expect(shapes).toContain('pythagoreanSquare')
+    expect(shapes).toContain('circular')
   })
 
   it('other views get a single default', () => {

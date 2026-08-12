@@ -12,13 +12,13 @@ import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
 import { ActionView } from './ActionView'
 import { SylowView } from './SylowView'
-import { FreeGroupTreeView } from './FreeGroupTreeView'
 import { PresentationTableView } from './PresentationTableView'
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
 
 const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ default: m.Cayley3DView })))
+const FreeGroupTreeViewLazy = lazy(() => import('./FreeGroupTreeView').then(m => ({ default: m.FreeGroupTreeView })))
 
 function CayleyGraphViewLocal() {
   const { currentGroup, selectedElements, selectElement, setHoverElement, getNodePosition, setNodePosition, canvasTransform, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets } = useGroup()
@@ -381,7 +381,7 @@ function renderViewContent(view: ViewMode) {
     case 'sylow':
       return <SvgPanZoom><SylowView /></SvgPanZoom>
     case 'tree':
-      return <FreeGroupTreeView />
+      return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><FreeGroupTreeViewLazy /></Suspense>
     case 'prestable':
       return <SvgPanZoom><PresentationTableView /></SvgPanZoom>
     default:

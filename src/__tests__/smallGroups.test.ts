@@ -59,26 +59,46 @@ describe('SmallGroups registry', () => {
 
   it('Dic3 (GAP 12,4) is registered with its own symbol', () => {
     const entry = getSmallGroup(12, 4)!
-    expect(entry.group.symbol).toBe('Z_{3}:C_{4}')
+    expect(entry.group.symbol).toBe('C_{3}:C_{4}')
     expect(entry.group.order).toBe(12)
     expect(entry.group.isAbelian).toBe(false)
   })
 
+  it('Dic3 element orders match C3:C4 (one involution, six order-4)', () => {
+    const group = getSmallGroup(12, 4)!.group
+    const id = group.identity
+    const counts: Record<number, number> = {}
+    for (const el of group.elements) {
+      if (el.id === id.id) continue
+      let cur = el
+      let k = 1
+      while (cur.id !== id.id) {
+        cur = group.multiply(cur, el)
+        k++
+      }
+      counts[k] = (counts[k] ?? 0) + 1
+    }
+    expect(counts[2]).toBe(1)
+    expect(counts[4]).toBe(6)
+    expect(counts[3]).toBe(2)
+    expect(counts[6]).toBe(2)
+  })
+
   it('orders 16-31 use GAP-derived TeX symbols', () => {
     expect(getSmallGroup(16, 0)!.group.symbol).toBe('C_{16}')
-    expect(getSmallGroup(16, 1)!.group.symbol).toBe('Z_{4}\\times Z_{4}')
+    expect(getSmallGroup(16, 1)!.group.symbol).toBe('C_{4}\\times C_{4}')
     expect(getSmallGroup(16, 6)!.group.symbol).toBe('D_{8}')
     expect(getSmallGroup(16, 8)!.group.symbol).toBe('Q_{16}')
     expect(getSmallGroup(18, 0)!.group.symbol).toBe('D_{9}')
     expect(getSmallGroup(24, 11)!.group.symbol).toBe('S_{4}')
     expect(getSmallGroup(24, 2)!.group.symbol).toBe('SL(2,3)')
-    expect(getSmallGroup(30, 0)!.group.symbol).toBe('Z_{5}\\times S_{3}')
+    expect(getSmallGroup(30, 0)!.group.symbol).toBe('C_{5}\\times S_{3}')
   })
 
   it('GAP structure-description collisions fall back to SmallGroup(n,i)', () => {
-    expect(getSmallGroup(16, 2)!.group.symbol).toBe('(Z_{4}\\times Z_{2}):Z_{2}')
+    expect(getSmallGroup(16, 2)!.group.symbol).toBe('(C_{4}\\times C_{2}):C_{2}')
     expect(getSmallGroup(16, 12)!.group.symbol).toBe('SmallGroup(16,13)')
-    expect(getSmallGroup(20, 0)!.group.symbol).toBe('Z_{5}:Z_{4}')
+    expect(getSmallGroup(20, 0)!.group.symbol).toBe('C_{5}:C_{4}')
     expect(getSmallGroup(20, 2)!.group.symbol).toBe('SmallGroup(20,3)')
   })
 

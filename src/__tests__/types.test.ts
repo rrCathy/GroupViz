@@ -16,12 +16,14 @@ import {
   hasTopLevelTimes,
   classifyDirectProduct2D,
   isC2Cube,
+  isRingGridGroup,
 } from '../core/types'
 import type { Group, GroupElement } from '../core/types'
 import { getSmallGroup } from '../core/groups/SmallGroups'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createS3 } from '../core/groups/SymmetricGroup'
 import { createDirectProduct } from '../core/groups/DirectProduct'
+import { createDihedralGroup } from '../core/groups/DihedralGroup'
 
 const ID: GroupElement = { id: 'e', label: '0', value: [] }
 
@@ -192,6 +194,78 @@ describe('getDefaultLayout3D', () => {
   })
 })
 
+describe('isRingGridGroup', () => {
+  const c4c2c2 = () =>
+    createDirectProduct(
+      createDirectProduct(createCyclicGroup(4), createCyclicGroup(2)),
+      createCyclicGroup(2),
+    )
+
+  it('detects C4 x C2 x C2 (pipe and registry)', () => {
+    expect(isRingGridGroup(c4c2c2())).toBe(true)
+    const reg = getSmallGroup(16, 9)!.group
+    expect(isRingGridGroup(reg)).toBe(true)
+  })
+
+  it('detects C6 x C2 x C2 (ring n = 6)', () => {
+    expect(
+      isRingGridGroup(
+        createDirectProduct(
+          createDirectProduct(createCyclicGroup(6), createCyclicGroup(2)),
+          createCyclicGroup(2),
+        ),
+      ),
+    ).toBe(true)
+  })
+
+  it('rejects C10 x C2 (only two cyclic factors)', () => {
+    expect(
+      isRingGridGroup(
+        createDirectProduct(createCyclicGroup(10), createCyclicGroup(2)),
+      ),
+    ).toBe(false)
+  })
+
+  it('rejects C12 x C2 (unique order-6 subgroup ⟨a²⟩ meets every V)', () => {
+    expect(
+      isRingGridGroup(
+        createDirectProduct(createCyclicGroup(12), createCyclicGroup(2)),
+      ),
+    ).toBe(false)
+  })
+
+  it('rejects groups without a clean C_n x C2^2 decomposition', () => {
+    // C2^3: n = 2 < 4
+    expect(
+      isRingGridGroup(
+        createDirectProduct(
+          createDirectProduct(createCyclicGroup(2), createCyclicGroup(2)),
+          createCyclicGroup(2),
+        ),
+      ),
+    ).toBe(false)
+    // C4 x C4: grid part not elementary abelian (⟨x⟩ ∩ V non-trivial)
+    expect(
+      isRingGridGroup(
+        createDirectProduct(createCyclicGroup(4), createCyclicGroup(4)),
+      ),
+    ).toBe(false)
+    // C4 x C2: grid too small (|V| = 2)
+    expect(
+      isRingGridGroup(
+        createDirectProduct(createCyclicGroup(4), createCyclicGroup(2)),
+      ),
+    ).toBe(false)
+    // C2 x D4: non-abelian, no clean decomposition
+    expect(
+      isRingGridGroup(
+        createDirectProduct(createDihedralGroup(4), createCyclicGroup(2)),
+      ),
+    ).toBe(false)
+    expect(isRingGridGroup(createS3())).toBe(false)
+  })
+})
+
 describe('getDefaultShape2D', () => {
   it('assigns 2D default shapes', () => {
     expect(getDefaultShape2D(mk({ symbol: 'S_{4}/N' }))).toBe('circular')
@@ -221,6 +295,15 @@ describe('getDefaultShape2D', () => {
     expect(getDefaultShape2D(createCyclicGroup(10))).toBe('circular')
     expect(getDefaultShape2D(createCyclicGroup(16))).toBe('circular')
     expect(getDefaultShape2D(createCyclicGroup(24))).toBe('circular')
+  })
+
+  it('uses ringGrid for C4 x C2 x C2 (pipe and registry)', () => {
+    const c4c2c2 = createDirectProduct(
+      createDirectProduct(createCyclicGroup(4), createCyclicGroup(2)),
+      createCyclicGroup(2),
+    )
+    expect(getDefaultShape2D(c4c2c2)).toBe('ringGrid')
+    expect(getDefaultShape2D(getSmallGroup(16, 9)!.group)).toBe('ringGrid')
   })
 
   it('lays out C2^3 as a dual ring (D4 style)', () => {
@@ -334,6 +417,19 @@ describe('getAvailableShapesForView', () => {
     const c2 = createCyclicGroup(2)
     const cube = createDirectProduct(createDirectProduct(c2, c2), c2)
     expect(getAvailableShapesForView(cube, 'cayley')).toEqual(['circular', 'dualRing', 'grid'])
+  })
+
+  it('offers ringGrid for C4 x C2 x C2 (pipe and registry)', () => {
+    const c4c2c2 = createDirectProduct(
+      createDirectProduct(createCyclicGroup(4), createCyclicGroup(2)),
+      createCyclicGroup(2),
+    )
+    const shapes = getAvailableShapesForView(c4c2c2, 'cayley')
+    expect(shapes).toContain('ringGrid')
+    expect(shapes).toContain('cylinder') // 仍保留 cylinder 同心层
+    expect(shapes.filter(s => s === 'ringGrid').length).toBe(1)
+    const reg = getAvailableShapesForView(getSmallGroup(16, 9)!.group, 'cayley')
+    expect(reg).toContain('ringGrid')
   })
 
   it('Q8 shows pythagoreanSquare in available shapes', () => {

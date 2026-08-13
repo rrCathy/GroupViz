@@ -95,7 +95,7 @@ interface CayleyEdgeData {
 >
 > 直积群 3D 形状由 `analyzeDPFactors` 智能选择：全循环→lattice、一循环→cylinder、无循环→torus、多因子→lattice。半直积群可用 ['spherical','lattice','torus','circular']，默认 'lattice'。
 
-## 7. 2D 形状系统（12 种）
+## 7. 2D 形状系统（13 种）
 
 | 形状 | 布局函数 | 适用群 | 描述 |
 |------|---------|--------|------|
@@ -109,16 +109,21 @@ interface CayleyEdgeData {
 | `coil` | `coilLayout()` | 所有群 | 变距螺旋（α=0.7） |
 | `projection3D` | `projection3DLayout()` | S₃/S₄/S₅/A₄/A₅/Q₈ | 3D 多面体等轴投影 |
 | `rewiring` | `semidirectProductLayout()` | 半直积群 | \|H\| 个 N 副本环绕 H 主环，φ 重布线 |
-| `cylinder` | `cylinderLayout2D()` | 2因子直积，恰一个循环因子 | 同心多层环：循环因子沿径向层叠，每层=非循环因子副本；各层同相位，循环因子生成元边成径向直线母线（俯视圆柱感） |
+| `cylinder` | `cylinderLayout2D()` | 2因子直积，恰一个循环因子 | 交错同心圆：同心多层环——每层=非循环因子 Xₙ 副本环（Dₙ 双环、S₃ 凯莱六边形），相邻层半格交错（offset = layerIdx·π/copyN），Cₙ 生成元边为层间斜线 |
 | `torus` | `torusLayout2D()` | 2因子直积，无循环因子 | 主轴环 + 每点挂另一因子副本（甜甜圈） |
+| `ringGrid` | `ringGridLayout2D()` | ≥3 个循环因子直积（Cₙ×C₂×…×C₂ 型） | n 边形环（环生成元 x 幂序）× 2×2 网格（V₄），每格中心挂一个完整环 |
 
-**智能默认 2D 形状**（`getDefaultShape2D`）：直积→`classifyDirectProduct2D`（全循环→grid、恰一循环因子→cylinder、无循环→torus、多因子→grid）、S₃/S₄/S₅/A₄/A₅/Q₈→projection3D、循环→circular（spiral 仅作手动可选）、二面→dualRing、半直积→rewiring、大阶非循环(order>30)→archimedean、其余→circular。可用形状列表自动追加分类形状 + grid（`getAvailableShapesForView`）。
+**智能默认 2D 形状**（`getDefaultShape2D`）：直积→`classifyDirectProduct2D`（全循环→grid、恰一循环因子→cylinder、无循环→torus、多因子→grid；C₄×C₂×C₂ 类 ≥3 循环因子→ringGrid）、S₃/S₄/S₅/A₄/A₅/Q₈→projection3D、循环→circular（spiral 仅作手动可选）、二面→dualRing、半直积→rewiring、大阶非循环(order>30)→archimedean、其余→circular。可用形状列表自动追加分类形状 + grid（`getAvailableShapesForView`）。
+
+**环网格探测**（`findRingGridDecomposition`/`isRingGridGroup`，types.ts）：纯群论探测 Cₙ×C₂² 分解——阶≤2 元素两两生成 V₄ 网格、遍历阶 n=order/4 环生成元做幂×V 唯一覆盖探测 + 交换性检查（拒绝 C₂×D₄ 伪分解）；**仅限 ≥3 个循环因子直积**（符号循环因子计数，C₁₀×C₂ 等两因子直积排除回 grid）。pipe 直积群、注册表 GAP 表群、同构群统一走同一条路。
 
 **注册表 Dₙ 双环**（`splitDihedralElements`，forceLayout.ts）：注册表二面体群（按阶创建面板 16-30 阶，元素 value=[k] 无旋转/反射编码）经元素阶分类——m=|G|/2，找阶 m 元素 r，旋转=⟨r⟩ 幂闭包（m 个），反射=其余（m 个），配对 sᵢ=rⁱ·s₀；`dualRingLayout` 与 `cayleyCircleLayout` 的 value 分类失败时自动回退此路径（外环旋转幂序角 + 内环反射同角），对 D_m、C₂ₘ、C_m×C₂、Q₈、C₈:C₂ 均匹配（A₄/C₂³ 无阶 m 元素返回 null 走原 fallback）。
 
 **直积因子识别**（`factorPipeGroups` / `factorPipeGroupsOrTokens`，ringOrder.ts）：按紧凑符号解析因子（`parseCompactFactors`，`C_{2}^{2}` 幂展开为 1 因子 2 段），与 pipe token 段数对齐后按因子分组（C₂²×S₃ = 2 组）；紧凑幂合并（S₃²）时按 pipe 段拆分为多因子，保证 cylinder/torus 布局与 `buildFactorSubgroup` 正常。
 
 **注册表群（非 pipe）因子聚类**（`tableGroupGridFactors` / `clusterFactorGroups` / `tableGroupFactorSplit` / `clusterIsCyclic`，ringOrder.ts）：注册表群（16-31 阶，元素无 pipe id）不依赖符号，按生成元交换性 union-find 聚类（不可交换生成元同簇→非循环因子内部生成元）→ 因子划分 + 混合进制枚举；`clusterIsCyclic` 判定簇循环性（存在单元素幂闭包=全簇）。C₄×C₄/Z₄×Z₂×Z₂/C₂⁴ → 4×4 满网格，Z₂×D₄/Z₂×Q₈ → cylinder 2 层同心环（循环簇沿径向层叠），C₂×C₂×S₃ → 聚类 [12,2]（C₂×S₃ 非循环簇 + C₂ 循环簇）cylinder 2 层。半直积（'(Z₄×Z₂):Z₂'）由 `hasTopLevelTimes` 顶层 \\times 检测排除，不套网格。
+
+**聚类失败兜底**（`tableFactorSearch`，ringOrder.ts + forceLayout.ts）：聚类对生成元横跨多个因子（C₃×S₃、C₂×A₄、C₅×S₃，GAP gens 混合）或全交换群（C₄×C₂×C₂）时失败/退化返回 null → cylinder/torus 布局改按符号搜索因子：按群符号分组（`tablePartOrder` 各因子阶 + `tableGroupedParts` 相邻同底循环合并），对每个分组从 `findAllSubgroups` 候选池（阶 + 循环性匹配）DFS 选因子，有序乘积覆盖全群验证后驱动同心多层环（如 C₃×S₃ → 3 层×6 节点、C₄×C₂×C₂ → 4 层×4 节点）。圆形布局兜底同步升级：`keys` 全为 gN 表群 id 时改用 `powerRingOrder`（生成元 BFS 幂序），C₁₆ 等循环表群恢复正多边形幂序、生成元边不再乱穿。
 
 **布局函数**（forceLayout.ts / shapeLayouts.ts / cycleLayouts.ts / ringOrder.ts）：
 
@@ -132,7 +137,8 @@ interface CayleyEdgeData {
 | `factorPipeGroups` / `factorPipeGroupsOrTokens` | ringOrder.ts | 紧凑符号→按因子分组 pipe tokens（C₂²×S₃ = 2 组） |
 | `buildFactorSubgroup` | forceLayout.ts | 因子临时群重建（keyToEl/分量乘法闭包） |
 | `factorCopyRingLayout` | forceLayout.ts | 因子副本环（Dₙ 双环 r=1/0.55，其余单环） |
-| `cylinderLayout2D` / `torusLayout2D` | forceLayout.ts | 圆柱（同心多层环）/ 甜甜圈（环上挂副本） |
+| `cylinderLayout2D` / `torusLayout2D` | forceLayout.ts | 交错同心圆（同心多层环，相邻层半格交错）/ 甜甜圈（环上挂副本） |
+| `ringGridLayout2D` | forceLayout.ts | 环网格（n 边形环 × 2×2 网格，每格挂完整环） |
 | `semidirectProductLayout` | forceLayout.ts | 半直积重布线布局 |
 | `forceLayout(group, positions, w, h, iterations?)` | forceLayout.ts | 同步力导向（斥力+引力+重力+循环斥力+冷却） |
 | `forceLayoutAsync(group, positions, w, h, onProgress?)` | forceLayout.ts | 异步分块力导向，order>30 使用 |

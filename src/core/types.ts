@@ -4,7 +4,7 @@ export type MultiplyType = 'right' | 'left'
 
 export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron'
 
-export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'pythagoreanSquare'
+export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'ringGrid' | 'pythagoreanSquare'
 
 export interface InternalEdgeData {
   fromInnerIdx: number
@@ -487,6 +487,95 @@ export function isC2Cube(group: Group): boolean {
   return true
 }
 
+export interface RingGridDecomposition {
+  ringGen: GroupElement // 环生成元（阶 n，x 幂环）
+  v1: GroupElement // 网格生成元 1（阶 2）
+  v2: GroupElement // 网格生成元 2（阶 2）
+  n: number // 环点数（阶）
+  map: Map<string, { i: number; v: GroupElement }> // 元素 id → (环幂 i, 网格元素 v)
+}
+
+/**
+ * 环网格（ring grid）分解探测：寻找 G ≅ Cₙ × C₂² 的直积分解——
+ * 环生成元 x（阶 n ≥ 4）+ 网格 V = {e, v1, v2, v1v2}（v1, v2 为相异阶 2 元素），
+ * 要求 ⟨x⟩·V 无重复覆盖全群（唯一分解，蕴含真正的直积结构，非交换群自动失败）。
+ * 纯群论实现：pipe 直积群、注册表 GAP 表群、同构群统一走同一条路。
+ * 示例：C₄×C₂×C₂ → x 阶 4、V = C₂²；C₆×C₂×C₂ → x 阶 6。
+ */
+export function findRingGridDecomposition(group: Group): RingGridDecomposition | null {
+  if (!group || !group.elements || group.elements.length !== group.order || group.order < 16) {
+    return null
+  }
+  // 环网格仅用于 ≥3 个循环群因子的直积（Cₙ×C₂×…×C₂ 型）；两因子直积
+  // （如 C₁₀×C₂）虽可能有 C₅×V₄ 分解，但走 grid/cylinder 更合适。
+  let cyclicCount = 0
+  if (group.symbol.includes('\\times')) {
+    for (const p of group.symbol.split('\\times').map(s => s.trim()).filter(Boolean)) {
+      const m = p.match(/^(.+)\^\{(\d+)\}$/)
+      const base = m ? m[1] : p
+      const segs = m ? Number(m[2]) : 1
+      if (/^C_\{\s*\d+\s*\}$/.test(base) || /^Z_\{\s*\d+\s*\}$/.test(base)) cyclicCount += segs
+    }
+  }
+  if (cyclicCount < 3) return null
+  const idId = group.identity.id
+  const s = group.elements.filter(e => e.id === idId || group.multiply(e, e).id === idId)
+  const nonId = s.filter(e => e.id !== idId)
+  if (nonId.length < 3) return null
+  const orderOf = (el: GroupElement): number => {
+    let cur = el
+    let k = 2
+    while (k <= group.order && cur.id !== idId) {
+      cur = group.multiply(cur, el)
+      k++
+    }
+    return cur.id === idId ? k - 1 : group.order
+  }
+  for (let p = 0; p < nonId.length; p++) {
+    for (let q = p + 1; q < nonId.length; q++) {
+      const v1 = nonId[p]
+      const v2 = nonId[q]
+      const v12 = group.multiply(v1, v2)
+      const vArr = [group.identity, v1, v2, v12]
+      const n = group.order / 4
+      if (!Number.isInteger(n) || n < 4) continue
+      for (const cand of group.elements) {
+        if (cand.id === idId || cand.id === v1.id || cand.id === v2.id || cand.id === v12.id) continue
+        if (orderOf(cand) !== n) continue
+        const map = new Map<string, { i: number; v: GroupElement }>()
+        let cur = group.identity
+        let covered = true
+        for (let i = 0; i < n && covered; i++) {
+          for (const v of vArr) {
+            const el = group.multiply(cur, v)
+            if (map.has(el.id)) {
+              covered = false
+              break
+            }
+            map.set(el.id, { i, v })
+          }
+          cur = group.multiply(cur, cand)
+        }
+        if (covered && map.size === group.order) {
+          // 交换性检查：需为真直积 G ≅ Cₙ × V（x 与 v1/v2 及 v1 与 v2 交换）。
+          // 非交换群（如 C₂×D₄）可能有唯一集合分解但乘法结构不是直积，拒绝。
+          const commutes =
+            group.multiply(cand, v1).id === group.multiply(v1, cand).id &&
+            group.multiply(cand, v2).id === group.multiply(v2, cand).id &&
+            group.multiply(v1, v2).id === group.multiply(v2, v1).id
+          if (commutes) return { ringGen: cand, v1, v2, n, map }
+        }
+      }
+    }
+  }
+  return null
+}
+
+/** 环网格群：存在 G ≅ Cₙ × C₂²（n ≥ 4）分解（如 C₄×C₂×C₂、C₆×C₂×C₂、C₁₂×C₂）。 */
+export function isRingGridGroup(group: Group): boolean {
+  return findRingGridDecomposition(group) !== null
+}
+
 export function getDefaultShape2D(group: Group): CayleyShape2D {
   if (isQuotientGroup(group)) return 'circular'
   // 7 阶（含）以内所有群只需圆形
@@ -495,6 +584,9 @@ export function getDefaultShape2D(group: Group): CayleyShape2D {
   if (isGroupSemidirectProduct(group)) return 'rewiring'
   // C₂³ 摆成 D₄ 风格双环（优先于直积分类）
   if (isC2Cube(group)) return 'dualRing'
+  // 环网格：G ≅ Cₙ×C₂²（n≥4）时循环部分做环、阶 2 部分做网格
+  // （C₄×C₂×C₂ 类；优先于 cylinder 的同心多层环，cylinder 可手动选择）
+  if (isRingGridGroup(group)) return 'ringGrid'
   if (isGroupDirectProduct(group)) return classifyDirectProduct2D(group)
   const sym = group.symbol
   const n = group.order
@@ -548,8 +640,11 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     if (isGroupDirectProduct(group)) {
       const cls = classifyDirectProduct2D(group)
       if (cls !== 'grid') shapes.push(cls)
+      if (isRingGridGroup(group)) shapes.push('ringGrid')
       shapes.push('grid')
     }
+    // 注册表等非直积来源的环网格群（如 GAP 表群 C₄×C₂×C₂）也提供该形状
+    if (isRingGridGroup(group) && !shapes.includes('ringGrid')) shapes.push('ringGrid')
     shapes.push('spherical')
     if (!isSA && !isSpecial) shapes.push('archimedean')
     if (!isGroupDirectProduct(group) && !isSA && !isSpecial) shapes.push('concentric')

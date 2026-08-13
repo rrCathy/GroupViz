@@ -1,4 +1,5 @@
 import type { Group, GroupElement } from '../types'
+import { findAllSubgroups } from './subgroups'
 
 export const S3_PERM_IDS = ['1,2,3', '2,1,3', '2,3,1', '3,2,1', '3,1,2', '1,3,2']
 
@@ -297,7 +298,8 @@ export function tableGroupFactorSplit(group: Group): {
   aIds: string[]
   bIds: string[]
 } | null {
-  const idGroups = clusterFactorGroups(group)
+  let idGroups = clusterFactorGroups(group)
+  if (!idGroups) idGroups = tableFactorSearch(group)
   if (!idGroups || idGroups.length !== 2) return null
   const byId = new Map(group.elements.map(e => [e.id, e]))
   const mul = group.multiply
@@ -339,11 +341,137 @@ export function clusterIsCyclic(group: Group, ids: string[]): boolean {
 }
 
 /**
+ * 解析符号因子的阶：C_{n}→n、S_{n}→n!、A_{n}→n!/2、D_{m}→2m、
+ * Q_{8}→8、QD_{16}/Q_{16}→16、SmallGroup(n,i)→n、
+ * 半直积记号 (N:H) 或 N:H → |N|·|H|。无法解析返回 null。
+ */
+export function tablePartOrder(part: string): number | null {
+  let t = part.trim()
+  if (t.startsWith('(') && t.endsWith(')')) t = t.slice(1, -1).trim()
+  let m = t.match(/^C_\{\s*(\d+)\s*\}$/)
+  if (m) return Number(m[1])
+  m = t.match(/^S_\{\s*(\d+)\s*\}$/)
+  if (m) {
+    const k = Number(m[1])
+    let f = 1
+    for (let i = 2; i <= k; i++) f *= i
+    return f
+  }
+  m = t.match(/^A_\{\s*(\d+)\s*\}$/)
+  if (m) {
+    const k = Number(m[1])
+    let f = 1
+    for (let i = 2; i <= k; i++) f *= i
+    return f / 2
+  }
+  m = t.match(/^D_\{\s*(\d+)\s*\}$/)
+  if (m) return 2 * Number(m[1])
+  if (t === 'Q_{8}') return 8
+  if (t === 'QD_{16}') return 16
+  if (t === 'Q_{16}') return 16
+  m = t.match(/^SmallGroup\((\d+),(\d+)\)$/)
+  if (m) return Number(m[1])
+  if (t.includes(':')) {
+    const halves = t.split(':').map(s => s.trim()).filter(Boolean)
+    if (halves.length === 2) {
+      const a = tablePartOrder(halves[0])
+      const b = tablePartOrder(halves[1])
+      if (a !== null && b !== null) return a * b
+    }
+  }
+  return null
+}
+
+/**
+ * 按归组语义解析直积符号因子（同 types.analyzeDPFactorsGrouped2D：
+ * 相邻同底循环 part 合并，C_{2}×C_{2} → C_{2}^{2} 视为非循环因子）。
+ * 返回每归组因子的 base / 段数 / 阶；解析失败返回 null。
+ */
+export function tableGroupedParts(symbol: string): { base: string; segs: number; order: number }[] | null {
+  if (!symbol.includes('\\times')) return null
+  const parts = symbol.split('\\times').map(s => s.trim()).filter(Boolean)
+  const grouped: { base: string; segs: number }[] = []
+  for (const p of parts) {
+    const pm = p.match(/^(.+)\^\{(\d+)\}$/)
+    const base = pm ? pm[1] : p
+    const segs = pm ? Number(pm[2]) : 1
+    const cycBase = /^C_\{\s*\d+\s*\}$/.test(base)
+    const last = grouped[grouped.length - 1]
+    if (cycBase && segs === 1 && last && last.base === base) last.segs += segs
+    else grouped.push({ base, segs })
+  }
+  const out: { base: string; segs: number; order: number }[] = []
+  for (const g of grouped) {
+    const baseOrder = tablePartOrder(g.base)
+    if (baseOrder === null) return null
+    out.push({ base: g.base, segs: g.segs, order: Math.pow(baseOrder, g.segs) })
+  }
+  return out
+}
+
+/**
+ * 符号引导的注册表群因子分解（clusterFactorGroups 生成元交换性聚类失败时的兜底）：
+ * 生成元跨越多个因子（如 C₃×S₃ 的 2 个混合生成元）或全部生成元可交换
+ * （如 C₄×C₂×C₂ 全循环簇）时，按符号归组因子（C₃×S₃ → [C₃, S₃]；
+ * C₄×C₂×C₂ → [C₄, C₂²]）从全部真子群中搜索满足内部直积
+ * G = H₁×H₂×…（乘积唯一覆盖全群）的因子组合。
+ * 返回每因子元素 id 列表（含 identity）或 null。
+ */
+export function tableFactorSearch(group: Group): string[][] | null {
+  const n = group.order
+  if (n === 0 || n > 60) return null
+  if (group.elements[0]?.id.includes('|')) return null
+  const grouped = tableGroupedParts(group.symbol)
+  if (!grouped || grouped.length < 2) return null
+  if (grouped.reduce((a, g) => a * g.order, 1) !== n) return null
+
+  const byId = new Map(group.elements.map(e => [e.id, e]))
+  const subgroups: { ids: string[]; cyclic: boolean; order: number }[] = []
+  for (const sub of findAllSubgroups(group)) {
+    if (sub.order === 1) continue
+    const ids = sub.elements.map(e => e.id)
+    subgroups.push({ ids, cyclic: clusterIsCyclic(group, ids), order: sub.order })
+  }
+
+  const candidates = grouped.map(g => {
+    const wantCyclic = /^C_\{\s*\d+\s*\}$/.test(g.base) && g.segs === 1
+    return subgroups.filter(s => s.order === g.order && s.cyclic === wantCyclic)
+  })
+  if (candidates.some(c => c.length === 0)) return null
+
+  const pick: string[][] = []
+  const solve = (fi: number): boolean => {
+    if (fi === candidates.length) {
+      let covered = new Set<string>([group.identity.id])
+      for (const ids of pick) {
+        const next = new Set<string>()
+        const els = ids.map(id => byId.get(id)!)
+        for (const c of covered) {
+          const cEl = byId.get(c)!
+          for (const e of els) next.add(group.multiply(cEl, e).id)
+        }
+        covered = next
+      }
+      return covered.size === n
+    }
+    for (const cand of candidates[fi]) {
+      pick.push(cand.ids)
+      if (solve(fi + 1)) return true
+      pick.pop()
+    }
+    return false
+  }
+  if (!solve(0)) return null
+  return pick
+}
+
+/**
  * 注册表群（GAP SmallGroups 导入，id 无 '|'、value 单维）的网格因子分解。
  * 聚类 + 混合进制组合为行/列坐标。
  */
 export function tableGroupGridFactors(group: Group): ProductFactors | null {
-  const idGroups = clusterFactorGroups(group)
+  let idGroups = clusterFactorGroups(group)
+  if (!idGroups) idGroups = tableFactorSearch(group)
   if (!idGroups) return null
   const byId = new Map(group.elements.map(e => [e.id, e]))
   const lists = idGroups.map(ids => ids.map(id => byId.get(id)!))

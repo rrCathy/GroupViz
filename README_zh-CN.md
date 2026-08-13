@@ -86,7 +86,7 @@
 ### 核心亮点
 - **基于群元素作用的凯莱图** — 边由任意群元素定义（广义 Cayley 图），支持右乘/左乘切换
 - **17 种 3D 形状模板** — 按群性质自动分配（S₄、A₄、A₅ 使用截角多面体）；直积群智能形状选择（lattice/cylinder/torus）
-- **12 种 2D 凯莱图形状** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring（半直积专属）/cylinder（直积一循环因子）/torus（直积无循环因子），按群类型智能选择默认形状
+- **13 种 2D 凯莱图形状** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring（半直积专属）/cylinder（直积一循环因子）/torus（直积无循环因子）/ringGrid（环×2×2 网格；≥3 个循环因子），按群类型智能选择默认形状
 - **多视图浮动窗口** — 同时打开多个视图进行对比分析
 - **子集分析** — 保存元素选择集；通过封闭性检验自动检测子群/正规子群
 - **自逆元素检测** — 高亮 g⁻¹ = g 的元素
@@ -95,10 +95,10 @@
 - **视图导出** — SVG（2D 视图）、PNG（3D 视图）、GIF（对称性动画）+ 批量导出 CLI（`npm run export`）
 - **国际化** — 中文/English UI，localStorage 持久化
 - **混合计算** — 小群本地 TS 计算（≤60），大群自动切换 FastAPI 后端（>60）
-- **小群注册表** — 阶 1–15 全部 27 个群，预计算子群/共轭类/中心数据
+- **小群注册表** — 阶 1–31 全部 93 个群（GAP SmallGroups 导入），预计算子群/共轭类/中心数据
 - **性能守卫** — 子群/共轭类 cutoff 60；Cayley 边限流；自同构枚举组合 >30000 放弃
 - **群展示系统** — ⟨S|R⟩ 创建任意有限群（Todd–Coxeter），群信息栏自动识别标准展示（Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈），tree/展示乘法表视图，草稿自动保存
-- **测试体系** — 38 个测试文件 862 tests（vitest）
+- **测试体系** — 39 个测试文件 1156 tests（vitest）
 ---
 
 ## 🚀 快速开始
@@ -159,7 +159,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 38 个测试文件（862 tests）
+├── __tests__/            # 39 个测试文件（1156 tests）
 ├── components/
 │   ├── Canvas/           # 视图组件（Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/多视图窗口）
@@ -237,7 +237,7 @@ GroupViz 可视化抽象代数与有限群论中的概念。
 - [x] 会话保存与恢复
 - [x] 视图导出（SVG/PNG/GIF）+ 批量导出 CLI
 - [x] 混合计算（本地 TS + FastAPI 后端，本地兜底 + 进度条）
-- [x] 测试体系（38 文件 862 tests）
+- [x] 测试体系（39 文件 1156 tests）
 - [ ] 群运算律验证动画
 - [x] 自定义有限群输入（⟨S|R⟩ 群展示系统）
 - [ ] 教学模式

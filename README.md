@@ -85,7 +85,7 @@
 ### Key Features
 - **Cayley graph by element action** — edges defined by any group element (generalized Cayley graph), right/left multiply switchable
 - **17 3D shape templates** — auto-assigned by group properties (truncated polyhedra for S₄, A₄, A₅); smart direct-product shapes (lattice/cylinder/torus)
-- **12 2D Cayley layout shapes** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring (semidirect-specific)/cylinder (direct product, one cyclic factor)/torus (direct product, no cyclic factor), intelligent default by group type
+- **13 2D Cayley layout shapes** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring (semidirect-specific)/cylinder (interleaved concentric circles; direct product, one cyclic factor)/torus (direct product, no cyclic factor)/ringGrid (ring × 2×2 grid; ≥3 cyclic factors), intelligent default by group type
 - **Multi-view floating windows** — open multiple views simultaneously for comparative analysis
 - **Subset analysis** — save element selections; auto-detect subgroup / normal subgroup via closure tests
 - **Self-inverse element detection** — highlights elements where g⁻¹ = g
@@ -95,9 +95,9 @@
 - **i18n** — Chinese / English UI with localStorage persistence
 - **Hybrid computation** — local TypeScript for small groups (≤60), FastAPI backend for large ones (>60)
 - **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; relator-loop view (3D torus Cayley graph, click a relator to highlight its closed loop) + presentation table view with word-evaluation paths; draft autosave
-- **Small group registry** — all 27 groups of order 1–15 with precomputed subgroup/conjugacy class/center data
+- **Small group registry** — all 93 groups of order 1–31 (GAP SmallGroups import) with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 38 test files, 862 tests (Vitest)
+- **Test suite** — 39 test files, 1156 tests (Vitest)
 
 ---
 
@@ -161,7 +161,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 38 test files (862 tests)
+├── __tests__/            # 39 test files (1156 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -251,7 +251,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (38 files, 862 tests)
+- [x] Test suite (39 files, 1156 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

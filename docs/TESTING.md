@@ -12,11 +12,11 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`{ test: { globals: true, environment: 'node' } }` — Node 环境，无 jsdom、无 setupFiles
-- **coverage**：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`（基线 Stmts 58.74% → 现 88.92%，lines 91.34%，exportApi.ts 95.41%）
+- **coverage**：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`（基线 Stmts 58.74% → 现 88.98%，lines 91.82%，exportApi.ts 95.41%）
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，38 文件 / 862 tests）
+## 3. 测试文件清单（src/__tests__，39 文件 / 1156 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -29,10 +29,10 @@
 | directProduct.test.ts | 15 | 直积群律（C2×C2≅V4、C2×C2≅C6 等）、pipe id、逐分量乘法/逆元、紧凑符号（C2×C2→`C_{2}^{2}`、C4×C2→`C_{4} \times C_{2}`）、生成元提升 |
 | cayleyEdges.test.ts | 14 | computeCayleyActionEdges：空 actions→[]、右乘/左乘、自逆→双向、单位元→自环、去重、order>60 限流 max(120, order*2)、阿贝尔群左右相同 |
 | utils.test.ts | 20 | texify（Unicode→TeX 全规则、裸命令后 ASCII 字母加空格、幂等）、renderTex、createGroupFromSymbol（嵌套直积/Unicode 直积/上标幂/无效幂回退/越界拒绝/legacy Unicode 符号） |
-| smallGroups.test.ts | 26 | 注册表 93 条（阶 1-31 GAP 全量）完整性/分布、每条 GAP 数据都有对应条目、符号唯一、getSmallGroup/getSmallGroupBySymbol/getPrecomputed、Dic₃、16-31 符号抽查（含冲突回退 SmallGroup(n,i)）、全量公理验证（恒等/逆元/结合律直查数据表/生成元闭包）、子群阶整除、isSimple 与素数一致、center/共轭类与 subgroups.ts 一致、createGroupFromSymbol 解析新符号、buildOrderGroupsMap（阶 1-31 + A₅ 60 + S₅ 120、阶 16 全 14 群、V₄ 保留） |
+| smallGroups.test.ts | 31 | 注册表 93 条（阶 1-31 GAP 全量）完整性/分布、每条 GAP 数据都有对应条目、符号唯一、getSmallGroup/getSmallGroupBySymbol/getPrecomputed、Dic₃、16-31 符号抽查（含冲突回退 SmallGroup(n,i)）、全量公理验证（恒等/逆元/结合律直查数据表/生成元闭包）、子群阶整除、isSimple 与素数一致、center/共轭类与 subgroups.ts 一致、createGroupFromSymbol 解析新符号、buildOrderGroupsMap（阶 1-31 + A₅ 60 + S₅ 120、阶 16 全 14 群、V₄ 保留）、表驱动群元素词标签（全群 label 无 g_ 前缀且为生成元词、C₁₆ 幂链、C₄×C₂:C₂ 词标签、D₈ 正规形 rⁱ/rⁱs、id 映射不变） |
 | generalLinearGroup.test.ts | 16 | GL(2,p)：矩阵乘/逆/det 模 p 手算样例、GL(2,2)（阶 6、生成元阶 2/ab 阶 3、闭包 6 元素、≅ S₃）、GL(2,3)（阶 48、det 同态核=SL(2,3) 阶 24、中心 {±I}、生成元阶 3/2、全量逆、结合律抽样）、p 非素数 throw |
 | polyhedra.test.ts | 14 | 多面体顶点数（12/24/24/24/60/60）、半径缩放、computeSkeletonEdges、computeElementRotation（identity 角 0、Cₙ/Dₙ 轴、A₄/S₄/A₅ 轴类型） |
-| forceLayout.test.ts | 62 | forceLayout/planarCycleLayout/子群格布局、cosetStripLayout（空群、S₃ A₃ 两条带、topPadding）、节点位置稳定性、直积因子工具（factorPipeGroups/parseCompactFactors 紧凑符号分组 C₂²×S₃=2 组、buildFactorSubgroup 因子临时群提取）、cylinderLayout2D（C₄×D₄ 32 点同心多环 distinct 半径 ≥8、C₂×S₃ 12 点、C₂×C₃×S₃ 36 点、注册表 Z₂×D₄/Z₂×Q₈ 2 层同心 16 点 distinct 半径=2、D₈ null、C₃×S₃ 各层同相位）、torusLayout2D（S₃×D₄ 48 点 maxR≤400、C₂²×S₃ 24 点、3 因子嵌套 96 点、注册表 (24,13) 24 点）、classifyDirectProduct2D 归组分类（C₂²×S₃→torus、C₂×C₃×S₃→cylinder、C₂³→grid、3 非循环因子→torus、注册表 (24,13)→torus）、semidirectProductLayout（注册表 (16,2) 16 点全有限、S₃ null、C3⋊C2 6 点）、splitDihedralElements（注册表 D₈/D₉ 双环分类、基本 D₄、C₂³/A₄ null）、dualRingLayout 注册表 D₈/D₉ 双环（外环 0.38·min + 内环 0.55 配对）、normalizeLayout2D（单位化）、directProductGridLayout2D（注册表群 C₄×C₄ 4×4 满网格 unique=16、(Z₄×Z₂):Z₂ 半直积 null、S₃×C₂ 6×2 grid） |
+| forceLayout.test.ts | 66 | forceLayout/planarCycleLayout/子群格布局、cosetStripLayout（空群、S₃ A₃ 两条带、topPadding）、节点位置稳定性、直积因子工具（factorPipeGroups/parseCompactFactors 紧凑符号分组 C₂²×S₃=2 组、buildFactorSubgroup 因子临时群提取）、cylinderLayout2D（C₄×D₄ 32 点同心多环 distinct 半径 ≥8、C₂×S₃ 12 点、C₂×C₃×S₃ 36 点、注册表 Z₂×D₄/Z₂×Q₈ 2 层同心 16 点 distinct 半径=2、D₈ null、C₃×S₃ 各层半格交错 π/6、注册表 C₃×S₃ 18,2 三层 S₃ 环含反射/旋转边层内）、torusLayout2D（S₃×D₄ 48 点 maxR≤400、C₂²×S₃ 24 点、3 因子嵌套 96 点、注册表 (24,13) 24 点）、classifyDirectProduct2D 归组分类（C₂²×S₃→torus、C₂×C₃×S₃→cylinder、C₂³→grid、3 非循环因子→torus、注册表 (24,13)→torus）、semidirectProductLayout（注册表 (16,2) 16 点全有限、S₃ null、C3⋊C2 6 点）、splitDihedralElements（注册表 D₈/D₉ 双环分类、基本 D₄、C₂³/A₄ null）、dualRingLayout 注册表 D₈/D₉ 双环（外环 0.38·min + 内环 0.55 配对）、ringGridLayout2D（pipe C₄×C₂×C₂ 16 点 4 环 2×2 网格：簇质心环半径一致/弦长 2r·sin(π/n)/格距>2r、注册表 16,9 16 点、C₄×C₄ null）、normalizeLayout2D（单位化）、directProductGridLayout2D（注册表群 C₄×C₄ 4×4 满网格 unique=16、(Z₄×Z₂):Z₂ 半直积 null、S₃×C₂ 6×2 grid） |
 | elementRotation.test.ts | 6 | 群元素 → 几何旋转映射（Cₙ/Dₙ/A₄/S₄/A₅ 轴与角） |
 | layout3D.test.ts | 4 | compute3DPositions：3D 形状模板布局（群形状映射、球面/环面投影） |
 | quotientS4.test.ts | 2 | S₄/V₄ 商群创建与 Cayley 边 |
@@ -40,7 +40,7 @@
 | quotientRendering.test.ts | 1 | 商群渲染数据 |
 | quotientLayout.test.ts | 1 | 商群 projection2D 布局 |
 | hybridCompute.test.ts | 27 | 混合计算：order ≤60 本地 / >60 后端缓存、fetchBackendResults 合并转换、computeGroupProperties 本地/后端、后端失败本地兜底（computeLocalFallbackResults：S₅ 子群/共轭类/性质、>240 空兜底）、fetchBackendCayleyEdges/ElementOrder |
-| types.test.ts | 38 | 群类型判定函数、analyzeDPFactors、analyzeDPFactorsGrouped2D（相邻同底循环因子归组：C₂×C₂×S₃→[C₂²,S₃]、C₂×C₂×C₂ 合并 C₂³、S₃×S₃ 不合并、非 DP null）、isCyclicFactorKeys、isGroupSemidirectProduct（顶层 ':' 检测）、getAvailableShapes2D/形状与布局默认值（循环群默认 circular、classifyDirectProduct2D 直积 2D 分类与注册表群分类：C₂²×S₃→torus、(24,13)→torus、半直积→rewiring、hasTopLevelTimes 顶层 \\times 检测、注册表群直积判定）、getViewBoxSize 全分支 |
+| types.test.ts | 45 | 群类型判定函数、analyzeDPFactors、analyzeDPFactorsGrouped2D（相邻同底循环因子归组：C₂×C₂×S₃→[C₂²,S₃]、C₂×C₂×C₂ 合并 C₂³、S₃×S₃ 不合并、非 DP null）、isCyclicFactorKeys、isGroupSemidirectProduct（顶层 ':' 检测）、isRingGridGroup（C₄×C₂×C₂ pipe+注册表 16,9、C₆×C₂² true；C₁₀×C₂ 仅两因子/C₁₂×C₂/C₂³/C₄×C₄/C₄×C₂/C₂×D₄/S₃ false）、getAvailableShapes2D/形状与布局默认值（循环群默认 circular、classifyDirectProduct2D 直积 2D 分类与注册表群分类：C₂²×S₃→torus、(24,13)→torus、半直积→rewiring、hasTopLevelTimes 顶层 \\times 检测、注册表群直积判定、C₄×C₂×C₂ 默认 ringGrid）、getViewBoxSize 全分支 |
 | api.test.ts | 14 | 后端 API 客户端：9 端点 URL/method/body、错误路径（detail 优先、否则 statusText） |
 | cycleLayouts.test.ts | 15 | computeCycleSubgroups、computeMaximalCycles、forceLayout（自环/initialPositions/cycleSubgroups）、planarCycleLayout |
 | ringOrder.test.ts | 33 | S2 排列/Z₂ 位向量/整数/eN 排序、parseProductFactors、matrixGridLayout、nestedFactorLayout2D、factorPipeGroups/parseCompactFactors、factorPipeGroupsGrouped（相邻同底循环归组：C₂²×S₃→2 组、C₂×C₂×C₃→[C₂²,C₃]、段数不符 null）、powerRingOrder（C₆ 幂序、V₄ bit 向量方形环序、C₄×C₂ pipe 特判（外圈 t0 升序 + 内圈 t1 降序）、直积 4 覆盖、S₃ 置换序、无生成元回退字典序）、tableGroupGridFactors（注册表群 C₄×C₄ 4×4、C₄×C₂×C₂ 4×4、C₂⁴ 4×4、C₂×D₄ 2×8、D₈ null）、clusterFactorGroups/tableGroupFactorSplit/clusterIsCyclic（Z₂×D₄ 聚类 2+8、D₈ null） |
@@ -53,6 +53,7 @@
 | actionDraftStorage.test.ts | 6 | 自定义群作用草稿持久化：round-trip（含 unbound 箭头）、无存储/损坏 JSON/结构非法返回 null、remove、覆盖保存 |
 | actionStorage.test.ts | 6 | 已完成群作用持久保存（groupviz-actions）：空返回 []、round-trip（含 unbound 箭头）、多群多条、损坏 JSON 返回 []、非法记录过滤（setSize 字符串）、覆盖保存 |
 | series.test.ts | 24 | 子群列（series.ts）：导列（S₃/S₄/A₄/S₅ 阶链与 reachesTrivial/可解性）、下中心列（D₈→{e} 幂零、D₁₂ 非幂零）、上中心列（D₁₂ Z∞=⟨r³⟩ 阶 4 非幂零、S₃ 平凡中心）、合成列（S₄/S₅/V₄/Q₈/D₈ 15 条/C₆/C₁₂ 2 条链、A₅ 单因子）、因子判定（Cₙ/V₄/Q₈/D₄/D₆/A₄/A₅ 标签、简单性）、isNormalSubgroupIn、SERIES_MAX_ORDER 守卫、computeChainFactors（备选链 S₅ 唯一链/D₈ V₄ 分支/A₄ 标签） |
+| tableGroups.audit.test.ts | 279 | GAP 表群可视化惰性审计（66 群全扫）：默认形状可布局（circular 走 cayleyCircleLayout）、全部可用非圆形形状布局（位置有限 + 无重复）、环形布局 distinct+finite、生成元 Cayley 边端点合法、顶层 ':' 半直积 getSemidirectProductMeta 非 null——防布局静默回退回归（曾捕获 C₃×S₃/C₂×A₄/C₅×S₃/C₄×C₂×C₂ 等 10 群 cylinder/torus 失效） |
 | presentations.test.ts | 36 | 群展示：解析器（简化/指数/括号/零指数/非法字符/长符号 + Unicode 上标 a²/a⁻¹）、parsePresentation、parseRelationEquation（f1=f2 等式）、Todd–Coxeter（finite/infinite/overflow）、buildGroupFromPresentation（C₄/D₄/V₄/S₃/A₅ 构建 + multiply/inverse 一致性 + 无限/溢出 + f1=f2 归一化 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合/stored 原样） |
 | cayleyTree.test.ts | 25 | 树视图核心（cayleyTree.ts）：computeCayleyTree BFS 生成树（生成树边/粘合边划分，粘合边不渲染仅计数）、computeFreeTree 自由模板树、computeFoldTree（幂折叠网格：a²,b³,ab=ba → C₂×C₃ 2×3 网格 0 交叉；genElsOverride 修复 S₄ Coxeter 3 生成元不崩溃；D∞ 0.7 路径状衰减、C₂*ℤ 0.5 稠密衰减 + 0 交叉、Sierpinski 0 交叉回归）、countEdgeCrossings 严格交叉计数、parseRelationEquation |
 | export.test.ts | 15 | 视图导出（export.ts）：encodeGif（GIF89a 魔数/多帧）、triggerDownload、exportView（SVG/3D canvas/无 viewport/svg/canvas 分支）、captureSvgFrame（像素解析/加载失败 reject）、exportSymmetryAsGifBlob（无 viewport null/多帧捕获 + 重启回调）、exportSymmetryAsGif（各 alert 分支） |

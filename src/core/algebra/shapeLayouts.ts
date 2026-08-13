@@ -11,6 +11,7 @@ import {
   semidirectProductLayout,
   cylinderLayout2D,
   torusLayout2D,
+  ringGridLayout2D,
   q8PythagoreanLayout,
 } from './forceLayout'
 
@@ -43,6 +44,8 @@ export function computeShape2DPositions(
       return cylinderLayout2D(group, width, height)
     case 'torus':
       return torusLayout2D(group, width, height)
+    case 'ringGrid':
+      return ringGridLayout2D(group, width, height)
     case 'pythagoreanSquare':
       return q8PythagoreanLayout(group, width, height)
     default:

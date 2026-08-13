@@ -319,3 +319,63 @@ describe('registry dihedral generators are standardized to (r, s)', () => {
     expect(g.generators[1].apply(g.identity).id).toBe('g2')
   })
 })
+
+describe('table-driven group element labels are generator words', () => {
+  const tableGroups = getAllSmallGroups().filter(
+    e => e.order >= 16 || e.group.symbol === 'C_{3}:C_{4}'
+  )
+
+  it('every table group: identity = e, generator elements carry generator names, unique labels', () => {
+    for (const entry of tableGroups) {
+      const g = entry.group
+      expect(g.identity.label, g.symbol).toBe('e')
+      const labels = g.elements.map(e => e.label)
+      expect(new Set(labels).size, `${g.symbol} unique labels`).toBe(g.order)
+      for (const el of g.elements) {
+        expect(el.label.startsWith('g_'), `${g.symbol} no raw g_n label`).toBe(false)
+      }
+      for (const gen of g.generators) {
+        expect(gen.apply(g.identity).label, `${g.symbol} gen ${gen.name}`).toBe(gen.name)
+      }
+    }
+  })
+
+  it('C_16 labels are powers of a (walking the generator chain)', () => {
+    const g = getSmallGroup(16, 0)!.group
+    const a = g.generators[0].apply(g.identity)
+    const powLabels: string[] = ['e']
+    let cur = g.identity
+    for (let i = 1; i < 16; i++) {
+      cur = g.multiply(cur, a)
+      powLabels.push(cur.label)
+    }
+    expect(powLabels).toEqual(['e', 'a', 'a^2', 'a^3', 'a^4', 'a^5', 'a^6', 'a^7',
+      'a^8', 'a^9', 'a^{10}', 'a^{11}', 'a^{12}', 'a^{13}', 'a^{14}', 'a^{15}'])
+  })
+
+  it('(C4 x C2):C2 generator elements are labeled a and b', () => {
+    const g = getSmallGroup(16, 2)!.group
+    expect(g.generators.map(gen => gen.apply(g.identity).label)).toEqual(['a', 'b'])
+    expect(g.elements.some(e => e.label === 'a b')).toBe(true)
+    expect(g.elements.some(e => e.label === 'a^2')).toBe(true)
+  })
+
+  it('D_8: rotations labeled e/a^1..a^7, 8 reflections labeled a^i b', () => {
+    const g = getSmallGroup(16, 6)!.group
+    const pure = g.elements.filter(e => /^(e|a(\^[0-9]+)?)$/.test(e.label))
+    const withB = g.elements.filter(e => e.label.includes('b'))
+    expect(pure).toHaveLength(8)
+    expect(withB).toHaveLength(8)
+    expect(g.elements.some(e => e.label === 'a b')).toBe(true)
+    expect(g.elements.some(e => e.label === 'a^7 b')).toBe(true)
+    expect(g.elements.some(e => e.label === 'a^1')).toBe(false)
+  })
+
+  it('label of an element still identifies the same table cell (g_id mapping intact)', () => {
+    const g = getSmallGroup(16, 2)!.group
+    for (const el of g.elements) {
+      const byId = g.elements.find(e => e.id === el.id)!
+      expect(byId).toBe(el)
+    }
+  })
+})

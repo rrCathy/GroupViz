@@ -136,7 +136,9 @@ interface Automorphism { id: string; map: Map<string,string>; label: string; app
 | 24 | 15 个（C₂₄, Z₃:C₈, SL(2,3), Z₃:Q₈, Z₄×S₃, D₁₂, Z₂×(Z₃:C₄), (Z₆×Z₂):C₂, Z₁₂×Z₂, Z₃×D₄, Z₃×Q₈, S₄, Z₂×A₄, Z₂×Z₂×S₃, Z₆×Z₂×Z₂） |
 | 25-31 | C₂₅, Z₅×Z₅, D₁₃, C₂₆, C₂₇, Z₉×Z₃, (Z₃×Z₃):C₃, Z₉:C₃, Z₃³, Z₇:C₄, C₂₈, D₁₄, Z₁₄×Z₂, C₂₉, Z₅×S₃, Z₃×D₁₀, D₁₅, C₃₀, C₃₁（19） |
 
-数据来源 `src/core/groups/smallGroupData.ts`（`SMALL_GROUP_DATA`，93 条，一次性由 GAP 导出：n=1..31、i=1..NrSmallGroups(n)，字段 {n, i, structure=StructureDescription, abelian, exponent, gens=MinimalGeneratingSet 元素位置, table=乘法表}，元素序 = SortedList(Elements) 且恒等元置首）。阶 1..15 的 27 条沿用原手写工厂（符号/行为不变），阶 16..31 的 65 条 + (12,4) Dic₃ 由 `createTableGroup(order, gapIndex)` 按乘法表构建（元素 label `g_{i}`，生成元名 a/b/c…，apply 右乘）。
+数据来源 `src/core/groups/smallGroupData.ts`（`SMALL_GROUP_DATA`，93 条，一次性由 GAP 导出：n=1..31、i=1..NrSmallGroups(n)，字段 {n, i, structure=StructureDescription, abelian, exponent, gens=MinimalGeneratingSet 元素位置, table=乘法表}，元素序 = SortedList(Elements) 且恒等元置首）。阶 1..15 的 27 条沿用原手写工厂（符号/行为不变），阶 16..31 的 65 条 + (12,4) Dic₃ 由 `createTableGroup(order, gapIndex)` 按乘法表构建（元素 id 保留 `g_{i}`，label 用生成元词，生成元名 a/b/c…，apply 右乘）。
+
+- **元素词标签**（`assignWordLabels` / `applyDihedralNormalForm`，SmallGroups.ts）：表驱动群元素不再裸 g_n——建群后先 BFS 沿生成元求最短词标签（恒等元 `e`，词如 `a`、`a b`、`a^{2} b`），D_m 结构再应用二面体正规形（旋转 = `a^{i}` 幂链、反射 = `a^{j} b`，初等 D₄ 印记），与展示群（presentations.ts）标签约定一致；生成元元素标签 = 生成元名，凯莱图作用勾选列表/同态/陪集/循环布局的 label 匹配（`elements.find(e => e.label === gen.name)`、恒等元 `label === 'e'` 检测）全部对齐。id 不变，环序数字排序与 id 键逻辑不受影响。
 
 - **符号生成 `structureToSymbol(n, i, structure)`**：StructureDescription TeX 化（C8→`C_{8}`、D16→`D_{8}`（二面体阶÷2 旋转约定）、C4 x C4→`Z_{4}\times Z_{4}`）；非循环群描述以 C 开头则 C→Z 替换（防 isGroupCyclic 误判）；`:` 保留字面量（不触发 `\rtimes` 判定）。结构描述重复（GAP 无法区分同构类型）时符号回退为 `SmallGroup(n,i)`（(16,3)/(16,13) 与 (20,1)/(20,3)）；(12,4) 的 GAP 描述 'D12' 与 D₁₂ 冲突，强制为 `Z_{3}:C_{4}`（Dic₃）。ensureTable 遇到符号冲突时后注册者改符号（先注册者优先）。
 - `getAllSmallGroups()` / `getSmallGroup(order, index=0)` / `getSmallGroupBySymbol(symbol)` / `getPrecomputed(group)`

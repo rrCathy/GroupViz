@@ -1,8 +1,8 @@
 import type { Group, GroupElement, NodePosition, Layout3D } from '../types'
-import { getDefaultLayout3D, isC2Cube, isGroupDirectProduct, isGroupDihedral } from '../types'
+import { getDefaultLayout3D, isC2Cube, isGroupDirectProduct, isGroupDihedral, findRingGridDecomposition } from '../types'
 import { compute3DPositions } from './layout3D'
 import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
-import { parseProductFactors, matrixGridLayout, ringOrder, detectS3PermSet, S3_PERM_IDS, factorPipeGroupsOrTokens, parseCompactFactors, clusterFactorGroups, clusterIsCyclic, factorPipeGroupsGrouped, powerRingOrder } from './ringOrder'
+import { parseProductFactors, matrixGridLayout, ringOrder, detectS3PermSet, S3_PERM_IDS, factorPipeGroupsOrTokens, parseCompactFactors, clusterFactorGroups, clusterIsCyclic, factorPipeGroupsGrouped, powerRingOrder, tableFactorSearch } from './ringOrder'
 
 // Re-export everything from submodules for backward compatibility
 export {
@@ -179,9 +179,10 @@ export function factorCopyRingLayout(tmp: Group): Map<string, NodePosition> {
 // ─── Cylinder layout 2D (concentric factor copies) ────────────────────
 
 /**
- * 圆柱 2D 形态 = 同心多环：循环因子层沿径向层叠（L 层），
- * 每层 = 非循环因子的副本环（Dₙ 副本即双环）；各层同相位，
- * 循环因子生成元边成径向直线母线（俯视圆柱感）。
+ * 交错同心圆（内部标识 cylinder）：同心多环——每层圆 = 非循环因子 Xₙ 的
+ * 副本结构（Dₙ 副本即双环；S₃/D₃ 副本即凯莱六边形）；层数 = 循环因子
+ * Cₙ 的阶，相邻层按副本点距半格交错（offset = layerIdx·π/copyN），
+ * Cₙ 生成元边 = 层间斜线（交错感，俯视如交错同心圆）。
  * pipe 群按符号因子分组；注册表群（非 pipe）按生成元交换性聚类分组。
  */
 export function cylinderLayout2D(
@@ -191,7 +192,13 @@ export function cylinderLayout2D(
 ): Map<string, NodePosition> | null {
   const isPipe = group.elements[0]?.id.includes('|')
   if (!isPipe) {
-    const clusters = clusterFactorGroups(group)
+    let clusters = clusterFactorGroups(group)
+    if (clusters) {
+      const hasCyc = clusters.some(c => clusterIsCyclic(group, c))
+      const hasNonCyc = clusters.some(c => !clusterIsCyclic(group, c))
+      if (!hasCyc || !hasNonCyc) clusters = null
+    }
+    if (!clusters) clusters = tableFactorSearch(group)
     if (!clusters) return null
     const byId = new Map(group.elements.map(e => [e.id, e]))
     const cycClusters = clusters.filter(c => clusterIsCyclic(group, c))
@@ -226,12 +233,13 @@ export function cylinderLayout2D(
     const cy = height / 2
 
     const result = new Map<string, NodePosition>()
+    const copyN = Math.max(nonEls.length, 1)
     for (const el of group.elements) {
       const s = seen.get(el.id)!
       const layerIdx = s.layerIdx
       const uv = copy.get(s.nonId) ?? { x: 0, y: 0 }
       const mag = Math.hypot(uv.x, uv.y) || 1
-      const angle = Math.atan2(uv.y, uv.x)
+      const angle = Math.atan2(uv.y, uv.x) + layerIdx * (Math.PI / copyN)
       const r = (1.1 + layerIdx * step) * mag
       result.set(el.id, {
         x: cx + r * Math.cos(angle) * scale,
@@ -281,6 +289,7 @@ export function cylinderLayout2D(
   const cy = height / 2
 
   const result = new Map<string, NodePosition>()
+  const copyN = Math.max(copy.size, 1)
   for (let i = 0; i < group.elements.length; i++) {
     const el = group.elements[i]
     const g = perEl[i]
@@ -289,11 +298,66 @@ export function cylinderLayout2D(
     const layerIdx = layerIdxMap.get(layerKey) ?? 0
     const uv = copy.get(nonKey) ?? { x: 0, y: 0 }
     const mag = Math.hypot(uv.x, uv.y) || 1
-    const angle = Math.atan2(uv.y, uv.x)
+    const angle = Math.atan2(uv.y, uv.x) + layerIdx * (Math.PI / copyN)
     const r = (1.1 + layerIdx * step) * mag
     result.set(el.id, {
       x: cx + r * Math.cos(angle) * scale,
       y: cy + r * Math.sin(angle) * scale
+    })
+  }
+  return result
+}
+
+// ─── Ring-grid layout 2D (cyclic ring × elementary grid) ──────────────
+
+/**
+ * 环网格 2D 形态（C₄×C₂×C₂ 类直积）：群的循环部分（阶 n ≥ 4 的环生成元 x）
+ * 做 n 边形环（幂序环绕，顶部起始），其余部分 V = {e, v1, v2, v1v2}（初等
+ * 交换 4 群）做 2×2 混合进制网格，每个格点中心挂一个完整环。
+ * 环上相邻点 = x 幂真实边；网格邻格 = v1/v2 真实边。
+ * 依托 findRingGridDecomposition（纯群论探测）：pipe 直积群、注册表 GAP
+ * 表群、同构群统一走同一条路。
+ */
+export function ringGridLayout2D(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> | null {
+  const dec = findRingGridDecomposition(group)
+  if (!dec) return null
+  const { v1, v2, n, map } = dec
+  const cols = 2
+  const rows = 2
+  // 坐标基底：e→(0,0)、v1→(1,0)、v2→(0,1)、v1v2→(1,1)
+  const v12 = group.multiply(v1, v2)
+  const idxOf = new Map<string, number>([
+    [group.identity.id, 0],
+    [v1.id, 1],
+    [v2.id, 2],
+    [v12.id, 3],
+  ])
+  const r = Math.max(1.0, n * 0.18)
+  const gap = 0.9
+  const d = 2 * r + gap
+  const spanX = (cols - 1) * d + 2 * r
+  const spanY = (rows - 1) * d + 2 * r
+  const scale = (Math.min(width, height) * 0.78) / Math.max(spanX, spanY, 1e-6)
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+  for (const el of group.elements) {
+    const hit = map.get(el.id)
+    if (!hit) return null
+    const idx = idxOf.get(hit.v.id)
+    if (idx === undefined) return null
+    const col = idx % cols
+    const row = Math.floor(idx / cols)
+    const gx = (col - (cols - 1) / 2) * d
+    const gy = (row - (rows - 1) / 2) * d
+    const ang = (hit.i * 2 * Math.PI) / n - Math.PI / 2
+    result.set(el.id, {
+      x: cx + (gx + r * Math.cos(ang)) * scale,
+      y: cy + (gy + r * Math.sin(ang)) * scale,
     })
   }
   return result
@@ -337,7 +401,8 @@ export function torusLayout2D(
       perElKeys = perEl.map(g => g.map(gr => gr.join('|')))
     }
   } else {
-    const clusters = clusterFactorGroups(group)
+    let clusters = clusterFactorGroups(group)
+    if (!clusters || clusters.length < 2) clusters = tableFactorSearch(group)
     if (!clusters || clusters.length < 2) return null
     const byId = new Map(group.elements.map(e => [e.id, e]))
     // 笛卡尔枚举分解：每元素 = 各簇元素之积，唯一性校验
@@ -651,6 +716,16 @@ export function dualRingLayout(
 
   if (n === 0) return result
 
+  // C₂³（阶 8 基本阿贝尔群）：大正方形套小正方形（D₄ 双环）。
+  // 必须优先于 value 分支——pipe 直积群的 value 分支按 value[0] 排序环序，
+  // 会把 ⟨a,c⟩ 摆成 [e,c,a,ac]，c→a 与 ac→e 为穿心对角弦（非真实边），
+  // 横穿内方造成交叉；c2CubeDualRing 用交替生成元环序 [e,a,ab,b]，
+  // 四边全为真实生成元边（信步无交叉），内方 = 外方·分隔生成元（径向连线）。
+  if (isC2Cube(group)) {
+    const cube = c2CubeDualRing(group, width, height)
+    if (cube) return cube
+  }
+
   const m = n / 2
 
   const rotations: GroupElement[] = []
@@ -681,11 +756,6 @@ export function dualRingLayout(
         result.set(refId, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
       }
       return result
-    }
-    // C₂³: square outer ring of {e,a,ab,b} with inner ring {·c} — D₄-style dual ring
-    if (isC2Cube(group)) {
-      const cube = c2CubeDualRing(group, width, height)
-      if (cube) return cube
     }
     // Fallback: plain circle. For S₃-as-permutations use the ring order so the
     // hexagon Cayley graph (generators (12),(23)) is drawn without crossings.
@@ -850,7 +920,7 @@ export function cayleyCircleLayout(
   }
 
   const keys = group.elements.map(e => e.id)
-  const order = ringOrder(keys)
+  const order = keys.every(k => /^[eg]\d+$/.test(k)) ? powerRingOrder(group) : ringOrder(keys)
   const idxOf = new Map(order.map((k, i) => [k, i]))
   for (const el of group.elements) {
     const idx = idxOf.get(el.id)

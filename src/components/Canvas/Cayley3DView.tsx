@@ -10,6 +10,8 @@ import type { GroupElement, Generator, CayleyEdgeData } from '../../core/types'
 import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
 import { compute3DPositions } from '../../core/algebra/layout3D'
 import { texify, renderTex } from '../../utils/texify'
+import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
+import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
 
 interface EdgeData {
   fromIdx: number
@@ -178,6 +180,8 @@ function SceneContent() {
   // 最近一次鼠标拖拽向量:自动旋转时按此方向持续旋转(而非固定方向)
   const dragVec = useRef({ x: 0, y: 0 })
   const dragState = useRef({ active: false, lastX: 0, lastY: 0, x: 0, y: 0, button: 0 })
+  // GIF 导出期间的外部强制旋转（固定总角速度，按最后一次拖拽方向分解 theta/phi 双分量，优先于 autoRotate）
+  const externalRotation = useRef({ active: false, radPerSec: 0 })
 
   useEffect(() => {
     const el = gl.domElement
@@ -231,6 +235,23 @@ function SceneContent() {
     }
   }, [gl, camera])
 
+  // 按最后一次拖拽方向将角速度分解到 theta/phi 两个分量（与手动拖拽同约定：拖右 theta -=，拖下 phi -=），
+  // 未拖拽过则默认绕竖轴（theta）旋转；拖拽含竖直分量时同步带动俯仰旋转——与 ▶ 自动旋转方向完全一致
+  const applyOrbitRotation = (
+    o: { theta: number; phi: number },
+    angVel: number,
+    delta: number,
+  ) => {
+    const d = dragVec.current
+    const len = Math.hypot(d.x, d.y)
+    if (len >= 8) {
+      o.theta -= (d.x / len) * angVel * delta
+      o.phi -= (d.y / len) * angVel * delta
+    } else {
+      o.theta -= angVel * delta
+    }
+  }
+
   // 每帧：手动拖拽的 theta/phi 已在 pointer 处理中直接更新；此处应用自动旋转增量并同步相机。
   // 球坐标 phi 无界（可无限翻越上下极点）；up 在 phi 越过 0 或 π（两极点）时翻转，画面保持正立
   useFrame((_, delta) => {
@@ -244,13 +265,13 @@ function SceneContent() {
       o.theta = Math.atan2(v.x, v.z)
       o.initialized = true
     }
-    if (autoRotate) {
+    if (externalRotation.current.active) {
+      applyOrbitRotation(o, externalRotation.current.radPerSec, delta)
+    } else if (autoRotate) {
       const d = dragVec.current
       const len = Math.hypot(d.x, d.y)
       const rate = (len >= 8 ? 0.35 + Math.min(0.65, len / 360) : 1) * 2 * Math.PI
-      // 与手动拖拽同约定（拖右 theta -=；拖下 phi -=），方向与最后一次拖拽完全一致
-      o.theta -= (len >= 8 ? (d.x / len) * rate : rate) * delta
-      o.phi -= (len >= 8 ? (d.y / len) * rate : 0) * delta
+      applyOrbitRotation(o, rate, delta)
     }
     const sinP = Math.sin(o.phi)
     camera.position.set(
@@ -277,6 +298,35 @@ function SceneContent() {
     el.addEventListener('dblclick', onDoubleClick)
     return () => el.removeEventListener('dblclick', onDoubleClick)
   }, [gl, resetCamera])
+
+  // 仅主视口（.canvas-viewport 内）的 3D 实例注册到导出桥；浮动窗口实例不注册，避免覆盖
+  useEffect(() => {
+    if (!gl.domElement.closest('.canvas-viewport')) return
+    const api: Cayley3DControlAPI = {
+      isReady: () => !!currentGroup,
+      snapshotOrbit: () => {
+        const o = orbit.current
+        return { theta: o.theta, phi: o.phi, radius: o.radius, target: o.target.clone() }
+      },
+      beginRotation: (radPerSec) => {
+        // 方向每帧按 dragVec 分解到 theta/phi（theta/phi 双分量），与 ▶ 自动旋转完全一致；
+        // 仅总角速度以 radPerSec 匀速（时长控制），拖拽方向/俯仰分量完整保留
+        externalRotation.current = { active: true, radPerSec }
+      },
+      endRotation: (snap) => {
+        externalRotation.current.active = false
+        if (snap) {
+          const o = orbit.current
+          o.theta = snap.theta
+          o.phi = snap.phi
+          o.radius = snap.radius
+          o.target.copy(snap.target)
+        }
+      },
+    }
+    registerCayley3DControls(api)
+    return () => unregisterCayley3DControls(api)
+  }, [currentGroup, gl])
 
   const cayleyEdges = useMemo(() => {
     if (!currentGroup) return [] as CayleyEdgeData[]

@@ -1,5 +1,6 @@
 import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import type { ViewMode } from '../core/types'
+import { getCayley3DControls } from './cayley3dControls'
 
 export function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -325,4 +326,99 @@ export async function exportSymmetryAsGif(
   const bytes = gif.bytes()
   const blob = new Blob([bytes as BlobPart], { type: 'image/gif' })
   triggerDownload(blob, filename)
+}
+
+export interface Cayley3DExportPlan {
+  seconds: number
+  cycles: number
+  periodSec: number
+  fps: number
+  frameCount: number
+  frameDelay: number
+  radPerSec: number
+}
+
+// 3D 凯莱图 GIF 导出方案（纯函数）：「3s」= 3 秒时长（2 圈）；「5 个旋转周期」= 5 圈 × periodSec
+export function cayley3DExportPlan(
+  opts: { seconds?: number; cycles?: number; periodSec?: number; fps?: number } = {},
+): Cayley3DExportPlan {
+  const fps = opts.fps ?? 20
+  const periodSec = opts.periodSec ?? 1.5
+  const cycles = opts.cycles ?? 2
+  const seconds = opts.seconds ?? cycles * periodSec
+  const frameDelay = Math.round(1000 / fps)
+  const frameCount = Math.ceil((seconds * 1000) / frameDelay)
+  const radPerSec = (cycles * 2 * Math.PI) / seconds
+  return { seconds, cycles, periodSec, fps, frameCount, frameDelay, radPerSec }
+}
+
+// 3D 凯莱图旋转 GIF：通过 cayley3dControls 桥以固定角速度驱动主视口相机旋转并逐帧采集
+export async function exportCayley3DGif(
+  filename: string,
+  plan: Cayley3DExportPlan,
+): Promise<Blob | null> {
+  const viewport = document.querySelector('.canvas-viewport')
+  if (!viewport) {
+    alert('No viewport found')
+    return null
+  }
+
+  const canvas = viewport.querySelector('canvas')
+  if (!canvas) {
+    alert('No canvas found for GIF export')
+    return null
+  }
+
+  const ctrl = getCayley3DControls()
+  if (!ctrl || !ctrl.isReady()) {
+    alert('3D view not ready for GIF export')
+    return null
+  }
+
+  const snapshot = ctrl.snapshotOrbit()
+  ctrl.beginRotation(plan.radPerSec)
+  try {
+    const gif = GIFEncoder()
+    const captureStart = performance.now()
+
+    for (let i = 0; i < plan.frameCount; i++) {
+      await new Promise<void>((resolve, reject) => {
+        requestAnimationFrame(() => {
+          try {
+            const offCanvas = document.createElement('canvas')
+            offCanvas.width = canvas.width
+            offCanvas.height = canvas.height
+            const ctx = offCanvas.getContext('2d')!
+            ctx.drawImage(canvas, 0, 0)
+            const imageData = ctx.getImageData(0, 0, offCanvas.width, offCanvas.height)
+            const frame = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength)
+            const palette = quantize(frame, 256, { format: 'rgba' })
+            const index = applyPalette(frame, palette, 'rgba')
+            gif.writeFrame(index, canvas.width, canvas.height, {
+              palette,
+              delay: plan.frameDelay,
+              repeat: i === 0 ? 0 : undefined,
+            })
+            resolve()
+          } catch (err) {
+            reject(err)
+          }
+        })
+      })
+
+      if (i < plan.frameCount - 1) {
+        const nextTarget = captureStart + (i + 1) * plan.frameDelay
+        const wait = Math.max(0, nextTarget - performance.now())
+        if (wait > 0) await new Promise(r => setTimeout(r, wait))
+      }
+    }
+
+    gif.finish()
+    const bytes = gif.bytes()
+    const blob = new Blob([bytes as BlobPart], { type: 'image/gif' })
+    triggerDownload(blob, filename)
+    return blob
+  } finally {
+    ctrl.endRotation(snapshot)
+  }
 }

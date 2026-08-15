@@ -42,7 +42,7 @@
 | **Set View** | Grid layout of all group elements |
 | **Cayley Graph (2D)** | SVG-based, 12 shape layouts, draggable nodes, configurable edges |
 | **Cycle Graph** | Cyclic subgroup visualization with maximal cycle filtering |
-| **Cayley Table** | Interactive multiplication table with row/column highlighting and coset striping |
+| **Cayley Table** | Interactive multiplication table with row/column highlighting and coset striping; for |G| > 16 offers three strategies (subgroup / random sample / full table with fullscreen mode, zoom slider, SVG export) |
 | **Cayley Graph (3D)** | Three.js rendering, 17 shape templates, orbit controls |
 | **Symmetry View** | Polyhedra geometry + element rotation animations + rotation axis markers |
 | **Subgroup Lattice** | Hasse diagram with layer-based layout |
@@ -97,7 +97,7 @@
 - **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; relator-loop view (3D torus Cayley graph, click a relator to highlight its closed loop) + presentation table view with word-evaluation paths; draft autosave
 - **Small group registry** — all 93 groups of order 1–31 (GAP SmallGroups import) with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 39 test files, 1195 tests (Vitest)
+- **Test suite** — 39 test files, 1205 tests (Vitest)
 
 ---
 
@@ -161,7 +161,7 @@ npm run preview
 
 ```
 src/
-├── __tests__/            # 39 test files (1195 tests)
+├── __tests__/            # 39 test files (1205 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -251,7 +251,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (39 files, 1195 tests)
+- [x] Test suite (39 files, 1205 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

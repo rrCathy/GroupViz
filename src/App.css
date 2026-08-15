@@ -2582,3 +2582,172 @@
   background: var(--border-color);
   border-radius: 2px;
 }
+
+/* ===== TableView strategies (subgroup / random / full) ===== */
+.table-strategy-bar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 92%;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 4px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.table-strategy-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.table-strategy-btn:hover {
+  background: var(--hover-bg, rgba(128, 128, 128, 0.15));
+  color: var(--text-primary);
+}
+
+.table-strategy-btn.active {
+  background: var(--accent-teal);
+  border-color: var(--accent-teal);
+  color: #fff;
+  font-weight: 600;
+}
+
+.table-strategy-caption {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-left: 4px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fullscreen table overlay */
+.table-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg-canvas, #0a0a14);
+  display: flex;
+  flex-direction: column;
+}
+
+.table-fullscreen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.table-fullscreen-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-fullscreen-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.table-fs-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  min-width: 28px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.table-fs-btn:hover {
+  background: var(--hover-bg, rgba(128, 128, 128, 0.15));
+  color: var(--text-primary);
+}
+
+.table-fs-slider {
+  width: 140px;
+  height: 28px;
+  cursor: pointer;
+  accent-color: var(--accent-teal);
+}
+
+.table-fullscreen-body {
+  flex: 1;
+  overflow: auto;
+  cursor: grab;
+  padding: 12px;
+}
+
+.table-fullscreen-body.dragging {
+  cursor: grabbing;
+}
+
+.table-fullscreen-svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Fullscreen confirm modal */
+.table-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-confirm-modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 20px 22px;
+  max-width: 420px;
+  width: calc(100% - 48px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.table-confirm-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.table-confirm-msg {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.table-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

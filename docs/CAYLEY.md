@@ -66,7 +66,7 @@ interface CayleyEdgeData {
 - 节点：Three.js 球体 (r=0.42~0.62)，**不可拖拽**，位置预计算
 - 边：圆柱体 + 锥形箭头（有向）或仅圆柱体（无向）；自环：上方环形
 - 节点标签：`Html` + KaTeX；**自定义球坐标轨道**（非 OrbitControls）：左键旋转（theta/phi 无极角钳制，可连续翻越上下两极点，`up=sign(sinφ)` 翻转保持画面正立）、右键平移 target、滚轮缩放 radius∈[3,25]；▶ 自动旋转沿用同一状态（最后拖拽方向与速率）
-- 3D 导出 PNG（`preserveDrawingBuffer: true`）
+- 3D 导出 PNG（`preserveDrawingBuffer: true`）+ **3D GIF 导出**（`exportCayley3DGif`：`cayley3dControls` 注册桥驱动相机按 `cayley3DExportPlan`（3s/2 圈 60 帧或 5 圈 7.5s 150 帧，20fps）匀速旋转，rAF 逐帧离屏 drawImage → gifenc 编码，结束恢复原相机视角）
 
 ## 6. 3D 形状模板（17 种）
 

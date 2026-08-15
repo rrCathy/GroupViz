@@ -113,6 +113,7 @@ interface GroupContextState {
 |------|------|---------|---------|
 | `exportView()` | 导出 SVG / PNG | 所有视图 | `.svg` / `.png` |
 | `exportSymmetryAsGif()` | 导出 GIF | 对称性视图 | `.gif`（gifenc，20fps 2s 循环） |
+| `exportCayley3DGif()` | 导出 GIF | 3D 凯莱图 | `.gif`（gifenc 20fps，3s/2 圈 或 5 圈 7.5s，经 `cayley3dControls` 桥驱动旋转） |
 
 - **SVG 导出**：克隆 SVG 元素、内联样式表 CSS、XMLSerializer → Blob → 下载（保留 KaTeX foreignObject）
 - **PNG 导出**：`canvas.toDataURL` 同步捕获（依赖 `preserveDrawingBuffer: true`）

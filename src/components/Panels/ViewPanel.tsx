@@ -1,8 +1,8 @@
-import { useMemo, useRef, useEffect } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { buildViewModes } from './constants'
 import { renderTex, texify } from '../../utils/texify'
-import { exportView, exportSymmetryAsGif } from '../../utils/export'
+import { exportView, exportSymmetryAsGif, exportCayley3DGif, cayley3DExportPlan } from '../../utils/export'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
@@ -268,6 +268,7 @@ function ExportSection({ currentGroup }: { currentGroup: Group | null }) {
   useEffect(() => () => { mountedRef.current = false }, [])
   const { currentView, symmetryShowAction, symmetryActionElementId, setSymmetryActionElementId } = useGroup()
   const { t } = useTranslation()
+  const [gif3dOption, setGif3dOption] = useState<'3s' | '5c'>('3s')
 
   const handleExportView = () => {
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
@@ -275,6 +276,15 @@ function ExportSection({ currentGroup }: { currentGroup: Group | null }) {
     const is3d = currentView === '3d' || currentView === 'symmetry'
     const ext = is3d ? 'png' : 'svg'
     exportView(currentView, `groupviz_${viewName}_${ts}.${ext}`)
+  }
+
+  const handleExport3DGif = () => {
+    if (!currentGroup) return
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const plan = gif3dOption === '5c'
+      ? cayley3DExportPlan({ cycles: 5 })
+      : cayley3DExportPlan({ seconds: 3, cycles: 2 })
+    exportCayley3DGif(`groupviz_3d_cayley_${ts}.gif`, plan)
   }
 
   const handleExportGif = () => {
@@ -309,6 +319,28 @@ function ExportSection({ currentGroup }: { currentGroup: Group | null }) {
       >
         {currentView === '3d' || currentView === 'symmetry' ? t('panel.exportPng') : t('panel.exportSvg')}
       </button>
+      {currentView === '3d' && (
+        <div style={{ marginTop: '4px' }}>
+          <select
+            value={gif3dOption}
+            onChange={(e) => setGif3dOption(e.target.value as '3s' | '5c')}
+            className="shape-select"
+            style={{ width: '100%' }}
+            aria-label={t('panel.gifOption')}
+          >
+            <option value="3s">{t('panel.gif3s')}</option>
+            <option value="5c">{t('panel.gif5Cycles')}</option>
+          </select>
+          <button
+            className="panel-btn"
+            onClick={handleExport3DGif}
+            disabled={!currentGroup}
+            style={{ width: '100%', marginTop: '4px' }}
+          >
+            {t('panel.exportGif')}
+          </button>
+        </div>
+      )}
       {currentView === 'symmetry' && (
         <button
           className="panel-btn"

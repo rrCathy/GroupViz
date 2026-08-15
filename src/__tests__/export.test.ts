@@ -6,7 +6,15 @@ import {
   encodeGif,
   exportSymmetryAsGifBlob,
   exportSymmetryAsGif,
+  cayley3DExportPlan,
+  exportCayley3DGif,
 } from '../utils/export'
+import {
+  registerCayley3DControls,
+  unregisterCayley3DControls,
+  getCayley3DControls,
+} from '../utils/cayley3dControls'
+import type { Cayley3DControlAPI, Cayley3DOrbitSnapshot } from '../utils/cayley3dControls'
 
 function makeFakeElement(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -62,6 +70,132 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+function makeFake3DControls(overrides: Partial<Cayley3DControlAPI> = {}): Cayley3DControlAPI {
+  return {
+    isReady: vi.fn(() => true),
+    snapshotOrbit: vi.fn(() => ({ theta: 0.5, phi: 1.2, radius: 8, target: {} }) as unknown as Cayley3DOrbitSnapshot),
+    beginRotation: vi.fn(),
+    endRotation: vi.fn(),
+    ...overrides,
+  }
+}
+
+describe('cayley3DExportPlan', () => {
+  it('defaults to 3s / 2 cycles at 20fps', () => {
+    const p = cayley3DExportPlan()
+    expect(p.seconds).toBe(3)
+    expect(p.cycles).toBe(2)
+    expect(p.periodSec).toBe(1.5)
+    expect(p.fps).toBe(20)
+    expect(p.frameDelay).toBe(50)
+    expect(p.frameCount).toBe(60)
+    expect(p.radPerSec).toBeCloseTo((2 * 2 * Math.PI) / 3)
+  })
+
+  it('computes 5 rotation cycles as 7.5s at 1.5s per cycle', () => {
+    const p = cayley3DExportPlan({ cycles: 5 })
+    expect(p.seconds).toBe(7.5)
+    expect(p.frameCount).toBe(150)
+    expect(p.radPerSec).toBeCloseTo((2 * Math.PI) / 1.5)
+  })
+
+  it('honors explicit seconds / fps', () => {
+    const p = cayley3DExportPlan({ seconds: 2, cycles: 4, fps: 10 })
+    expect(p.frameDelay).toBe(100)
+    expect(p.frameCount).toBe(20)
+    expect(p.radPerSec).toBeCloseTo(4 * Math.PI)
+  })
+})
+
+describe('cayley3dControls registration', () => {
+  afterEach(() => {
+    const c = getCayley3DControls()
+    if (c) unregisterCayley3DControls(c)
+  })
+
+  it('registers, retrieves and unregisters the api', () => {
+    const api = makeFake3DControls()
+    expect(getCayley3DControls()).toBeNull()
+    registerCayley3DControls(api)
+    expect(getCayley3DControls()).toBe(api)
+    unregisterCayley3DControls(api)
+    expect(getCayley3DControls()).toBeNull()
+  })
+
+  it('later registrations win and unregistering stale api keeps the newest', () => {
+    const a = makeFake3DControls()
+    const b = makeFake3DControls()
+    registerCayley3DControls(a)
+    registerCayley3DControls(b)
+    expect(getCayley3DControls()).toBe(b)
+    unregisterCayley3DControls(a)
+    expect(getCayley3DControls()).toBe(b)
+  })
+})
+
+describe('exportCayley3DGif', () => {
+  afterEach(() => {
+    const c = getCayley3DControls()
+    if (c) unregisterCayley3DControls(c)
+  })
+
+  it('alerts when no viewport exists', async () => {
+    await exportCayley3DGif('x.gif', cayley3DExportPlan({ seconds: 0.1, cycles: 1 }))
+    expect(globalThis.alert).toHaveBeenCalledWith('No viewport found')
+  })
+
+  it('alerts when no canvas exists', async () => {
+    const viewport = makeFakeElement({ querySelector: vi.fn(() => null) })
+    stubBasicDom({ viewport })
+    await exportCayley3DGif('x.gif', cayley3DExportPlan({ seconds: 0.1, cycles: 1 }))
+    expect(globalThis.alert).toHaveBeenCalledWith('No canvas found for GIF export')
+  })
+
+  it('alerts when the 3d view is not registered', async () => {
+    const canvas = makeFakeCanvas2d()
+    const viewport = makeFakeElement({ querySelector: vi.fn((sel: string) => (sel === 'canvas' ? canvas : null)) })
+    stubBasicDom({ viewport })
+    await exportCayley3DGif('x.gif', cayley3DExportPlan({ seconds: 0.1, cycles: 1 }))
+    expect(globalThis.alert).toHaveBeenCalledWith('3D view not ready for GIF export')
+  })
+
+  it('captures frames, drives rotation and restores orbit afterwards', async () => {
+    const canvas = makeFakeCanvas2d()
+    const viewport = makeFakeElement({ querySelector: vi.fn((sel: string) => (sel === 'canvas' ? canvas : null)) })
+    stubBasicDom({ viewport })
+    const ctrl = makeFake3DControls()
+    registerCayley3DControls(ctrl)
+
+    const plan = cayley3DExportPlan({ seconds: 0.1, cycles: 1, fps: 10 })
+    const blob = await exportCayley3DGif('x.gif', plan)
+
+    expect(blob).not.toBeNull()
+    expect(blob!.type).toBe('image/gif')
+    const bytes = new Uint8Array(await blob!.arrayBuffer())
+    expect(new TextDecoder().decode(bytes.subarray(0, 6))).toBe('GIF89a')
+    expect(ctrl.beginRotation).toHaveBeenCalledWith(plan.radPerSec)
+    expect(ctrl.endRotation).toHaveBeenCalledWith(expect.objectContaining({ theta: 0.5 }))
+  })
+
+  it('restores the orbit even when capture fails mid-way', async () => {
+    const canvas = makeFakeCanvas2d()
+    const viewport = makeFakeElement({ querySelector: vi.fn((sel: string) => (sel === 'canvas' ? canvas : null)) })
+    stubBasicDom({ viewport })
+    // 离屏采集 canvas 的 2d context 缺失 → 采集流程抛错
+    vi.stubGlobal('document', {
+      ...(globalThis.document as object),
+      createElement: vi.fn(() => makeFakeElement({ width: 4, height: 4, getContext: vi.fn(() => null) })),
+    })
+    const ctrl = makeFake3DControls()
+    registerCayley3DControls(ctrl)
+
+    await expect(exportCayley3DGif('x.gif', cayley3DExportPlan({ seconds: 0.1, cycles: 1, fps: 10 })))
+      .rejects.toThrow()
+    expect(ctrl.beginRotation).toHaveBeenCalled()
+    expect(ctrl.endRotation).toHaveBeenCalled()
+  })
 })
 
 describe('encodeGif', () => {

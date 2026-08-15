@@ -588,7 +588,7 @@ export function SemidirectProductView() {
           </label>
           {step > 0 && (
             <button className="panel-btn" onClick={() => gotoStep(step - 1)}
-              style={{ fontSize: '14px', padding: '4px 10px', backgroundColor: 'var(--accent-teal)', color: '#0f0f1a', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+              style={{ fontSize: '14px', padding: '4px 10px', backgroundColor: 'var(--accent-teal)', color: 'var(--btn-on-accent)', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
               ◀
             </button>
           )}
@@ -598,12 +598,12 @@ export function SemidirectProductView() {
           ))}
           {step < 3 ? (
             <button className="panel-btn" onClick={() => gotoStep(step + 1)}
-              style={{ fontSize: '14px', padding: '4px 10px', backgroundColor: 'var(--accent-teal)', color: '#0f0f1a', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
+              style={{ fontSize: '14px', padding: '4px 10px', backgroundColor: 'var(--accent-teal)', color: 'var(--btn-on-accent)', border: 'none', borderRadius: 4, cursor: 'pointer' }}>
               ▶
             </button>
           ) : (
             <button className="panel-btn" onClick={handleFinish}
-              style={{ fontSize: '13px', padding: '4px 14px', backgroundColor: 'var(--accent-green)', color: '#0f0f1a', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>
+              style={{ fontSize: '13px', padding: '4px 14px', backgroundColor: 'var(--accent-green)', color: 'var(--btn-on-accent)', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>
               {t('sd.finish')}
             </button>
           )}

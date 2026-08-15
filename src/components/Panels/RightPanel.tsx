@@ -337,7 +337,7 @@ export function RightPanel() {
               </div>
               <div className="info-row">
                 <span className="info-label">{t('right.homo.kernel')}</span>
-                <span className="info-value" style={{ color: '#ff6b6b' }}>
+                <span className="info-value" style={{ color: 'var(--accent-danger)' }}>
                   <span dangerouslySetInnerHTML={{ __html: renderTex(formatKernelLabel(homoSource, homoResult.kernel)) }} />
                   {' '}(|Ker|={homoResult.kernel.length})
                 </span>
@@ -393,7 +393,7 @@ export function RightPanel() {
               )}
             </>
           ) : homoResult ? (
-            <p className="info-placeholder" style={{ color: '#ff6b6b' }}>✗ {t('homo.invalid')}</p>
+            <p className="info-placeholder" style={{ color: 'var(--accent-danger)' }}>✗ {t('homo.invalid')}</p>
           ) : (
             <p className="info-placeholder">{t('right.homo.noActive')}</p>
           )}
@@ -647,7 +647,7 @@ export function RightPanel() {
               </span>
             </div>
             {comp.violation && (
-              <div style={{ fontSize: 10, color: '#f43f5e', lineHeight: 1.5, marginBottom: 4 }}>
+              <div style={{ fontSize: 10, color: 'var(--accent-danger)', lineHeight: 1.5, marginBottom: 4 }}>
                 {t('action.violation', {
                   g: comp.violation.g,
                   a: comp.violation.a,

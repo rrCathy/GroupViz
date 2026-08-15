@@ -12,11 +12,11 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`{ test: { globals: true, environment: 'node' } }` — Node 环境，无 jsdom、无 setupFiles
-- **coverage**：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`（基线 Stmts 58.74% → 现 88.98%，lines 91.82%，exportApi.ts 95.41%）
+- **coverage**：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 88.56%，lines 91.49%，branches 77.78%、funcs 92.08%，exportApi.ts 95.41%）
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，39 文件 / 1205 tests）
+## 3. 测试文件清单（src/__tests__，39 文件 / 1206 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -56,7 +56,7 @@
 | tableGroups.audit.test.ts | 279 | GAP 表群可视化惰性审计（66 群全扫）：默认形状可布局（circular 走 cayleyCircleLayout）、全部可用非圆形形状布局（位置有限 + 无重复）、环形布局 distinct+finite、生成元 Cayley 边端点合法、顶层 ':' 半直积 getSemidirectProductMeta 非 null——防布局静默回退回归（曾捕获 C₃×S₃/C₂×A₄/C₅×S₃/C₄×C₂×C₂ 等 10 群 cylinder/torus 失效） |
 | presentations.test.ts | 36 | 群展示：解析器（简化/指数/括号/零指数/非法字符/长符号 + Unicode 上标 a²/a⁻¹）、parsePresentation、parseRelationEquation（f1=f2 等式）、Todd–Coxeter（finite/infinite/overflow）、buildGroupFromPresentation（C₄/D₄/V₄/S₃/A₅ 构建 + multiply/inverse 一致性 + 无限/溢出 + f1=f2 归一化 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合/stored 原样） |
 | cayleyTree.test.ts | 25 | 树视图核心（cayleyTree.ts）：computeCayleyTree BFS 生成树（生成树边/粘合边划分，粘合边不渲染仅计数）、computeFreeTree 自由模板树、computeFoldTree（幂折叠网格：a²,b³,ab=ba → C₂×C₃ 2×3 网格 0 交叉；genElsOverride 修复 S₄ Coxeter 3 生成元不崩溃；D∞ 0.7 路径状衰减、C₂*ℤ 0.5 稠密衰减 + 0 交叉、Sierpinski 0 交叉回归）、countEdgeCrossings 严格交叉计数、parseRelationEquation |
-| export.test.ts | 25 | 视图导出（export.ts）：encodeGif（GIF89a 魔数/多帧）、triggerDownload、exportView（SVG/3D canvas/无 viewport/svg/canvas 分支）、captureSvgFrame（像素解析/加载失败 reject）、exportSymmetryAsGifBlob（无 viewport null/多帧捕获 + 重启回调）、exportSymmetryAsGif（各 alert 分支）、cayley3DExportPlan（3s/2 圈 60 帧、5 圈 7.5s 150 帧、自定义参数）、cayley3dControls 注册（register/get/unregister/后注册胜出）、exportCayley3DGif（无 viewport/未注册 alert 分支、正常流程 GIF89a + beginRotation 参数 + endRotation 恢复、失败路径 reject） |
+| export.test.ts | 26 | 视图导出（export.ts）：encodeGif（GIF89a 魔数/多帧）、triggerDownload、exportView（SVG/3D canvas/无 viewport/svg/canvas 分支）、captureSvgFrame（像素解析/加载失败 reject）、exportSymmetryAsGifBlob（无 viewport null/多帧捕获 + 重启回调）、exportSymmetryAsGif（各 alert 分支）、cayley3DExportPlan（3s/2 圈 60 帧、5 圈 7.5s 150 帧、自定义参数）、cayley3dControls 注册（register/get/unregister/后注册胜出）、exportCayley3DGif（无 viewport/未注册 alert 分支、正常流程 GIF89a + beginRotation 用 displayAngVel() 实测角速度 + endRotation 恢复、失败路径 reject、**displayAngVel 驱动帧数重推导**（总转角 cycles×2π）、**frameAt 按帧序号×帧延时精确驱动**（逐帧断言 (i, frameDelay) 参数）） |
 | exportApi.test.ts | 16 | 导出桥（exportApi.ts）：registerExportBridge 与 waitReady 时序、getSymmetryInfo（C/D/A₄/S₄/A₅/V₄ 映射）、getAvailableShapes2D/3D、getAvailableViewsForExport（大群去 table/直积去 symmetry）、hideOverlays/showOverlays、exportSVGContent（CSS 变量注入）、exportCanvasDataUrl、recordGIF（base64 解析） |
 
 ## 4. 测试要点与约定

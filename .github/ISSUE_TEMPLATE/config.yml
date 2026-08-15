@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/rrCathy/GroupViz#readme
+    about: Read the README (EN / 简体中文) and docs/ before filing an issue.
+  - name: Roadmap & changelog
+    url: https://github.com/rrCathy/GroupViz/blob/main/docs/ROADMAP.md
+    about: Check whether the feature is already planned (ROADMAP.md) or shipped (docs/CHANGELOG.md).

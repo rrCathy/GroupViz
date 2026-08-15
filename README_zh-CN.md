@@ -7,7 +7,9 @@
   <a href="./README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-**GroupViz** 是一个用于可视化与探索有限群论的交互式Web应用。提供 13 种视图模式（视图面板 9 个卡片 + 群展示面板 2 个专用视图：tree/展示乘法表）、支持多种典型群族与群构建系统（直积/半直积/自同构群/商群/同态/群展示），所有数学公式均通过 KaTeX 渲染。
+**GroupViz** 是一个用于可视化与探索有限群论的交互式Web应用。提供 13 种视图模式（视图面板 9 个卡片 + 同态/轨道视图经各自构建面板进入 + 群展示面板 2 个专用视图：tree/展示乘法表）、支持多种典型群族与群构建系统（直积/半直积/自同构群/商群/同态/群展示），所有数学公式均通过 KaTeX 渲染。
+
+初次使用 GroupViz？建议先读[新手教程](docs/TUTORIAL_zh-CN.md)（English: [TUTORIAL.md](docs/TUTORIAL.md)）。
 <p align="center">
   <img src="https://img.shields.io/badge/React-19.2-blue" alt="React 19">
   <img src="https://img.shields.io/badge/TypeScript-6.0-blue" alt="TS 6">
@@ -34,7 +36,7 @@
 - **陪集分解** — 左/右陪集彩色编码，陪集条带视图中验证 Lagrange 定理
 - **单群检测** — 自动判断是否为单群
 ### 13 种视图模式
-视图面板提供 9 个视图卡片；「tree」「展示乘法表」两个群展示专用视图的入口在左侧「群展示」面板底部（不在视图卡片中）。
+视图面板提供 9 个视图卡片；「同态」「轨道」视图的入口分别在「同态」「群作用」面板中；「tree」「展示乘法表」两个群展示专用视图的入口在左侧「群展示」面板底部（均不在视图卡片中）。
 | 视图 | 说明 |
 |------|------|
 | **集合视图** | 群元素网格排列展示 |
@@ -92,13 +94,13 @@
 - **自逆元素检测** — 高亮 g⁻¹ = g 的元素
 - **会话保存与恢复** — 自动存入 localStorage，刷新后恢复（含商群/自同构/半直积重建）
 - **深色/浅色主题** — CSS自定义属性，支持系统偏好检测
-- **视图导出** — SVG（2D 视图）、PNG（3D 视图）、GIF（对称性动画）+ 批量导出 CLI（`npm run export`）
+- **视图导出** — SVG（2D 视图）、PNG（3D 视图）、GIF（对称性动画 + 3D 凯莱图旋转）+ 批量导出 CLI（`npm run export`）
 - **国际化** — 中文/English UI，localStorage 持久化
 - **混合计算** — 小群本地 TS 计算（≤60），大群自动切换 FastAPI 后端（>60）
 - **小群注册表** — 阶 1–31 全部 93 个群（GAP SmallGroups 导入），预计算子群/共轭类/中心数据
 - **性能守卫** — 子群/共轭类 cutoff 60；Cayley 边限流；自同构枚举组合 >30000 放弃
 - **群展示系统** — ⟨S|R⟩ 创建任意有限群（Todd–Coxeter），群信息栏自动识别标准展示（Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈），tree/展示乘法表视图，草稿自动保存
-- **测试体系** — 39 个测试文件 1178 tests（vitest）
+- **测试体系** — 39 个测试文件 1206 tests（vitest）
 ---
 
 ## 🚀 快速开始
@@ -139,6 +141,19 @@ npm run preview
 
 ---
 
+## 🤝 参与贡献
+
+欢迎任何形式的贡献——从布局算法修正到新群族、新构建流程。从这里开始：
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) —— 新手引导、代码规范、开发流程与风险审查协议
+- [docs/ROADMAP.md](docs/ROADMAP.md) —— 尚未完成的事项（这里只列未做项）
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) —— 已完成里程碑与逐次开发记录
+- [Issue 模板](.github/ISSUE_TEMPLATE/) —— Bug 报告与功能请求
+
+CI（`.github/workflows/ci.yml`）在每次 push/PR 自动运行 lint、测试、覆盖率阈值、生产构建与后端 pytest；`main` 自动部署 GitHub Pages，`v*` 标签发布 Release。
+
+---
+
 ## 🛠 技术栈
 
 | 类别 | 技术 |
@@ -148,7 +163,7 @@ npm run preview
 | 样式 | CSS 自定义属性 + App.css |
 | 3D 渲染 | Three.js + React Three Fiber |
 | 数学渲染 | KaTeX |
-| 状态管理 | 模块化 React Context（9 个 Provider） |
+| 状态管理 | 模块化 React Context（12 个领域 Provider） |
 | 后端 | Python FastAPI（大群混合计算） |
 | 国际化 | 自定义 React Context |
 | 测试 | Vitest |
@@ -158,8 +173,10 @@ npm run preview
 ## 📂 项目结构
 
 ```
+.github/                # CI 工作流（ci / pages / release）+ issue / PR 模板
+CONTRIBUTING.md         # 参与贡献指南（含新手引导）
 src/
-├── __tests__/            # 39 个测试文件（1178 tests）
+├── __tests__/            # 39 个测试文件（1206 tests）
 ├── components/
 │   ├── Canvas/           # 视图组件（Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/多视图窗口）
@@ -174,7 +191,7 @@ src/
 │   ├── polyhedra.ts      # 多面体顶点生成
 │   ├── elementRotation.ts # 群元素 → 3D 几何旋转变换
 │   └── viewBox.ts        # SVG 视口尺寸计算
-├── context/              # 模块化状态管理（9 个 Provider + Actions 模块）
+├── context/              # 模块化状态管理（12 个领域 Provider + GroupContext 聚合）
 ├── utils/                # Unicode→TeX 转换、导出、导出桥、群工厂、混合计算
 ├── backend/              # FastAPI 后端（大群结构计算）
 └── docs/                 # 技术文档体系
@@ -219,7 +236,7 @@ GroupViz 可视化抽象代数与有限群论中的概念。
 ---
 
 ## 🔮 路线图
-- [x] 11 种视图模式（含同态视图、陪集条带、轨道视图、Sylow 视图）
+- [x] 13 种视图模式（含同态视图、陪集条带、轨道视图、Sylow 视图）
 - [x] 群展示系统（⟨S|R⟩ 创建 + Todd–Coxeter、树视图、可视化创建、展示乘法表视图）
 - [x] 多视图浮动窗口
 - [x] 子群格（Hasse 图）
@@ -237,7 +254,7 @@ GroupViz 可视化抽象代数与有限群论中的概念。
 - [x] 会话保存与恢复
 - [x] 视图导出（SVG/PNG/GIF）+ 批量导出 CLI
 - [x] 混合计算（本地 TS + FastAPI 后端，本地兜底 + 进度条）
-- [x] 测试体系（39 文件 1205 tests）
+- [x] 测试体系（39 文件 1206 tests）
 - [ ] 群运算律验证动画
 - [x] 自定义有限群输入（⟨S|R⟩ 群展示系统）
 - [ ] 教学模式

@@ -49,6 +49,8 @@ interface NodeSphereProps {
 
 const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected, isHovered, subsetColor, element, onSelectElement, onPointerEnter, onPointerLeave }: NodeSphereProps) {
   const texLabel = useMemo(() => renderTex(texify(label)), [label])
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
   return (
     <group position={position}>
@@ -85,8 +87,8 @@ const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected
         <Html distanceFactor={12} center style={{ pointerEvents: 'none', userSelect: 'none' }}>
           <div
             style={{
-              color: '#fff', fontSize: 11, fontWeight: 'bold',
-              textShadow: '0 0 6px rgba(0,0,0,0.8)', whiteSpace: 'nowrap',
+              color: 'var(--node-text)', fontSize: 11, fontWeight: 'bold',
+              textShadow: isDark ? '0 0 6px rgba(0,0,0,0.8)' : '0 0 4px rgba(255,255,255,0.9)', whiteSpace: 'nowrap',
               fontFamily: 'serif', display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}
             dangerouslySetInnerHTML={{ __html: texLabel }}
@@ -167,7 +169,7 @@ function SceneContent() {
   } = useGroup()
   const { hoverElement, setHoverElement } = useHover()
   const { t } = useTranslation()
-  const { gl, camera } = useThree()
+  const { gl, camera, scene } = useThree()
   const [autoRotate, setAutoRotate] = useState(false)
   // 自定义轨道状态（替代 drei OrbitControls）：theta/phi 球坐标，phi 无界（可无限翻越上下极点，无 makeSafe 钳制）
   const orbit = useRef({
@@ -180,8 +182,84 @@ function SceneContent() {
   // 最近一次鼠标拖拽向量:自动旋转时按此方向持续旋转(而非固定方向)
   const dragVec = useRef({ x: 0, y: 0 })
   const dragState = useRef({ active: false, lastX: 0, lastY: 0, x: 0, y: 0, button: 0 })
-  // GIF 导出期间的外部强制旋转（固定总角速度，按最后一次拖拽方向分解 theta/phi 双分量，优先于 autoRotate）
-  const externalRotation = useRef({ active: false, radPerSec: 0 })
+  // GIF 导出期间的角度驱动：beginRotation 记录基准角并创建独立离屏渲染器/相机，
+  // frameAt 按帧索引精确求角并渲染到离屏 canvas（每帧角度 = 基准 + radPerSec × 帧延时 × 帧序号，
+  // 与实时渲染耗时无关）；实时轨道/相机全程不被触碰，展示区照常旋转
+  const externalRotation = useRef<{
+    active: boolean
+    radPerSec: number
+    baseTheta: number
+    basePhi: number
+    radius: number
+    target: THREE.Vector3
+    renderer: THREE.WebGLRenderer | null
+    ecam: THREE.PerspectiveCamera | null
+  }>({
+    active: false, radPerSec: 0, baseTheta: 0, basePhi: 0, radius: 1,
+    target: new THREE.Vector3(), renderer: null, ecam: null,
+  })
+
+  // 展示区自动旋转角速度（与 ▶ 自动旋转同一公式；拖拽后按拖拽向量长度降速）：
+  // GIF 导出用同一值，保证导出动图与展示区转速一致
+  const displayAngVel = useCallback(() => {
+    const d = dragVec.current
+    const len = Math.hypot(d.x, d.y)
+    return (len >= 8 ? 0.35 + Math.min(0.65, len / 360) : 1) * 2 * Math.PI
+  }, [])
+
+  const positions = useMemo(() => {
+    if (!currentGroup) return [] as THREE.Vector3[]
+    return compute3DPositions(currentGroup, cayleyShape3D).map(
+      p => new THREE.Vector3(p[0], p[1], p[2])
+    )
+  }, [currentGroup, cayleyShape3D])
+
+  // 外接球：节点云质心为球心，最大距离为半径（含节点球/自环余量），复位与初始视角均基于它
+  const bounds = useMemo(() => {
+    const center = new THREE.Vector3(0, 0, 0)
+    if (positions.length === 0) return { center, radius: 3 }
+    for (const p of positions) center.add(p)
+    center.divideScalar(positions.length)
+    let r = 0
+    for (const p of positions) r = Math.max(r, p.distanceTo(center))
+    return { center, radius: r + 1.4 }
+  }, [positions])
+
+  // 默认视角（复位目标）：外接球直径 ≈ 视口高度 2/3（d = 1.5R/tan(fov/2)），相机远在球外（d ≈ 3.2R > R）。
+  // minRadius = 球外（视角不可进入外接球）；maxRadius = 适配距离 3 倍
+  const fitOrbit = useMemo(() => {
+    const halfFov = ((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360
+    const dist = (bounds.radius * 1.5) / Math.tan(halfFov)
+    return {
+      theta: 0,
+      phi: Math.acos(3 / Math.sqrt(3 ** 2 + 12 ** 2)),
+      radius: dist,
+      minRadius: Math.max(1.5, bounds.radius + 0.8),
+      maxRadius: Math.max(30, dist * 3),
+      target: bounds.center.clone(),
+    }
+  }, [bounds, camera])
+
+  // latestFit 在每次渲染后同步，供复位与切群/切形状自动回正使用（避免 fitOrbit 对象身份波动触发）
+  const latestFit = useRef(fitOrbit)
+  useEffect(() => {
+    latestFit.current = fitOrbit
+  })
+  const groupKey = currentGroup ? `${currentGroup.symbol}|${currentGroup.order}` : ''
+
+  const resetCamera = useCallback(() => {
+    const o = orbit.current
+    const fit = latestFit.current
+    o.theta = fit.theta
+    o.phi = fit.phi
+    o.radius = fit.radius
+    o.target.copy(fit.target)
+  }, [])
+
+  // 切换群或切换 3D 形状时自动回到默认适配视角
+  useEffect(() => {
+    resetCamera()
+  }, [groupKey, cayleyShape3D, resetCamera])
 
   useEffect(() => {
     const el = gl.domElement
@@ -219,7 +297,7 @@ function SceneContent() {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const o = orbit.current
-      o.radius = Math.min(25, Math.max(3, o.radius * Math.pow(0.95, e.deltaY / 100)))
+      o.radius = Math.min(fitOrbit.maxRadius, Math.max(fitOrbit.minRadius, o.radius * Math.pow(0.95, -e.deltaY / 100)))
     }
     el.addEventListener('pointerdown', onDown)
     el.addEventListener('pointermove', onMove)
@@ -233,7 +311,7 @@ function SceneContent() {
       el.removeEventListener('pointercancel', onUp)
       el.removeEventListener('wheel', onWheel)
     }
-  }, [gl, camera])
+  }, [gl, camera, fitOrbit])
 
   // 按最后一次拖拽方向将角速度分解到 theta/phi 两个分量（与手动拖拽同约定：拖右 theta -=，拖下 phi -=），
   // 未拖拽过则默认绕竖轴（theta）旋转；拖拽含竖直分量时同步带动俯仰旋转——与 ▶ 自动旋转方向完全一致
@@ -252,27 +330,8 @@ function SceneContent() {
     }
   }
 
-  // 每帧：手动拖拽的 theta/phi 已在 pointer 处理中直接更新；此处应用自动旋转增量并同步相机。
-  // 球坐标 phi 无界（可无限翻越上下极点）；up 在 phi 越过 0 或 π（两极点）时翻转，画面保持正立
-  useFrame((_, delta) => {
-    if (!currentGroup) return
-    const o = orbit.current
-    if (!o.initialized) {
-      // 从当前相机位置反推初始轨道（兼容会话恢复等外部设置的相机）
-      const v = new THREE.Vector3().subVectors(camera.position, o.target)
-      o.radius = Math.min(25, Math.max(3, v.length()))
-      o.phi = Math.acos(Math.min(1, Math.max(-1, v.y / o.radius)))
-      o.theta = Math.atan2(v.x, v.z)
-      o.initialized = true
-    }
-    if (externalRotation.current.active) {
-      applyOrbitRotation(o, externalRotation.current.radPerSec, delta)
-    } else if (autoRotate) {
-      const d = dragVec.current
-      const len = Math.hypot(d.x, d.y)
-      const rate = (len >= 8 ? 0.35 + Math.min(0.65, len / 360) : 1) * 2 * Math.PI
-      applyOrbitRotation(o, rate, delta)
-    }
+  // 由球坐标轨道写入相机（位置/up 极点翻转/lookAt）：帧循环与 GIF 导出 frameAt 共用，保证画面与 GIF 帧一致
+  const applyCameraFromOrbit = useCallback((o: { theta: number; phi: number; radius: number; target: THREE.Vector3 }) => {
     const sinP = Math.sin(o.phi)
     camera.position.set(
       o.target.x + o.radius * sinP * Math.sin(o.theta),
@@ -282,15 +341,27 @@ function SceneContent() {
     // 越过上下任一极点（sinφ 变号）时翻转 up，保持画面正立连续
     camera.up.set(0, sinP >= 0 ? 1 : -1, 0)
     camera.lookAt(o.target)
-  })
+  }, [camera])
 
-  const resetCamera = useCallback(() => {
+  // 每帧：手动拖拽的 theta/phi 已在 pointer 处理中直接更新；此处应用自动旋转增量并同步相机。
+  // 球坐标 phi 无界（可无限翻越上下极点）；GIF 导出期间角度由 frameAt 精确驱动，此处仅同步相机
+  useFrame((_, delta) => {
+    if (!currentGroup) return
     const o = orbit.current
-    o.theta = 0
-    o.phi = Math.acos(3 / Math.sqrt(3 ** 2 + 12 ** 2))
-    o.radius = Math.sqrt(3 ** 2 + 12 ** 2)
-    o.target.set(0, 0, 0)
-  }, [])
+    if (!o.initialized) {
+      // 初始视角 = 复位适配视角（外接球居中、直径占视口高度 2/3、相机在球外）
+      o.theta = fitOrbit.theta
+      o.phi = fitOrbit.phi
+      o.radius = fitOrbit.radius
+      o.target.copy(fitOrbit.target)
+      o.initialized = true
+    }
+    if (autoRotate) {
+      // GIF 导出期间实时循环不受影响：导出相机独立离屏渲染，展示区照常按此速度旋转
+      applyOrbitRotation(o, displayAngVel(), delta)
+    }
+    applyCameraFromOrbit(o)
+  })
 
   useEffect(() => {
     const el = gl.domElement
@@ -308,37 +379,81 @@ function SceneContent() {
         const o = orbit.current
         return { theta: o.theta, phi: o.phi, radius: o.radius, target: o.target.clone() }
       },
+      displayAngVel: () => displayAngVel(),
       beginRotation: (radPerSec) => {
-        // 方向每帧按 dragVec 分解到 theta/phi（theta/phi 双分量），与 ▶ 自动旋转完全一致；
-        // 仅总角速度以 radPerSec 匀速（时长控制），拖拽方向/俯仰分量完整保留
-        externalRotation.current = { active: true, radPerSec }
-      },
-      endRotation: (snap) => {
-        externalRotation.current.active = false
-        if (snap) {
-          const o = orbit.current
-          o.theta = snap.theta
-          o.phi = snap.phi
-          o.radius = snap.radius
-          o.target.copy(snap.target)
+        // 记录基准角/半径/目标，并创建独立离屏渲染器 + 相机（与实时轨道/相机完全隔离，
+        // 导出期间展示区照常旋转；offline renderer 的 drawing buffer 与主视口同尺寸）
+        const o = orbit.current
+        const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true })
+        renderer.setSize(gl.domElement.width, gl.domElement.height, false)
+        const ecam = new THREE.PerspectiveCamera(
+          (camera as THREE.PerspectiveCamera).fov,
+          (camera as THREE.PerspectiveCamera).aspect,
+          camera.near,
+          camera.far
+        )
+        externalRotation.current = {
+          active: true, radPerSec,
+          baseTheta: o.theta, basePhi: o.phi,
+          radius: o.radius, target: o.target.clone(),
+          renderer, ecam,
         }
+        // 预热渲染一次（编译离屏 GL 着色器并建立绘制流水线），首帧角度与 frameAt(0) 一致
+        const sinP0 = Math.sin(o.phi)
+        ecam.position.set(
+          o.target.x + o.radius * sinP0 * Math.sin(o.theta),
+          o.target.y + o.radius * Math.cos(o.phi),
+          o.target.z + o.radius * sinP0 * Math.cos(o.theta)
+        )
+        ecam.up.set(0, sinP0 >= 0 ? 1 : -1, 0)
+        ecam.lookAt(o.target)
+        renderer.render(scene, ecam)
+      },
+      // GIF 导出的第 index 帧：按帧序号与帧延时精确计算角度（与实时渲染耗时无关，
+      // 方向沿用最后一次拖拽分解），渲染到离屏 canvas 并返回供导出循环采集
+      frameAt: (index, frameDelayMs) => {
+        const e = externalRotation.current
+        if (!e.active || !e.renderer || !e.ecam) return null
+        const total = (e.radPerSec * index * frameDelayMs) / 1000
+        const d = dragVec.current
+        const len = Math.hypot(d.x, d.y)
+        let theta: number
+        let phi: number
+        if (len >= 8) {
+          theta = e.baseTheta - (d.x / len) * total
+          phi = e.basePhi - (d.y / len) * total
+        } else {
+          theta = e.baseTheta - total
+          phi = e.basePhi
+        }
+        const sinP = Math.sin(phi)
+        e.ecam.position.set(
+          e.target.x + e.radius * sinP * Math.sin(theta),
+          e.target.y + e.radius * Math.cos(phi),
+          e.target.z + e.radius * sinP * Math.cos(theta)
+        )
+        e.ecam.up.set(0, sinP >= 0 ? 1 : -1, 0)
+        e.ecam.lookAt(e.target)
+        e.renderer.render(scene, e.ecam)
+        return e.renderer.domElement
+      },
+      endRotation: () => {
+        // 实时轨道/相机全程未被触碰，无需恢复；仅释放离屏渲染器
+        const e = externalRotation.current
+        e.active = false
+        e.renderer?.dispose()
+        e.renderer = null
+        e.ecam = null
       },
     }
     registerCayley3DControls(api)
     return () => unregisterCayley3DControls(api)
-  }, [currentGroup, gl])
+  }, [currentGroup, gl, scene, camera, displayAngVel])
 
   const cayleyEdges = useMemo(() => {
     if (!currentGroup) return [] as CayleyEdgeData[]
     return computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType)
   }, [currentGroup, cayleyActions, cayleyMultiplyType])
-
-  const positions = useMemo(() => {
-    if (!currentGroup) return [] as THREE.Vector3[]
-    return compute3DPositions(currentGroup, cayleyShape3D).map(
-      p => new THREE.Vector3(p[0], p[1], p[2])
-    )
-  }, [currentGroup, cayleyShape3D])
 
   const sphericalThreshold = 400
   const isLargeGroup = currentGroup ? (
@@ -431,21 +546,21 @@ function SceneContent() {
             display: 'flex', gap: 6, alignItems: 'center', pointerEvents: 'auto'
           }}>
             <div style={{
-              background: 'rgba(15, 15, 26, 0.85)', color: '#ccc',
+              background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
               padding: '6px 12px', borderRadius: 8, fontSize: 13,
               fontFamily: 'monospace', pointerEvents: 'none'
             }}>
               <span style={{ fontWeight: 'bold' }} dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.symbol)) }} />
-              <span style={{ marginLeft: 8, color: '#888' }}>|G| = {currentGroup.order}</span>
+              <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>|G| = {currentGroup.order}</span>
             </div>
             <button
               onClick={() => setAutoRotate(v => !v)}
               title={t('cayley3d.autoRotate')}
               aria-label={t('cayley3d.autoRotate')}
               style={{
-                background: 'rgba(15, 15, 26, 0.85)',
-                color: autoRotate ? '#4ecdc4' : '#ccc',
-                border: autoRotate ? '1px solid #4ecdc4' : '1px solid #444',
+                background: 'var(--bg-tooltip)',
+                color: autoRotate ? 'var(--accent-teal)' : 'var(--text-secondary)',
+                border: autoRotate ? '1px solid var(--accent-teal)' : '1px solid var(--border-primary)',
                 borderRadius: 8, padding: '6px 10px', fontSize: 13,
                 cursor: 'pointer', fontFamily: 'monospace'
               }}
@@ -457,8 +572,8 @@ function SceneContent() {
               title={t('cayley3d.resetView')}
               aria-label={t('cayley3d.resetView')}
               style={{
-                background: 'rgba(15, 15, 26, 0.85)', color: '#ccc',
-                border: '1px solid #444', borderRadius: 8, padding: '6px 10px',
+                background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
+                border: '1px solid var(--border-primary)', borderRadius: 8, padding: '6px 10px',
                 fontSize: 13, cursor: 'pointer', fontFamily: 'monospace'
               }}
             >
@@ -472,7 +587,7 @@ function SceneContent() {
         <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }}>
           <div style={{
             position: 'absolute', top: 10, left: 10,
-            background: 'rgba(15, 15, 26, 0.85)', color: '#ccc',
+            background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
             padding: '8px 14px', borderRadius: 8, fontSize: 13,
             fontFamily: 'monospace', pointerEvents: 'none'
           }}>
@@ -557,7 +672,7 @@ export function Cayley3DView() {
   return (
     <div style={{ width: '100%', height: '100%', background: bgColor }}>
       <Canvas
-        camera={{ position: [0, 3, 12], fov: 50, near: 0.1, far: 100 }}
+        camera={{ position: [0, 3, 12], fov: 50, near: 0.1, far: 400 }}
         gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}
         style={{ width: '100%', height: '100%' }}
       >

@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a new visualization, group family, or workflow
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GroupViz is research/teaching software with a hardcore (researcher) UI today and a planned educational mode. Please frame requests against that roadmap — see docs/ROADMAP.md (未做清单) and docs/CHANGELOG.md (completed milestones).
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What mathematical concept or workflow does this make possible? Who benefits (researcher / student / teacher)?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: What exactly should the user see and be able to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways to achieve the same goal (including "do nothing — existing view X already covers it").
+  - type: input
+    id: reference
+    attributes:
+      label: Reference
+      description: Textbook page (e.g. Visual Group Theory ch. 5), GAP documentation, or paper that defines the convention.
+  - type: dropdown
+    id: roadmap
+    attributes:
+      label: Roadmap fit
+      options:
+        - near-term (feature hardening, E1 gappy integration)
+        - mid-term (FGVE engine)
+        - long-term (GVL teaching lab)
+        - not sure

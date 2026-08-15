@@ -43,3 +43,6 @@ lighthouse/
 
 # Screenshots from browser scans
 sweep-*.png
+3d-fit-*.png
+state-*.png
+snap-*.txt

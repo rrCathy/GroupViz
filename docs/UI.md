@@ -79,7 +79,7 @@ AppWrapper (I18nProvider → ThemeProvider)
 
 ## 5. 主题与国际化
 
-- **主题**：ThemeContext + useTheme，CSS 自定义属性驱动（--bg/--panel/--accent 等），支持深/浅色、系统偏好检测、localStorage 记忆
+- **主题**：ThemeContext + useTheme，CSS 自定义属性驱动（--bg/--panel/--accent 等），支持深/浅色、系统偏好检测、localStorage 记忆；语义色 token：--accent-blue/green/red/orange/danger(+hover)、--btn-on-accent（深色 #0f0f1a / 浅色 #ffffff，随主题切换——accent 按钮文字必须用它而非硬编码）、--text-accent，及别名 token（--bg-elevated/--bg-muted/--bg-panel/--bg-hover/--border-color/--canvas-bg/--input-bg/--panel-bg/--panel-border/--text 别名到既有主 token）
 - **国际化**：I18nContext + useTranslation，中文(zh)/English(en)，浏览器语言自动选择，localStorage 记忆
 - ✅ **i18n 键已补全**：`hint.quotientCreated( Iso)`、`hint.automorphismComputed( Iso)`、`hint.layoutFailed`、`op.createQuotient`、`op.removeQuotient`、`op.computedAutomorphism`、`op.removeAutomorphism`、`right.homomorphism`、`right.homo.kernel/image/quotient/noActive`、`right.automorphismMapping`、`right.automorphismFixed`、`homo.firstIso.phase0..3(+Desc)`、`canvas.cosetStripNoSubgroup/NoCosets`、`canvas.tableSampled` 均已定义；CosetStripView/TableView 硬编码英文已改为 t() 调用（`panel.batchExport*` 键随 BatchExportPanel 移除，批量导出由 CLI 承担）；zh/en 键集合一致性由 `i18n.test.ts` 自动化断言
 

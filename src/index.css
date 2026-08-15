@@ -64,6 +64,23 @@ body {
   --accent-danger-hover: #ff3333;
   --accent-sponsor: #f5576c;
   --accent-sponsor-hover: #ff8a95;
+  --accent-blue: #3b82f6;
+  --accent-green: #22c55e;
+  --accent-red: #ff6b6b;
+  --accent-orange: #f97316;
+  --btn-on-accent: #0f0f1a;
+  --text-accent: #4ecdc4;
+
+  --bg-elevated: var(--bg-interactive-hover);
+  --bg-muted: var(--bg-secondary);
+  --bg-panel: var(--bg-secondary);
+  --bg-hover: var(--bg-interactive-hover);
+  --border-color: var(--border-primary);
+  --canvas-bg: var(--bg-canvas);
+  --input-bg: var(--bg-input);
+  --panel-bg: var(--bg-secondary);
+  --panel-border: var(--border-primary);
+  --text: var(--text-primary);
 
   --gradient-header: linear-gradient(180deg, var(--bg-header-start) 0%, var(--bg-header-end) 100%);
   --gradient-canvas: radial-gradient(circle at center, var(--bg-canvas-gradient) 0%, var(--bg-canvas) 100%);
@@ -129,6 +146,14 @@ body {
   --accent-teal-hover: #0d8d88;
   --accent-indigo: #4f46e5;
   --accent-yellow-text: #92400e;
+  --accent-blue: #2563eb;
+  --accent-green: #16a34a;
+  --accent-red: #d64545;
+  --accent-orange: #ea580c;
+  --accent-danger: #d64545;
+  --accent-danger-hover: #b91c1c;
+  --btn-on-accent: #ffffff;
+  --text-accent: #0ea5a0;
 
   --shadow-hint: 0 4px 16px rgba(0, 0, 0, 0.06);
   --shadow-preview: 0 0 40px rgba(99, 102, 241, 0.10), 0 8px 32px rgba(0, 0, 0, 0.08);

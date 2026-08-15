@@ -182,7 +182,7 @@ export function GroupActionPanel() {
             {actionKind === 'conjugation' && actionComputation?.isHomomorphism && (
               <div className="info-row" style={{ marginTop: 6 }}>
                 <span className="info-label">{t('action.kind.conjugation')}</span>
-                <span className="info-value" style={{ color: '#22c55e' }}>✓</span>
+                <span className="info-value" style={{ color: 'var(--accent-green)' }}>✓</span>
               </div>
             )}
 

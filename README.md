@@ -7,7 +7,9 @@
   <strong>English</strong> | <a href="./README_zh-CN.md">简体中文</a>
 </p>
 
-**GroupViz** is an interactive web application for visualizing and exploring finite group theory. It provides 11 visualization modes, supports multiple classical group families plus a group construction system (direct/semidirect products, automorphism groups, quotient groups, homomorphisms), and renders all mathematical notation with KaTeX.
+**GroupViz** is an interactive web application for visualizing and exploring finite group theory. It provides 13 visualization modes, supports multiple classical group families plus a group construction system (direct/semidirect products, automorphism groups, quotient groups, homomorphisms), and renders all mathematical notation with KaTeX.
+
+New to GroupViz? Walk through the step-by-step [tutorial](docs/TUTORIAL.md) (简体中文教程：[TUTORIAL_zh-CN.md](docs/TUTORIAL_zh-CN.md)).
 
 <p align="center">
   <img src="https://img.shields.io/badge/React-19.2-blue" alt="React 19">
@@ -36,7 +38,8 @@
 - **Coset decomposition** — left/right cosets, color-coded, Lagrange's theorem verification in the coset strip view
 - **Simple group detection** — automatic property checking
 
-### 10 View Modes
+### 13 View Modes
+The view panel offers 9 cards; the homomorphism and orbit views open from their respective construction panels, and the two presentation views — tree & presentation table — open from the Group Presentation panel (not in the cards).
 | View | Description |
 |------|-------------|
 | **Set View** | Grid layout of all group elements |
@@ -49,6 +52,9 @@
 | **Homomorphism View** | Source/target dual Cayley graphs + mapping edges, kernel/image highlighting, first isomorphism theorem animation |
 | **Coset Strip** | Cosets as colored columns with `|G| = |H|·[G:H]` Lagrange verification, plus the circular Cayley graph of ⟨H⟩ above the subgroup strip |
 | **Orbit View** | Group action orbits as clusters (fixed points ★ leftmost), generator edges, hover shows full action, orbit-stabilizer verification |
+| **Sylow View** | p-elements & all p-subgroups (p selectable among \|G\| prime factors), Cayley-graph layout (click a subgroup → edges switch to its generators), single select → coset strips (Lagrange), Ctrl/⌘ or ⊕ two subgroups → conjugation view (Sylow II, vertical arrows + P cyan/Q purple internal generator edges) |
+| **Tree View** | Degenerate tree = BFS spanning tree of the quotient Cayley graph: solid spanning-tree edges (colored by generator), glued edges not drawn (counted in a bar), regularized layouts (line/grid/cross/3D) — "relators = tree-cutting" |
+| **Presentation Table View** | Multiplication-table style browsing (columns × rows) with a static relator bar on top; auto-sampled for order > 36 |
 
 ### Group Action System
 | Source | Description |
@@ -91,13 +97,13 @@
 - **Self-inverse element detection** — highlights elements where g⁻¹ = g
 - **Session save/restore** — auto-save to localStorage, resume after refresh (quotient/automorphism/semidirect reconstruction)
 - **Dark/light theme** — CSS custom properties, system preference detection
-- **View export** — SVG (2D views), PNG (3D views), GIF (symmetry animation) + batch export CLI (`npm run export`)
+- **View export** — SVG (2D views), PNG (3D views), GIF (symmetry animation + 3D Cayley rotation) + batch export CLI (`npm run export`)
 - **i18n** — Chinese / English UI with localStorage persistence
 - **Hybrid computation** — local TypeScript for small groups (≤60), FastAPI backend for large ones (>60)
-- **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; relator-loop view (3D torus Cayley graph, click a relator to highlight its closed loop) + presentation table view with word-evaluation paths; draft autosave
+- **Group presentations** — create any finite group from ⟨S|R⟩ (Todd–Coxeter enumeration), auto-detect standard presentations (Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈) for the info bar; tree view (BFS spanning tree, click a node to see its word, glued-edge count in a bar) + presentation table view with a static relator bar; draft autosave
 - **Small group registry** — all 93 groups of order 1–31 (GAP SmallGroups import) with precomputed subgroup/conjugacy class/center data
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 39 test files, 1205 tests (Vitest)
+- **Test suite** — 39 test files, 1206 tests (Vitest)
 
 ---
 
@@ -130,7 +136,7 @@ npm run preview
 ## 📖 Usage
 
 1. **Select a group** from the left panel (Cyclic, Dihedral, Symmetric, Alternating, or Special groups), or use the construction system (direct/semidirect product, Aut(G), quotient)
-2. **Switch views** in the view panel (the two presentation views — relator loops & presentation table — open from the Group Presentation panel)
+2. **Switch views** in the view panel (9 cards; the homomorphism & orbit views open from their respective panels, and the two presentation views — tree & presentation table — open from the Group Presentation panel)
 3. **Interact with the canvas** — pan (drag background), zoom (scroll), select elements (click), lasso-select (Ctrl+drag)
 4. **Explore Cayley graphs** — enable/disable element actions, switch right/left multiplication, pick 2D/3D shapes, run force layout
 5. **Explore group theory** — save subsets to detect subgroups, show cosets, build quotient groups; construct homomorphisms and run the first isomorphism animation
@@ -138,6 +144,19 @@ npm run preview
 7. **Open floating views** — toggle multi-view mode to compare representations side by side
 
 > Backend: For very large groups (order > 60), GroupViz offloads structure computation to a FastAPI service (see [docs/BACKEND.md](docs/BACKEND.md)). Detailed technical docs live in `docs/`: groups (GROUPS.md), Cayley system (CAYLEY.md), views (VIEWS.md), state (STATE.md), UI (UI.md), testing (TESTING.md).
+
+---
+
+## 🤝 Contributing
+
+GroupViz welcomes contributions — from math-layout fixes to new group families and construction workflows. Start here:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — newcomer guide, conventions, dev workflow, and the risk-review protocol
+- [docs/ROADMAP.md](docs/ROADMAP.md) — what is *not* done yet (only open items live here)
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — completed milestones and per-session dev records
+- [Issue templates](.github/ISSUE_TEMPLATE/) for bug reports and feature requests
+
+CI (`.github/workflows/ci.yml`) runs lint, tests, coverage thresholds, production build, and backend pytest on every push/PR; `main` auto-deploys to GitHub Pages and `v*` tags publish releases.
 
 ---
 
@@ -150,7 +169,7 @@ npm run preview
 | Styling | CSS Custom Properties + App.css |
 | 3D Rendering | Three.js + React Three Fiber |
 | Math Rendering | KaTeX |
-| State Management | Modular React Context (9 providers) |
+| State Management | Modular React Context (12 domain providers) |
 | Backend | Python FastAPI (hybrid computation) |
 | i18n | Custom React Context |
 | Testing | Vitest |
@@ -160,8 +179,10 @@ npm run preview
 ## 📂 Project Structure
 
 ```
+.github/                # CI workflows (ci / pages / release) + issue & PR templates
+CONTRIBUTING.md         # Contribution guide (includes newcomer onboarding)
 src/
-├── __tests__/            # 39 test files (1205 tests)
+├── __tests__/            # 39 test files (1206 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -178,7 +199,7 @@ src/
 │   ├── polyhedra.ts      # Polyhedron vertex generation
 │   ├── elementRotation.ts # Group element → 3D geometric rotation
 │   └── viewBox.ts        # SVG viewport sizing
-├── context/              # Modular state (9 providers + action modules)
+├── context/              # Modular state (12 domain providers + GroupContext composite)
 ├── utils/                # Unicode→TeX converter, export, export bridge, group factory, hybrid compute
 ├── backend/              # FastAPI backend (large-group computation)
 └── docs/                 # Technical documentation
@@ -234,7 +255,7 @@ Edge semantics:
 
 ## 🔮 Roadmap
 
-- [x] 10 visualization modes (incl. homomorphism view, coset strip, orbit view)
+- [x] 13 visualization modes (incl. homomorphism view, coset strip, orbit & Sylow views)
 - [x] Multi-view floating windows
 - [x] Subgroup lattice (Hasse diagram)
 - [x] Symmetry view with polyhedra rotation animations
@@ -251,7 +272,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (39 files, 1205 tests)
+- [x] Test suite (39 files, 1206 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

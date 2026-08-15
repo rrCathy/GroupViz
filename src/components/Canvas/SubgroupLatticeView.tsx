@@ -607,7 +607,7 @@ export function SubgroupLatticeView() {
                   <span style={{ color: 'var(--text-muted)' }}>{t('series.alternativeChains', { n: String(compositionChains.length) })}</span>
                 )}
                 {seriesType === 'composition' && compositionTruncated && (
-                  <span style={{ color: '#eab308' }}>{t('series.truncated')}</span>
+                  <span style={{ color: 'var(--accent-yellow-text)' }}>{t('series.truncated')}</span>
                 )}
               </div>
             </>

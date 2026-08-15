@@ -57,7 +57,7 @@ function CayleyGraphViewLocal() {
   if (!currentGroup) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <p style={{ color: '#888' }}>{t('canvas.noGroup')}</p>
+        <p style={{ color: 'var(--text-dim)' }}>{t('canvas.noGroup')}</p>
       </div>
     )
   }

@@ -46,7 +46,7 @@ function SemidirectProductInner() {
           </div>
 
           {sdNormalSubgroup && (
-            <button className="panel-btn" onClick={computeAutN} style={{ width: '100%', marginBottom: '6px', backgroundColor: 'var(--accent-teal)', color: '#0f0f1a', borderColor: 'var(--accent-teal)' }}>
+            <button className="panel-btn" onClick={computeAutN} style={{ width: '100%', marginBottom: '6px', backgroundColor: 'var(--accent-teal)', color: 'var(--btn-on-accent)', borderColor: 'var(--accent-teal)' }}>
               {t('sd.computeAut')}
             </button>
           )}

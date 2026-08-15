@@ -96,7 +96,7 @@ interface Group {
 - 群工厂 `createGroupFromSymbol` 不解析 `\rtimes`，会话恢复依赖 `reconstructSemidirectProduct`（`semidirectProductStorage.ts`）
 
 **半直积状态与 UI**：
-- Context：`GroupSemidirectProductContext.tsx`（9 个 Provider 之一）——isSemidirectProductMode / sdPanelOpen / sdNormalSubgroup / sdActingGroup / sdAutNGroup / sdAutNList / sdPhiGenMapping / sdPhiFullMap / sdPhiValid / sdSemidirectProductGroups / sdDecompositions / sdActiveDecomposition；Actions：toggleSemidirectProductMode / setSDPanelOpen / setSDNormalSubgroup / setSDActingGroup / computeAutN / setPhiGenMapping / expandPhiFull / executeSemidirectProduct / storeSemidirectProductGroup / loadSemidirectProductGroup / decomposeSemidirectProduct / selectSemidirectDecomposition
+- Context：`GroupSemidirectProductContext.tsx`（12 个领域 Provider 之一）——isSemidirectProductMode / sdPanelOpen / sdNormalSubgroup / sdActingGroup / sdAutNGroup / sdAutNList / sdPhiGenMapping / sdPhiFullMap / sdPhiValid / sdSemidirectProductGroups / sdDecompositions / sdActiveDecomposition；Actions：toggleSemidirectProductMode / setSDPanelOpen / setSDNormalSubgroup / setSDActingGroup / computeAutN / setPhiGenMapping / expandPhiFull / executeSemidirectProduct / storeSemidirectProductGroup / loadSemidirectProductGroup / decomposeSemidirectProduct / selectSemidirectDecomposition
 - 持久化：localStorage key `'groupviz-sd-groups'`，`StoredSemidirectProduct {id, symbol?, normalSymbol, actingSymbol, phiGenMapping}`
 - 面板：`SemidirectProductPanel.tsx`（模式切换 + N/H 选择 + φ 映射 + 创建/群列表/储存 + **半直积分解列表区**）
 - 视图：`SemidirectProductView.tsx`——设置模式（H 与 Aut(N) 双 Cayley 图 + φ 箭头）+ 4 步教学动画（H 骨架 → N 副本环重布线 → H 边连接 → 完整乘积）

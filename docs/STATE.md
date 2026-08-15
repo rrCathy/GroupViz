@@ -113,11 +113,12 @@ interface GroupContextState {
 |------|------|---------|---------|
 | `exportView()` | 导出 SVG / PNG | 所有视图 | `.svg` / `.png` |
 | `exportSymmetryAsGif()` | 导出 GIF | 对称性视图 | `.gif`（gifenc，20fps 2s 循环） |
-| `exportCayley3DGif()` | 导出 GIF | 3D 凯莱图 | `.gif`（gifenc 20fps，3s/2 圈 或 5 圈 7.5s，经 `cayley3dControls` 桥驱动旋转） |
+| `exportCayley3DGif()` | 导出 GIF | 3D 凯莱图 | `.gif`（gifenc，「约 3 秒」或「5 个旋转周期」：`displayAngVel()` 取展示区当前角速度重推导帧数，总转角整圈无缝循环，`frameAt` 离屏逐帧渲染，展示区不受影响） |
 
 - **SVG 导出**：克隆 SVG 元素、内联样式表 CSS、XMLSerializer → Blob → 下载（保留 KaTeX foreignObject）
 - **PNG 导出**：`canvas.toDataURL` 同步捕获（依赖 `preserveDrawingBuffer: true`）
-- **GIF 导出**：清除选中 → 重设元素 → rAF 逐帧 drawImage → quantize + applyPalette → gifenc 编码
+- **GIF 导出（对称性）**：清除选中 → 重设元素 → rAF 逐帧 drawImage → quantize + applyPalette → gifenc 编码
+- **GIF 导出（3D 凯莱图）**：`beginRotation` 建独立离屏渲染器 + 记录基准轨道 → `frameAt(i, frameDelayMs)` 按帧序号精确求角渲染到离屏 canvas → quantize + applyPalette → gifenc 编码；结束后仅释放离屏渲染器，实时画面无需恢复（见 docs/CAYLEY.md）
 
 **批量导出**（CLI 取代原 BatchExportPanel）：`scripts/batch-export.mjs`（`npm run export`）经 `window.__groupVizExport__` 桥（`src/utils/exportApi.ts`）渲染 9 预设群 × 7 视图，存 `exports/batch-<timestamp>/`。
 

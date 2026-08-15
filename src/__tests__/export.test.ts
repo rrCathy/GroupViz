@@ -78,6 +78,8 @@ function makeFake3DControls(overrides: Partial<Cayley3DControlAPI> = {}): Cayley
     snapshotOrbit: vi.fn(() => ({ theta: 0.5, phi: 1.2, radius: 8, target: {} }) as unknown as Cayley3DOrbitSnapshot),
     beginRotation: vi.fn(),
     endRotation: vi.fn(),
+    frameAt: vi.fn(),
+    displayAngVel: vi.fn(() => (2 * Math.PI) / 1.5),
     ...overrides,
   }
 }
@@ -175,8 +177,26 @@ describe('exportCayley3DGif', () => {
     expect(blob!.type).toBe('image/gif')
     const bytes = new Uint8Array(await blob!.arrayBuffer())
     expect(new TextDecoder().decode(bytes.subarray(0, 6))).toBe('GIF89a')
-    expect(ctrl.beginRotation).toHaveBeenCalledWith(plan.radPerSec)
+    expect(ctrl.beginRotation).toHaveBeenCalledWith((2 * Math.PI) / 1.5)
     expect(ctrl.endRotation).toHaveBeenCalledWith(expect.objectContaining({ theta: 0.5 }))
+  })
+
+  it('drives each frame by exact frame index × frame delay (deterministic, order-independent)', async () => {
+    const canvas = makeFakeCanvas2d()
+    const viewport = makeFakeElement({ querySelector: vi.fn((sel: string) => (sel === 'canvas' ? canvas : null)) })
+    stubBasicDom({ viewport })
+    const ctrl = makeFake3DControls()
+    registerCayley3DControls(ctrl)
+
+    const plan = cayley3DExportPlan({ seconds: 0.1, cycles: 1, fps: 10 })
+    await exportCayley3DGif('x.gif', plan)
+
+    // 帧数按展示区转速重新推导：总转角 cycles×2π ÷ displayAngVel(2π/1.5) = 1.5s ÷ 100ms → 15 帧
+    const frameCount = Math.max(2, Math.round((plan.cycles * 2 * Math.PI) / ((2 * Math.PI) / 1.5) / (plan.frameDelay / 1000)))
+    expect(ctrl.frameAt).toHaveBeenCalledTimes(frameCount)
+    for (let i = 0; i < frameCount; i++) {
+      expect(ctrl.frameAt).toHaveBeenNthCalledWith(i + 1, i, plan.frameDelay)
+    }
   })
 
   it('restores the orbit even when capture fails mid-way', async () => {

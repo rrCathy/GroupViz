@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a rendering, math, or interaction bug in GroupViz
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. A minimal description of the group + view combination goes a long way.
+  - type: input
+    id: group
+    attributes:
+      label: Group & view
+      description: Which group (family/symbol/order, e.g. "D₄ order 8" or "SmallGroup(16,13)") and which view mode (set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow / tree / prestable)?
+      placeholder: e.g. "C₆ × C₂, cylinder Cayley layout"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How did the issue happen? (group selection → view switch → shape/layout → interaction)
+      placeholder: |
+        1. Select C₆ × C₂ from the direct product panel
+        2. Switch to the Cayley graph (2D) view, shape "cylinder"
+        3. Click node ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Paste any console errors/warnings.
+      placeholder: |
+        Nodes overlap / edges fly off-canvas / layout silently falls back to another shape / ...
+        console: [Any error output]
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome / Edge
+        - Firefox
+        - Safari
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: theme
+    attributes:
+      label: Theme & screen
+      description: Dark/light theme, roughly your screen size (e.g. "dark, 1920×1080")
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra context
+      description: Screenshots, exported SVG/PNG, or refer/ book page references (Cayley-graph conventions follow *Visual Group Theory*)

@@ -352,7 +352,8 @@ export function cayley3DExportPlan(
   return { seconds, cycles, periodSec, fps, frameCount, frameDelay, radPerSec }
 }
 
-// 3D 凯莱图旋转 GIF：通过 cayley3dControls 桥以固定角速度驱动主视口相机旋转并逐帧采集
+// 3D 凯莱图旋转 GIF：经 cayley3dControls 桥以「展示区当前旋转速度」驱动独立离屏相机逐帧渲染并采集；
+// 导出期间实时画面不受影响（离屏渲染，不触碰实时轨道/相机）
 export async function exportCayley3DGif(
   filename: string,
   plan: Cayley3DExportPlan,
@@ -375,38 +376,40 @@ export async function exportCayley3DGif(
     return null
   }
 
+  // 用展示区当前旋转速度（与 ▶ 自动旋转同一公式）驱动 GIF，保证导出动图与展示区转速一致：
+  // 帧数按「cycles 圈 ÷ 展示速度」重新推导，总转角恒为 cycles × 2π（循环无缝回接）
+  const angVel = ctrl.displayAngVel()
+  const frameCount = Math.max(
+    2,
+    Math.round((plan.cycles * 2 * Math.PI) / angVel / (plan.frameDelay / 1000))
+  )
+
   const snapshot = ctrl.snapshotOrbit()
-  ctrl.beginRotation(plan.radPerSec)
+  ctrl.beginRotation(angVel)
   try {
     const gif = GIFEncoder()
     const captureStart = performance.now()
 
-    for (let i = 0; i < plan.frameCount; i++) {
-      await new Promise<void>((resolve, reject) => {
-        requestAnimationFrame(() => {
-          try {
-            const offCanvas = document.createElement('canvas')
-            offCanvas.width = canvas.width
-            offCanvas.height = canvas.height
-            const ctx = offCanvas.getContext('2d')!
-            ctx.drawImage(canvas, 0, 0)
-            const imageData = ctx.getImageData(0, 0, offCanvas.width, offCanvas.height)
-            const frame = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength)
-            const palette = quantize(frame, 256, { format: 'rgba' })
-            const index = applyPalette(frame, palette, 'rgba')
-            gif.writeFrame(index, canvas.width, canvas.height, {
-              palette,
-              delay: plan.frameDelay,
-              repeat: i === 0 ? 0 : undefined,
-            })
-            resolve()
-          } catch (err) {
-            reject(err)
-          }
-        })
+    for (let i = 0; i < frameCount; i++) {
+      // 每帧角度 = 基准角 + radPerSec × 帧延时 × 帧序号：纯按帧索引精确驱动，
+      // 与实时渲染耗时无关——大群渲染变慢也不会让 GIF 旋转加速（帧间角度差恒为 radPerSec × frameDelay）
+      const src = ctrl.frameAt(i, plan.frameDelay) ?? canvas
+      const offCanvas = document.createElement('canvas')
+      offCanvas.width = src.width
+      offCanvas.height = src.height
+      const ctx = offCanvas.getContext('2d')!
+      ctx.drawImage(src, 0, 0)
+      const imageData = ctx.getImageData(0, 0, offCanvas.width, offCanvas.height)
+      const frame = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength)
+      const palette = quantize(frame, 256, { format: 'rgba' })
+      const index = applyPalette(frame, palette, 'rgba')
+      gif.writeFrame(index, src.width, src.height, {
+        palette,
+        delay: plan.frameDelay,
+        repeat: i === 0 ? 0 : undefined,
       })
 
-      if (i < plan.frameCount - 1) {
+      if (i < frameCount - 1) {
         const nextTarget = captureStart + (i + 1) * plan.frameDelay
         const wait = Math.max(0, nextTarget - performance.now())
         if (wait > 0) await new Promise(r => setTimeout(r, wait))

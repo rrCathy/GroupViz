@@ -12,7 +12,7 @@ const zh: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': '群论可视化平台',
-  'welcome.version': 'v1.12.0',
+  'welcome.version': 'v1.12.1',
   'welcome.tagline': '探索抽象代数的对称之美 — 交互式群论可视化与学习工具',
   'welcome.enter': '进入应用',
   'welcome.section.done': '已实现',
@@ -145,7 +145,7 @@ const zh: TranslationMap = {
   'panel.exportSvg': '导出 SVG',
   'panel.exportGif': '导出 GIF',
   'panel.gifOption': 'GIF 旋转时长',
-  'panel.gif3s': '3 秒',
+  'panel.gif3s': '约 3 秒',
   'panel.gif5Cycles': '5 个旋转周期',
   'panel.exportView': '导出视图',
   'panel.exporting': '导出中...',
@@ -657,7 +657,7 @@ const en: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': 'Group Theory Visualization Platform',
-  'welcome.version': 'v1.12.0',
+  'welcome.version': 'v1.12.1',
   'welcome.tagline': 'Explore the beauty of symmetry in abstract algebra — Interactive group theory visualization & learning tool',
   'welcome.enter': 'Enter',
   'welcome.section.done': 'Implemented',
@@ -790,7 +790,7 @@ const en: TranslationMap = {
   'panel.exportSvg': 'Export SVG',
   'panel.exportGif': 'Export GIF',
   'panel.gifOption': 'GIF rotation length',
-  'panel.gif3s': '3 seconds',
+  'panel.gif3s': '~3 seconds',
   'panel.gif5Cycles': '5 rotation cycles',
   'panel.exportView': 'Export View',
   'panel.exporting': 'Exporting...',

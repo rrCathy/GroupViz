@@ -141,7 +141,7 @@ export function OperationsPanel() {
                       style={{
                         width: '100%', fontSize: '10px', padding: '2px 6px', marginTop: '4px',
                         backgroundColor: 'var(--accent-teal)',
-                        color: '#0f0f1a',
+                        color: 'var(--btn-on-accent)',
                         borderColor: 'var(--accent-teal)'
                       }}
                     >

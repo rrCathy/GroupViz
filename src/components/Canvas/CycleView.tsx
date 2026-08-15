@@ -1,11 +1,13 @@
 import { useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { planarCycleLayout } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 
 export function CycleView() {
-  const { currentGroup, selectedElements, selectElement, setHoverElement, getNodePosition, setNodePosition, canvasTransform, showMaximalCycles, viewBoxSize, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors } = useGroup()
+  const { currentGroup, selectedElements, selectElement, getNodePosition, setNodePosition, canvasTransform, showMaximalCycles, viewBoxSize, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors } = useGroup()
+  const { setHoverElement } = useHover()
   const { t } = useTranslation()
 
   const cycles = useMemo(() => {

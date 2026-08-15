@@ -1,5 +1,5 @@
 import type { Group, GroupElement } from '../types'
-import { closeUnderMultiply, computeElementOrderInGroup } from './subgroups'
+import { computeElementOrderInGroup, findMinimalGenerators } from './subgroups'
 
 export interface SylowSubgroupInfo {
   elements: GroupElement[]
@@ -226,22 +226,7 @@ export function findAllPSubgroups(group: Group, p: number): PSubgroupInfo[] {
 }
 
 /** Greedy minimal generating set (largest orders first, for readable labels). */
-export function findMinimalGenerators(elements: GroupElement[], group: Group): GroupElement[] {
-  const sorted = elements
-    .slice()
-    .sort((a, b) => computeElementOrderInGroup(b, group) - computeElementOrderInGroup(a, group))
-  const gens: GroupElement[] = []
-  for (const el of sorted) {
-    if (gens.length === 0) {
-      gens.push(el)
-      continue
-    }
-    const closure = closeUnderMultiply(group, gens)
-    if (closure.some(c => c.id === el.id)) continue
-    gens.push(el)
-  }
-  return gens
-}
+export { findMinimalGenerators } from './subgroups'
 
 /** g·H·g⁻¹ as a sorted element list. */
 export function conjugateSubgroup(

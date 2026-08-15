@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { findAllSubgroups, getConjugacyClasses, isSimpleGroup, getGroupCenter } from '../../core/algebra/subgroups'
@@ -12,6 +12,16 @@ import { computeBurnsideCount } from '../../core/algebra/actions'
 import { presentationOf, formatPresentation } from '../../core/algebra/presentations'
 import { detectStructureType } from '../../core/algebra/semidirectDecompositions'
 import { AccordionSection } from './AccordionSection'
+
+const ElementChip = memo(function ElementChip({ elId, html, selected, onSelect }: { elId: string; html: string; selected: boolean; onSelect: (id: string, additive: boolean) => void }) {
+  return (
+    <button
+      className={`element-chip ${selected ? 'selected' : ''}`}
+      onClick={() => onSelect(elId, true)}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  )
+})
 
 function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { currentGroup: { _automorphismById?: Map<string, { map: Map<string, string>; label: string }>; automorphismParentSymbol?: string }, selectedElementId: string }) {
   const { t } = useTranslation()
@@ -201,6 +211,34 @@ export function RightPanel() {
     }
     return map
   }, [subsets])
+
+  const chipHtml = useMemo(() => {
+    const map = new Map<string, string>()
+    if (currentGroup) {
+      for (const el of currentGroup.elements) {
+        map.set(el.id, renderTex(texify(el.label)))
+      }
+    }
+    return map
+  }, [currentGroup])
+
+  const subgroupHtml = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const sg of subgroups) {
+      const key = sg.elements.map(e => e.id).sort().join(',')
+      map.set(key, renderTex(texify(sg.elements.map(e => e.label).join(', '))))
+    }
+    return map
+  }, [subgroups])
+
+  const classHtml = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const cls of conjugacyClasses) {
+      const key = cls.map(e => e.id).sort().join(',')
+      map.set(key, renderTex(texify(cls.map(e => e.label).join(', '))))
+    }
+    return map
+  }, [conjugacyClasses])
 
   const activeHomo = homomorphisms.find(h => h.id === activeHomomorphismId)
   const homoSource = activeHomo?.source || editingSource
@@ -706,7 +744,7 @@ export function RightPanel() {
                       {selStab.map((gid) => {
                         const el = currentGroup.elements.find(e => e.id === gid)
                         return el ? (
-                          <span key={gid} className="element-chip" dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }} />
+                          <span key={gid} className="element-chip" dangerouslySetInnerHTML={{ __html: chipHtml.get(gid) ?? '' }} />
                         ) : null
                       })}
                     </div>
@@ -748,7 +786,7 @@ export function RightPanel() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                     <span className="sg-order">{sg.order}</span>
-                    <span className="sg-info" dangerouslySetInnerHTML={{ __html: renderTex(texify(subgroupLabel)) }} />
+                    <span className="sg-info" dangerouslySetInnerHTML={{ __html: subgroupHtml.get(key) ?? '' }} />
                     {sg.isNormal && <span className="sg-badge">{t('badge.normal')}</span>}
                     {isCenter && <span className="sg-badge center">{t('badge.center')}</span>}
                   </div>
@@ -804,7 +842,7 @@ export function RightPanel() {
                 style={{ cursor: 'pointer' }}
               >
                 <span className="class-size">|{cls.length}|</span>
-                <span className="class-elements" dangerouslySetInnerHTML={{ __html: renderTex(texify(cls.map(e => e.label).join(', '))) }} />
+                <span className="class-elements" dangerouslySetInnerHTML={{ __html: classHtml.get(ccKey) ?? '' }} />
               </div>
               )
             })}
@@ -818,11 +856,12 @@ export function RightPanel() {
         <h3>{t('right.elementList', { n: currentGroup?.elements.length || 0 })}</h3>
         <div className="elements-grid">
           {currentGroup?.elements?.map(el => (
-              <button
+              <ElementChip
                 key={el.id}
-                className={`element-chip ${selectedElements.has(el.id) ? 'selected' : ''}`}
-                onClick={() => selectElement(el.id, true)}
-                dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }}
+                elId={el.id}
+                html={chipHtml.get(el.id) ?? ''}
+                selected={selectedElements.has(el.id)}
+                onSelect={selectElement}
               />
           ))}
         </div>

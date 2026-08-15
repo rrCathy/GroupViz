@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { GroupContext } from '../../context/GroupContext'
 import type { GroupContextType } from '../../context/GroupContext'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import type { ViewMode, CanvasTransform } from '../../core/types'
 import { SetView } from './SetView'
@@ -21,7 +22,8 @@ const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ defaul
 const FreeGroupTreeViewLazy = lazy(() => import('./FreeGroupTreeView').then(m => ({ default: m.FreeGroupTreeView })))
 
 function CayleyGraphViewLocal() {
-  const { currentGroup, selectedElements, selectElement, setHoverElement, getNodePosition, setNodePosition, canvasTransform, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets } = useGroup()
+  const { currentGroup, selectedElements, selectElement, getNodePosition, setNodePosition, canvasTransform, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets } = useGroup()
+  const { setHoverElement } = useHover()
   const { t } = useTranslation()
 
   const nodeRadius = 28

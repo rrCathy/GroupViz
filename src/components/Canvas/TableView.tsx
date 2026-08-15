@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { isTooLarge } from '../../core/viewBox'
 
@@ -14,7 +15,6 @@ export function TableView() {
     currentGroup,
     selectedElements,
     selectElement,
-    setHoverElement,
     viewBoxSize,
     forceShowLargeGroupViews,
     setForceShowLargeGroupForView,
@@ -25,6 +25,7 @@ export function TableView() {
     cosetType,
     showAllCosets,
   } = useGroup()
+  const { setHoverElement } = useHover()
   const { t } = useTranslation()
   const isLargeTable = currentGroup ? currentGroup.order > 36 : false
 

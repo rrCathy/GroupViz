@@ -490,6 +490,20 @@ function parseSemiDirectSymbolPair(symbol: string): [number, number] | null {
 }
 
 /**
+ * Named semidirect-product groups whose GAP `StructureDescription` has no
+ * top-level ':' notation (QD16 = SmallGroup(16,8) ≈ C₈⋊C₂ with
+ * bab = a³). These are recognized algebraically so the rewiring shape
+ * applies without affecting the generic isGroupSemidirectProduct check.
+ */
+function namedSemidirectOrderPair(group: Group): [number, number] | null {
+  if (group.order !== 16) return null
+  // QD16 = C₈⋊C₂ 与 (16,13) = (C₄×C₂)⋊C₂ 的符号均不含 ':'，
+  // 但结构都是半直积，用命名特判恢复 N=8、H=2 分解。
+  if (group.symbol === 'QD_{16}' || group.symbol === 'SmallGroup(16,13)') return [8, 2]
+  return null
+}
+
+/**
  * Resolve the (N, H, φ) structure of a semidirect-product group.
  * Pipe semidirect products (created via createSemidirectProduct) carry
  * _semidirectProduct directly; registered groups written in GAP ':' notation
@@ -500,13 +514,30 @@ function parseSemiDirectSymbolPair(symbol: string): [number, number] | null {
 export function getSemidirectProductMeta(group: Group): SemidirectProductMeta | null {
   const spec = group._semidirectProduct
   if (spec) return spec
-  if (!isGroupSemidirectProduct(group)) return null
+  const namedPair = namedSemidirectOrderPair(group)
+  // 符号冲突回退类（symbol 被替换为 'SmallGroup(n,i)'，如 (20,3) ≈ C₅⋊C₄）
+  // 同样无 ':' 记号，但结构是半直积 → 放行走结构恢复
+  if (!isGroupSemidirectProduct(group) && !namedPair && !group.symbol.startsWith('SmallGroup(')) {
+    return null
+  }
   const decs = findSemidirectDecompositions(group)
-  const pair = parseSemiDirectSymbolPair(group.symbol)
-  const bySymbol = pair
-    ? decs.find((d) => d.normal.order === pair[0] && d.acting.order === pair[1])
+  const symPair = parseSemiDirectSymbolPair(group.symbol)
+  const bySymbol = symPair
+    ? decs.find((d) => d.normal.order === symPair[0] && d.acting.order === symPair[1])
     : undefined
-  const dec = bySymbol ?? decs.find((d) => d.verified) ?? decs[0]
+  // 命名半直积（如 QD16）：优先 normal 为交换正规子群的 verified 分解。
+  // QD16 的 C₈（循环、1 生成元）与 Q₈（非交换）同阶；(16,13) 的 N = C₄×C₂
+  // 与可能的非交换 8 阶子群同样存在——统一用 isAbelian 锁定交换 N。
+  const byNamed = namedPair
+    ? decs.find(
+        (d) =>
+          d.verified &&
+          d.normal.order === namedPair[0] &&
+          d.acting.order === namedPair[1] &&
+          d.normal.isAbelian
+      )
+    : undefined
+  const dec = bySymbol ?? byNamed ?? decs.find((d) => d.verified) ?? decs[0]
   if (!dec) return null
   return { normal: dec.normal, acting: dec.acting, phiMap: dec.phiMap }
 }

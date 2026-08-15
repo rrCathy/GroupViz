@@ -619,6 +619,37 @@ describe('ringGridLayout2D', () => {
     const g = createDirectProduct(createCyclicGroup(4), createCyclicGroup(4))
     expect(ringGridLayout2D(g, 800, 600)).toBeNull()
   })
+
+  it('lays out C3^3 (p=3) as 9 rings on a 3x3 grid (power-form pipe)', () => {
+    const g = createDirectProduct(
+      createDirectProduct(createCyclicGroup(3), createCyclicGroup(3)),
+      createCyclicGroup(3),
+    )
+    const pos = ringGridLayout2D(g, 800, 600)
+    expect(pos).not.toBeNull()
+    expect(pos!.size).toBe(27)
+    expect(new Set([...pos!.values()].map(p => `${p.x.toFixed(4)},${p.y.toFixed(4)}`)).size).toBe(27)
+    const dec = findRingGridDecomposition(g)
+    expect(dec).not.toBeNull()
+    expect(dec!.p).toBe(3)
+    expect(dec!.n).toBe(3)
+    // 每格 3 个元素呈三角形（环 n=3），9 个格簇
+    const byV = new Map<string, number>()
+    for (const el of g.elements) {
+      const v = dec!.map.get(el.id)!.v.id
+      byV.set(v, (byV.get(v) ?? 0) + 1)
+    }
+    expect(byV.size).toBe(9)
+    expect([...byV.values()].every(c => c === 3)).toBe(true)
+  })
+
+  it('lays out registry C3^3 (27,5) as a ring grid', () => {
+    const g = getSmallGroup(27, 4)!.group
+    const pos = ringGridLayout2D(g, 800, 600)
+    expect(pos).not.toBeNull()
+    expect(pos!.size).toBe(27)
+    expect(findRingGridDecomposition(g)!.p).toBe(3)
+  })
 })
 
 describe('dihedralSnakeOrder', () => {
@@ -748,6 +779,27 @@ describe('semidirectProductLayout', () => {
       expect(Number.isFinite(p.x)).toBe(true)
       expect(Number.isFinite(p.y)).toBe(true)
     }
+  })
+
+  it('twists N-rings by phi(h) so QD16 and C8:C2 differ (issue 9)', () => {
+    // QD16=(16,8) 的 φ(b)(a)=a³ 与 C8:C2=(16,6) 的 φ(b)(a)=a⁵：扭转后辐条 (n → k·n) 互异
+    const qd16 = getSmallGroup(16, 7)!.group
+    const c8c2 = getSmallGroup(16, 5)!.group
+    const posQ = semidirectProductLayout(qd16, 800, 600)
+    const posC = semidirectProductLayout(c8c2, 800, 600)
+    expect(posQ).not.toBeNull()
+    expect(posC).not.toBeNull()
+    // 至少一个元素在两种布局中位置不同
+    let differ = false
+    for (const el of qd16.elements) {
+      const a = posQ!.get(el.id)
+      const b = posC!.get(el.id)
+      if (a && b && (Math.abs(a.x - b.x) > 1e-3 || Math.abs(a.y - b.y) > 1e-3)) {
+        differ = true
+        break
+      }
+    }
+    expect(differ).toBe(true)
   })
 })
 

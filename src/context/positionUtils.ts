@@ -1,7 +1,7 @@
 import type { Group, GroupElement, ViewMode } from '../core/types'
 import { isGroupDirectProduct, type CayleyShape2D } from '../core/types'
 import { getViewBoxSize } from '../core/viewBox'
-import { directProductGridLayout2D, ringOrder } from '../core/algebra/forceLayout'
+import { directProductGridLayout2D, ringOrder, cayleyCircleLayout } from '../core/algebra/forceLayout'
 import { computeShape2DPositions } from '../core/algebra/shapeLayouts'
 
 export type NodePositionsMap = Map<string, Map<string, { x: number; y: number }>>
@@ -32,6 +32,13 @@ export function initializeNodePositions(group: Group, view: ViewMode, shape2D?: 
   if (view === 'cayley' && shape2D) {
     const pos = computeShape2DPositions(group, shape2D, vbs.width, vbs.height)
     if (pos && pos.size > 0) return pos
+    // 'circular' 形状没有独立布局：预置位置必须与 CayleyGraphView 的
+    // cayleyCircleLayout 兜底一致（否则预置单环会作为“拖拽覆盖”压过
+    // cayleyCircleLayout 内的专用布局，如 Q₁₆ 的四环同心布局）
+    if (shape2D === 'circular') {
+      const radius = Math.min(vbs.width * 0.3, 180 + n * 10)
+      return cayleyCircleLayout(group, centerX, centerY, radius)
+    }
   }
 
   if (view === 'cayley' && isGroupDirectProduct(group) && shape2D !== 'circular') {

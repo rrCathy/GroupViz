@@ -16,6 +16,8 @@ import {
   hasTopLevelTimes,
   classifyDirectProduct2D,
   isC2Cube,
+  isC2Tesseract,
+  isNamedRewiringGroup,
   isRingGridGroup,
 } from '../core/types'
 import type { Group, GroupElement } from '../core/types'
@@ -144,9 +146,15 @@ describe('getAvailableShapes3D', () => {
     expect(getAvailableShapes3D(mk({ symbol: 'S_{4}/N' }))).toEqual([])
   })
 
-  it('offers lattice/torus/circular for semidirect products', () => {
+  it('offers semidirectCylinder/circular for semidirect products', () => {
     const shapes = getAvailableShapes3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))
-    expect(shapes).toEqual(['spherical', 'semidirectCylinder', 'lattice', 'torus', 'circular'])
+    expect(shapes).toEqual(['spherical', 'semidirectCylinder', 'circular'])
+  })
+
+  it('offers hypercube for C2^4 (registry (16,14))', () => {
+    const shapes = getAvailableShapes3D(getSmallGroup(16, 13)!.group)
+    expect(shapes).toContain('hypercube')
+    expect(shapes).toContain('lattice')
   })
 
   it('handles direct products by factor type', () => {
@@ -154,6 +162,13 @@ describe('getAvailableShapes3D', () => {
     expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times S_{3}' }))).toEqual(['spherical', 'cylinder', 'lattice', 'circular'])
     expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3} \\times C_{5}' }))).toEqual(['spherical', 'lattice', 'circular'])
     expect(getAvailableShapes3D(mk({ symbol: 'S_{3} \\times S_{4} \\times S_{5}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+    // 多因子混合：C₂×C₃×S₃（两个不同循环因子）→ cylinder（任意因子数）；
+    // C₂×C₂ 合并为非循环 C₂² → 全非循环 → torus
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3} \\times S_{3}' }))).toEqual(['spherical', 'cylinder', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{2} \\times S_{3}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2}^{2} \\times S_{3}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+    // 全非循环多因子 → torus（嵌套环）
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{3} \\times S_{3} \\times S_{4}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
   })
 
   it('handles cyclic, dihedral, abelian order-4 and generic groups', () => {
@@ -177,7 +192,7 @@ describe('getAvailableShapes3D', () => {
 describe('getDefaultLayout3D', () => {
   it('chooses layout per family', () => {
     expect(getDefaultLayout3D(mk({ symbol: 'S_{4}/N' }))).toBe('spherical')
-    expect(getDefaultLayout3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe('lattice')
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe('semidirectCylinder')
     expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe('lattice')
     expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times S_{3}' }))).toBe('cylinder')
     expect(getDefaultLayout3D(mk({ symbol: 'S_{3} \\times S_{4}' }))).toBe('torus')
@@ -191,6 +206,34 @@ describe('getDefaultLayout3D', () => {
     expect(getDefaultLayout3D(mk({ symbol: 'S_{4}' }))).toBe('truncatedCube')
     expect(getDefaultLayout3D(mk({ symbol: 'S_{6}' }))).toBe('circular')
     expect(getDefaultLayout3D(mk({ symbol: 'Weird_{x}' }))).toBe('spherical')
+  })
+
+  it('uses semidirectCylinder for all semidirect products', () => {
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{3}:C_{4}' }))).toBe('semidirectCylinder')
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{5} \\rtimes_{\\phi} C_{4}' }))).toBe('semidirectCylinder')
+  })
+
+  it('uses hypercube for C2^4 and semidirectCylinder for collision-fallback groups', () => {
+    expect(getDefaultLayout3D(getSmallGroup(16, 13)!.group)).toBe('hypercube') // (16,14) C₂⁴
+    expect(getDefaultLayout3D(getSmallGroup(20, 2)!.group)).toBe('semidirectCylinder') // (20,3) ≈ C₅⋊C₄
+  })
+
+  it('uses cylinder for multi-factor mixed products and torus for all non-cyclic', () => {
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times C_{3} \\times S_{3}' }))).toBe('cylinder')
+    expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times C_{2} \\times S_{3}' }))).toBe('torus')
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{3} \\times S_{3}' }))).toBe('torus')
+  })
+
+  it('defaults C2 cube groups to the cube layout', () => {
+    const c2c2c2 = createDirectProduct(
+      createDirectProduct(createCyclicGroup(2), createCyclicGroup(2)),
+      createCyclicGroup(2),
+    )
+    expect(isC2Cube(c2c2c2)).toBe(true)
+    expect(getDefaultLayout3D(c2c2c2)).toBe('cube')
+    // 注册表 C₂³（GAP index 5，0 基数组位置 4）
+    const reg = getSmallGroup(8, 4)!.group
+    expect(getDefaultLayout3D(reg)).toBe('cube')
   })
 })
 
@@ -273,16 +316,34 @@ describe('getDefaultShape2D', () => {
     expect(getDefaultShape2D(mk({ symbol: 'C_{2} \\times C_{3}', order: 12 }))).toBe('grid')
     expect(getDefaultShape2D(mk({ symbol: 'S_{3}', order: 6 }))).toBe('circular') // ≤7 阶只有圆形
     expect(getDefaultShape2D(mk({ symbol: 'A_{5}', order: 60 }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'A_{4}', order: 12 }))).toBe('projection3D')
     expect(getDefaultShape2D(mk({ symbol: 'Q_{8}', order: 8 }))).toBe('pythagoreanSquare')
-    expect(getDefaultShape2D(mk({ symbol: 'S_{9}', order: 9 }))).toBe('projection3D')
+    expect(getDefaultShape2D(mk({ symbol: 'S_{9}', order: 9 }))).toBe('circular')
     expect(getDefaultShape2D(mk({ symbol: 'C_{5}', order: 5 }))).toBe('circular') // ≤7 阶只有圆形
     expect(getDefaultShape2D(mk({ symbol: 'D_{3}', order: 6 }))).toBe('circular') // ≤7 阶只有圆形
-    expect(getDefaultShape2D(mk({ symbol: 'X_{1}', order: 40 }))).toBe('archimedean')
+    expect(getDefaultShape2D(mk({ symbol: 'X_{1}', order: 40 }))).toBe('circular')
     expect(getDefaultShape2D(mk({ symbol: 'S_{3} \\times C_{2}', order: 20 }))).toBe('cylinder')
   })
 
   it('assigns rewiring to registered semidirect products (GAP : notation)', () => {
     expect(getDefaultShape2D(getSmallGroup(16, 2)!.group)).toBe('rewiring')
+  })
+
+  it('assigns rewiring to collision-fallback registry groups (SmallGroup(20,3) ≈ C₅⋊C₄)', () => {
+    const g20 = getSmallGroup(20, 2)!.group
+    expect(isNamedRewiringGroup(g20)).toBe(true)
+    expect(getDefaultShape2D(g20)).toBe('rewiring')
+  })
+
+  it('uses ringGrid for C3^3 (registry (27,5))', () => {
+    expect(getDefaultShape2D(getSmallGroup(27, 4)!.group)).toBe('ringGrid')
+  })
+
+  it('uses ringGrid for power-form pipe C3^3 (compact symbol)', () => {
+    const c3 = createCyclicGroup(3)
+    const c3c3c3 = createDirectProduct(createDirectProduct(c3, c3), c3)
+    expect(c3c3c3.symbol).toContain('^')
+    expect(getDefaultShape2D(c3c3c3)).toBe('ringGrid')
   })
 
   it('uses circular for all groups of order <= 7', () => {
@@ -383,6 +444,23 @@ describe('isC2Cube', () => {
   })
 })
 
+describe('isC2Tesseract', () => {
+  it('detects the elementary abelian 2-group of order 16 (C2^4)', () => {
+    const c2 = createCyclicGroup(2)
+    const c24 = createDirectProduct(createDirectProduct(createDirectProduct(c2, c2), c2), c2)
+    expect(isC2Tesseract(c24)).toBe(true)
+    expect(isC2Tesseract(getSmallGroup(16, 13)!.group)).toBe(true) // (16,14) C₂⁴
+  })
+
+  it('rejects order-8, cyclic and non-elementary 16-groups', () => {
+    const c2 = createCyclicGroup(2)
+    const cube = createDirectProduct(createDirectProduct(c2, c2), c2)
+    expect(isC2Tesseract(cube)).toBe(false) // order 8
+    expect(isC2Tesseract(createCyclicGroup(16))).toBe(false) // order-16 element exists
+    expect(isC2Tesseract(getSmallGroup(16, 1)!.group)).toBe(false) // (16,2) C₄×C₄
+  })
+})
+
 describe('getAvailableShapesForView', () => {
   it('returns circular for null group', () => {
     expect(getAvailableShapesForView(null, 'cayley')).toEqual(['circular'])
@@ -390,8 +468,8 @@ describe('getAvailableShapesForView', () => {
 
   it('cayley view per family', () => {
     expect(getAvailableShapesForView(mk({ symbol: 'S_{4}/N' }), 'cayley')).toEqual(['circular'])
-    expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}', order: 12 }), 'cayley')).toEqual(['rewiring', 'circular', 'spherical', 'concentric'])
-    expect(getAvailableShapesForView(getSmallGroup(16, 2)!.group, 'cayley')).toEqual(['rewiring', 'circular', 'spherical', 'concentric'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}', order: 12 }), 'cayley')).toEqual(['rewiring', 'circular', 'spherical'])
+    expect(getAvailableShapesForView(getSmallGroup(16, 2)!.group, 'cayley')).toEqual(['rewiring', 'circular', 'spherical'])
     expect(getAvailableShapesForView(mk({ symbol: 'C_{12}', order: 12 }), 'cayley')).toEqual(['circular', 'spherical', 'spiral', 'coil'])
     expect(getAvailableShapesForView(mk({ symbol: 'D_{4}', order: 8 }), 'cayley')).toEqual(['circular', 'spherical', 'dualRing'])
 
@@ -404,7 +482,7 @@ describe('getAvailableShapesForView', () => {
 
     const g = getAvailableShapesForView(mk({ symbol: 'C_{2} \\times S_{3}', order: 12 }), 'cayley')
     expect(g).toContain('grid')
-    expect(g).toContain('archimedean')
+    expect(g).not.toContain('archimedean')
     expect(g).not.toContain('concentric')
 
     const gg = getAvailableShapesForView(mk({ symbol: 'C_{2} \\times C_{3}', order: 12 }), 'cayley')

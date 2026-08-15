@@ -225,7 +225,7 @@ export function findAllNormalSubgroups(group: Group): Subgroup[] {
       elements: group.elements,
       order: group.order,
       index: 1,
-      generators: [],
+      generators: findMinimalGenerators(group.elements, group),
       isNormal: true,
     })
     return subgs.sort((a, b) => a.order - b.order)
@@ -265,7 +265,7 @@ export function findAllNormalSubgroups(group: Group): Subgroup[] {
       elements: candidate,
       order: candidate.length,
       index: group.order / candidate.length,
-      generators: [],
+      generators: findMinimalGenerators(candidate, group),
       isNormal
     })
   }
@@ -282,6 +282,24 @@ function isSubgroupClosed(group: Group, elements: GroupElement[]): boolean {
     }
   }
   return true
+}
+
+/** Greedy minimal generating set (largest orders first, for readable labels). */
+export function findMinimalGenerators(elements: GroupElement[], group: Group): GroupElement[] {
+  const sorted = elements
+    .slice()
+    .sort((a, b) => computeElementOrderInGroup(b, group) - computeElementOrderInGroup(a, group))
+  const gens: GroupElement[] = []
+  for (const el of sorted) {
+    if (gens.length === 0) {
+      gens.push(el)
+      continue
+    }
+    const closure = closeUnderMultiply(group, gens)
+    if (closure.some(c => c.id === el.id)) continue
+    gens.push(el)
+  }
+  return gens
 }
 
 export function closeUnderMultiply(group: Group, seed: GroupElement[]): GroupElement[] {
@@ -347,7 +365,7 @@ export function findAllSubgroups(group: Group, allowLarge = false): Subgroup[] {
       elements,
       order: elements.length,
       index: n / elements.length,
-      generators: [],
+      generators: findMinimalGenerators(elements, group),
       isNormal: isNormalIdx(idx),
     })
   }

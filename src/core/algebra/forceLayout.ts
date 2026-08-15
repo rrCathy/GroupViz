@@ -2,7 +2,7 @@ import type { Group, GroupElement, NodePosition, Layout3D } from '../types'
 import { getDefaultLayout3D, isC2Cube, isGroupDirectProduct, isGroupDihedral, findRingGridDecomposition } from '../types'
 import { compute3DPositions } from './layout3D'
 import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
-import { parseProductFactors, matrixGridLayout, ringOrder, detectS3PermSet, S3_PERM_IDS, factorPipeGroupsOrTokens, parseCompactFactors, clusterFactorGroups, clusterIsCyclic, factorPipeGroupsGrouped, powerRingOrder, tableFactorSearch } from './ringOrder'
+import { parseProductFactors, matrixGridLayout, ringOrder, detectS3PermSet, S3_PERM_IDS, factorPipeGroupsOrTokens, parseCompactFactors, clusterFactorGroups, clusterIsCyclic, factorPipeGroupsGrouped, powerRingOrder, tableFactorSearch, splitDihedralElements, dihedralSnakeOrder, quaternionCosetMap } from './ringOrder'
 
 // Re-export everything from submodules for backward compatibility
 export {
@@ -16,7 +16,7 @@ export {
   ringOrder, detectS3PermSet, S3_PERM_IDS, cayleyRingKeys, parseProductFactors,
   type ProductFactors, matrixGridLayout, nestedFactorLayout2D, factorPipeGroups,
   parseCompactFactors, type CompactFactorPart, clusterFactorGroups, tableGroupFactorSplit, clusterIsCyclic,
-  factorPipeGroupsGrouped, type PipeFactorGrouped,
+  factorPipeGroupsGrouped, type PipeFactorGrouped, splitDihedralElements, dihedralSnakeOrder,
 } from './ringOrder'
 
 // ─── Public Entry Point ─────────────────────────────────────────────────
@@ -311,9 +311,9 @@ export function cylinderLayout2D(
 // ─── Ring-grid layout 2D (cyclic ring × elementary grid) ──────────────
 
 /**
- * 环网格 2D 形态（C₄×C₂×C₂ 类直积）：群的循环部分（阶 n ≥ 4 的环生成元 x）
- * 做 n 边形环（幂序环绕，顶部起始），其余部分 V = {e, v1, v2, v1v2}（初等
- * 交换 4 群）做 2×2 混合进制网格，每个格点中心挂一个完整环。
+ * 环网格 2D 形态（C₄×C₂×C₂ / C₃³ 类直积）：群的循环部分（阶 n ≥ 3 的环生成元 x）
+ * 做 n 边形环（幂序环绕，顶部起始），其余部分 V = C_p²（p ∈ {2,3} 素数网格，v1、
+ * v2 为相异阶 p 元素）做 p×p 混合进制网格，每个格点中心挂一个完整环。
  * 环上相邻点 = x 幂真实边；网格邻格 = v1/v2 真实边。
  * 依托 findRingGridDecomposition（纯群论探测）：pipe 直积群、注册表 GAP
  * 表群、同构群统一走同一条路。
@@ -326,16 +326,21 @@ export function ringGridLayout2D(
   const dec = findRingGridDecomposition(group)
   if (!dec) return null
   const { v1, v2, n, map } = dec
-  const cols = 2
-  const rows = 2
-  // 坐标基底：e→(0,0)、v1→(1,0)、v2→(0,1)、v1v2→(1,1)
-  const v12 = group.multiply(v1, v2)
-  const idxOf = new Map<string, number>([
-    [group.identity.id, 0],
-    [v1.id, 1],
-    [v2.id, 2],
-    [v12.id, 3],
-  ])
+  const p = dec.p ?? 2
+  const cols = p
+  const rows = p
+  // 坐标基底：idx = j*p + i（v1 幂为列、v2 幂为行）；p=2 时与原排列
+  // e→(0,0)、v1→(1,0)、v2→(0,1)、v1v2→(1,1) 完全一致
+  const idxOf = new Map<string, number>()
+  for (let i = 0; i < p; i++) {
+    let rowEl = group.identity
+    for (let k = 0; k < i; k++) rowEl = group.multiply(rowEl, v1)
+    for (let j = 0; j < p; j++) {
+      let el = rowEl
+      for (let k = 0; k < j; k++) el = group.multiply(el, v2)
+      idxOf.set(el.id, j * p + i)
+    }
+  }
   const r = Math.max(1.0, n * 0.18)
   const gap = 0.9
   const d = 2 * r + gap
@@ -645,65 +650,6 @@ function c2CubeDualRing(
   return result
 }
 
-/**
- * 不依赖 value 格式的旋转/反射分类（D_m 结构，含注册表群 value=[k]）：
- * 找阶 m 元素 r（m = |G|/2）→ rotations = ⟨r⟩ 幂序 [e, r, r², …]；
- * reflections = 其余元素，反射 s_i 与旋转 r^i 同角配对（s_i = r^i · s₀）。
- * 找不到阶 m 元素、或反射数 ≠ m → null（由调用方回退）。
- */
-export function splitDihedralElements(group: Group): {
-  rotations: GroupElement[]
-  reflectPair: Map<string, number>
-} | null {
-  const n = group.order
-  const m = n / 2
-  if (n % 2 !== 0 || m < 2) return null
-  const id = group.identity
-
-  for (const el of group.elements) {
-    if (el.id === id.id) continue
-    const powers: GroupElement[] = [id, el]
-    const seen = new Set([id.id, el.id])
-    let cur = el
-    let closed = false
-    for (;;) {
-      cur = group.multiply(cur, el)
-      if (cur.id === id.id) { closed = true; break }
-      if (seen.has(cur.id)) break
-      seen.add(cur.id)
-      powers.push(cur)
-    }
-    if (!closed || powers.length !== m) continue
-    const rotIds = new Set(powers.map(e => e.id))
-    const refs = group.elements.filter(e => !rotIds.has(e.id))
-    if (refs.length !== m) continue
-    const s0 = refs[0]
-    const reflectPair = new Map<string, number>()
-    let pairOk = true
-    for (let i = 0; i < m; i++) {
-      const s_i = group.multiply(powers[i], s0)
-      if (rotIds.has(s_i.id) || reflectPair.has(s_i.id)) { pairOk = false; break }
-      reflectPair.set(s_i.id, i)
-    }
-    if (pairOk && reflectPair.size === m) {
-      return { rotations: powers, reflectPair }
-    }
-  }
-  return null
-}
-
-// 二面体蛇形环序：rotations 幂序正排 + reflections 按配对角反排，
-// 摊平为单环（外圈旋转升序 → 内圈反射降序），使生成元边外环相邻、反射边径向。
-// 用于半直积布局的 N 盘内环序（注册表群 N 无 pipe id，powerRingOrder 不特判）。
-export function dihedralSnakeOrder(group: Group): string[] | null {
-  const split = splitDihedralElements(group)
-  if (!split) return null
-  const refsDesc = Array.from(split.reflectPair.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([id]) => id)
-  return [...split.rotations.map(e => e.id), ...refsDesc]
-}
-
 export function dualRingLayout(
   group: Group,
   width: number,
@@ -825,6 +771,38 @@ export function dualRingLayout(
  * - Direct-product ids ('a|b'): factor-wise ring order (legacy behavior).
  * - Everything else: ring order on a single circle.
  */
+// ─── Q₁₆（广义四元数群）2D 布局：4 个同心陪集环 ────────────────────────────
+
+/**
+ * Q₁₆ 2D 凯莱图布局（参考 Group Explorer 的 Q16 圆柱俯视/侧视）：
+ * 4 个右陪集 a^j⟨b⟩（j = 0..3）画成同心圆，节点 a^j·b^i 位于圆 j 上
+ * 角度 90°·i（四环对齐）。b 边 = 环内 90° 弧（4 个干净的正方形 b-循环）；
+ * a 边 = 纯径向线：i 偶（i=0,2）从环 j 到 j+1（外侧），i 奇（i=1,3）从
+ * 环 j 到 j−1（内侧），共 12 条径向辐条；剩下 4 条 wrap 边
+ * （(3,0)→(0,2)、(0,1)→(3,3)、(3,2)→(0,0)、(0,3)→(3,1)）为穿过
+ * 中心的 2 条直径（各自两条反向边）——教科书式 Q16 画法，
+ * 与 GE 圆柱的「4 层 ⟨b⟩ 环 + a 沿轴」同构。数值扫描确认这是
+ * 全部 4 环布局中交叉最少的（4 处交叉集中在圆心）。
+ * 结构不匹配（order≠16 或陪集分解失败）返回 null。
+ */
+export function quaternionRingLayout2D(
+  group: Group,
+  cx: number,
+  cy: number,
+  radius: number
+): Map<string, NodePosition> | null {
+  const dec = quaternionCosetMap(group)
+  if (!dec) return null
+  const result = new Map<string, NodePosition>()
+  for (const el of group.elements) {
+    const { j, i } = dec.byElement.get(el.id)!
+    const r = radius * (0.34 + (j * 0.66) / 3)
+    const angle = ((90 * i) * Math.PI) / 180 - Math.PI / 2
+    result.set(el.id, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) })
+  }
+  return result
+}
+
 export function cayleyCircleLayout(
   group: Group,
   cx: number,
@@ -865,6 +843,11 @@ export function cayleyCircleLayout(
     })
     return result
   }
+
+  // Q₁₆（广义四元数群）：4 个交错同心 ⟨b⟩-陪集环（GE 圆柱俯视），
+  // 结构不匹配时返回 null 走下方兜底
+  const q16 = quaternionRingLayout2D(group, cx, cy, radius)
+  if (q16) return q16
 
   const rotations: GroupElement[] = []
   const reflections: GroupElement[] = []
@@ -1373,12 +1356,13 @@ export function projection3DLayout(group: Group, width: number, height: number):
 //
 // The "rewiring" shape shows the semidirect product G = N ⋊ H as |H| copies
 // of the normal subgroup N arranged around a main ring of H elements.
-// Every copy is drawn in the SAME natural element order (like the fixed
-// ring of AutomorphismPreviewPopup), so each ring is a plain copy of N.
+// Every copy is drawn TWISTED by φ(h): element n inside ring h sits at the
+// angular slot of φ(h)(n), so rings whose φ(h) is non-trivial are visibly
+// rotated against the identity ring (for D₄ = C₄ ⋊ C₂ the second copy's
+// cycle runs in the opposite direction).
 // The automorphisms φ(h) are shown as an overlay on the canvas: the
-// generator edges inside ring h are the Cayley edges of N twisted by φ(h)
-// (for D₄ = C₄ ⋊ C₂ the second copy's cycle runs in the opposite
-// direction), φ(h)-fixed points are highlighted, and the x ↦ φ(x)
+// generator edges inside ring h are the Cayley edges of N twisted by φ(h),
+// φ(h)-fixed points are highlighted, and the x ↦ φ(x)
 // rewiring wires are drawn as teal arcs between the affected elements.
 
 export function semidirectProductLayout(
@@ -1418,7 +1402,14 @@ export function semidirectProductLayout(
     const hIdx = hIdxMap.get(f.h.id) ?? 0
     const hAngle = (hIdx * 2 * Math.PI / H.order) - Math.PI / 2
     const hp = { x: cx + rH * Math.cos(hAngle), y: cy + rH * Math.sin(hAngle) }
-    const nIdx = nIdxMap.get(f.n.id) ?? 0
+    // φ(h) 扭转：环 h 内的元素按 φ(h)(n) 的索引摆放——φ(h) 非平凡时环被
+    // 旋转/重排，使不同半直积（QD16: b→a³、C₈:C₂: b→a⁵、D16: b→a⁻¹）的
+    // 跨环辐条连接模式 (n → φ(b)(n)) 互不相同，而非镜像同图。
+    // 环内 a-边连接 idx(φ(h)(n)) → idx(φ(h)(n·φ(h)(a)))（φ(h)² = id 时即相邻
+    // 环步进），b-边连接两环间同元素，辐条跨环错位直观展示 φ 的扭转。
+    const hPhi = sd.phiMap.get(f.h.id)?.map.get(f.n.id)
+    const twistedIdx = hPhi !== undefined ? nIdxMap.get(hPhi) : undefined
+    const nIdx = twistedIdx ?? nIdxMap.get(f.n.id) ?? 0
     const nAngle = (nIdx * 2 * Math.PI / N.order) - Math.PI / 2
     result.set(el.id, { x: hp.x + rN * Math.cos(nAngle), y: hp.y + rN * Math.sin(nAngle) })
   }

@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { SetView } from './SetView'
 import { CycleView } from './CycleView'
@@ -474,8 +475,68 @@ export function GroupCanvas() {
   )
 }
 
+function renderEdgePath(
+  edge: CayleyEdgeData,
+  nodePositionsCache: Map<string, { x: number; y: number }>,
+  nodeRadius: number,
+  enabledActionIndexMap: Map<string, number>,
+  isHighlighted: boolean,
+) {
+  const fromPos = nodePositionsCache.get(edge.fromId)
+  const toPos = nodePositionsCache.get(edge.toId)
+  if (!fromPos || !toPos) return null
+
+  const dx = toPos.x - fromPos.x
+  const dy = toPos.y - fromPos.y
+  const dist = Math.sqrt(dx * dx + dy * dy)
+
+  const baseColor = edge.color
+  const color = isHighlighted ? baseColor : `${baseColor}99`
+
+  if (edge.isSelfLoop) {
+    const scx = fromPos.x
+    const scy = fromPos.y - nodeRadius - 20
+    return (
+      <g key={`${edge.fromId}-${edge.actionElementId}`}>
+        <ellipse cx={scx} cy={scy} rx={14} ry={12} fill="none" stroke={color} strokeWidth={isHighlighted ? 3.5 : 2.5} />
+        <polygon points={`${scx - 5},${scy - 2} ${scx + 5},${scy - 2} ${scx},${scy - 14}`} fill={baseColor} />
+      </g>
+    )
+  }
+
+  const midX = (fromPos.x + toPos.x) / 2
+  const midY = (fromPos.y + toPos.y) / 2
+  const nx = -dy / dist
+  const ny = dx / dist
+
+  const curvature = Math.min(dist * 0.08, 18)
+  const ctrlX = midX + nx * curvature
+  const ctrlY = midY + ny * curvature
+
+  const startX = fromPos.x + (dx / dist) * nodeRadius
+  const startY = fromPos.y + (dy / dist) * nodeRadius
+  const endX = toPos.x - (dx / dist) * nodeRadius
+  const endY = toPos.y - (dy / dist) * nodeRadius
+
+  const actionIdx = enabledActionIndexMap.get(edge.actionElementId)
+  const markerId = actionIdx !== undefined ? `arrow-${actionIdx}` : undefined
+
+  return (
+    <path
+      key={`${edge.fromId}-${edge.toId}-${edge.actionElementId}`}
+      d={`M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`}
+      stroke={color}
+      strokeWidth={isHighlighted ? 3.5 : 2.5}
+      fill="none"
+      markerEnd={edge.isBidirectional || !markerId ? undefined : `url(#${markerId})`}
+      opacity={0.9}
+    />
+  )
+}
+
 function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }) {
-  const { currentGroup, selectedElements, canvasTransform, selectElement, setHoverElement, getNodePosition, setNodePosition, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors, cayleyShape2D } = useGroup()
+  const { currentGroup, selectedElements, canvasTransform, selectElement, getNodePosition, setNodePosition, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors, cayleyShape2D } = useGroup()
+  const { setHoverElement } = useHover()
   const { t } = useTranslation()
 
   // Stable computed values so hooks are invoked in the same order every render.
@@ -525,15 +586,6 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
 
   const isLargeGraph = n > 60
 
-  const isNodeOnScreen = (px: number, py: number) => {
-    if (!isLargeGraph) return true
-    const sx = px * canvasTransform.scale + canvasTransform.x
-    const sy = py * canvasTransform.scale + canvasTransform.y
-    const m = nodeRadius * canvasTransform.scale * 1.5
-    return sx + m > 0 && sx - m < viewBoxSize.width &&
-           sy + m > 0 && sy - m < viewBoxSize.height
-  }
-
   const subsetDetailMap = useMemo(() => {
     const m = new Map<string, typeof subsets[0]>()
     subsets.forEach(s => s.elementIds.forEach(id => { if (!m.has(id)) m.set(id, s) }))
@@ -567,6 +619,230 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
     return cache
   }, [currentGroup, getNodePos])
 
+  // KaTeX label HTML is expensive: render once per group instead of per render.
+  const labelHtmlCache = useMemo(() => {
+    const m = new Map<string, string>()
+    if (!currentGroup) return m
+    currentGroup.elements.forEach((el) => {
+      m.set(el.id, renderTex(texify(el.label)))
+    })
+    return m
+  }, [currentGroup])
+
+  // Selection count (not the set) drives the base graph, so single-select
+  // changes do not rebuild nodes/edges — only the overlay layers redraw.
+  const selectedCount = useMemo(() => selectedElements.size, [selectedElements])
+
+  const edgeElements = useMemo(() => {
+    if (!currentGroup) return null
+    return edges.map(edge => renderEdgePath(edge, nodePositionsCache, nodeRadius, enabledActionIndexMap, false))
+  }, [edges, nodePositionsCache, enabledActionIndexMap, nodeRadius, currentGroup])
+
+  // Overlay: edges touching a selected element redrawn full-color + thicker.
+  const highlightedEdges = useMemo(() => {
+    if (!currentGroup || selectedElements.size === 0) return null
+    return edges
+      .filter(edge => selectedElements.has(edge.fromId) || selectedElements.has(edge.toId))
+      .map(edge => renderEdgePath(edge, nodePositionsCache, nodeRadius, enabledActionIndexMap, true))
+  }, [edges, selectedElements, nodePositionsCache, enabledActionIndexMap, nodeRadius, currentGroup])
+
+  // Node elements are memoized so that hover (which only 3D consumes) and other
+  // unrelated context updates do not rebuild the whole graph every frame.
+  const nodeElements = useMemo(() => {
+    if (!currentGroup) return null
+    return currentGroup.elements.map((el) => {
+      const pos = nodePositionsCache.get(el.id) || { x: cx, y: cy }
+      const sx = pos.x * canvasTransform.scale + canvasTransform.x
+      const sy = pos.y * canvasTransform.scale + canvasTransform.y
+      const cullMargin = nodeRadius * canvasTransform.scale * 1.5
+      const onScreen = !isLargeGraph || (sx + cullMargin > 0 && sx - cullMargin < viewBoxSize.width && sy + cullMargin > 0 && sy - cullMargin < viewBoxSize.height)
+      if (!onScreen) return null
+      const parentSubset = subsetDetailMap.get(el.id)
+      const cosetIdx = cosetElementMap.get(el.id)
+      const isInHighlightedCoset = cosetIdx !== undefined && cosetHighlightSet.has(cosetIdx)
+      const isSdFixed = cayleyShape2D === 'rewiring' && !!sdMeta && sdFixedMap.get(el.id) === true
+      
+      let fillColor = 'var(--node-fill)'
+      let strokeColor = 'var(--node-stroke)'
+      let strokeWidth = 2.5
+      
+      if (isSdFixed) {
+        fillColor = 'var(--accent-teal)22'
+        strokeColor = 'var(--accent-teal)'
+        strokeWidth = 3
+      } else if (isInHighlightedCoset && cosetIdx !== undefined) {
+        fillColor = cosetColors[cosetIdx] + '33'
+        strokeColor = cosetColors[cosetIdx]
+        strokeWidth = 3
+      } else if (parentSubset) {
+        fillColor = parentSubset.color + '33'
+        strokeColor = parentSubset.color
+        strokeWidth = 2.5
+      }
+      
+      return (
+        <g
+          key={el.id}
+          transform={`translate(${pos.x}, ${pos.y})`}
+          onClick={(e) => {
+            e.stopPropagation()
+            selectElement(el.id, e.ctrlKey || e.metaKey)
+          }}
+          onMouseDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+              const svg = e.currentTarget.closest('svg')
+              if (!svg) return
+              const svgRect = svg.getBoundingClientRect()
+              const viewBoxWidth = viewBoxSize.width
+              const viewBoxHeight = viewBoxSize.height
+              const scaleX = viewBoxWidth / svgRect.width
+              const scaleY = viewBoxHeight / svgRect.height
+              
+              const startX = (e.clientX - svgRect.left) * scaleX
+              const startY = (e.clientY - svgRect.top) * scaleY
+              const startPos = getNodePos(el.id)
+              const initialOffsetX = startPos.x
+              const initialOffsetY = startPos.y
+
+              let pendingPos: { x: number; y: number } | null = null
+              const rafId = { current: 0 }
+              
+              const handleMove = (moveEvent: MouseEvent) => {
+                const currentX = (moveEvent.clientX - svgRect.left) * scaleX
+                const currentY = (moveEvent.clientY - svgRect.top) * scaleY
+                const newX = initialOffsetX + (currentX - startX) / canvasTransform.scale
+                const newY = initialOffsetY + (currentY - startY) / canvasTransform.scale
+                pendingPos = { x: newX, y: newY }
+                // rAF-throttle: at most one setNodePosition per frame.
+                if (rafId.current === 0) {
+                  rafId.current = requestAnimationFrame(() => {
+                    rafId.current = 0
+                    if (pendingPos) setNodePosition(el.id, pendingPos.x, pendingPos.y)
+                  })
+                }
+              }
+              
+              const handleUp = () => {
+                window.removeEventListener('mousemove', handleMove)
+                window.removeEventListener('mouseup', handleUp)
+                if (rafId.current !== 0) {
+                  cancelAnimationFrame(rafId.current)
+                  rafId.current = 0
+                }
+                if (pendingPos) setNodePosition(el.id, pendingPos.x, pendingPos.y)
+              }
+              
+              window.addEventListener('mousemove', handleMove)
+              window.addEventListener('mouseup', handleUp)
+            }
+          }}
+          onMouseEnter={() => setHoverElement(el)}
+          onMouseLeave={() => setHoverElement(null)}
+          style={{ cursor: 'grab' }}
+        >
+           {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 ? (
+              // 复合节点（陪集成员栈）：isSelected 硬编码 false 是有意取舍——
+              // 选中态由外层 gold ring overlay（r=nodeRadius+3）表达，不再切换实线/虚线
+              renderCompoundNode(el, nodeRadius, false, fillColor, strokeColor, strokeWidth, true)
+            ) : (
+             <>
+               <circle
+                 r={nodeRadius}
+                 fill={fillColor}
+                 stroke={strokeColor}
+                 strokeWidth={strokeWidth}
+                 filter={isLargeGraph ? undefined : "url(#node-shadow)"}
+               />
+               {parentSubset && (
+                 <circle
+                   r={nodeRadius}
+                   fill={`${parentSubset.color}22`}
+                   stroke="none"
+                 />
+               )}
+               {isInHighlightedCoset && cosetIdx !== undefined && (
+                 <circle
+                   r={nodeRadius}
+                   fill={`${cosetColors[cosetIdx]}22`}
+                   stroke="none"
+                 />
+               )}
+               {(!isLargeGraph || selectedCount === 0) && (
+                 <foreignObject
+                   x={-nodeRadius}
+                   y={-16}
+                   width={nodeRadius * 2}
+                   height={32}
+                   style={{ pointerEvents: 'none', userSelect: 'none' }}
+                 >
+                   <div
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         width: '100%', height: '100%', color: isSdFixed ? 'var(--accent-teal)' : 'var(--node-text)', fontSize: isLargeGraph ? '10px' : '15px', fontWeight: isSdFixed ? 700 : 400
+                      }}
+                     dangerouslySetInnerHTML={{
+                       __html: labelHtmlCache.get(el.id) ?? ''
+                     }}
+                   />
+                 </foreignObject>
+               )}
+             </>
+           )}
+           {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 && isInHighlightedCoset && cosetIdx !== undefined && (
+             <circle
+               r={nodeRadius + 2}
+               fill={`${cosetColors[cosetIdx]}22`}
+               stroke="none"
+             />
+           )}
+           {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 && parentSubset && (
+             <circle
+               r={nodeRadius + 2}
+               fill={`${parentSubset.color}22`}
+               stroke="none"
+             />
+           )}
+            {selfInverseElementId === el.id && (
+             <g>
+               <circle r={nodeRadius + 6} fill="none" stroke="#ffd93d" strokeWidth={2.5} strokeDasharray="6 3" opacity={0.85}>
+                 <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="0.8s" repeatCount="indefinite" />
+               </circle>
+               <path
+                 d={`M ${nodeRadius + 3},-8 L ${nodeRadius + 14},-5 L ${nodeRadius + 10},-1`}
+                 fill="#ffd93d"
+                 opacity={0.85}
+               />
+             </g>
+           )}
+        </g>
+      )
+    })
+  }, [currentGroup, nodePositionsCache, selectedCount, subsetDetailMap, cosetElementMap, cosetHighlightSet, cosetColors, sdMeta, sdFixedMap, selfInverseElementId, nodeRadius, isLargeGraph, canvasTransform, viewBoxSize, cx, cy, labelHtmlCache, cayleyShape2D, getNodePos, selectElement, setHoverElement, setNodePosition])
+
+  // Overlay: gold ring (+ label on large graphs) drawn above nodes for the
+  // selected elements, so selection changes skip the base-graph rebuild.
+  const selectionOverlay = useMemo(() => {
+    if (!currentGroup || selectedElements.size === 0) return null
+    return [...selectedElements].map(id => {
+      const pos = nodePositionsCache.get(id) || { x: cx, y: cy }
+      const sx = pos.x * canvasTransform.scale + canvasTransform.x
+      const sy = pos.y * canvasTransform.scale + canvasTransform.y
+      const cullMargin = nodeRadius * canvasTransform.scale * 1.5
+      if (isLargeGraph && !(sx + cullMargin > 0 && sx - cullMargin < viewBoxSize.width && sy + cullMargin > 0 && sy - cullMargin < viewBoxSize.height)) return null
+      return (
+        <g key={`selected-${id}`} transform={`translate(${pos.x}, ${pos.y})`}>
+          <circle r={nodeRadius + 3} fill="none" stroke="#ffd93d" strokeWidth={3} opacity={0.95} />
+          {isLargeGraph && (
+            <foreignObject x={-nodeRadius} y={-16} width={nodeRadius * 2} height={32} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', color: 'var(--node-text)', fontSize: '10px' }} dangerouslySetInnerHTML={{ __html: labelHtmlCache.get(id) ?? '' }} />
+            </foreignObject>
+          )}
+        </g>
+      )
+    })
+  }, [selectedElements, nodePositionsCache, nodeRadius, canvasTransform, viewBoxSize, isLargeGraph, cx, cy, labelHtmlCache, currentGroup])
+
   if (!currentGroup) {
     return (
       <div className="view-empty">
@@ -574,60 +850,6 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
       </div>
     )
   }
-
-  const edgeElements = edges.map((edge: CayleyEdgeData) => {
-    const fromPos = nodePositionsCache.get(edge.fromId)
-    const toPos = nodePositionsCache.get(edge.toId)
-    if (!fromPos || !toPos) return null
-
-    const dx = toPos.x - fromPos.x
-    const dy = toPos.y - fromPos.y
-    const dist = Math.sqrt(dx * dx + dy * dy)
-    
-    const isHighlighted = selectedElements.has(edge.fromId) || selectedElements.has(edge.toId)
-    const baseColor = edge.color
-    const color = isHighlighted ? baseColor : `${baseColor}99`
-
-    if (edge.isSelfLoop) {
-      const scx = fromPos.x
-      const scy = fromPos.y - nodeRadius - 20
-      return (
-        <g key={`${edge.fromId}-${edge.actionElementId}`}>
-          <ellipse cx={scx} cy={scy} rx={14} ry={12} fill="none" stroke={color} strokeWidth={isHighlighted ? 3.5 : 2.5} />
-          <polygon points={`${scx-5},${scy-2} ${scx+5},${scy-2} ${scx},${scy-14}`} fill={baseColor} />
-        </g>
-      )
-    }
-
-    const midX = (fromPos.x + toPos.x) / 2
-    const midY = (fromPos.y + toPos.y) / 2
-    const nx = -dy / dist
-    const ny = dx / dist
-    
-    const curvature = Math.min(dist * 0.08, 18)
-    const ctrlX = midX + nx * curvature
-    const ctrlY = midY + ny * curvature
-    
-    const startX = fromPos.x + (dx / dist) * nodeRadius
-    const startY = fromPos.y + (dy / dist) * nodeRadius
-    const endX = toPos.x - (dx / dist) * nodeRadius
-    const endY = toPos.y - (dy / dist) * nodeRadius
-    
-    const actionIdx = enabledActionIndexMap.get(edge.actionElementId)
-    const markerId = actionIdx !== undefined ? `arrow-${actionIdx}` : undefined
-
-    return (
-      <path
-        key={`${edge.fromId}-${edge.toId}-${edge.actionElementId}`}
-        d={`M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${endX} ${endY}`}
-        stroke={color}
-        strokeWidth={isHighlighted ? 3.5 : 2.5}
-        fill="none"
-        markerEnd={edge.isBidirectional || !markerId ? undefined : `url(#${markerId})`}
-        opacity={0.9}
-      />
-    )
-  })
 
   const enabledActions = cayleyActions.filter(a => a.enabled)
 
@@ -646,159 +868,10 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
       
       <g ref={gRef} transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale})`}>
         {edgeElements}
+        {highlightedEdges}
 
-        {currentGroup.elements.map((el) => {
-          const pos = nodePositionsCache.get(el.id) || { x: cx, y: cy }
-          if (!isNodeOnScreen(pos.x, pos.y)) return null
-          const isSelected = selectedElements.has(el.id)
-          const parentSubset = subsetDetailMap.get(el.id)
-          const cosetIdx = cosetElementMap.get(el.id)
-          const isInHighlightedCoset = cosetIdx !== undefined && cosetHighlightSet.has(cosetIdx)
-          const isSdFixed = cayleyShape2D === 'rewiring' && !!sdMeta && sdFixedMap.get(el.id) === true
-          
-          let fillColor = 'var(--node-fill)'
-          let strokeColor = 'var(--node-stroke)'
-          let strokeWidth = 2.5
-          
-          if (isSelected) {
-            fillColor = 'var(--node-fill-selected)'
-            strokeColor = '#ffd93d'
-            strokeWidth = 3
-          } else if (isSdFixed) {
-            fillColor = 'var(--accent-teal)22'
-            strokeColor = 'var(--accent-teal)'
-            strokeWidth = 3
-          } else if (isInHighlightedCoset && cosetIdx !== undefined) {
-            fillColor = cosetColors[cosetIdx] + '33'
-            strokeColor = cosetColors[cosetIdx]
-            strokeWidth = 3
-          } else if (parentSubset) {
-            fillColor = parentSubset.color + '33'
-            strokeColor = parentSubset.color
-            strokeWidth = 2.5
-          }
-          
-          return (
-            <g
-              key={el.id}
-              transform={`translate(${pos.x}, ${pos.y})`}
-              onClick={(e) => {
-                e.stopPropagation()
-                selectElement(el.id, e.ctrlKey || e.metaKey)
-              }}
-              onMouseDown={(e) => {
-                if (e.button === 0) {
-                  e.stopPropagation()
-                  const svg = e.currentTarget.closest('svg')
-                  if (!svg) return
-                  const svgRect = svg.getBoundingClientRect()
-                  const viewBoxWidth = viewBoxSize.width
-                  const viewBoxHeight = viewBoxSize.height
-                  const scaleX = viewBoxWidth / svgRect.width
-                  const scaleY = viewBoxHeight / svgRect.height
-                  
-                  const startX = (e.clientX - svgRect.left) * scaleX
-                  const startY = (e.clientY - svgRect.top) * scaleY
-                  const startPos = getNodePos(el.id)
-                  const initialOffsetX = startPos.x
-                  const initialOffsetY = startPos.y
-                  
-                  const handleMove = (moveEvent: MouseEvent) => {
-                    const currentX = (moveEvent.clientX - svgRect.left) * scaleX
-                    const currentY = (moveEvent.clientY - svgRect.top) * scaleY
-                    const newX = initialOffsetX + (currentX - startX) / canvasTransform.scale
-                    const newY = initialOffsetY + (currentY - startY) / canvasTransform.scale
-                    setNodePosition(el.id, newX, newY)
-                  }
-                  
-                  const handleUp = () => {
-                    window.removeEventListener('mousemove', handleMove)
-                    window.removeEventListener('mouseup', handleUp)
-                  }
-                  
-                  window.addEventListener('mousemove', handleMove)
-                  window.addEventListener('mouseup', handleUp)
-                }
-              }}
-              onMouseEnter={() => setHoverElement(el)}
-              onMouseLeave={() => setHoverElement(null)}
-              style={{ cursor: 'grab' }}
-            >
-               {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 ? (
-                  renderCompoundNode(el, nodeRadius, isSelected, fillColor, strokeColor, strokeWidth, true)
-                ) : (
-                 <>
-                   <circle
-                     r={nodeRadius}
-                     fill={fillColor}
-                     stroke={strokeColor}
-                     strokeWidth={strokeWidth}
-                     filter={isLargeGraph ? undefined : "url(#node-shadow)"}
-                   />
-                   {parentSubset && (
-                     <circle
-                       r={nodeRadius}
-                       fill={`${parentSubset.color}22`}
-                       stroke="none"
-                     />
-                   )}
-                   {isInHighlightedCoset && cosetIdx !== undefined && (
-                     <circle
-                       r={nodeRadius}
-                       fill={`${cosetColors[cosetIdx]}22`}
-                       stroke="none"
-                     />
-                   )}
-                   {(!isLargeGraph || isSelected || selectedElements.size === 0) && (
-                     <foreignObject
-                       x={-nodeRadius}
-                       y={-16}
-                       width={nodeRadius * 2}
-                       height={32}
-                       style={{ pointerEvents: 'none', userSelect: 'none' }}
-                     >
-                       <div
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                             width: '100%', height: '100%', color: isSdFixed ? 'var(--accent-teal)' : 'var(--node-text)', fontSize: isLargeGraph ? '10px' : '15px', fontWeight: isSdFixed ? 700 : 400
-                          }}
-                         dangerouslySetInnerHTML={{
-                           __html: renderTex(texify(el.label))
-                         }}
-                       />
-                     </foreignObject>
-                   )}
-                 </>
-               )}
-               {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 && isInHighlightedCoset && cosetIdx !== undefined && (
-                 <circle
-                   r={nodeRadius + 2}
-                   fill={`${cosetColors[cosetIdx]}22`}
-                   stroke="none"
-                 />
-               )}
-               {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 && parentSubset && (
-                 <circle
-                   r={nodeRadius + 2}
-                   fill={`${parentSubset.color}22`}
-                   stroke="none"
-                 />
-               )}
-                {selfInverseElementId === el.id && (
-                 <g>
-                   <circle r={nodeRadius + 6} fill="none" stroke="#ffd93d" strokeWidth={2.5} strokeDasharray="6 3" opacity={0.85}>
-                     <animate attributeName="stroke-dashoffset" from="0" to="-18" dur="0.8s" repeatCount="indefinite" />
-                   </circle>
-                   <path
-                     d={`M ${nodeRadius + 3},-8 L ${nodeRadius + 14},-5 L ${nodeRadius + 10},-1`}
-                     fill="#ffd93d"
-                     opacity={0.85}
-                   />
-                 </g>
-               )}
-            </g>
-          )
-        })}
+        {nodeElements}
+        {selectionOverlay}
       </g>
       
     </svg>

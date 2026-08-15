@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { cosetStripLayout, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
@@ -14,7 +15,6 @@ export function CosetStripView() {
     currentGroup,
     selectedElements,
     selectElement,
-    setHoverElement,
     canvasTransform,
     cosetElementMap,
     cosetColors,
@@ -22,6 +22,7 @@ export function CosetStripView() {
     viewBoxSize,
     subsets,
   } = useGroup()
+  const { setHoverElement } = useHover()
 
   const subsetDetailMap = useMemo(() => {
     const m = new Map<string, typeof subsets[0]>()

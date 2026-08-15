@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback, useMemo, useTransition, type ReactNode } from 'react'
-import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResult } from '../../core/types'
+import type { Group, ViewMode, CanvasTransform, SubgroupCheckResult } from '../../core/types'
 import { type CayleyShape2D, getDefaultShape2D } from '../../core/types'
 import { getViewBoxSize, type ViewBoxSize } from '../../core/viewBox'
 import { useTranslation } from '../../i18n/useTranslation'
@@ -15,7 +15,6 @@ interface GroupCoreState {
   nodePositions: NodePositionsMap
   viewTabs: { id: string; view: ViewMode; label: string }[]
   activeTabId: string
-  hoverElement: GroupElement | null
   showMaximalCycles: boolean
   hintMessage: string
   forceShowLargeGroupViews: Set<ViewMode>
@@ -39,7 +38,6 @@ interface GroupCoreActions {
   addViewTab: (view: ViewMode) => void
   closeViewTab: (id: string) => void
   setActiveTab: (id: string) => void
-  setHoverElement: (el: GroupElement | null) => void
   checkSubsetProperty: (elements: string[]) => SubgroupCheckResult
   generateSubgroups: () => void
   selectNextElement: () => void
@@ -84,7 +82,6 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
     [viewTabsBase, getViewLabel]
   )
   const [activeTabId, setActiveTabId] = useState('tab-1')
-  const [hoverElement, setHoverElementState] = useState<GroupElement | null>(null)
   const [showMaximalCycles, setShowMaximalCycles] = useState(false)
   const [hintMessage, setHintMessage] = useState('')
   const [forceShowLargeGroupViews, setForceShowLargeGroupViewsState] = useState<Set<ViewMode>>(new Set())
@@ -221,10 +218,6 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
     if (tab) setCurrentViewState(tab.view)
   }, [viewTabs])
 
-  const setHoverElement = useCallback((el: GroupElement | null) => {
-    setHoverElementState(el)
-  }, [])
-
   const checkSubsetProperty = useCallback((elements: string[]): SubgroupCheckResult => {
     const result: SubgroupCheckResult = {
       type: 'subset',
@@ -343,11 +336,11 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
 
   const value: GroupCoreContextType = {
     currentGroup, currentView, selectedElements, canvasTransform, operationHistory,
-    nodePositions, viewTabs, activeTabId, hoverElement, showMaximalCycles,
+    nodePositions, viewTabs, activeTabId, showMaximalCycles,
     hintMessage, forceShowLargeGroupViews, viewBoxSize, isPending, isLargeGroup,
     setCurrentGroup, clearCurrentGroup, setCurrentView, selectElement, clearSelection, setCanvasTransform,
     resetCanvasTransform, addOperationHistory, setNodePosition, batchSetNodePositions,
-    getNodePosition, addViewTab, closeViewTab, setActiveTab, setHoverElement,
+    getNodePosition, addViewTab, closeViewTab, setActiveTab,
     checkSubsetProperty, generateSubgroups, selectNextElement, selectPrevElement,
     setShowMaximalCycles, setHintMessage, setForceShowLargeGroupForView, resetNodePositions, clearAllNodePositions, getViewLabel,
   }

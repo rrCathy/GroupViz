@@ -733,8 +733,7 @@ function SymmetryScene({
       )}
 
       <OrbitControls
-        enableDamping
-        dampingFactor={0.1}
+        enableDamping={false}
         minDistance={2}
         maxDistance={20}
         enableRotate={!showAction}

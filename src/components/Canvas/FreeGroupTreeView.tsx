@@ -78,7 +78,7 @@ function Tree3DScene({ tree, selectedWord, onSelect }: {
           </mesh>
         )
       })}
-      <OrbitControls enableDamping dampingFactor={0.12} minDistance={20} maxDistance={base * 20} />
+      <OrbitControls enableDamping={false} minDistance={20} maxDistance={base * 20} />
     </Canvas>
   )
 }

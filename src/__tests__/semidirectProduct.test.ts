@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createSemidirectProduct } from '../core/groups/SemidirectProduct'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
-import { getSmallGroup } from '../core/groups/SmallGroups'
+import { getSmallGroup, getAllSmallGroups } from '../core/groups/SmallGroups'
 import { createS3 } from '../core/groups/SymmetricGroup'
 import type { Group, GroupElement } from '../core/types'
 import type { Automorphism } from '../core/algebra/automorphisms'
@@ -189,6 +189,26 @@ describe('getSemidirectProductMeta (rewiring shape metadata)', () => {
     expect(meta).not.toBeNull()
     expect(meta!.normal.order).toBe(3)
     expect(meta!.acting.order).toBe(2)
+  })
+
+  it('recovers named semidirect QD16 as C₈⋊C₂ (no ":" notation)', () => {
+    const entry = getAllSmallGroups().find(e => e.group.symbol === 'QD_{16}')!
+    const meta = getSemidirectProductMeta(entry.group)
+    expect(meta).not.toBeNull()
+    expect(meta!.normal.name).toBe('C_{8}')
+    expect(meta!.normal.order).toBe(8)
+    expect(meta!.acting.order).toBe(2)
+    expect(meta!.phiMap.size).toBe(2)
+    // φ(b)(a) = a³ — the quasidihedral twist
+    const a = meta!.normal.generators[0].apply(meta!.normal.identity)
+    const b = meta!.acting.generators[0].apply(meta!.acting.identity)
+    const phiB = meta!.phiMap.get(b.id)
+    expect(phiB).toBeDefined()
+    expect(phiB).toBeDefined()
+    const a3 = phiB!.map.get(a.id)
+    expect(a3).toBeDefined()
+    const cub = entry.group.multiply(entry.group.multiply(a, a), a)
+    expect(a3).toBe(cub.id)
   })
 })
 

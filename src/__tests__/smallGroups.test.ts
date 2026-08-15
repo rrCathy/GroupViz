@@ -109,6 +109,114 @@ describe('SmallGroups registry', () => {
     expect(getSmallGroup(16, 14)).toBeNull()
   })
 
+  it('QD16 generators are normalized to the standard (a, b): a order 8, b order 2, bab = a³', () => {
+    const entry = getAllSmallGroups().find(e => e.group.symbol === 'QD_{16}')!
+    const group = entry.group
+    const a = group.generators[0].apply(group.identity)
+    const b = group.generators[1].apply(group.identity)
+    const orderOf = (el: GroupElement): number => {
+      let cur = el
+      let k = 1
+      while (cur.id !== group.identity.id) {
+        cur = group.multiply(cur, el)
+        k++
+      }
+      return k
+    }
+    expect(orderOf(a)).toBe(8)
+    expect(orderOf(b)).toBe(2)
+    // bab = a³
+    const bab = group.multiply(group.multiply(b, a), b)
+    const a3 = group.multiply(group.multiply(a, a), a)
+    expect(bab.id).toBe(a3.id)
+    // ⟨a, b⟩ closes to the whole group
+    const seen = new Set<string>()
+    let p = group.identity
+    for (let i = 0; i < 8; i++) {
+      seen.add(p.id)
+      seen.add(group.multiply(p, b).id)
+      p = group.multiply(p, a)
+    }
+    expect(seen.size).toBe(16)
+  })
+
+  it('(16,13) generators are normalized to the Group Explorer (a, b, c): a order 4, b order 2, c order 2, ab = ba, ac = ca, cbc = ba²', () => {
+    const entry = getAllSmallGroups().find(e => e.group.symbol === 'SmallGroup(16,13)')!
+    const group = entry.group
+    const a = group.generators[0].apply(group.identity)
+    const b = group.generators[1].apply(group.identity)
+    const c = group.generators[2].apply(group.identity)
+    const orderOf = (el: GroupElement): number => {
+      let cur = el
+      let k = 1
+      while (cur.id !== group.identity.id) {
+        cur = group.multiply(cur, el)
+        k++
+      }
+      return k
+    }
+    expect(orderOf(a)).toBe(4)
+    expect(orderOf(b)).toBe(2)
+    expect(orderOf(c)).toBe(2)
+    const mul = (x: GroupElement, y: GroupElement) => group.multiply(x, y)
+    // ab = ba and ac = ca (N = C₄×C₂ abelian)
+    expect(mul(b, a).id).toBe(mul(a, b).id)
+    expect(mul(c, a).id).toBe(mul(a, c).id)
+    // cbc = ba² (the semidirect twist φ(c)(b) = b·a²)
+    const cbc = mul(mul(c, b), c)
+    const ba2 = mul(mul(b, a), a)
+    expect(cbc.id).toBe(ba2.id)
+    // ⟨a, b, c⟩ closes to the whole group
+    const byClosure = new Set<string>()
+    const stack = [group.identity]
+    while (stack.length > 0) {
+      const cur = stack.pop()!
+      if (byClosure.has(cur.id)) continue
+      byClosure.add(cur.id)
+      for (const el of [a, b, c]) {
+        const nxt = mul(cur, el)
+        if (!byClosure.has(nxt.id)) stack.push(nxt)
+      }
+    }
+    expect(byClosure.size).toBe(16)
+  })
+
+  it('Q₁₆ (16,9) generators are normalized to the Group Explorer (a, b): a order 8, b order 4, b² = a⁴, aba = b', () => {
+    const entry = getAllSmallGroups().find(e => e.group.symbol === 'Q_{16}')!
+    const group = entry.group
+    const a = group.generators[0].apply(group.identity)
+    const b = group.generators[1].apply(group.identity)
+    const orderOf = (el: GroupElement): number => {
+      let cur = el
+      let k = 1
+      while (cur.id !== group.identity.id) {
+        cur = group.multiply(cur, el)
+        k++
+      }
+      return k
+    }
+    expect(orderOf(a)).toBe(8)
+    expect(orderOf(b)).toBe(4)
+    const mul = (x: GroupElement, y: GroupElement) => group.multiply(x, y)
+    // b² = a⁴ (central element)
+    expect(mul(b, b).id).toBe(mul(mul(mul(a, a), a), a).id)
+    // aba = b (a-conjugation flips b)
+    expect(mul(mul(a, b), a).id).toBe(b.id)
+    // ⟨a, b⟩ closes to the whole group
+    const byClosure = new Set<string>()
+    const stack = [group.identity]
+    while (stack.length > 0) {
+      const cur = stack.pop()!
+      if (byClosure.has(cur.id)) continue
+      byClosure.add(cur.id)
+      for (const el of [a, b]) {
+        const nxt = mul(cur, el)
+        if (!byClosure.has(nxt.id)) stack.push(nxt)
+      }
+    }
+    expect(byClosure.size).toBe(16)
+  })
+
   it('getSmallGroupBySymbol finds entries', () => {
     expect(getSmallGroupBySymbol('S_{3}')!.order).toBe(6)
     expect(getSmallGroupBySymbol('Q_{8}')!.order).toBe(8)
@@ -312,11 +420,15 @@ describe('registry dihedral generators are standardized to (r, s)', () => {
     expect(Math.min(a, b)).toBe(2)
   })
 
-  it('non-dihedral registry groups keep their GAP generators', () => {
-    const g = getSmallGroup(16, 7)!.group // QD16 (GAP i=8)
+  it('non-dihedral registry groups keep their GAP generators (except QD16, standardized to (a, b))', () => {
+    const g = getSmallGroup(16, 7)!.group // QD16 (GAP i=8) — now standardized
     expect(g.generators).toHaveLength(2)
-    expect(g.generators[0].apply(g.identity).id).toBe('g1')
+    expect(['g5', 'g2'].indexOf(g.generators[0].apply(g.identity).id)).toBeGreaterThanOrEqual(0)
     expect(g.generators[1].apply(g.identity).id).toBe('g2')
+    // another non-dihedral group still keeps GAP generators
+    const g2 = getSmallGroup(20, 0)!.group // C5:C4
+    expect(g2.generators).toHaveLength(2)
+    expect(g2.generators[0].apply(g2.identity).id).toBe('g1')
   })
 })
 

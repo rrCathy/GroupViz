@@ -2,7 +2,7 @@ export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' 
 
 export type MultiplyType = 'right' | 'left'
 
-export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron'
+export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron' | 'hypercube'
 
 export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'ringGrid' | 'pythagoreanSquare'
 
@@ -350,6 +350,21 @@ export function isGroupSemidirectProduct(group: Group): boolean {
   return sym.includes('\\rtimes') || hasTopLevelColon(sym)
 }
 
+/**
+ * Named semidirect-product groups (GAP StructureDescription has no ':')
+ * that benefit from the rewiring shape. These groups carry no ':' in their
+ * symbol so isGroupSemidirectProduct is false, yet their canonical structure
+ * is a semidirect product N⋊H, recovered by getSemidirectProductMeta.
+ *   QD16      = SmallGroup(16,8)  ≈ C₈⋊C₂ (cyclic normal)
+ *   (C₄×C₂):C₂ = SmallGroup(16,13) ≈ (C₄×C₂)⋊C₂ (abelian normal)
+ */
+export function isNamedRewiringGroup(group: Group): boolean {
+  if (group.order > 60) return false
+  // QD16 专名；其余为符号冲突回退类（symbol 被替换为 SmallGroup(n,i) 的注册表群，
+  // 如 (20,3) ≈ C₅⋊C₄、(16,13) ≈ (C₄×C₂)⋊C₂），结构均为半直积，走重布线形状
+  return group.symbol === 'QD_{16}' || group.symbol.startsWith('SmallGroup(')
+}
+
 export interface SemidirectProductSpec {
   normalSymbol: string
   actingSymbol: string
@@ -371,28 +386,29 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
   const sym = group.symbol
   const shapes: Layout3D[] = ['spherical']
 
-  if (isGroupSemidirectProduct(group)) {
-    shapes.push('semidirectCylinder', 'lattice', 'torus', 'circular')
+  if (isGroupSemidirectProduct(group) || isNamedRewiringGroup(group)) {
+    // lattice/torus 依赖直积因子结构，半直积群布局失败会静默球化 → 不提供
+    shapes.push('semidirectCylinder', 'circular')
     return shapes
   }
 
   if (isGroupDirectProduct(group)) {
-    const info = analyzeDPFactors(group)
+    // 归组分类（相邻同底循环合并 C₂×C₂→C₂² 视为非循环因子），与 2D classifyDirectProduct2D 对齐
+    const info = analyzeDPFactorsGrouped2D(group)
     if (info) {
-      if (info.allCyclic) {
+      if (info.count <= 1 || info.allCyclic) {
         shapes.push('lattice', 'circular')
-      } else if (info.totalFactors === 2) {
-        if (info.cyclicCount === 1) {
-          shapes.push('cylinder', 'lattice', 'circular')
-        } else {
-          shapes.push('torus', 'lattice', 'circular')
-        }
-      } else {
+      } else if (info.cyclicCount === 0) {
         shapes.push('lattice', 'torus', 'circular')
+      } else {
+        // 含循环 + 非循环因子：cylinder（多循环因子轴向堆叠，任意因子数）
+        shapes.push('cylinder', 'lattice', 'circular')
       }
     } else {
       shapes.push('lattice', 'torus', 'circular')
     }
+    if (isC2Cube(group)) shapes.push('cube')
+    if (isC2Tesseract(group)) shapes.push('hypercube')
     return shapes
   }
 
@@ -408,6 +424,10 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
 
   if (group.isAbelian) {
     shapes.push('circular')
+    // C₂³ 凯莱图 = 立方体（8 顶点标准立方体网格）
+    if (isC2Cube(group)) shapes.push('cube')
+    // C₂⁴ 凯莱图 = 超立方体（16 顶点内外立方体同心投影）
+    if (isC2Tesseract(group)) shapes.push('hypercube')
     if (group.order === 4) shapes.push('tetrahedron')
     return shapes
   }
@@ -418,6 +438,9 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
     shapes.push('circular', 'truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3')
   } else if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') {
     shapes.push('cube')
+  } else if (sym === 'Q_{16}' || sym === 'Q16' || sym === 'Q₁₆') {
+    // Q₁₆（广义四元数群，GE 记为 Q₈）：⟨b⟩-陪集圆柱（GE 风格）
+    shapes.push('semidirectCylinder')
   } else if (sym === 'A_{4}' || sym === 'A4') {
     shapes.push('circular', 'truncatedTetrahedron')
   } else if (sym === 'A_{5}' || sym === 'A5') {
@@ -433,19 +456,18 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
 
 export function getDefaultLayout3D(group: Group): Layout3D {
   if (isQuotientGroup(group)) return 'spherical'
-  if (isGroupSemidirectProduct(group)) {
-    if (group.symbol === 'C_{3}:C_{4}') return 'semidirectCylinder'
-    return 'lattice'
-  }
+  // 半直积默认 N⋊H 圆柱（N 环 + H 沿轴，对应 2D rewiring 的 3D 形态）
+  if (isGroupSemidirectProduct(group) || isNamedRewiringGroup(group)) return 'semidirectCylinder'
+  // C₂³ 凯莱图 = 立方体（优先于直积/阿贝尔分类）
+  if (isC2Cube(group)) return 'cube'
+  // C₂⁴ 凯莱图 = 超立方体（16 顶点内外立方体同心投影）
+  if (isC2Tesseract(group)) return 'hypercube'
   if (isGroupDirectProduct(group)) {
-    const info = analyzeDPFactors(group)
+    const info = analyzeDPFactorsGrouped2D(group)
     if (info) {
-      if (info.allCyclic) return 'lattice'
-      if (info.totalFactors === 2) {
-        if (info.cyclicCount === 1) return 'cylinder'
-        return 'torus'
-      }
-      return 'lattice'
+      if (info.count <= 1 || info.allCyclic) return 'lattice'
+      if (info.cyclicCount === 0) return 'torus'
+      return 'cylinder'
     }
     return 'lattice'
   }
@@ -455,6 +477,7 @@ export function getDefaultLayout3D(group: Group): Layout3D {
   const sym = group.symbol
   if (sym === 'S_{3}' || sym === 'S3' || sym === 'S₃') return 'hexagon'
   if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'cube'
+  if (sym === 'Q_{16}' || sym === 'Q16' || sym === 'Q₁₆') return 'semidirectCylinder'
   if (sym === 'A_{4}' || sym === 'A4') return 'truncatedTetrahedron'
   if (sym === 'A_{5}' || sym === 'A5') return 'truncatedIcosahedron'
   if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedCube'
@@ -487,41 +510,66 @@ export function isC2Cube(group: Group): boolean {
   return true
 }
 
+/** C₂⁴ (elementary abelian 16-group): order 16, non-cyclic, every element of order 2. */
+export function isC2Tesseract(group: Group): boolean {
+  if (!group || group.order !== 16 || isGroupCyclic(group)) return false
+  if (!group.elements || group.elements.length !== group.order) return false
+  const id = group.identity
+  for (const el of group.elements) {
+    if (el.id === id.id) continue
+    if (group.multiply(el, el).id !== id.id) return false
+  }
+  return true
+}
+
+/** 球面投影（projection3D）仅适配少数置换群：S₃/S₄/S₅/A₄/A₅。 */
+const PROJECTION_3D_SYMBOLS = new Set([
+  'S_{3}', 'S_{4}', 'S_{5}', 'S3', 'S4', 'S5', 'S₃', 'S₄', 'S₅',
+  'A_{4}', 'A4', 'A_{5}', 'A5',
+])
+export function isProjection3DGroup(group: Group): boolean {
+  return PROJECTION_3D_SYMBOLS.has(group.symbol)
+}
+
 export interface RingGridDecomposition {
   ringGen: GroupElement // 环生成元（阶 n，x 幂环）
-  v1: GroupElement // 网格生成元 1（阶 2）
-  v2: GroupElement // 网格生成元 2（阶 2）
+  v1: GroupElement // 网格生成元 1（阶 p）
+  v2: GroupElement // 网格生成元 2（阶 p）
   n: number // 环点数（阶）
+  p?: number // 网格素数（2 → 2×2 网格，3 → 3×3 网格），缺省 2
   map: Map<string, { i: number; v: GroupElement }> // 元素 id → (环幂 i, 网格元素 v)
 }
 
 /**
- * 环网格（ring grid）分解探测：寻找 G ≅ Cₙ × C₂² 的直积分解——
- * 环生成元 x（阶 n ≥ 4）+ 网格 V = {e, v1, v2, v1v2}（v1, v2 为相异阶 2 元素），
+ * 环网格（ring grid）分解探测：寻找 G ≅ Cₙ × C_p² 的直积分解——
+ * 环生成元 x（阶 n ≥ 3）+ 网格 V = C_p²（v1, v2 为相异阶 p 元素，p ∈ {2,3}），
  * 要求 ⟨x⟩·V 无重复覆盖全群（唯一分解，蕴含真正的直积结构，非交换群自动失败）。
  * 纯群论实现：pipe 直积群、注册表 GAP 表群、同构群统一走同一条路。
- * 示例：C₄×C₂×C₂ → x 阶 4、V = C₂²；C₆×C₂×C₂ → x 阶 6。
+ * 示例：C₄×C₂×C₂ → x 阶 4、V = C₂²；C₆×C₂×C₂ → x 阶 6；C₃³ → x 阶 3、V = C₃²。
  */
 export function findRingGridDecomposition(group: Group): RingGridDecomposition | null {
   if (!group || !group.elements || group.elements.length !== group.order || group.order < 16) {
     return null
   }
-  // 环网格仅用于 ≥3 个循环群因子的直积（Cₙ×C₂×…×C₂ 型）；两因子直积
+  // 环网格仅用于 ≥3 个循环群因子的直积（Cₙ×C_p² 型）；两因子直积
   // （如 C₁₀×C₂）虽可能有 C₅×V₄ 分解，但走 grid/cylinder 更合适。
+  const isCyclicBase = (base: string): boolean =>
+    /^C_\{\s*\d+\s*\}$/.test(base) || /^Z_\{\s*\d+\s*\}$/.test(base)
   let cyclicCount = 0
   if (group.symbol.includes('\\times')) {
     for (const p of group.symbol.split('\\times').map(s => s.trim()).filter(Boolean)) {
       const m = p.match(/^(.+)\^\{(\d+)\}$/)
       const base = m ? m[1] : p
       const segs = m ? Number(m[2]) : 1
-      if (/^C_\{\s*\d+\s*\}$/.test(base) || /^Z_\{\s*\d+\s*\}$/.test(base)) cyclicCount += segs
+      if (isCyclicBase(base)) cyclicCount += segs
     }
+  } else {
+    // 纯幂紧凑符号（直积面板幂合并，如 C_{2}^{4}、C_{3}^{3}）：整体展开
+    const sup = group.symbol.match(/^(.+)\^\{(\d+)\}$/)
+    if (sup && isCyclicBase(sup[1])) cyclicCount += Number(sup[2])
   }
   if (cyclicCount < 3) return null
   const idId = group.identity.id
-  const s = group.elements.filter(e => e.id === idId || group.multiply(e, e).id === idId)
-  const nonId = s.filter(e => e.id !== idId)
-  if (nonId.length < 3) return null
   const orderOf = (el: GroupElement): number => {
     let cur = el
     let k = 2
@@ -531,39 +579,66 @@ export function findRingGridDecomposition(group: Group): RingGridDecomposition |
     }
     return cur.id === idId ? k - 1 : group.order
   }
-  for (let p = 0; p < nonId.length; p++) {
-    for (let q = p + 1; q < nonId.length; q++) {
-      const v1 = nonId[p]
-      const v2 = nonId[q]
-      const v12 = group.multiply(v1, v2)
-      const vArr = [group.identity, v1, v2, v12]
-      const n = group.order / 4
-      if (!Number.isInteger(n) || n < 4) continue
-      for (const cand of group.elements) {
-        if (cand.id === idId || cand.id === v1.id || cand.id === v2.id || cand.id === v12.id) continue
-        if (orderOf(cand) !== n) continue
-        const map = new Map<string, { i: number; v: GroupElement }>()
-        let cur = group.identity
-        let covered = true
-        for (let i = 0; i < n && covered; i++) {
-          for (const v of vArr) {
-            const el = group.multiply(cur, v)
-            if (map.has(el.id)) {
-              covered = false
-              break
-            }
-            map.set(el.id, { i, v })
+  // 网格素数 p：p=2 为 2×2 网格（原行为），p=3 支持 C₃³ 等 3×3 网格
+  for (const p of [2, 3]) {
+    const pSq = p * p
+    const n = group.order / pSq
+    if (!Number.isInteger(n) || n < 3) continue
+    const pEls = group.elements.filter(e => e.id !== idId && orderOf(e) === p)
+    if (pEls.length < 2) continue
+    for (let a = 0; a < pEls.length; a++) {
+      for (let b = a + 1; b < pEls.length; b++) {
+        const v1 = pEls[a]
+        const v2 = pEls[b]
+        // 交换性（真直积前提）
+        if (group.multiply(v1, v2).id !== group.multiply(v2, v1).id) continue
+        // 独立性：v1 ∉ ⟨v2⟩（素数阶下等价于 v1 ≠ v2^i, 1 ≤ i < p）
+        let dependent = false
+        let cur = v2
+        for (let i = 1; i < p; i++) {
+          if (cur.id === v1.id) {
+            dependent = true
+            break
           }
-          cur = group.multiply(cur, cand)
+          cur = group.multiply(cur, v2)
         }
-        if (covered && map.size === group.order) {
-          // 交换性检查：需为真直积 G ≅ Cₙ × V（x 与 v1/v2 及 v1 与 v2 交换）。
-          // 非交换群（如 C₂×D₄）可能有唯一集合分解但乘法结构不是直积，拒绝。
-          const commutes =
-            group.multiply(cand, v1).id === group.multiply(v1, cand).id &&
-            group.multiply(cand, v2).id === group.multiply(v2, cand).id &&
-            group.multiply(v1, v2).id === group.multiply(v2, v1).id
-          if (commutes) return { ringGen: cand, v1, v2, n, map }
+        if (dependent) continue
+        // 网格元素 V = { v1^i · v2^j | 0 ≤ i,j < p }，index = i*p + j
+        const vArr: GroupElement[] = []
+        for (let i = 0; i < p; i++) {
+          let rowEl = group.identity
+          for (let k = 0; k < i; k++) rowEl = group.multiply(rowEl, v1)
+          for (let j = 0; j < p; j++) {
+            let el = rowEl
+            for (let k = 0; k < j; k++) el = group.multiply(el, v2)
+            vArr.push(el)
+          }
+        }
+        for (const cand of group.elements) {
+          if (cand.id === idId || vArr.some(v => v.id === cand.id)) continue
+          if (orderOf(cand) !== n) continue
+          const map = new Map<string, { i: number; v: GroupElement }>()
+          let cur2 = group.identity
+          let covered = true
+          for (let i = 0; i < n && covered; i++) {
+            for (const v of vArr) {
+              const el = group.multiply(cur2, v)
+              if (map.has(el.id)) {
+                covered = false
+                break
+              }
+              map.set(el.id, { i, v })
+            }
+            cur2 = group.multiply(cur2, cand)
+          }
+          if (covered && map.size === group.order) {
+            // 交换性检查：需为真直积 G ≅ Cₙ × V（x 与 v1/v2 交换）。
+            // 非交换群（如 C₂×D₄）可能有唯一集合分解但乘法结构不是直积，拒绝。
+            const commutes =
+              group.multiply(cand, v1).id === group.multiply(v1, cand).id &&
+              group.multiply(cand, v2).id === group.multiply(v2, cand).id
+            if (commutes) return { ringGen: cand, v1, v2, n, p, map }
+          }
         }
       }
     }
@@ -571,7 +646,7 @@ export function findRingGridDecomposition(group: Group): RingGridDecomposition |
   return null
 }
 
-/** 环网格群：存在 G ≅ Cₙ × C₂²（n ≥ 4）分解（如 C₄×C₂×C₂、C₆×C₂×C₂、C₁₂×C₂）。 */
+/** 环网格群：存在 G ≅ Cₙ × C_p²（n ≥ 3，p ∈ {2,3}）分解（如 C₄×C₂×C₂、C₃³）。 */
 export function isRingGridGroup(group: Group): boolean {
   return findRingGridDecomposition(group) !== null
 }
@@ -582,25 +657,24 @@ export function getDefaultShape2D(group: Group): CayleyShape2D {
   if (group.order <= 7) return 'circular'
   // Semidirect product: coset layout of N across H — the "rewiring" shape
   if (isGroupSemidirectProduct(group)) return 'rewiring'
+  // 命名半直积群（GAP 无 ':' 记号，如 QD16 = C₈⋊C₂）同样走重布线
+  if (isNamedRewiringGroup(group)) return 'rewiring'
   // C₂³ 摆成 D₄ 风格双环（优先于直积分类）
   if (isC2Cube(group)) return 'dualRing'
-  // 环网格：G ≅ Cₙ×C₂²（n≥4）时循环部分做环、阶 2 部分做网格
-  // （C₄×C₂×C₂ 类；优先于 cylinder 的同心多层环，cylinder 可手动选择）
+  // 环网格：G ≅ Cₙ×C_p²（n≥3，p∈{2,3}）时循环部分做环、阶 p 部分做 p×p 网格
+  // （C₄×C₂×C₂ / C₃³ 类；优先于 cylinder 的同心多层环，cylinder 可手动选择）
   if (isRingGridGroup(group)) return 'ringGrid'
   if (isGroupDirectProduct(group)) return classifyDirectProduct2D(group)
   const sym = group.symbol
-  const n = group.order
-  if (sym === 'S_{3}' || sym === 'S_{4}' || sym === 'S_{5}' || sym === 'S3' || sym === 'S4' || sym === 'S5' || sym === 'S₃' || sym === 'S₄' || sym === 'S₅') return 'projection3D'
-  if (sym === 'A_{5}' || sym === 'A5') return 'projection3D'
+  // 球面投影仅适配少数置换群（S₃/S₄/S₅/A₄/A₅），其他群不套用
+  if (isProjection3DGroup(group)) return 'projection3D'
   if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'pythagoreanSquare'
-  if (sym.startsWith('S') || (sym.startsWith('A') && n >= 12)) return 'projection3D'
-    if (isGroupCyclic(group)) {
-      // 循环群凯莱图 = 单生成元多边形，圆形布局弧长均匀无交叉；
-      // 螺旋（spiral/coil）仅作手动可选形状，不做默认（C16 等大循环会显得杂乱）
-      return 'circular'
-    }
-    if (isGroupDihedral(group)) return 'dualRing'
-  if (n > 30 && !isGroupCyclic(group)) return 'archimedean'
+  if (isGroupCyclic(group)) {
+    // 循环群凯莱图 = 单生成元多边形，圆形布局弧长均匀无交叉；
+    // 螺旋（spiral/coil）仅作手动可选形状，不做默认（C16 等大循环会显得杂乱）
+    return 'circular'
+  }
+  if (isGroupDihedral(group)) return 'dualRing'
   return 'circular'
 }
 
@@ -615,7 +689,10 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
       return ['circular']
     }
     if (isGroupSemidirectProduct(group)) {
-      return ['rewiring', 'circular', 'spherical', 'concentric']
+      return ['rewiring', 'circular', 'spherical']
+    }
+    if (isNamedRewiringGroup(group)) {
+      return ['rewiring', 'circular', 'spherical']
     }
     if (isC2Cube(group)) {
       return ['circular', 'dualRing', 'grid']
@@ -630,11 +707,10 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     if (isGroupDihedral(group)) {
       return ['circular', 'spherical', 'dualRing']
     }
-    const shapes: CayleyShape2D[] = ['circular']
+const shapes: CayleyShape2D[] = ['circular']
     const sym = group.symbol
-    const isSA = sym.startsWith('S') || sym.startsWith('A')
     const isSpecial = sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈'
-    if (isSA || isSpecial) {
+    if (isProjection3DGroup(group) || isSpecial) {
       shapes.push(isSpecial ? 'pythagoreanSquare' : 'projection3D')
     }
     if (isGroupDirectProduct(group)) {
@@ -646,8 +722,6 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     // 注册表等非直积来源的环网格群（如 GAP 表群 C₄×C₂×C₂）也提供该形状
     if (isRingGridGroup(group) && !shapes.includes('ringGrid')) shapes.push('ringGrid')
     shapes.push('spherical')
-    if (!isSA && !isSpecial) shapes.push('archimedean')
-    if (!isGroupDirectProduct(group) && !isSA && !isSpecial) shapes.push('concentric')
     return shapes
   }
   // set, cycle, and other views have a single default layout

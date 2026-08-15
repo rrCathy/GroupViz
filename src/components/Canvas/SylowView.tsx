@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
 import { useTheme } from '../../theme/useTheme'
@@ -14,7 +15,8 @@ const sgKeyOf = (sg: { elements: { id: string }[] }) =>
   sg.elements.map(e => e.id).slice().sort().join(',')
 
 export function SylowView() {
-  const { currentGroup, selectedElements, selectElement, setHoverElement, canvasTransform, viewBoxSize } = useGroup()
+  const { currentGroup, selectedElements, selectElement, canvasTransform, viewBoxSize } = useGroup()
+  const { setHoverElement } = useHover()
   const { t } = useTranslation()
   const { theme } = useTheme()
 

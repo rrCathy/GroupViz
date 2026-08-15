@@ -66,9 +66,9 @@
 数学上不可能出错——只收集求值为 e 的单词，TC 阶数 = |G| 即同构：
 
 - 守卫：`order > DISCOVERER_MAX_ORDER (120)` 或生成元数 ∉ 1..4 → null
-- 词预算：`maxL = max{L ∈ [5,7,9] : (2k)^L ≤ 40000}`（含正/逆字母，k=1→9、k=2→7、k=3/4→5）
-- 枚举全部长度 2..maxL 单词，求值 = identity 的收集（canonical string 去重，cap 200 条）；**生成元符号重复时改用 `abcdefgh`[i] 防歧义**（如 C₃×C₂ 两生成元都叫 '1'）
-- 对 L ∈ [5,7,9] 逐步提升：TC(长度 ≤ L 的关系词) finite 且 order = |G| → 返回
+- 词预算：`maxL = max{L ∈ [5,7,8,9] : (2k)^L ≤ 70000}`（含正/逆字母，k=1→9、k=2→8、k=3/4→5）；QD16 关键关系 (ba)⁴ 词长 8 需要 maxL ≥ 8
+- 枚举全部长度 2..maxL 单词，求值 = identity 的收集：`simplifyWord` 先简化（合并相邻同生成元、消去 aa⁻¹ 平凡对）→ `isRedundantRelator` 前缀过滤（词内含前缀恒等式则冗余）→ **`canonicalCyclicForm` 循环旋转/逆折叠**（关系 w=e 蕴含任意循环旋转（共轭）与逆也是关系，同一共轭类词统一到字典序最小形式，QD16 的 868 条共轭冗余词折叠为少数规范词）→ canonical string 去重（cap 2000 条）；**生成元符号重复时改用 `abcdefgh`[i] 防歧义**（如 C₃×C₂ 两生成元都叫 '1'）
+- 对 L ∈ [5,7,8,9] 逐步提升：TC(长度 ≤ L 的关系词) finite 且 order = |G| → **贪心极小化**：保护 K 条最短关系（K=生成元数，即生成元阶关系如 a⁴/b²），其余词从长到短逐个尝试移除（移除后 TC 阶仍 = |G| 才移除），1.5s 预算守卫 → 返回极小展示；**结果按 symbol|order|生成元数缓存**（信息栏/树视图反复调用不再重算 ~1.6s）；**QD16 特判**：GAP 生成元 g1 阶 4 只能导出非标准 ⟨a⁴, b², (ba)⁴⟩，`presentationOf` 按元素阶定位阶 8 生成元 a + 阶 2 反射 b（bab = a³ 且闭包 = 全群）返回标准展示 **⟨a⁸, b², bab=a³⟩**
 - 已知局限：S₄×C₂ 等（k=4, maxL=5）缺长关系会失败 → null
 
 ## 8. UI
@@ -87,8 +87,8 @@
 
 - `PRESENTATION_MAX_ORDER = 240`（构建上限，对齐 FALLBACK_CUTOFF）
 - `TC_MAX_COSETS = 3000`、`TC_MAX_STEPS = 5_000_000`
-- `DISCOVERER_MAX_ORDER = 120`、`DISCOVERER_RELATOR_CAP = 200`、`DISCOVERER_WORD_BUDGET = 40_000`、`DISCOVERER_LENGTHS = [5, 7, 9]`
+- `DISCOVERER_MAX_ORDER = 120`、`DISCOVERER_RELATOR_CAP = 2000`、`DISCOVERER_WORD_BUDGET = 70_000`、`DISCOVERER_LENGTHS = [5, 7, 8, 9]`、极小化预算 1500ms
 
-## 10. 测试（presentations.test.ts，36 用例）
+## 10. 测试（presentations.test.ts，37 用例）
 
-解析器边界（简化/指数/括号/零指数/非法字符/长符号/**Unicode 上标**）、parsePresentation（包裹/`;`/`= e`）、TC 三态、构建（C₄/D₄/V₄/S₃/A₅ + multiply/inverse 一致性 + 无限/溢出 + **f1=f2 归一化**：`a²=b³` 幂等 + `ab=ba` 上标形式 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合 + stored 原样 + isGroupPresentation 判定）。
+解析器边界（简化/指数/括号/零指数/非法字符/长符号/**Unicode 上标**）、parsePresentation（包裹/`;`/`= e`）、TC 三态、构建（C₄/D₄/V₄/S₃/A₅ + multiply/inverse 一致性 + 无限/溢出 + **f1=f2 归一化**：`a²=b³` 幂等 + `ab=ba` 上标形式 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合 + **QD16 标准展示恢复（⟨a⁸, b², bab=a³⟩，共轭词隐藏 / 发现器 868 词折叠 + 按阶定位）+ 发现器缓存复用 + stored 原样 + isGroupPresentation 判定）。

@@ -11,6 +11,7 @@ import { registerExportBridge } from '../utils/exportApi'
 import type { NodePositionsMap } from './positionUtils'
 
 import { GroupCoreProvider, useGroupCore } from './core/GroupCoreContext'
+import { HoverProvider } from './core/HoverContext'
 import { GroupBackendProvider, useGroupBackend } from './backend/GroupBackendContext'
 import { GroupCayleyProvider, useGroupCayley } from './cayley/GroupCayleyContext'
 import { GroupSubsetProvider, useGroupSubset, type QuotientGroupEntry, type AutomorphismGroupEntry } from './subsets/GroupSubsetContext'
@@ -35,7 +36,6 @@ interface GroupContextState {
   nodePositions: NodePositionsMap
   viewTabs: { id: string; view: ViewMode; label: string }[]
   activeTabId: string
-  hoverElement: GroupElement | null
   isSimpleGroup: boolean
   showMaximalCycles: boolean
   hintMessage: string
@@ -133,7 +133,6 @@ interface GroupContextActions {
   addViewTab: (view: ViewMode) => void
   closeViewTab: (id: string) => void
   setActiveTab: (id: string) => void
-  setHoverElement: (el: GroupElement | null) => void
   checkSubsetProperty: (elements: string[]) => SubgroupCheckResult
   computeInverse: () => void
   clearCanvas: () => void
@@ -527,7 +526,6 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     nodePositions: core.nodePositions,
     viewTabs: core.viewTabs,
     activeTabId: core.activeTabId,
-    hoverElement: core.hoverElement,
     isSimpleGroup: backend.isSimpleGroup,
     showMaximalCycles: core.showMaximalCycles,
     hintMessage: core.hintMessage,
@@ -634,7 +632,6 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     addViewTab: core.addViewTab,
     closeViewTab: core.closeViewTab,
     setActiveTab: core.setActiveTab,
-    setHoverElement: core.setHoverElement,
     checkSubsetProperty: core.checkSubsetProperty,
     computeInverse,
     clearCanvas,
@@ -770,6 +767,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
 
 export function GroupProvider({ children }: { children: ReactNode }) {
   return (
+    <HoverProvider>
     <GroupCoreProvider>
       <GroupBackendProvider>
         <GroupCayleyProvider>
@@ -797,6 +795,7 @@ export function GroupProvider({ children }: { children: ReactNode }) {
         </GroupCayleyProvider>
       </GroupBackendProvider>
     </GroupCoreProvider>
+    </HoverProvider>
   )
 }
 

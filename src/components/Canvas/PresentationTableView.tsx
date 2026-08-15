@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
 import { presentationOf, formatPresentation } from '../../core/algebra/presentations'
@@ -17,11 +18,11 @@ export function PresentationTableView() {
     activePresentationGroup,
     selectedElements,
     selectElement,
-    setHoverElement,
     viewBoxSize,
     forceShowLargeGroupViews,
     setForceShowLargeGroupForView,
   } = useGroup()
+  const { setHoverElement } = useHover()
   const { t } = useTranslation()
 
   const group = activePresentationGroup ?? currentGroup

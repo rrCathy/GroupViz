@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
+import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
 import type { InternalEdgeData } from '../../core/types'
@@ -166,7 +167,8 @@ function renderCompoundNode(
 }
 
 export function SetView() {
-  const { currentGroup, selectedElements, selectElement, setHoverElement, canvasTransform, viewBoxSize, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors } = useGroup()
+  const { currentGroup, selectedElements, selectElement, canvasTransform, viewBoxSize, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors } = useGroup()
+  const { setHoverElement } = useHover()
   const { t } = useTranslation()
 
   const subsetDetailMap = useMemo(() => {

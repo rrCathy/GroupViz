@@ -1,5 +1,5 @@
 import type { Group, GroupElement } from '../types'
-import { findAllSubgroups } from './subgroups'
+import { findAllSubgroups, computeElementOrderInGroup } from './subgroups'
 
 export const S3_PERM_IDS = ['1,2,3', '2,1,3', '2,3,1', '3,2,1', '3,1,2', '1,3,2']
 
@@ -289,6 +289,67 @@ export function powerRingOrder(group: Group): string[] {
   return order
 }
 
+// ─── Q₁₆（广义四元数群）陪集分解 ─────────────────────────────────────────
+
+export interface QuaternionCosetMap {
+  byElement: Map<string, { j: number; i: number }>
+  a: GroupElement
+  b: GroupElement
+}
+
+/**
+ * Q₁₆ 元素唯一分解 g = a^j · b^i（j, i ∈ 0..3）。生成元约定与 Group Explorer
+ * 一致（GE 把 order 16 的广义四元数群记为 Q₈，下标 = 阶/2；本仓库
+ * buildGenerators 已按 GE 重建标准 (a,b)：a 阶 8、b 阶 4、a⁴ = b²、b·a·b⁻¹ = a⁻¹）。
+ * 对每个元素扫 a⁻ʲ·g ∈ {e, b, b², b³} 求唯一坐标，全部 16 个元素恰好
+ * 落在 4×4 网格才成功；结构不匹配（非 Q16 或生成元顺序不同）返回 null。
+ */
+export function quaternionCosetMap(group: Group): QuaternionCosetMap | null {
+  if (group.order !== 16) return null
+  const gens = group.generators
+    .map(g => g.apply(group.identity))
+    .filter(el => el.id !== group.identity.id)
+  if (gens.length < 2) return null
+  const mul = group.multiply
+  const inv = group.inverse
+  const id = group.identity
+
+  const decompose = (a: GroupElement, b: GroupElement): Map<string, { j: number; i: number }> | null => {
+    const aNeg = [id, inv(a), mul(inv(a), inv(a)), mul(mul(inv(a), inv(a)), inv(a))]
+    const bPows = [id, b, mul(b, b), mul(mul(b, b), b)]
+    const byElement = new Map<string, { j: number; i: number }>()
+    for (const el of group.elements) {
+      let found = false
+      for (let j = 0; j < 4 && !found; j++) {
+        const t = mul(aNeg[j], el)
+        for (let i = 0; i < 4; i++) {
+          if (t.id === bPows[i].id) {
+            byElement.set(el.id, { j, i })
+            found = true
+            break
+          }
+        }
+      }
+      if (!found) return null
+    }
+    return byElement.size === 16 ? byElement : null
+  }
+
+  const tryPair = (a: GroupElement, b: GroupElement): QuaternionCosetMap | null => {
+    if (computeElementOrderInGroup(a, group) !== 8 || computeElementOrderInGroup(b, group) !== 4) return null
+    const a4 = mul(mul(mul(a, a), a), a)
+    if (a4.id !== mul(b, b).id) return null
+    if (mul(mul(b, a), inv(b)).id !== inv(a).id) return null
+    const byElement = decompose(a, b)
+    if (!byElement) return null
+    return { byElement, a, b }
+  }
+
+  const direct = tryPair(gens[0], gens[1])
+  if (direct) return direct
+  return tryPair(gens[1], gens[0])
+}
+
 /**
  * 注册表群（非 pipe）的混合进制因子分解：全群元素 → (因子 A 元素, 因子 B 元素) 分量。
  * 两簇元素逐一相乘枚举全群（直积分解唯一），aIds/bIds 为两簇元素 id（含 identity）。
@@ -338,6 +399,65 @@ export function clusterIsCyclic(group: Group, ids: string[]): boolean {
     if (seen.size === n) return true
   }
   return false
+}
+
+/**
+ * 不依赖 value 格式的旋转/反射分类（D_m 结构，含注册表群 value=[k]）：
+ * 找阶 m 元素 r（m = |G|/2）→ rotations = ⟨r⟩ 幂序 [e, r, r², …]；
+ * reflections = 其余元素，反射 s_i 与旋转 r^i 同角配对（s_i = r^i · s₀）。
+ * 找不到阶 m 元素、或反射数 ≠ m → null（由调用方回退）。
+ */
+export function splitDihedralElements(group: Group): {
+  rotations: GroupElement[]
+  reflectPair: Map<string, number>
+} | null {
+  const n = group.order
+  const m = n / 2
+  if (n % 2 !== 0 || m < 2) return null
+  const id = group.identity
+
+  for (const el of group.elements) {
+    if (el.id === id.id) continue
+    const powers: GroupElement[] = [id, el]
+    const seen = new Set([id.id, el.id])
+    let cur = el
+    let closed = false
+    for (;;) {
+      cur = group.multiply(cur, el)
+      if (cur.id === id.id) { closed = true; break }
+      if (seen.has(cur.id)) break
+      seen.add(cur.id)
+      powers.push(cur)
+    }
+    if (!closed || powers.length !== m) continue
+    const rotIds = new Set(powers.map(e => e.id))
+    const refs = group.elements.filter(e => !rotIds.has(e.id))
+    if (refs.length !== m) continue
+    const s0 = refs[0]
+    const reflectPair = new Map<string, number>()
+    let pairOk = true
+    for (let i = 0; i < m; i++) {
+      const s_i = group.multiply(powers[i], s0)
+      if (rotIds.has(s_i.id) || reflectPair.has(s_i.id)) { pairOk = false; break }
+      reflectPair.set(s_i.id, i)
+    }
+    if (pairOk && reflectPair.size === m) {
+      return { rotations: powers, reflectPair }
+    }
+  }
+  return null
+}
+
+// 二面体蛇形环序：rotations 幂序正排 + reflections 按配对角反排，
+// 摊平为单环（外圈旋转升序 → 内圈反射降序），使生成元边外环相邻、反射边径向。
+// 用于半直积布局的 N 盘内环序（注册表群 N 无 pipe id，powerRingOrder 不特判）。
+export function dihedralSnakeOrder(group: Group): string[] | null {
+  const split = splitDihedralElements(group)
+  if (!split) return null
+  const refsDesc = Array.from(split.reflectPair.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id)
+  return [...split.rotations.map(e => e.id), ...refsDesc]
 }
 
 /**

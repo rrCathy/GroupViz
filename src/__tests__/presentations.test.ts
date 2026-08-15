@@ -10,6 +10,7 @@ import {
   wordToCanonicalString,
 } from '../core/algebra/presentations'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
+import { getAllSmallGroups } from '../core/groups/SmallGroups'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
@@ -295,6 +296,31 @@ describe('presentationOf', () => {
     const q = computeQuotientGroup(g, order3!)
     expect(q).not.toBeNull()
     expectPresentationValid(q!)
+  })
+
+  it('recovers QD_16 as the standard presentation ⟨a⁸, b², bab=a³⟩', () => {
+    const entry = getAllSmallGroups().find(e => e.group.symbol === 'QD_{16}')
+    expect(entry).toBeDefined()
+    const pres = expectPresentationValid(entry!.group)
+    // GAP 生成元 g1 阶 4（= 标准 a²）；标准展示按阶定位 a（阶 8）：
+    // ⟨a⁸, b², bab=a³⟩，而非发现器给出的非标准 ⟨a⁴, b², (ba)⁴⟩
+    const relText = pres.relators.join(' ')
+    expect(relText).toContain('a^{8}')
+    expect(relText).toContain('b^{2}')
+    expect(relText).toContain('baba^{-3}')
+    expect(pres.relators.length).toBeLessThanOrEqual(5)
+  })
+
+  it('reuses cached discovery results across group instances', () => {
+    // Aut(Z_3) symbol 不匹配 S/A/C/D family 正则，必走发现器路径；
+    // 两个独立实例共享缓存，且 generatorElements 按当前群重新求值
+    const a = createAutomorphismGroup(createCyclicGroup(3))!
+    const b = createAutomorphismGroup(createCyclicGroup(3))!
+    const p1 = presentationOf(a)
+    const p2 = presentationOf(b)
+    expect(p1).not.toBeNull()
+    expect(p2!.relators).toEqual(p1!.relators)
+    expect(p2!.generatorElements!.length).toBe(b.generators.length)
   })
 
   it('returns the stored presentation unchanged', () => {

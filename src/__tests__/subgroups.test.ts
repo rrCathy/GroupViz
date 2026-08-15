@@ -94,6 +94,43 @@ describe('Subgroup Calculations', () => {
         expect(group.order % sub.order).toBe(0)
       }
     })
+
+    it('should fill generators whose closure equals the subgroup (S3)', () => {
+      const group = createS3()
+      const subgroups = findAllSubgroups(group)
+
+      for (const sub of subgroups) {
+        expect(sub.generators.length).toBeGreaterThan(0)
+        const closureIds = closeUnderMultiply(group, sub.generators).map(e => e.id).sort()
+        const subIds = sub.elements.map(e => e.id).sort()
+        expect(closureIds).toEqual(subIds)
+      }
+    })
+
+    it('should fill generators whose closure equals the subgroup (D4)', () => {
+      const group = createDihedralGroup(4)
+      const subgroups = findAllSubgroups(group)
+
+      for (const sub of subgroups) {
+        expect(sub.generators.length).toBeGreaterThan(0)
+        const closureIds = closeUnderMultiply(group, sub.generators).map(e => e.id).sort()
+        const subIds = sub.elements.map(e => e.id).sort()
+        expect(closureIds).toEqual(subIds)
+      }
+    })
+
+    it('should fill generators in findAllNormalSubgroups (S3)', () => {
+      const group = createS3()
+      const normal = findAllNormalSubgroups(group)
+
+      expect(normal.length).toBeGreaterThan(0)
+      for (const sub of normal) {
+        expect(sub.generators.length).toBeGreaterThan(0)
+        const closureIds = closeUnderMultiply(group, sub.generators).map(e => e.id).sort()
+        const subIds = sub.elements.map(e => e.id).sort()
+        expect(closureIds).toEqual(subIds)
+      }
+    })
   })
 
   describe('getConjugacyClasses', () => {

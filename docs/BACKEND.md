@@ -14,6 +14,13 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
+或用前端托管脚本（推荐，node 常驻父进程保活，详见 §6 的 detached 修复）：
+
+```bash
+npm run backend            # 带 --reload（开发）
+npm run backend -- --no-reload   # 无重载
+```
+
 Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.ts proxy）。
 
 ## 3. 后端结构
@@ -25,6 +32,7 @@ Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.t
 | `backend/algebra.py` | 代数计算（子群/共轭类/陪集/子群格） |
 | `backend/factory.py` | 符号 → 群对象工厂 |
 | `backend/schemas.py` | Pydantic 请求/响应模型 |
+| `backend/gap_service.py` | GAP 4.16 集成层（direct/cygwin 双模式探测、表达式翻译、序列化调用） |
 | `backend/requirements.txt` | Python 依赖 |
 | `backend/test_main.py` | 后端 API 测试 |
 
@@ -34,7 +42,7 @@ Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.t
 
 | 方法 | 端点 | 客户端函数 | 说明 |
 |------|------|-----------|------|
-| GET | `/api/health` | `fetchHealth()` | 健康检查，返回 `{status, cached_groups}` |
+| GET | `/api/health` | `fetchHealth()` | 健康检查，返回 `{status, cached_groups, gap:{available, mode, executable}}` |
 | POST | `/api/compute/subgroups` | `fetchSubgroups()` | 计算子群 |
 | POST | `/api/compute/normal-subgroups` | `fetchNormalSubgroups()` | 仅计算正规子群 |
 | POST | `/api/compute/conjugacy-classes` | `fetchConjugacyClasses()` | 计算共轭类 |
@@ -43,6 +51,8 @@ Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.t
 | POST | `/api/compute/element-orders` | `fetchElementOrders()` | 计算多个元素的阶 |
 | POST | `/api/compute/lattice` | `fetchLattice()` | 计算子群格（Hasse 图） |
 | POST | `/api/compute/direct-product` | `fetchDirectProduct()` | 服务端直积构建 |
+| POST | `/api/compute/series` | `fetchSeries()` | 子群列（derived/upperCentral/lowerCentral/composition），terms+factors |
+| POST | `/api/compute/import-group` | `fetchImportGroup()` | 任意 GAP 表达式导入（SymmetricGroup(3)→S3、SmallGroup(16,8)→QD16，≤4096 阶，非法 422）；**导入群自动注册**（`_imported_groups`：structure + gapExpr 双键，get_group 回退命中），导入后 subgroups/lattice/classes/center/properties/series 全链路可用；PSL 等非置换表示经 `IsomorphismPermGroup` 转置换 |
 
 所有 POST 请求体统一为 `{symbol, embedding?, multiply_type, action_ids?, element_ids?}`。
 
@@ -50,6 +60,19 @@ Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.t
 
 - `_group_cache`：群对象构建结果（key=群符号）
 - `_subgroup_cache`：子群/正规子群（key=群符号），lattice 端点复用避免重复计算
+- `_gap_cache`：GAP 计算全量结果（key=群符号），进程内缓存，S₆ 首算 ≈13s 后毫秒级
+
+## 6. GAP 大群计算引擎（v1.13.0）
+
+`backend/gap_service.py` 集成 **GAP 4.16** 作为大群结构计算引擎：
+
+- **模式探测**：direct（直接 `gap.exe -b -q`）/ cygwin（`bash.exe --login -c 'cd /opt/gap-4.16.0 && timeout 120 ./gap.exe …'` 双模式）
+- **detached 卡死修复（2026-08-17 定案）**：Cygwin 版 GAP 在 detached/后台（Start-Process、服务）环境曾必挂 120s（exit 124 → 422）。根因：`-b -q -c 'Read(...)'` 脚本执行完回到 REPL 死等 stdin EOF（capture_output 的 stdin=PIPE 永不关闭），无控制台句柄上下文更顽固。`_run_gap_raw` 双重修复：`stdin=subprocess.DEVNULL`（Read 完立即 EOF 退出）+ `CREATE_NEW_CONSOLE | CREATE_NO_WINDOW`（显式隐藏控制台，覆盖其他初始化竞态）。实测 detached 下 import PSL(2,7) 3.3s 成功（修复前 90s+ 挂起）
+- **表达式翻译**：`symbol_to_expr`（Cₙ/Zₙ→CyclicGroup(n)、Dₙ→DihedralGroup(2n)、V₄、Q₈、GL(2,q)、直积/幂^k），不认识的符号返回 None → 纯 Python 降级
+- **序列化**：`GV_ser` 自定义序列化（群元素→置换/binary string、子群→下标列表），`run_script` 进程串行锁 + `GV_BEGIN/GV_END` 标记提取 + 15s 超时
+- **自动切换**：subgroups/normal-subgroups/conjugacy-classes/center/lattice/properties 六端点 >120 阶且 GAP 可用时自动走 GAP（响应带 `source: "gap"`）；GAP 不可用/非置换群/表达式不支持 → 回退纯 Python
+- **S₆ 参考数据**：1455 子群 / 6469 格边 / 11 共轭类（类大小 [1,15,45,15,40,120,40,90,90,144,120]）/ 中心 {e} / 导列 [720,360]
+- **前端就绪层**：`fetchBackendSeries`（hybridCompute.ts）在 order > SERIES_MAX_ORDER=240 时自动切后端 series 端点，GroupSeriesContext.gapSeries 供 SubgroupLatticeView 底部链式面板显示
 
 ## 6. 混合计算层（src/utils/hybridCompute.ts）
 

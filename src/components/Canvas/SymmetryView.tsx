@@ -682,12 +682,12 @@ function SymmetryScene({
       <directionalLight position={[-5, -2, -3]} intensity={0.6} />
       <pointLight position={[0, 5, 0]} intensity={0.5} />
 
-      <Html position={[0, topY + 1.5, 0]} center zIndexRange={[2, 0]}>
+      <Html position={[0, topY + 1.5, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
         <div style={{ color: theme === 'dark' ? '#fff' : '#1a1a2e', fontSize: '20px', fontWeight: 'bold', textShadow: theme === 'dark' ? '0 0 10px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
           dangerouslySetInnerHTML={{ __html: renderTex(texify(group.name)) }} />
       </Html>
 
-      <Html position={[0, topY + 2.2, 0]} center zIndexRange={[2, 0]}>
+      <Html position={[0, topY + 2.2, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
         <div style={{ color: theme === 'dark' ? '#aaa' : '#555566', fontSize: '13px', textShadow: theme === 'dark' ? '0 0 8px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
           dangerouslySetInnerHTML={{ __html: renderTex(
             symmetryType === 'cyclic' ? `C_{{${group.order}}} \\cdot ` + t('symmetry.geo.cyclicText', { n: group.order }) :
@@ -699,7 +699,7 @@ function SymmetryScene({
       </Html>
 
       {canToggle && (
-        <Html position={[0, topY + 3.0, 0]} center zIndexRange={[2, 0]}>
+        <Html position={[0, topY + 3.0, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
           <button onClick={(e) => { e.stopPropagation(); onToggleVariant() }}
             style={{ background: 'var(--bg-element-chip)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', padding: '3px 10px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer', userSelect: 'none' }}>
             {symmetryType === 'cube' ? (variant ? t('symmetry.toCube') : t('symmetry.toOctahedron')) : ''}

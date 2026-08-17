@@ -356,8 +356,16 @@ describe('detectStructureType', () => {
     expect(detectStructureType(createAlternatingGroup(5))).toBe('indecomposable')
   })
 
-  it('returns unknown beyond the search cutoff', () => {
-    expect(detectStructureType(createSymmetricGroup(5))).toBe('unknown')
+  it('labels large groups from their symbol beyond the search cutoff', () => {
+    const g = createSymmetricGroup(5)
+    expect(g.order).toBeGreaterThan(60)
+    expect(detectStructureType(g)).toBe('indecomposable')
+    const semi = { ...g, symbol: 'C_{8} : C_{2}' }
+    expect(detectStructureType(semi)).toBe('semidirect')
+    const direct = { ...g, symbol: 'C_{2} x C_{32}' }
+    expect(detectStructureType(direct)).toBe('direct')
+    const star = { ...g, symbol: 'C_{64}' }
+    expect(detectStructureType(star)).toBe('indecomposable')
   })
 
   it('fast-paths groups built as semidirect products', () => {

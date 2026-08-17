@@ -24,11 +24,20 @@ import {
   fetchCayleyEdges,
   fetchElementOrder,
   fetchGroupProperties,
+  fetchSeries,
   type ApiSubgroup,
   type ApiElement,
   type ApiCayleyEdge,
+  type ApiSeriesFactor,
 } from './api'
 import { computeGroupProperties as localGroupProperties } from '../core/algebra/properties'
+import {
+  computeSubgroupSeries,
+  SERIES_MAX_ORDER,
+  type SeriesType,
+  type SubgroupSeries,
+  type SeriesFactor,
+} from '../core/algebra/series'
 
 export interface ResolvedGroupProperties {
   solvable: boolean
@@ -333,6 +342,67 @@ export async function fetchBackendElementOrder(
       element: el ?? { id: elementId, label: res.element_label, value: [] },
       order: res.order,
       cycle: res.cycle.map(e => apiElementToGroupElement(group, e)),
+    }
+  } catch {
+    return null
+  }
+}
+
+// ── Backend Series (GAP for large groups) ───────────────────────────────────
+
+/** GAP factor → TeX label (simplified; local computeFactor has more detail). */
+export function gapFactorLabel(f: ApiSeriesFactor): string {
+  if (f.is_abelian) return `C_{${f.order}}`
+  if (f.is_simple && f.order === 60) return 'A_5'
+  return `G_{${f.order}}`
+}
+
+/**
+ * Subgroup series with backend support:
+ * - order ≤ SERIES_MAX_ORDER: local computation (as before)
+ * - larger groups: GAP via /compute/series + /compute/properties
+ *
+ * Returns null when the backend is unavailable or fails (UI falls back to
+ * the "too large" hint).
+ */
+export async function fetchBackendSeries(
+  group: Group,
+  seriesType: SeriesType
+): Promise<SubgroupSeries | null> {
+  if (group.order <= SERIES_MAX_ORDER) {
+    return computeSubgroupSeries(group, seriesType)
+  }
+  try {
+    const [seriesRes, propsRes] = await Promise.all([
+      fetchSeries(group.symbol, seriesType),
+      fetchGroupProperties(group.symbol),
+    ])
+    const terms = seriesRes.terms.map(term =>
+      term.elements.map(e => apiElementToGroupElement(group, e))
+    )
+    const identity = group.identity
+    // Local derived series always ends at {e}; mirror that for display
+    // (only skip when the backend chain already terminates at the identity).
+    const last = terms[terms.length - 1]
+    if (terms.length > 0 && last.length > 1) {
+      terms.push([identity])
+    }
+    const factors: SeriesFactor[] = seriesRes.factors.map(f => ({
+      order: f.order,
+      isAbelian: f.is_abelian,
+      isSimple: f.is_simple,
+      label: gapFactorLabel(f),
+    }))
+    return {
+      type: seriesType,
+      terms,
+      factors,
+      reachesTrivial: terms.length > 0 && terms[terms.length - 1].length === 1,
+      reachesFull: terms.length > 0 && terms[0].length === group.order,
+      solvable: propsRes.solvable === true,
+      nilpotent: propsRes.nilpotent === true,
+      alternativeCount: seriesType === 'composition' ? 1 : 0,
+      truncated: false,
     }
   } catch {
     return null

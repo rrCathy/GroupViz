@@ -128,6 +128,46 @@ export interface ApiGroupProperties {
   elapsed_ms?: number
 }
 
+export interface ApiSeriesTerm {
+  elements: ApiElement[]
+  order: number
+}
+
+export interface ApiSeriesFactor {
+  order: number
+  is_abelian: boolean
+  is_simple: boolean
+}
+
+export interface ApiSeries {
+  symbol: string
+  series_type: string
+  terms: ApiSeriesTerm[]
+  factors: ApiSeriesFactor[]
+  source: string
+  elapsed_ms?: number
+}
+
+export interface ApiImportGroup {
+  gap_expr: string
+  order: number
+  table: number[][]
+  gens: number[]
+  idents: string[]
+  structure: string
+  elapsed_ms?: number
+}
+
+export interface ApiHealth {
+  status: string
+  cached_groups: number
+  gap: {
+    available: boolean
+    mode: string | null
+    executable: string | null
+  }
+}
+
 // ── API Functions ──────────────────────────────────────────────────────────
 
 export async function fetchGroupInfo(symbol: string): Promise<ApiGroupInfo> {
@@ -200,8 +240,21 @@ export async function fetchDirectProduct(
   })
 }
 
-/** Health check — returns the number of cached groups on the server. */
-export async function fetchHealth(): Promise<{ status: string; cached_groups: number }> {
+/** Health check — returns backend+GAP availability. */
+export async function fetchHealth(): Promise<ApiHealth> {
   const res = await fetch(`${API_BASE}/health`)
   return res.json()
+}
+
+export type SeriesTypeName = 'derived' | 'upperCentral' | 'lowerCentral' | 'composition'
+
+export async function fetchSeries(
+  symbol: string,
+  seriesType: SeriesTypeName
+): Promise<ApiSeries> {
+  return apiPost<ApiSeries>('/compute/series', { symbol, series_type: seriesType })
+}
+
+export async function fetchImportGroup(gapExpr: string): Promise<ApiImportGroup> {
+  return apiPost<ApiImportGroup>('/compute/import-group', { gap_expr: gapExpr })
 }

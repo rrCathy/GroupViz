@@ -110,6 +110,7 @@ interface GroupContextState {
   compositionChains: GroupElement[][][] | null
   compositionTruncated: boolean
   seriesFlags: { solvable: boolean; nilpotent: boolean } | null
+  seriesLoading: boolean
   presentationGroups: Group[]
   presentationDraft: string
   templateGenCount: number
@@ -610,6 +611,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     compositionChains: series.compositionChains,
     compositionTruncated: series.compositionTruncated,
     seriesFlags: series.seriesFlags,
+    seriesLoading: series.seriesLoading,
 
     presentationGroups: presentation.presentationGroups,
     presentationDraft: presentation.presentationDraft,

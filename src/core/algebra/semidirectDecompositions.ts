@@ -391,7 +391,7 @@ export type GroupStructureType = 'direct' | 'semidirect' | 'indecomposable' | 'u
 export function detectStructureType(group: Group): GroupStructureType {
   if (group._semidirectProduct) return 'semidirect'
   if (isGroupDirectProduct(group)) return 'direct'
-  if (group.order > 60) return 'unknown'
+  if (group.order > 60) return detectStructureFromSymbol(group.symbol)
 
   const normals = findAllNormalSubgroups(group).filter(
     (n) => n.order > 1 && n.order < group.order,
@@ -407,6 +407,16 @@ export function detectStructureType(group: Group): GroupStructureType {
   }
 
   if (findSemidirectDecompositions(group).length > 0) return 'semidirect'
+  return 'indecomposable'
+}
+
+/**
+ * 大群（>60，本地穷举过重）按群记号做结构判定：
+ * ':' / '⋊' → 半直积，'×' 或 GAP 结构串的 ' x ' → 直积，否则不可分解。
+ */
+export function detectStructureFromSymbol(symbol: string): GroupStructureType {
+  if (symbol.includes(':') || symbol.includes('⋊')) return 'semidirect'
+  if (symbol.includes('×') || symbol.includes(' x ')) return 'direct'
   return 'indecomposable'
 }
 

@@ -16,7 +16,7 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，39 文件 / 1206 tests）
+## 3. 测试文件清单（src/__tests__，41 文件 / 1239 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|

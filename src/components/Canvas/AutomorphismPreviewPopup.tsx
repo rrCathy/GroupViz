@@ -71,6 +71,31 @@ export function AutomorphismPreviewPopup() {
     return { group: parentGroup, positions, elById, showLabels }
   }, [parentGroup])
 
+  const elLabelHtml = useMemo(() => {
+    if (!stableFrame) return new Map<string, string>()
+    const m = new Map<string, string>()
+    for (const el of stableFrame.group.elements) m.set(el.id, renderTex(texify(el.label)))
+    return m
+  }, [stableFrame])
+
+  const autoTitleHtml = useMemo(
+    () => (automorphism ? renderTex(texify(automorphism.label)) : ''),
+    [automorphism]
+  )
+
+  const genLabelHtml = useMemo(() => {
+    if (!stableFrame || !automorphism) return new Map<string, string>()
+    const m = new Map<string, string>()
+    const { group, elById } = stableFrame
+    for (const g of group.generators) {
+      const genEl = g.apply(group.identity)
+      const mappedId = automorphism.map.get(genEl.id)
+      const imgEl = mappedId ? elById.get(mappedId) : undefined
+      m.set(genEl.id, renderTex(texify(imgEl?.label || genEl.label)))
+    }
+    return m
+  }, [stableFrame, automorphism])
+
   const rewiredActions = useMemo((): CayleyAction[] => {
     if (!stableFrame || !automorphism) return []
     const { group, elById } = stableFrame
@@ -147,7 +172,7 @@ export function AutomorphismPreviewPopup() {
         userSelect: 'none', flexShrink: 0,
       }} onMouseDown={handleDragStart}>
         <span style={{ fontWeight: 500 }}
-          dangerouslySetInnerHTML={{ __html: renderTex(texify(automorphism.label)) }} />
+          dangerouslySetInnerHTML={{ __html: autoTitleHtml }} />
         <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Aut({parentSymbol})</span>
         <button onClick={handleClose} className="autopreview-close-btn"
           style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '16px', padding: '0 4px', lineHeight: 1 }}>
@@ -163,11 +188,9 @@ export function AutomorphismPreviewPopup() {
         <span>gen: </span>
         {group.generators.map((g, i) => {
           const genEl = g.apply(group.identity)
-          const mappedId = automap.get(genEl.id)
-          const imgEl = mappedId ? elById.get(mappedId) : undefined
           return (
             <span key={i} style={{ color: g.color, fontWeight: 600 }}
-              dangerouslySetInnerHTML={{ __html: renderTex(texify(imgEl?.label || genEl.label)) }} />
+              dangerouslySetInnerHTML={{ __html: genLabelHtml.get(genEl.id) ?? '' }} />
           )
         })}
       </div>
@@ -234,7 +257,7 @@ export function AutomorphismPreviewPopup() {
                     width: '100%', height: '100%',
                     color: fixed ? 'var(--accent-teal)' : 'var(--node-text)',
                     fontSize: `${FONT_SIZE}px`, fontWeight: fixed ? 600 : 400,
-                  }} dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }} />
+                  }} dangerouslySetInnerHTML={{ __html: elLabelHtml.get(el.id) ?? '' }} />
                 </foreignObject>
               )}
             </g>
@@ -257,10 +280,10 @@ export function AutomorphismPreviewPopup() {
                 return (
                   <Fragment key={srcId}>
                     <span style={{ textAlign: 'right', color: 'var(--text-primary)' }}
-                      dangerouslySetInnerHTML={{ __html: renderTex(texify(srcEl?.label || srcId)) }} />
+                      dangerouslySetInnerHTML={{ __html: srcEl ? (elLabelHtml.get(srcEl.id) ?? '') : srcId }} />
                     <span style={{ color: 'var(--text-muted)' }}>↦</span>
                     <span style={{ textAlign: 'left', color: srcId === tgtId ? 'var(--accent-teal)' : 'var(--text-special)' }}
-                      dangerouslySetInnerHTML={{ __html: renderTex(texify(tgtEl?.label || tgtId)) }} />
+                      dangerouslySetInnerHTML={{ __html: tgtEl ? (elLabelHtml.get(tgtEl.id) ?? '') : tgtId }} />
                   </Fragment>
                 )
               })}

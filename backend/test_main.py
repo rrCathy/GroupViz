@@ -180,8 +180,12 @@ def test_direct_product_caching():
 
 from fastapi.testclient import TestClient
 from main import app
+import gap_service
 
 client = TestClient(app)
+
+GAP_AVAILABLE = gap_service.is_available()
+needs_gap = pytest.mark.skipif(not GAP_AVAILABLE, reason="GAP backend not available")
 
 
 def test_health():
@@ -270,6 +274,135 @@ def test_direct_product_api():
 def test_invalid_symbol():
     resp = client.post("/api/group-info", json={"symbol": "X_999"})
     assert resp.status_code == 400
+
+
+# ── GAP 集成端点（无 GAP 时自动跳过）─────────────────────────────────────────
+
+def test_health_reports_gap():
+    resp = client.get("/api/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "gap" in data
+    assert data["gap"]["available"] == GAP_AVAILABLE
+
+
+@needs_gap
+def test_series_api():
+    resp = client.post("/api/compute/series", json={
+        "symbol": "S_5",
+        "series_type": "composition",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["source"] == "gap"
+    assert len(data["terms"]) >= 2
+    assert data["terms"][0]["order"] == 120
+    assert data["factors"][0]["order"] == 2
+    assert data["factors"][0]["is_simple"] is True
+
+
+@needs_gap
+def test_series_invalid_type():
+    resp = client.post("/api/compute/series", json={
+        "symbol": "S_5",
+        "series_type": "bogus",
+    })
+    assert resp.status_code == 400
+
+
+@needs_gap
+def test_import_group_api():
+    resp = client.post("/api/compute/import-group", json={
+        "gap_expr": "SymmetricGroup(3)",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["order"] == 6
+    assert data["structure"] == "S3"
+    assert len(data["idents"]) == 6
+    assert len(data["table"]) == 6
+    assert len(data["gens"]) == 2
+
+
+@needs_gap
+def test_import_group_invalid_expr():
+    resp = client.post("/api/compute/import-group", json={"gap_expr": "1 + 2"})
+    assert resp.status_code == 422
+
+
+@needs_gap
+def test_imported_group_subgroups_use_gap():
+    """导入群（PSL(2,7)→PSL(3,2)）注册后，子群计算走 GAP 全量通路。"""
+    resp = client.post("/api/compute/import-group", json={
+        "gap_expr": "ProjectiveSpecialLinearGroup(2,7)",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["order"] == 168
+    assert data["structure"] == "PSL(3,2)"
+
+    resp = client.post("/api/compute/subgroups", json={"symbol": "PSL(3,2)"})
+    assert resp.status_code == 200
+    subs = resp.json()
+    assert subs["source"] == "gap"
+    assert subs["total_count"] == 179
+    # 元素 id 应为 g{k}（位置映射），无矩阵构造串/置换串幻影
+    for sub in subs["subgroups"]:
+        assert len(sub["elements"]) == sub["order"]
+        for e in sub["elements"][:5]:
+            assert e["id"].startswith("g")
+            assert 0 <= int(e["id"][1:]) < 168
+
+
+@needs_gap
+def test_imported_group_info_positional_ids():
+    """导入群 group-info 元素 id 为 g{k}（与前端 createGroupFromImport 对齐），
+    label 为生成元单词而非 GAP 原始矩阵构造串。"""
+    resp = client.post("/api/compute/import-group", json={"gap_expr": "SL(2,3)"})
+    assert resp.status_code == 200
+
+    resp = client.post("/api/group-info", json={"symbol": "SL(2,3)"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["order"] == 24
+    assert [el["id"] for el in data["elements"]] == [f"g{i}" for i in range(24)]
+    labels = [el["label"] for el in data["elements"]]
+    assert labels[0] == "e"
+    assert all("Z(3)" not in lab and not lab.startswith("NewMatrix") for lab in labels)
+
+
+@needs_gap
+def test_imported_q64_local_subgroups_no_phantom_ids():
+    """Q64（64 阶，本地 python 通路）导入后子群端点元素 id 全为 g{k}，
+    无 <identity> of ... 之类幻影串，且不能选中问题随之消失。"""
+    resp = client.post("/api/compute/import-group", json={"gap_expr": "QuaternionGroup(64)"})
+    assert resp.status_code == 200
+    imp = resp.json()
+    assert imp["structure"] == "Q64"
+    assert imp["order"] == 64
+
+    resp = client.post("/api/compute/subgroups", json={"symbol": "Q64"})
+    assert resp.status_code == 200
+    subs = resp.json()
+    assert subs["total_count"] == 37
+    seen = set()
+    for sub in subs["subgroups"]:
+        assert len(sub["elements"]) == sub["order"]
+        for e in sub["elements"]:
+            assert e["id"].startswith("g")
+            idx = int(e["id"][1:])
+            assert 0 <= idx < 64
+            seen.add(e["id"])
+    # 每个元素都出现在某子群中（含全群），去重后应为全部 64 个元素
+    assert len(seen) == 64
+
+
+@needs_gap
+def test_small_group_structure_detection():
+    """SmallGroup(16,8) 是 QD16 的半直积命名群，structure 应识别。"""
+    resp = client.post("/api/compute/import-group", json={"gap_expr": "SmallGroup(16,8)"})
+    assert resp.status_code == 200
+    assert resp.json()["structure"] == "QD16"
 
 
 if __name__ == "__main__":

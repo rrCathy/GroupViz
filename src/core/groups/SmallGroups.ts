@@ -300,7 +300,7 @@ function wordToLabel(terms: { g: number; e: number }[], genNames: string[]): str
 // （单位元 = 'e'），使元素标签与生成元名字一一对应（a、b、a^2、a b …），
 // 替换原先无意义的 g_0..g_{n-1}，也让 HomomorphismView/SemidirectProductView 等
 // 按 label 查找生成元元素的逻辑对表驱动群生效。
-function assignWordLabels(
+export function assignWordLabels(
   elements: GroupElement[],
   generators: Generator[],
   mul: (x: GroupElement, y: GroupElement) => GroupElement,
@@ -332,7 +332,7 @@ function assignWordLabels(
 // 二面体群的规范词形：旋转 = a^i（按离散对数），反射 = a^i b。
 // BFS 最短词对旋转元素可能给出 b a b 这类混合词（数学正确但不符合
 // 《群论彩图版》的 r^i / r^i s 约定），此处按标准生成元 (a=r, b=s) 重写。
-function applyDihedralNormalForm(
+export function applyDihedralNormalForm(
   elements: GroupElement[],
   generators: Generator[],
   mul: (x: GroupElement, y: GroupElement) => GroupElement,

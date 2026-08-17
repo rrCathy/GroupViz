@@ -11,6 +11,8 @@ import {
   fetchBackendResults,
   fetchBackendCayleyEdges,
   fetchBackendElementOrder,
+  fetchBackendSeries,
+  gapFactorLabel,
 } from '../utils/hybridCompute'
 import {
   fetchSubgroups,
@@ -20,6 +22,7 @@ import {
   fetchCayleyEdges,
   fetchElementOrder,
   fetchGroupProperties,
+  fetchSeries,
 } from '../utils/api'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createS3, createSymmetricGroup } from '../core/groups/SymmetricGroup'
@@ -33,6 +36,7 @@ vi.mock('../utils/api', () => ({
   fetchCayleyEdges: vi.fn(),
   fetchElementOrder: vi.fn(),
   fetchGroupProperties: vi.fn(),
+  fetchSeries: vi.fn(),
 }))
 
 const mockFetchFunctions = {
@@ -43,6 +47,7 @@ const mockFetchFunctions = {
   fetchCayleyEdges: vi.mocked(fetchCayleyEdges),
   fetchElementOrder: vi.mocked(fetchElementOrder),
   fetchGroupProperties: vi.mocked(fetchGroupProperties),
+  fetchSeries: vi.mocked(fetchSeries),
 }
 
 beforeEach(() => {
@@ -334,5 +339,83 @@ describe('fetchBackendElementOrder', () => {
     const big = makeBigGroup(120, ['g0'])
     mockFetchFunctions.fetchElementOrder.mockRejectedValue(new Error('boom'))
     expect(await fetchBackendElementOrder(big, 'g9')).toBeNull()
+  })
+})
+
+describe('gapFactorLabel', () => {
+  it('labels abelian factors as cyclic groups', () => {
+    expect(gapFactorLabel({ order: 2, is_abelian: true, is_simple: true })).toBe('C_{2}')
+    expect(gapFactorLabel({ order: 12, is_abelian: true, is_simple: false })).toBe('C_{12}')
+  })
+
+  it('labels A5 by order for non-abelian simple factors', () => {
+    expect(gapFactorLabel({ order: 60, is_abelian: false, is_simple: true })).toBe('A_5')
+  })
+
+  it('falls back to generic label otherwise', () => {
+    expect(gapFactorLabel({ order: 360, is_abelian: false, is_simple: false })).toBe('G_{360}')
+  })
+})
+
+describe('fetchBackendSeries', () => {
+  it('computes locally for small groups', async () => {
+    const c6 = createCyclicGroup(6)
+    const res = await fetchBackendSeries(c6, 'derived')
+    expect(res).not.toBeNull()
+    expect(res!.reachesTrivial).toBe(true)
+    expect(res!.terms[0]).toHaveLength(6)
+  })
+
+  it('maps backend series terms and factors for large groups', async () => {
+    const big = makeBigGroup(720, ['e0', 'a1', 'a2'])
+    mockFetchFunctions.fetchSeries.mockResolvedValue({
+      symbol: 'S_6', series_type: 'derived', source: 'gap',
+      terms: [
+        { elements: [{ id: 'e0', label: '0', value: [0] }, { id: 'a1', label: 'a', value: [1] }, { id: 'a2', label: 'a2', value: [2] }], order: 3 },
+        { elements: [{ id: 'a1', label: 'a', value: [1] }, { id: 'a2', label: 'a2', value: [2] }], order: 2 },
+      ],
+      factors: [
+        { order: 3, is_abelian: true, is_simple: true },
+        { order: 2, is_abelian: true, is_simple: true },
+      ],
+    })
+    mockFetchFunctions.fetchGroupProperties.mockResolvedValue({
+      derived_series_orders: [3], solvable: true, nilpotent: false, perfect: false,
+    })
+    const res = await fetchBackendSeries(big, 'derived')
+    expect(res).not.toBeNull()
+    expect(res!.terms[0].map(e => e.id)).toEqual(['e0', 'a1', 'a2'])
+    expect(res!.factors.map(f => f.label)).toEqual(['C_{3}', 'C_{2}'])
+    expect(res!.solvable).toBe(true)
+    expect(res!.nilpotent).toBe(false)
+    // Terms already reach {e}: no trivial term appended.
+    expect(res!.reachesTrivial).toBe(true)
+    // First term is not the full group in this fixture.
+    expect(res!.reachesFull).toBe(false)
+    // identity element reused from group
+    expect(res!.terms[0][0]).toBe(big.elements[0])
+  })
+
+  it('appends trivial term when backend chain does not reach {e}', async () => {
+    const big = makeBigGroup(720, ['e0', 'a1'])
+    mockFetchFunctions.fetchSeries.mockResolvedValue({
+      symbol: 'S_6', series_type: 'derived', source: 'gap',
+      terms: [
+        { elements: [{ id: 'e0', label: '0', value: [0] }, { id: 'a1', label: 'a', value: [1] }], order: 2 },
+      ],
+      factors: [{ order: 2, is_abelian: true, is_simple: true }],
+    })
+    mockFetchFunctions.fetchGroupProperties.mockResolvedValue({
+      derived_series_orders: [2], solvable: true, nilpotent: false, perfect: false,
+    })
+    const res = await fetchBackendSeries(big, 'derived')
+    expect(res!.terms).toHaveLength(2)
+    expect(res!.terms[1]).toEqual([big.identity])
+  })
+
+  it('returns null when backend fails', async () => {
+    const big = makeBigGroup(720, ['e0'])
+    mockFetchFunctions.fetchSeries.mockRejectedValue(new Error('boom'))
+    expect(await fetchBackendSeries(big, 'composition')).toBeNull()
   })
 })

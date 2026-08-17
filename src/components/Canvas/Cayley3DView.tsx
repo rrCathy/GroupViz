@@ -84,7 +84,7 @@ const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected
         </mesh>
       )}
       {(isSelected || isHovered) && (
-        <Html distanceFactor={12} center style={{ pointerEvents: 'none', userSelect: 'none' }}>
+        <Html distanceFactor={12} center style={{ pointerEvents: 'none', userSelect: 'none' }} wrapperClass="gv-html-overlay">
           <div
             style={{
               color: 'var(--node-text)', fontSize: 11, fontWeight: 'bold',
@@ -540,7 +540,7 @@ function SceneContent() {
       <pointLight position={[0, 0, 0]} intensity={0.3} color="#ffffff" />
 
       {currentGroup && (
-        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }}>
+        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
           <div style={{
             position: 'absolute', top: 10, right: 10,
             display: 'flex', gap: 6, alignItems: 'center', pointerEvents: 'auto'
@@ -584,7 +584,7 @@ function SceneContent() {
       )}
 
       {currentGroup && cayleyActions.length > 0 && (
-        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }}>
+        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
           <div style={{
             position: 'absolute', top: 10, left: 10,
             background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',

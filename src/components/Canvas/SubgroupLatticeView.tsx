@@ -65,6 +65,7 @@ export function SubgroupLatticeView() {
     compositionTruncated,
     activeChainIdx,
     seriesFlags,
+    seriesLoading,
   } = useGroup()
   const { t } = useTranslation()
   const { theme } = useTheme()
@@ -127,7 +128,34 @@ export function SubgroupLatticeView() {
   const latticeData = useMemo(() => {
     if (!currentGroup) return null
     if (isLargeGroup && backendCache.lattice) {
-      return backendCache.lattice as { nodes: SubgroupLatticeNode[]; edges: SubgroupLatticeEdge[] }
+      // Backend lattice nodes ship `elements` (and `is_normal` / no `elementIds`);
+      // normalize into the local SubgroupLatticeNode shape consumed below.
+      const raw = backendCache.lattice as {
+        nodes: Array<{
+          id: string
+          elements?: Array<{ id: string }> | null
+          elementIds?: string[]
+          order: number
+          is_normal?: boolean
+          isNormal?: boolean
+          level?: number
+        }>
+        edges: SubgroupLatticeEdge[]
+      }
+      return {
+        nodes: raw.nodes.map(n => ({
+          id: n.id,
+          label: `${n.order}`,
+          elementIds: Array.isArray(n.elementIds)
+            ? n.elementIds
+            : (n.elements ?? []).map(e => e.id),
+          order: n.order,
+          index: 0,
+          isNormal: n.is_normal ?? n.isNormal ?? false,
+          level: n.level ?? 0,
+        })),
+        edges: (raw.edges as unknown as Array<{ source: number; target: number }>).map(e => ({ from: e.source, to: e.target })),
+      }
     }
     if (isLargeGroup) return null
     return computeSubgroupLattice(currentGroup)
@@ -252,6 +280,9 @@ export function SubgroupLatticeView() {
 
   const seriesFactors = useMemo<SeriesFactor[] | null>(() => {
     if (!currentGroup || !seriesTerms || !seriesType) return null
+    // Backend (GAP) series ships its own factors — use them directly to
+    // avoid an O(n²) recomputation on large groups.
+    if (seriesData?.factors && seriesData.factors.length > 0) return seriesData.factors
     if (seriesType === 'composition') return computeChainFactors(currentGroup, seriesTerms, true)
     return seriesData?.factors ?? null
   }, [currentGroup, seriesType, seriesTerms, seriesData])
@@ -612,7 +643,9 @@ export function SubgroupLatticeView() {
               </div>
             </>
           ) : (
-            <span style={{ color: 'var(--text-muted)' }}>{t('series.tooLarge')}</span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              {seriesLoading ? t('series.loading') : t('series.tooLarge')}
+            </span>
           )}
         </div>
       )}

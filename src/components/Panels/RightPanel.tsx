@@ -45,6 +45,21 @@ function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { current
     return new Map(parentGroup.elements.map(e => [e.id, e.label]))
   }, [parentGroup])
 
+  // KaTeX rendering is expensive: render each parent-group element label once
+  // per group, not once per selection change (up to 81 calls per render).
+  const labelHtmlCache = useMemo(() => {
+    if (!elLabelById) return new Map<string, string>()
+    const m = new Map<string, string>()
+    for (const [id, label] of elLabelById) {
+      m.set(id, renderTex(texify(label)))
+    }
+    return m
+  }, [elLabelById])
+
+  const autoLabelHtml = useMemo(() => {
+    return automorphism ? renderTex(texify(automorphism.label)) : ''
+  }, [automorphism])
+
   const entries = useMemo(() => {
     if (!automorphism) return { nonFixed: [], fixedCount: 0 }
     const automap = automorphism.map
@@ -66,7 +81,7 @@ function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { current
     }}>
       <h3 style={{ color: 'var(--accent-teal)' }}>{t('right.automorphismMapping')}</h3>
       <div className="info-row" style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px' }}>
-        <span dangerouslySetInnerHTML={{ __html: renderTex(texify(automorphism.label)) }} />
+        <span dangerouslySetInnerHTML={{ __html: autoLabelHtml }} />
       </div>
       <div style={{
         maxHeight: '180px',
@@ -88,7 +103,7 @@ function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { current
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
               }}
-              dangerouslySetInnerHTML={{ __html: renderTex(texify(elLabelById.get(srcId) || srcId)) }}
+              dangerouslySetInnerHTML={{ __html: labelHtmlCache.get(srcId) || '' }}
             />
             <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>↦</span>
             <span
@@ -100,7 +115,7 @@ function AutomorphismMappingPanel({ currentGroup, selectedElementId }: { current
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
               }}
-              dangerouslySetInnerHTML={{ __html: renderTex(texify(elLabelById.get(tgtId) || tgtId)) }}
+              dangerouslySetInnerHTML={{ __html: labelHtmlCache.get(tgtId) || '' }}
             />
           </div>
         ))}

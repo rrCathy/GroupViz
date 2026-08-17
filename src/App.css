@@ -906,6 +906,15 @@
   text-align: left;
 }
 
+/* drei Html 覆盖层：显式 z-index 兜底，不依赖 drei 动态计算（首挂载可能缺失） */
+.gv-html-overlay {
+  z-index: 2 !important;
+}
+
+.gv-html-fullscreen {
+  z-index: 5 !important;
+}
+
 .hint-box {
   position: absolute;
   bottom: 12px;

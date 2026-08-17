@@ -12,7 +12,7 @@ const zh: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': '群论可视化平台',
-  'welcome.version': 'v1.12.1',
+  'welcome.version': 'v1.13.0',
   'welcome.tagline': '探索抽象代数的对称之美 — 交互式群论可视化与学习工具',
   'welcome.enter': '进入应用',
   'welcome.section.done': '已实现',
@@ -39,6 +39,7 @@ const zh: TranslationMap = {
   'panel.cayleySettings': '凯莱图设置',
   'panel.operations': '操作与子集',
   'panel.basicGroup': '基本群',
+  'panel.importGroup': '记号导入群',
 
   /* Left Panel — Group Types */
   'group.cyclic': '循环群',
@@ -221,6 +222,7 @@ const zh: TranslationMap = {
   'series.solvable': '可解',
   'series.nilpotent': '幂零',
   'series.tooLarge': '群阶超过 240，跳过本地系列计算',
+  'series.loading': '后端（GAP）计算系列中…',
   'series.truncated': '合成列超过 20 条，仅展示前 20 条',
 
   /* Cayley 3D Legend */
@@ -469,6 +471,20 @@ const zh: TranslationMap = {
   'pres.create.tabVisual': '可视化创建',
   'pres.clearGroup': '清空当前群（回到模板树）',
   'pres.visual.template': '生成元模板',
+  'importGroup.placeholder': '输入群记号，如 PSL(2,7)、C_3×D_4 或 SmallGroup(16,13)',
+  'importGroup.samples': '示例',
+  'importGroup.order': '阶',
+  'importGroup.orderUnknown': '阶未知',
+  'importGroup.pathLocal': '本地直接创建',
+  'importGroup.pathBackend': '后端 GAP 导入',
+  'importGroup.import': '导入群',
+  'importGroup.loading': '导入中…',
+  'importGroup.error.empty': '请输入群记号',
+  'importGroup.error.semidirect': '半直积记号需要自同态 φ，请改用 SmallGroup(n,i) 记号',
+  'importGroup.error.unknown': '无法识别的群记号',
+  'importGroup.error.noRoute': '该记号既不能本地创建也没有可用的 GAP 路径',
+  'importGroup.error.backend': '后端未运行或 GAP 不可用，请先启动后端服务',
+  'importGroup.error.fetch': '导入失败：{msg}',
   'pres.visual.relation': '输入一条关系（f = e 或 f1 = f2）',
   'pres.visual.relationPlaceholder': '例 a^3=e 或 ab=ba',
   'pres.visual.add': '确定',
@@ -657,7 +673,7 @@ const en: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': 'Group Theory Visualization Platform',
-  'welcome.version': 'v1.12.1',
+  'welcome.version': 'v1.13.0',
   'welcome.tagline': 'Explore the beauty of symmetry in abstract algebra — Interactive group theory visualization & learning tool',
   'welcome.enter': 'Enter',
   'welcome.section.done': 'Implemented',
@@ -684,6 +700,7 @@ const en: TranslationMap = {
   'panel.cayleySettings': 'Cayley Settings',
   'panel.operations': 'Operations & Subsets',
   'panel.basicGroup': 'Basic Groups',
+  'panel.importGroup': 'Import by Notation',
 
   /* Left Panel — Group Types */
   'group.cyclic': 'Cyclic',
@@ -866,6 +883,7 @@ const en: TranslationMap = {
   'series.solvable': 'Solvable',
   'series.nilpotent': 'Nilpotent',
   'series.tooLarge': 'Order exceeds 240; local series computation skipped',
+  'series.loading': 'Computing series via backend (GAP)…',
   'series.truncated': 'More than 20 chains; showing first 20',
 
   /* Cayley 3D Legend */
@@ -1098,6 +1116,20 @@ const en: TranslationMap = {
   'pres.error.overflow': 'Group too large or coset enumeration limit exceeded',
   'pres.error.unconnected': 'Generator action is not connected (generators do not generate the whole group)',
   'pres.error.empty': 'Please enter a group presentation',
+  'importGroup.placeholder': 'Type a group notation, e.g. PSL(2,7), C_3×D_4 or SmallGroup(16,13)',
+  'importGroup.samples': 'Samples',
+  'importGroup.order': 'Order',
+  'importGroup.orderUnknown': 'Order unknown',
+  'importGroup.pathLocal': 'Built locally',
+  'importGroup.pathBackend': 'Imported via backend GAP',
+  'importGroup.import': 'Import Group',
+  'importGroup.loading': 'Importing…',
+  'importGroup.error.empty': 'Type a group notation',
+  'importGroup.error.semidirect': 'Semidirect notation needs the automorphism φ — use SmallGroup(n,i) instead',
+  'importGroup.error.unknown': 'Unrecognized group notation',
+  'importGroup.error.noRoute': 'This notation can neither be built locally nor mapped to a GAP expression',
+  'importGroup.error.backend': 'Backend is not running or GAP is unavailable — start the backend first',
+  'importGroup.error.fetch': 'Import failed: {msg}',
   'pres.storeHint': 'Presentation group stored: {symbol}',
   'pres.removeHint': 'Presentation group removed: {symbol}',
   'pres.loadHint': 'Presentation group loaded: {symbol} (order {order})',

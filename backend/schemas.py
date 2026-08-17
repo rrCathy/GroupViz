@@ -31,6 +31,15 @@ class DirectProductRequest(BaseModel):
     symbol_b: str
 
 
+class SeriesRequest(BaseModel):
+    symbol: str
+    series_type: str  # derived / upperCentral / lowerCentral / composition
+
+
+class ImportGroupRequest(BaseModel):
+    gap_expr: str
+
+
 # ---- Response models (documentation only, actual responses are JSON) ----
 
 class ElementResponse(BaseModel):

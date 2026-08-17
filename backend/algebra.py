@@ -547,7 +547,7 @@ def compute_cayley_edges(
 
     return {"edges": edges}
 
-# ©¤©¤ Group Properties (solvable / nilpotent / perfect) ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤
+# â”€â”€ Group Properties (solvable / nilpotent / perfect) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def compute_group_properties(group: Group) -> dict:
     """Derived series, solvability, nilpotence (lower central series),

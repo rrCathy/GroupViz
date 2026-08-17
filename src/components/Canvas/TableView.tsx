@@ -141,7 +141,10 @@ export function TableView() {
   const [fullscreenOpen, setFullscreenOpen] = useState(false)
   const [fsScale, setFsScale] = useState(1)
   const [fsDragging, setFsDragging] = useState(false)
+  const [fsScroll, setFsScroll] = useState({ l: 0, t: 0 })
+  const [fsViewport, setFsViewport] = useState({ w: 0, h: 0 })
   const fsBodyRef = useRef<HTMLDivElement>(null)
+  const fsScrollRaf = useRef(0)
   const fsSvgRef = useRef<SVGSVGElement>(null)
   const fsDragRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(null)
 
@@ -398,6 +401,32 @@ export function TableView() {
     fsDragRef.current = null
     setFsDragging(false)
   }
+
+  const onFsScroll = useCallback(() => {
+    const body = fsBodyRef.current
+    if (!body || fsScrollRaf.current) return
+    fsScrollRaf.current = requestAnimationFrame(() => {
+      fsScrollRaf.current = 0
+      setFsScroll({ l: body.scrollLeft, t: body.scrollTop })
+    })
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (fsScrollRaf.current) cancelAnimationFrame(fsScrollRaf.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!fullscreenOpen) return
+    const body = fsBodyRef.current
+    if (!body) return
+    const update = () => setFsViewport({ w: body.clientWidth, h: body.clientHeight })
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(body)
+    return () => ro.disconnect()
+  }, [fullscreenOpen])
 
   const exportFullscreen = () => {
     const svg = fsSvgRef.current
@@ -766,6 +795,7 @@ export function TableView() {
           <div
             className={`table-fullscreen-body${fsDragging ? ' dragging' : ''}`}
             ref={fsBodyRef}
+            onScroll={onFsScroll}
             onPointerDown={onFwPointerDown}
             onPointerMove={onFwPointerMove}
             onPointerUp={onFwPointerUp}
@@ -780,6 +810,19 @@ export function TableView() {
               const tw = n * fsCell + padL + 16
               const th = n * fsCell + padT + padB
               const fsIdentityIdx = idToIdx.get(currentGroup.identity.id) ?? -1
+              const vw = fsViewport.w || 960
+              const vh = fsViewport.h || 600
+              const viewL = fsScroll.l / fsScale
+              const viewT = fsScroll.t / fsScale
+              const viewW = vw / fsScale
+              const viewH = vh / fsScale
+              const buf = 3
+              const cStart = Math.max(0, Math.floor((viewL - padL) / fsCell) - buf)
+              const cEnd = Math.min(n - 1, Math.ceil((viewL + viewW - padL) / fsCell) + buf)
+              const rStart = Math.max(0, Math.floor((viewT - padT) / fsCell) - buf)
+              const rEnd = Math.min(n - 1, Math.ceil((viewT + viewH - padT) / fsCell) + buf)
+              const rowIdxList = Array.from({ length: rEnd - rStart + 1 }, (_, k) => rStart + k)
+              const colIdxList = Array.from({ length: cEnd - cStart + 1 }, (_, k) => cStart + k)
               return (
                 <svg
                   ref={fsSvgRef}
@@ -788,34 +831,42 @@ export function TableView() {
                   style={{ width: tw * fsScale, height: th * fsScale }}
                 >
                   <g transform={`translate(${padL}, ${padT})`}>
-                    {elements.map((rowEl, rowIdx) => (
-                      <text
-                        key={`fr-${rowEl.id}`}
-                        x={-6}
-                        y={rowIdx * fsCell + fsCell / 2 + 4}
-                        textAnchor="end"
-                        fill={elementColors[rowIdx % elementColors.length]}
-                        fontSize={11}
-                        fontFamily="serif"
-                      >
-                        {rowEl.label}
-                      </text>
-                    ))}
-                    {elements.map((colEl, colIdx) => (
-                      <text
-                        key={`fc-${colEl.id}`}
-                        x={colIdx * fsCell + fsCell / 2}
-                        y={-6}
-                        textAnchor="middle"
-                        fill={elementColors[colIdx % elementColors.length]}
-                        fontSize={11}
-                        fontFamily="serif"
-                      >
-                        {colEl.label}
-                      </text>
-                    ))}
-                    {elements.map((rowEl, rowIdx) =>
-                      elements.map((colEl, colIdx) => {
+                    {rowIdxList.map((rowIdx) => {
+                      const rowEl = elements[rowIdx]
+                      return (
+                        <text
+                          key={`fr-${rowEl.id}`}
+                          x={-6}
+                          y={rowIdx * fsCell + fsCell / 2 + 4}
+                          textAnchor="end"
+                          fill={elementColors[rowIdx % elementColors.length]}
+                          fontSize={11}
+                          fontFamily="serif"
+                        >
+                          {rowEl.label}
+                        </text>
+                      )
+                    })}
+                    {colIdxList.map((colIdx) => {
+                      const colEl = elements[colIdx]
+                      return (
+                        <text
+                          key={`fc-${colEl.id}`}
+                          x={colIdx * fsCell + fsCell / 2}
+                          y={-6}
+                          textAnchor="middle"
+                          fill={elementColors[colIdx % elementColors.length]}
+                          fontSize={11}
+                          fontFamily="serif"
+                        >
+                          {colEl.label}
+                        </text>
+                      )
+                    })}
+                    {rowIdxList.map(rowIdx =>
+                      colIdxList.map(colIdx => {
+                        const rowEl = elements[rowIdx]
+                        const colEl = elements[colIdx]
                         const result = table[rowIdx][colIdx]
                         const resultColor = getElementColor(result.label)
                         const sgKey = `${rowIdx},${colIdx}`

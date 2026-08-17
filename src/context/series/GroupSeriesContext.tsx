@@ -4,10 +4,12 @@ import { useGroupCore } from '../core/GroupCoreContext'
 import {
   computeSubgroupSeries,
   enumerateCompositionSeries,
+  SERIES_MAX_ORDER,
   type SeriesType,
   type SubgroupSeries,
 } from '../../core/algebra/series'
 import { computeGroupProperties } from '../../core/algebra/properties'
+import { fetchBackendSeries } from '../../utils/hybridCompute'
 import type { GroupElement } from '../../core/types'
 
 interface GroupSeriesState {
@@ -20,6 +22,8 @@ interface GroupSeriesState {
   compositionTruncated: boolean
   /** Group-level solvable/nilpotent flags (for composition display). */
   seriesFlags: { solvable: boolean; nilpotent: boolean } | null
+  /** True while a large-group series is being fetched from the GAP backend. */
+  seriesLoading: boolean
 }
 
 interface GroupSeriesActions {
@@ -36,6 +40,8 @@ export function GroupSeriesProvider({ children }: { children: ReactNode }) {
 
   const [seriesType, setSeriesTypeState] = useState<SeriesType | null>(null)
   const [activeChainIdx, setActiveChainIdxState] = useState(0)
+  const [gapSeries, setGapSeries] = useState<SubgroupSeries | null>(null)
+  const [gapLoading, setGapLoading] = useState(false)
   const prevGroupRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -47,25 +53,64 @@ export function GroupSeriesProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       setSeriesTypeState(null)
       setActiveChainIdxState(0)
+      setGapSeries(null)
+      setGapLoading(false)
     })
   }, [currentGroup])
 
-  const seriesData = useMemo(() => {
+  // Large groups (order > SERIES_MAX_ORDER): fetch the series from the GAP
+  // backend; the local engine returns null above that cutoff.
+  useEffect(() => {
+    if (!currentGroup || seriesType === null) return
+    if (currentGroup.order <= SERIES_MAX_ORDER) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setGapLoading(true)
+      fetchBackendSeries(currentGroup, seriesType)
+        .then(series => {
+          if (!cancelled) setGapSeries(series)
+        })
+        .finally(() => {
+          if (!cancelled) setGapLoading(false)
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentGroup, seriesType])
+
+  const localSeries = useMemo(() => {
     if (!currentGroup || seriesType === null || seriesType === 'composition') return null
     return computeSubgroupSeries(currentGroup, seriesType)
   }, [currentGroup, seriesType])
 
+  const seriesData = useMemo<SubgroupSeries | null>(() => {
+    if (localSeries) return localSeries
+    if (gapSeries && gapSeries.type === seriesType) return gapSeries
+    return null
+  }, [localSeries, gapSeries, seriesType])
+
   const compositionEnum = useMemo(() => {
     if (!currentGroup || seriesType !== 'composition') return null
+    if (currentGroup.order > SERIES_MAX_ORDER) {
+      // GAP returns a single (greedy) chain; no full enumeration available.
+      if (gapSeries) return { chains: [gapSeries.terms], truncated: false }
+      return { chains: [], truncated: false }
+    }
     return enumerateCompositionSeries(currentGroup, 20)
-  }, [currentGroup, seriesType])
+  }, [currentGroup, seriesType, gapSeries])
 
   const seriesFlags = useMemo(() => {
     if (!currentGroup || seriesType === null) return null
+    if (currentGroup.order > SERIES_MAX_ORDER) {
+      if (!gapSeries) return null
+      return { solvable: gapSeries.solvable, nilpotent: gapSeries.nilpotent }
+    }
     const props = computeGroupProperties(currentGroup, true)
     if (!props) return null
     return { solvable: props.solvable, nilpotent: props.nilpotent }
-  }, [currentGroup, seriesType])
+  }, [currentGroup, seriesType, gapSeries])
 
   const setSeriesType = useCallback((type: SeriesType | null) => {
     setSeriesTypeState(type)
@@ -83,6 +128,7 @@ export function GroupSeriesProvider({ children }: { children: ReactNode }) {
     compositionChains: compositionEnum ? compositionEnum.chains : null,
     compositionTruncated: compositionEnum ? compositionEnum.truncated : false,
     seriesFlags,
+    seriesLoading: gapLoading,
     setSeriesType,
     setActiveChainIdx,
   }

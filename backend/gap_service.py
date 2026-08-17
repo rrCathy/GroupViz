@@ -243,14 +243,17 @@ def _run_gap_raw(script: str) -> subprocess.CompletedProcess:
     # stdin=PIPE 且从不关闭 → GAP 死等 stdin EOF 永不退出；detached/后台
     # （Start-Process、服务、任务计划）无控制台句柄上下文尤其顽固（进程
     # 卡死直至 GNU timeout 120s 强杀 → exit 124 → 422）。
-    # 双重修复：
+    # 修复：
     #   1) stdin=subprocess.DEVNULL —— Read 完立即读到 EOF 退出；
-    #   2) CREATE_NEW_CONSOLE | CREATE_NO_WINDOW —— 显式分配隐藏控制台，
-    #      覆盖其他需要控制台句柄的 Cygwin 初始化竞态。
-    # 实测（detached）：修复后 import PSL(2,7) 2.9s rc=0（修复前挂 120s）。
+    #   2) CREATE_NO_WINDOW —— 不继承也不新建控制台窗口（不弹终端框）。
+    # 注意：不能加 CREATE_NEW_CONSOLE（MSDN：与 CREATE_NO_WINDOW 连用时
+    # CREATE_NO_WINDOW 被忽略 → 每次 GAP 计算都会弹出可见终端框，
+    # 用户实测 2026-08-17；已改为仅 CREATE_NO_WINDOW，前台终端与
+    # detached（pythonw/服务/任务计划）双场景实测均 2.5s 成功、无弹窗）。
+    # 实测：import PSL(2,7) 2.9s rc=0（修复前挂 120s）。
     creation_flags = 0
     if os.name == "nt":
-        creation_flags = subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NO_WINDOW
+        creation_flags = subprocess.CREATE_NO_WINDOW
 
     # 把脚本写入临时文件，经 `-c 'Read(...)'` 载入（Read 模式不回显语句，
     # 而 stdin/文件重定向会在 REPL 语义下回显每条赋值结果，污染 stdout 协议）。

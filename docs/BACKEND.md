@@ -67,7 +67,7 @@ Vite 开发服务器将 `/api` 代理到 `http://localhost:8000`（vite.config.t
 `backend/gap_service.py` 集成 **GAP 4.16** 作为大群结构计算引擎：
 
 - **模式探测**：direct（直接 `gap.exe -b -q`）/ cygwin（`bash.exe --login -c 'cd /opt/gap-4.16.0 && timeout 120 ./gap.exe …'` 双模式）
-- **detached 卡死修复（2026-08-17 定案）**：Cygwin 版 GAP 在 detached/后台（Start-Process、服务）环境曾必挂 120s（exit 124 → 422）。根因：`-b -q -c 'Read(...)'` 脚本执行完回到 REPL 死等 stdin EOF（capture_output 的 stdin=PIPE 永不关闭），无控制台句柄上下文更顽固。`_run_gap_raw` 双重修复：`stdin=subprocess.DEVNULL`（Read 完立即 EOF 退出）+ `CREATE_NEW_CONSOLE | CREATE_NO_WINDOW`（显式隐藏控制台，覆盖其他初始化竞态）。实测 detached 下 import PSL(2,7) 3.3s 成功（修复前 90s+ 挂起）
+- **detached 卡死修复（2026-08-17 定案，后经弹窗回归微调）**：Cygwin 版 GAP 在 detached/后台（Start-Process、服务）环境曾必挂 120s（exit 124 → 422）。根因：`-b -q -c 'Read(...)'` 脚本执行完回到 REPL 死等 stdin EOF（capture_output 的 stdin=PIPE 永不关闭），无控制台句柄上下文更顽固。`_run_gap_raw` 修复：`stdin=subprocess.DEVNULL`（Read 完立即 EOF 退出）；创建标志**仅 `CREATE_NO_WINDOW`**（曾用 `CREATE_NEW_CONSOLE | CREATE_NO_WINDOW`，但 MSDN 规定该组合下 CREATE_NO_WINDOW 被忽略 → 每次 GAP 计算弹出可见终端框，用户实测反馈后于 2026-08-17 改为仅 CREATE_NO_WINDOW；前台终端 + detached（pythonw 模拟）双场景 EnumWindows 实测均无弹窗且 ~2.5s 成功）。实测 detached 下 import PSL(2,7) 3.3s 成功（修复前 90s+ 挂起）
 - **表达式翻译**：`symbol_to_expr`（Cₙ/Zₙ→CyclicGroup(n)、Dₙ→DihedralGroup(2n)、V₄、Q₈、GL(2,q)、直积/幂^k），不认识的符号返回 None → 纯 Python 降级
 - **序列化**：`GV_ser` 自定义序列化（群元素→置换/binary string、子群→下标列表），`run_script` 进程串行锁 + `GV_BEGIN/GV_END` 标记提取 + 15s 超时
 - **自动切换**：subgroups/normal-subgroups/conjugacy-classes/center/lattice/properties 六端点 >120 阶且 GAP 可用时自动走 GAP（响应带 `source: "gap"`）；GAP 不可用/非置换群/表达式不支持 → 回退纯 Python

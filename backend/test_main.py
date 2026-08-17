@@ -240,6 +240,24 @@ def test_lattice_api():
     assert len(data["nodes"]) >= 4
 
 
+def test_lattice_same_order_shares_level():
+    """同阶子群必须共享同一 level（level 按阶值分层而非节点索引）——
+    否则每个节点独占一层，子群格会塌成一条竖线。A5 有 10 个 2 阶子群。"""
+    resp = client.post("/api/compute/lattice", json={"symbol": "A5"})
+    assert resp.status_code == 200
+    data = resp.json()
+    nodes = data["nodes"]
+    assert len(nodes) >= 10
+    by_order: dict[int, set[int]] = {}
+    for n in nodes:
+        by_order.setdefault(n["order"], set()).add(n["level"])
+    # 每个阶值至多对应一个 level（同层共享）
+    for order, levels in by_order.items():
+        assert len(levels) == 1, f"order {order} spans levels {levels}"
+    # 确实存在同阶多子群（2 阶有 10 个），若都独占一层该断言会触发竖线
+    assert len([o for o in by_order if len([n for n in nodes if n["order"] == o]) > 1]) >= 2
+
+
 def test_cayley_edges_api():
     resp = client.post("/api/compute/cayley-edges", json={
         "symbol": "S_3",

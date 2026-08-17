@@ -273,12 +273,13 @@ def _gap_lattice(data: dict, elements: list[dict]) -> dict:
         {"source": new_of_gap[pm - 1], "target": new_of_gap[ph - 1]}
         for pm, ph in data["edges"]
     ]
-    # level 语义与 algebra.py 一致：level = max_level - order_rank（最小子群最高）
-    sorted_by_order = sorted(range(m), key=lambda idx: nodes[idx]["order"])
-    order_map = {idx: rank for rank, idx in enumerate(sorted_by_order)}
-    max_level = max(order_map.values()) if order_map else 0
+    # level 语义与 algebra.py 一致：level = max_level - order_rank（最小子群最高）；
+    # rank 按「阶值」分配——同阶子群同层，避免稳定排序给每个节点独立 rank 导致竖线
+    orders = sorted({nodes[i]["order"] for i in range(m)})
+    order_rank = {order: rank for rank, order in enumerate(orders)}
+    max_level = len(orders) - 1
     for i in range(m):
-        nodes[i]["level"] = max_level - order_map[i]
+        nodes[i]["level"] = max_level - order_rank[nodes[i]["order"]]
     return {"nodes": nodes, "edges": edges}
 
 

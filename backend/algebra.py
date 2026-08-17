@@ -464,15 +464,18 @@ def compute_subgroup_lattice(group: Group, precomputed_subs: list[dict] | None =
                 edges.append({"source": i, "target": j})
 
     # Assign levels: bottom (trivial) to top (full group)
-    # Sort by order, then assign levels so smaller subgroups at bottom
-    sorted_by_order = sorted(range(m), key=lambda idx: nodes[idx]["order"])
-    order_map: dict[int, int] = {}
-    for rank, idx in enumerate(sorted_by_order):
-        order_map[idx] = rank
+    # Sort by order, then assign levels so smaller subgroups at bottom;
+    # rank keyed by ORDER VALUE — subgroups of the same order share a level
+    # (index-keyed ranks from a stable sort would give every node a distinct
+    # level and collapse the lattice into a single vertical column)
+    orders = sorted({nodes[i]["order"] for i in range(m)})
+    order_rank: dict[int, int] = {}
+    for rank, order in enumerate(orders):
+        order_rank[order] = rank
 
-    max_level = max(order_map.values()) if order_map else 0
+    max_level = len(orders) - 1
     for i in range(m):
-        nodes[i]["level"] = max_level - order_map.get(i, 0)
+        nodes[i]["level"] = max_level - order_rank.get(nodes[i]["order"], 0)
 
     return {"nodes": nodes, "edges": edges}
 

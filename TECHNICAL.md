@@ -229,7 +229,7 @@ interface Group {
 
 #### 对称群 `SymmetricGroup.ts`
 - 元素：n 个元素的所有排列（n! 个）
-- 生成元：S₃ 用 (12),(23); S₄ 用 (12),(234); S₅+ 用 (12),(12...n)
+- 生成元：S₃ 用 (12),(23); S₄ 用 (12),(1234)（Group Explorer 标准，凯莱图 = 截角八面体，平面）; S₅+ 用 (12),(12...n)
 - 乘法：置换复合 `p∘q`
 - 符号：`S_{n}` (n=2..6)
 
@@ -371,9 +371,9 @@ Three.js + R3F 渲染，节点不可拖拽。
 | `cylinder` | 2因子直积(1循环+1非循环) | 循环因子沿 Y 轴分层 |
 | `torus` | 2因子直积(无循环) | 环面主/次方向 |
 | `truncatedTetrahedron` | A₄ | 截角四面体 (12顶点) |
-| `truncatedCube` | S₄ (默认) | 截角立方体 (24顶点) |
+| `truncatedCube` | S₄ (备选) | 截角立方体 (24顶点，与 S₄ 新凯莱图非同构) |
 | `rhombicuboctahedron` | S₄ (备选) | 菱形截角八面体 (24顶点) |
-| `truncatedOctahedron2/3` | S₄ (备选) | 截角八面体变体 (24顶点) |
+| `truncatedOctahedron2` | S₄ (默认) | 截角八面体 (24顶点，S₄ 标准生成元 (12),(1234) 凯莱图骨架) |
 | `truncatedIcosahedron` | A₅ (默认) | 截角二十面体 (60顶点) |
 | `truncatedDodecahedron` | A₅ (备选) | 截角十二面体 (60顶点) |
 

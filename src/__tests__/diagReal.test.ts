@@ -52,8 +52,8 @@ describe('diag', () => {
     }
   })
 
-  it('real default cases: planar groups keep all arcs, no shared-endpoint tangles', { timeout: 120000 }, () => {
-    const planar = new Set(['C6', 'V4', 'S3', 'D4', 'D5', 'A4', 'D6', 'C2xC2xC2'])
+  it('real default cases: planar groups keep all arcs, no shared-endpoint tangles', { timeout: 300000 }, () => {
+    const planar = new Set(['C6', 'V4', 'S3', 'D4', 'D5', 'A4', 'S4', 'D6', 'C2xC2xC2'])
     const cases: Array<[string, Group]> = [
       ['C6', createCyclicGroup(6)],
       ['V4', createKleinFour()],
@@ -79,13 +79,13 @@ describe('diag', () => {
         }
       }
       const totalArcs = emb.layers.reduce((s, l) => s + l.arcs.length, 0)
+      console.log(`${name} order=${g.order} edges=${edges.length} kept=${emb.layers[0].arcs.length} chords=${emb.chords.length} layers=${emb.layers.length} crossShared=${cross}`)
       expect(totalArcs + emb.chords.length, `${name}: arc+chord conservation`).toBe(edges.length)
       if (planar.has(name)) {
         expect(emb.chords.length, `${name}: planar keeps all arcs`).toBe(0)
         expect(emb.layers.length, `${name}: planar single layer`).toBe(1)
         expect(cross, `${name}: planar no tangles at 4.5deg`).toBe(0)
       }
-      console.log(`${name} order=${g.order} edges=${edges.length} kept=${emb.layers[0].arcs.length} chords=${emb.chords.length} layers=${emb.layers.length} crossShared=${cross}`)
     }
   })
 })

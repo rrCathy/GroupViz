@@ -10,7 +10,7 @@ import type { GroupElement, Generator, CayleyEdgeData } from '../../core/types'
 import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
 import { compute3DPositions } from '../../core/algebra/layout3D'
 import { embedSphereGraph, sphereRadiusFor } from '../../core/algebra/sphereGraph'
-import type { SphereEmbedding, SphereEdge, SphereStemData, Vec3 } from '../../core/algebra/sphereGraph'
+import type { SphereEmbedding, SphereEdge, Vec3 } from '../../core/algebra/sphereGraph'
 import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
 import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
@@ -214,39 +214,6 @@ const ChordEdge = memo(function ChordEdge({ from, to, color, isHighlighted }: {
         roughness={0.5}
       />
     </mesh>
-  )
-})
-
-/** 杆 + 小圆点：内层球面元素的径向连接（外层只显示圆点，最外层节点不画杆） */
-const StemRod = memo(function StemRod({ direction, outerRadius, innerRadius, color }: {
-  direction: THREE.Vector3
-  outerRadius: number
-  innerRadius: number
-  color: string
-}) {
-  const dirN = direction.clone().normalize()
-  const outer = dirN.clone().multiplyScalar(outerRadius)
-  const inner = dirN.clone().multiplyScalar(innerRadius)
-  const len = outerRadius - innerRadius
-  const mid = outer.clone().add(inner).multiplyScalar(0.5)
-  const meshRef = useRef<THREE.Mesh>(null)
-  useEffect(() => {
-    if (!meshRef.current) return
-    const quat = new THREE.Quaternion()
-    quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirN.clone())
-    meshRef.current.quaternion.copy(quat)
-  }, [dirN])
-  return (
-    <group>
-      <mesh ref={meshRef} position={mid}>
-        <cylinderGeometry args={[0.03, 0.03, len, 4, 1]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.3} roughness={0.4} />
-      </mesh>
-      <mesh position={inner}>
-        <sphereGeometry args={[0.16, 12, 12]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.45} roughness={0.3} />
-      </mesh>
-    </group>
   )
 })
 
@@ -684,14 +651,6 @@ function SceneContent() {
     return m
   }, [edgeDataMap, elementLookup, selectedElements])
 
-  const stemMap = useMemo(() => {
-    const m = new Map<number, SphereStemData>()
-    if (sphereEmbedding) {
-      for (const s of sphereEmbedding.stems) m.set(s.idx, s)
-    }
-    return m
-  }, [sphereEmbedding])
-
   if (!currentGroup) return null
 
   return (
@@ -793,11 +752,18 @@ function SceneContent() {
               const key = `${Math.min(arc.fromIdx, arc.toIdx)}|${Math.max(arc.fromIdx, arc.toIdx)}`
               const info = pairColorMap.get(key)
               const color = info?.color || '#ffffff'
+              const samples: Vec3[] = layer.radiusFactor >= 1
+                ? arc.samples
+                : arc.samples.map((s, si) => {
+                    const t = si / (arc.samples.length - 1)
+                    const env = layer.radiusFactor + (1 - layer.radiusFactor) * Math.min(1, 4 * Math.min(t, 1 - t))
+                    return [s[0] * env, s[1] * env, s[2] * env] as Vec3
+                  })
               return (
                 <SphereArcMesh
                   key={`arc-${li}-${ai}`}
-                  samples={arc.samples}
-                  radius={sphereRadius * layer.radiusFactor}
+                  samples={samples}
+                  radius={sphereRadius}
                   color={color}
                   isHighlighted={info?.isHighlighted || false}
                 />
@@ -815,22 +781,6 @@ function SceneContent() {
                 to={positions[chord.toIdx]}
                 color={color}
                 isHighlighted={info?.isHighlighted || false}
-              />
-            )
-          })}
-          {sphereEmbedding.stems.map(stem => {
-            const el = currentGroup.elements[stem.idx]
-            if (!el) return null
-            if (isLargeGroup && !visibleElementIds.has(el.id)) return null
-            const layer = sphereEmbedding.layers[stem.layer]
-            const color = getElementColor(stem.idx, currentGroup.order, currentGroup.isAbelian)
-            return (
-              <StemRod
-                key={`stem-${stem.idx}`}
-                direction={positions[stem.idx]}
-                outerRadius={sphereRadius}
-                innerRadius={sphereRadius * layer.radiusFactor}
-                color={color}
               />
             )
           })}
@@ -881,7 +831,6 @@ function SceneContent() {
       {positions.map((pos, i) => {
         const el = currentGroup.elements[i]
         if (isLargeGroup && !visibleElementIds.has(el.id)) return null
-        if (stemMap.has(i)) return null
         const isSelected = selectedElements.has(el.id)
         const parentSubset = subsetOf.get(el.id)
         return (

@@ -203,7 +203,7 @@ describe('getDefaultLayout3D', () => {
     expect(getDefaultLayout3D(mk({ symbol: 'Q_{8}' }))).toBe('cube')
     expect(getDefaultLayout3D(mk({ symbol: 'A_{4}' }))).toBe('truncatedTetrahedron')
     expect(getDefaultLayout3D(mk({ symbol: 'A_{5}' }))).toBe('truncatedIcosahedron')
-    expect(getDefaultLayout3D(mk({ symbol: 'S_{4}' }))).toBe('truncatedCube')
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{4}' }))).toBe('truncatedOctahedron2')
     expect(getDefaultLayout3D(mk({ symbol: 'S_{6}' }))).toBe('circular')
     expect(getDefaultLayout3D(mk({ symbol: 'Weird_{x}' }))).toBe('spherical')
   })

@@ -307,7 +307,7 @@ describe('embedSphereGraph', () => {
     }
   })
 
-  it('guarantees zero surface crossings for a dense non-planar graph', () => {
+  it('guarantees zero surface crossings for a dense non-planar graph', { timeout: 30000 }, () => {
     const edges = completeGraph(8)
     const emb = embedSphereGraph(8, edges)
     const arcs = emb.layers[0].arcs

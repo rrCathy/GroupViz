@@ -111,10 +111,13 @@ export function createSymmetricGroup(n: number): Group {
     generators.push(getGenerator('s23', '\\sigma_{23}', '#4ecdc4', swap23))
   }
   if (n === 4) {
-    // S4: a=(12) order 2, b=(234) order 3
-    const bPerm = Array.from({ length: n }, (_, j) => j + 1)
-    const tmp = bPerm[1]; bPerm[1] = bPerm[2]; bPerm[2] = bPerm[3]; bPerm[3] = tmp
-    generators.push(getGenerator('b', '(234)', '#4ecdc4', bPerm))
+    // S4: a=(12) order 2, b=(1234) order 4 —— Group Explorer 标准生成对，
+    // 凯莱图 = 截角八面体（24 顶点 36 棱，平面图，球面嵌入全弧无交叉）。
+    // 旧生成对 (12),(234) 的凯莱图含 8 个 ⟨(234)⟩ 三角形，非平面图，
+    // 无法全弧嵌入（曾致 S4 嵌入 28/36 + 2 弦 + 2 层被用户批评）。
+    const bPerm = Array.from({ length: n }, (_, j) => j + 2)
+    bPerm[n - 1] = 1
+    generators.push(getGenerator('c', '\\sigma_{1234}', '#4ecdc4', bPerm))
   }
   if (n >= 5) {
     // Sn with 2 generators: (12) and n-cycle (12...n)

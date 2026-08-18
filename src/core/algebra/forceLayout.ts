@@ -1296,7 +1296,7 @@ export function coilLayout(
 function projectionLayoutForGroup(group: Group): Layout3D {
   const sym = group.symbol
   if (sym === 'S_{3}' || sym === 'S3' || sym === 'S₃') return 'hexagon'
-  if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedCube'
+  if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedOctahedron2'
   if (sym === 'A_{4}' || sym === 'A4') return 'truncatedTetrahedron'
   if (sym === 'A_{5}' || sym === 'A5') return 'truncatedIcosahedron'
   if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'cube'

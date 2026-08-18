@@ -2,7 +2,7 @@ export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' 
 
 export type MultiplyType = 'right' | 'left'
 
-export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron' | 'hypercube'
+export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedIcosahedron' | 'truncatedDodecahedron' | 'hypercube'
 
 export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'ringGrid' | 'pythagoreanSquare'
 
@@ -435,7 +435,7 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
   if (sym === 'S_{3}' || sym === 'S3' || sym === 'S₃') {
     shapes.push('circular', 'hexagon')
   } else if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') {
-    shapes.push('circular', 'truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3')
+    shapes.push('circular', 'truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2')
   } else if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') {
     shapes.push('cube')
   } else if (sym === 'Q_{16}' || sym === 'Q16' || sym === 'Q₁₆') {
@@ -480,7 +480,7 @@ export function getDefaultLayout3D(group: Group): Layout3D {
   if (sym === 'Q_{16}' || sym === 'Q16' || sym === 'Q₁₆') return 'semidirectCylinder'
   if (sym === 'A_{4}' || sym === 'A4') return 'truncatedTetrahedron'
   if (sym === 'A_{5}' || sym === 'A5') return 'truncatedIcosahedron'
-  if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedCube'
+  if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedOctahedron2'
   if (sym.startsWith('S') || sym.startsWith('A')) return 'circular'
   return 'spherical'
 }

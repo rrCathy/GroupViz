@@ -7,8 +7,10 @@
  *  2. 内部弦（直径）—— 残留边转为穿过球内的弦（弦与表面弧数学上永不交叉）；
  *  3. 同心球面分层 —— 残留继续下沉到 0.8R / 0.64R 的内层球面，层间物理隔离。
  *
- * 所有随机过程（爬山、微扰）均使用种子 RNG（mulberry32），保证确定性。
+* 所有随机过程（爬山、微扰）均使用种子 RNG（mulberry32），保证确定性。
  */
+
+import { truncatedOctahedron, truncatedTetrahedron } from '../polyhedra'
 
 export type Vec3 = [number, number, number]
 
@@ -841,7 +843,7 @@ function refineDirections(dirs: Vec3[]): Vec3[] {
  * n≤12 时用平滑目标（近交叉罚分 + 硬交叉加权）——countCross 是离散的，
  * 从 1→0 无梯度可选，随机游走从 fibonacci 起点找不到 C6 六边形盆地；
  * 平滑罚分能引导下山。 */
-function climbDirections(dirs: Vec3[], edges: SphereEdge[], seed: number): Vec3[] {
+function climbDirections(dirs: Vec3[], edges: SphereEdge[], seed: number, nodeClearance?: number): Vec3[] {
   const n = dirs.length
   if (n <= 1) return dirs
   const rng = mulberry32(seed)
@@ -858,7 +860,7 @@ function climbDirections(dirs: Vec3[], edges: SphereEdge[], seed: number): Vec3[
       pairList.push({ ai: i, bi: j })
     }
   }
-  const objective = (cand: Vec3[]): number => {
+const objective = (cand: Vec3[]): number => {
     let c = 0
     let pen = 0
     for (const { ai, bi } of pairList) {
@@ -887,13 +889,31 @@ function climbDirections(dirs: Vec3[], edges: SphereEdge[], seed: number): Vec3[
         if (md < 1.6) pen += (1.6 - md) * (1.6 - md)
       }
     }
+    if (nodeClearance !== undefined) {
+      // 节点避让罚分：弧擦过外来节点（角距 < clearance = 节点+管半径）会致
+      // routeLayer 将该弧淘汰为弦/沉层——平面图必须同时满足交叉 0 与避让 0
+      for (const e of edges) {
+        const u1 = cand[e.fromIdx]
+        const u2 = cand[e.toIdx]
+        for (let k = 0; k <= 16; k += 4) {
+          const p = slerpUnit(u1, u2, k / 16)
+          let md = Infinity
+          for (let i = 0; i < n; i++) {
+            if (i === e.fromIdx || i === e.toIdx) continue
+            const dd = angularDist(p, cand[i])
+            if (dd < md) md = dd
+          }
+          if (md < nodeClearance) pen += (nodeClearance - md) * (nodeClearance - md)
+        }
+      }
+    }
     return c * 1000 + pen
   }
   let best = objective(d)
   if (best === 0) return d
   // 小 n（≤16）用激进参数：更大步长+更多轮次，能找到六边形这类协调排布
   // （±0.2 rad×96 步的随机游走永远到不了 C6 平面嵌入的优点区）
-  const aggressive = n <= 16
+const aggressive = n <= 30
   const moves = aggressive ? n * 40 : n * 12
   const restarts = aggressive ? 6 : n <= 40 ? 3 : 2
   for (let restart = 0; restart < restarts; restart++) {
@@ -929,6 +949,313 @@ function climbDirections(dirs: Vec3[], edges: SphereEdge[], seed: number): Vec3[
       best = curBest
       if (best === 0) break
     }
+  }
+  return d
+}
+
+/**
+ * 定向避让修复：对「弧擦过外来节点」（角距 < clearance，routeLayer 判据）
+ * 的违规对，把节点沿远离弧的方向旋转推开。保持交叉数不增。
+ * 每次处理最严重违规，重复多轮；比随机爬山高效（爬山局部极小难以
+ * 打破——对称布局如立方体，弧穿过对径节点需大幅协调移动）。
+ */
+function trySkeletonEmbed(edges: SphereEdge[], order: number): Vec3[] | null {
+  // 平面群凯莱图 ↔ Archimedean 多面体骨架精确同构匹配（当前为度 3 图族）：
+  // S₄ 凯莱图（对换 (12) + 4-轮换 (1234)）= 截角八面体（24 顶点 36 棱，
+  // 8 六边形 + 6 四边形面，平面）；A₄ = 截角四面体（12 顶点 18 棱）。
+  // BFS 指派图顶点 → 多面体顶点：多面体棱天然 0 交叉且互相避让（凸多面体骨架）。
+  let geoVerts: Vec3[] | null = null
+  let geoSk: [number, number][] | null = null
+  if (order === 24 && edges.length === 36) {
+    geoVerts = truncatedOctahedron(5)
+  } else if (order === 12 && edges.length === 18) {
+    geoVerts = truncatedTetrahedron(5)
+  }
+  if (geoVerts) {
+    // 骨架 = 距离 bin 中「出现次数 = 3n/2（3-正则棱数）」的最小距离 bin。
+    // 不能取绝对最短距离：截角立方体最短距离对（48 对）是斜向非棱对，
+    // 棱长 bin 恰出现 36 次（如 truncCube 5.858、truncOcta 3.536、truncTetra 4.714）。
+    const n = geoVerts.length
+    const bins = new Map<number, number>()
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = geoVerts[i][0] - geoVerts[j][0]
+        const dy = geoVerts[i][1] - geoVerts[j][1]
+        const dz = geoVerts[i][2] - geoVerts[j][2]
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz)
+        const key = Math.round(d * 1000)
+        bins.set(key, (bins.get(key) || 0) + 1)
+      }
+    }
+    const edgeCount = (3 * n) / 2
+    const keys = [...bins.keys()].sort((a, b) => a - b)
+    let edgeBin = 0
+    for (const k of keys) {
+      if (bins.get(k) === edgeCount) {
+        edgeBin = k
+        break
+      }
+    }
+    if (edgeBin === 0) {
+      console.log('SKEL-geo', order, edges.length, geoVerts ? geoVerts.length : 0, 0)
+      return null
+    }
+    const tol = 0.001
+    geoSk = []
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = geoVerts[i][0] - geoVerts[j][0]
+        const dy = geoVerts[i][1] - geoVerts[j][1]
+        const dz = geoVerts[i][2] - geoVerts[j][2]
+        if (Math.abs(Math.sqrt(dx * dx + dy * dy + dz * dz) - edgeBin / 1000) < tol) {
+          geoSk.push([i, j])
+        }
+      }
+    }
+    console.log('SKEL-sk', order, geoSk.length)
+  }
+  if (!geoVerts || !geoSk) { console.log('SKEL-geo', order, edges.length, geoVerts ? geoVerts.length : 0, geoSk ? geoSk.length : 0); return null }
+  const n = order
+  const gAdj: number[][] = Array.from({ length: n }, () => [])
+  for (const e of edges) {
+    if (!gAdj[e.fromIdx].includes(e.toIdx)) gAdj[e.fromIdx].push(e.toIdx)
+    if (!gAdj[e.toIdx].includes(e.fromIdx)) gAdj[e.toIdx].push(e.fromIdx)
+  }
+  const pAdj: number[][] = Array.from({ length: n }, () => [])
+  for (const [a, b] of geoSk) {
+    pAdj[a].push(b)
+    pAdj[b].push(a)
+  }
+  for (let i = 0; i < n; i++) {
+    if (gAdj[i].length !== pAdj[i].length) {
+      console.log('SKEL-deg', order, 'i', i, 'g', gAdj[i].length, 'p', pAdj[i].length, 'gdeg0', gAdj[0].length, 'pdeg0', pAdj[0].length, 'gSk', geoSk.length, 'uniq', edges.length)
+      return null
+    }
+  }
+  console.log('SKEL-deg', order, gAdj[0] === undefined ? -1 : gAdj[0].length, pAdj[0] === undefined ? -1 : pAdj[0].length)
+  // BFS 顺序：每个新顶点至少有一个已指派邻居 → 交集剪枝极强
+  const orderList: number[] = [0]
+  const marked = new Uint8Array(n)
+  marked[0] = 1
+  for (let qi = 0; qi < orderList.length; qi++) {
+    const u = orderList[qi]
+    for (const w of gAdj[u]) {
+      if (!marked[w]) {
+        marked[w] = 1
+        orderList.push(w)
+      }
+    }
+  }
+  const phi = new Int32Array(n).fill(-1)
+  const used = new Uint8Array(n)
+  const candsFor = (v: number): number[] => {
+    if (phi[v] !== -1) return []
+    const neighbors = gAdj[v].filter(w => phi[w] !== -1)
+    if (neighbors.length === 0) {
+      const cs: number[] = []
+      for (let p = 0; p < n; p++) if (!used[p]) cs.push(p)
+      return cs
+    }
+    let cs: number[] | null = null
+    for (const w of neighbors) {
+      const ps = pAdj[phi[w]].filter(p => !used[p])
+      cs = cs === null ? ps : cs.filter(p => ps.includes(p))
+    }
+    return cs ?? []
+  }
+  const dfs = (idx: number): boolean => {
+    if (idx >= n) return true
+    const v = orderList[idx]
+    const cs = candsFor(v)
+    const need = gAdj[v].filter(w => phi[w] === -1).length
+    for (const p of cs) {
+      const avail = pAdj[p].filter(q => !used[q]).length
+      if (avail < need) continue
+      phi[v] = p
+      used[p] = 1
+      if (dfs(idx + 1)) return true
+      used[p] = 0
+      phi[v] = -1
+    }
+    return false
+  }
+  if (!dfs(0)) return null
+  const dirs: Vec3[] = []
+  for (let i = 0; i < n; i++) dirs.push(normalize3(geoVerts[phi[i]]))
+  return dirs
+}
+
+function repairClearance(dirs: Vec3[], edges: SphereEdge[], clearance: number): Vec3[] {
+  let d = dirs.slice()
+  const n = d.length
+  let curCross = crossingCount(d, edges)
+  for (let round = 0; round < 80; round++) {
+    let worst = 0
+    let worstEdge = -1
+    let worstNode = -1
+    for (let ei = 0; ei < edges.length; ei++) {
+      const e = edges[ei]
+      const u = d[e.fromIdx]
+      const v = d[e.toIdx]
+      for (let k = 0; k <= 8; k++) {
+        const p = slerpUnit(u, v, k / 8)
+        for (let w = 0; w < n; w++) {
+          if (w === e.fromIdx || w === e.toIdx) continue
+          const ang = angularDist(p, d[w])
+          if (ang < clearance && ang > worst) {
+            worst = ang
+            worstEdge = ei
+            worstNode = w
+          }
+        }
+      }
+    }
+    if (worstEdge < 0) return d
+    // 把节点推开：绕轴 = 弧平面法线 nA（沿切向把节点转离弧面最近点）
+    const e = edges[worstEdge]
+    const u = d[e.fromIdx]
+    const v = d[e.toIdx]
+    const nA = normalize3(cross3(u, v))
+    const wNode = d[worstNode]
+    const mNode = slerpUnit(u, v, 0.5)
+    // 逃逸方向：节点反弧中点方向（在弧面法线 + 远离方向合成）
+    const away = normalize3(add3(scale3(mNode, -dot3(mNode, wNode)), scale3(nA, -dot3(nA, wNode) * 0.6)))
+    const axis = normalize3(cross3(wNode, away))
+    if (!(axis[0] || axis[1] || axis[2])) break
+    let improved = false
+    for (const delta of [0.14, 0.22, 0.32, 0.5, 0.75, -0.14, -0.22, -0.32]) {
+      const trial = d.slice()
+      trial[worstNode] = rotateVec(wNode, axis, delta)
+      const c2 = crossingCount(trial, edges)
+      if (c2 > curCross) continue
+      let ok = true
+      for (let ei = 0; ei < edges.length; ei++) {
+        const ee = edges[ei]
+        for (let k = 0; k <= 8; k++) {
+          const p = slerpUnit(trial[ee.fromIdx], trial[ee.toIdx], k / 8)
+          for (let w = 0; w < n; w++) {
+            if (w === ee.fromIdx || w === ee.toIdx) continue
+            if (angularDist(p, trial[w]) < clearance) {
+              ok = false
+              break
+            }
+          }
+          if (!ok) break
+        }
+        if (!ok) break
+      }
+      if (ok) {
+        d = trial
+        curCross = c2
+        improved = true
+        break
+      }
+    }
+    if (!improved) {
+      // 无安全旋转：放弃该对，防死循环
+      d[worstNode] = rotateVec(d[worstNode], nA, 0.18)
+      curCross = crossingCount(d, edges)
+    }
+  }
+  return d
+}
+
+/**
+ * 交叉计数：全对（非共享端点）大圆交叉。用于候选布局择优。
+ */
+function crossingCount(dirs: Vec3[], edges: SphereEdge[]): number {
+  let c = 0
+  for (let i = 0; i < edges.length; i++) {
+    const ei = edges[i]
+    for (let j = i + 1; j < edges.length; j++) {
+      const ej = edges[j]
+      if (ei.fromIdx === ej.fromIdx || ei.fromIdx === ej.toIdx || ei.toIdx === ej.fromIdx || ei.toIdx === ej.toIdx) {
+        continue
+      }
+      if (greatArcsCross(dirs[ei.fromIdx], dirs[ei.toIdx], dirs[ej.fromIdx], dirs[ej.toIdx])) c++
+    }
+  }
+  return c
+}
+
+/**
+ * 球面力导向布局：全对斥力（kRep/d²）+ 边引力（kAtt·d），合力投影到
+ * 切平面后沿球面移动节点。平面图（如 S₄ 凯莱图 = 截角八面体骨架）
+ * 从随机起点收敛到 0 交叉对称排布的盆地；确定性 RNG。
+ */
+function forceDirectedLayout(dirs: Vec3[], edges: SphereEdge[], iterations: number, _seed: number): Vec3[] {
+  const n = dirs.length
+  if (n <= 1) return dirs
+  const adj: number[][] = Array.from({ length: n }, () => [])
+  for (const e of edges) {
+    if (e.fromIdx === e.toIdx) continue
+    adj[e.fromIdx].push(e.toIdx)
+    adj[e.toIdx].push(e.fromIdx)
+  }
+  const kRep = 0.16
+  const kAtt = 0.1
+  const d = dirs.slice()
+  let step = 0.55
+  for (let it = 0; it < iterations; it++) {
+    const fx = new Float64Array(n)
+    const fy = new Float64Array(n)
+    const fz = new Float64Array(n)
+    for (let i = 0; i < n; i++) {
+      const pi = d[i]
+      for (let j = i + 1; j < n; j++) {
+        const dx = d[j][0] - pi[0]
+        const dy = d[j][1] - pi[1]
+        const dz = d[j][2] - pi[2]
+        const d2 = dx * dx + dy * dy + dz * dz
+        const dd = Math.sqrt(d2) + 1e-6
+        const f = kRep / (d2 + 0.02)
+        const ux = dx / dd
+        const uy = dy / dd
+        const uz = dz / dd
+        fx[i] += ux * f
+        fy[i] += uy * f
+        fz[i] += uz * f
+        fx[j] -= ux * f
+        fy[j] -= uy * f
+        fz[j] -= uz * f
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      const pi = d[i]
+      for (const j of adj[i]) {
+        if (j <= i) continue
+        const dx = d[j][0] - pi[0]
+        const dy = d[j][1] - pi[1]
+        const dz = d[j][2] - pi[2]
+        const dd = Math.sqrt(dx * dx + dy * dy + dz * dz) + 1e-6
+        const ux = dx / dd
+        const uy = dy / dd
+        const uz = dz / dd
+        const f = kAtt * dd
+        fx[i] += ux * f
+        fy[i] += uy * f
+        fz[i] += uz * f
+        fx[j] -= ux * f
+        fy[j] -= uy * f
+        fz[j] -= uz * f
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      const p = d[i]
+      const dot = fx[i] * p[0] + fy[i] * p[1] + fz[i] * p[2]
+      const tx = fx[i] - dot * p[0]
+      const ty = fy[i] - dot * p[1]
+      const tz = fz[i] - dot * p[2]
+      const len = Math.sqrt(tx * tx + ty * ty + tz * tz)
+      if (len < 1e-9) continue
+      const mv = Math.min(len, step)
+      const nx = p[0] + (tx * mv) / len
+      const ny = p[1] + (ty * mv) / len
+      const nz = p[2] + (tz * mv) / len
+      const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1
+      d[i] = [nx / nl, ny / nl, nz / nl]
+    }
+    step *= 0.965
   }
   return d
 }
@@ -1067,7 +1394,7 @@ function cycleComponentsSeeding(order: number, edges: SphereEdge[]): Vec3[] | nu
 }
 
 export function embedSphereGraph(order: number, edges: SphereEdge[], opts?: EmbedOptions): SphereEmbedding {
-  const seed = opts?.seed ?? 12345
+const seed = opts?.seed ?? 12345
   const maxLayers = opts?.maxLayers ?? DEFAULT_MAX_LAYERS
   const chordCap = opts?.chordCap ?? Math.max(6, Math.floor(order / 12))
   const climb = opts?.climb !== false
@@ -1103,12 +1430,59 @@ export function embedSphereGraph(order: number, edges: SphereEdge[], opts?: Embe
       perm[cycleOrder[k]] = k
     }
     dirs = perm.map(p => dirs[p])
-  } else {
+} else {
     const cycDirs = cycleComponentsSeeding(order, uniq)
     if (cycDirs) {
       dirs = cycDirs
     } else if (order <= 60 && uniq.length <= 400 && climb) {
-      dirs = climbDirections(dirs, uniq, seed + 1)
+      // 多候选择优：现有点集（fibonacci+精修）为候选 0；候选 1-N 为随机起点
+      // 的球面力导向（多 seed，探不同盆地）。全部按大圆交叉数计分，选最优。
+      // climb 两阶段：先无节点罚分快速求 0 交叉排布（平面图全弧嵌入）；
+      // 达成后再带节点避让罚分打磨（routeLayer 的 clearance 判据），
+      // 否则弧擦过节点仍会被 routeLayer 淘汰。
+      let bestCand = dirs
+      let bestCross = crossingCount(dirs, uniq)
+      // 多面体骨架精确嵌入：平面群凯莱图与 Archimedean 多面体骨架同构
+      // （S₄ 对换凯莱图 = 截角八面体 24 顶点 36 棱）。BFS 图同构匹配
+      // 指派图顶点 → 多面体顶点，多面体棱天然 0 交叉且互相避让。
+      const skel = trySkeletonEmbed(uniq, order)
+      console.log('SKEL', order, uniq.length, skel ? 'hit' : 'miss', skel ? crossingCount(skel, uniq) : -1)
+      if (skel) {
+        bestCand = skel
+        bestCross = 0
+      }
+      for (let k = 0; k < 14; k++) {
+        const rng = mulberry32(seed + 91 + k * 17)
+        const start: Vec3[] = []
+        for (let i = 0; i < order; i++) {
+          const z = rng() * 2 - 1
+          const t = rng() * 2 * Math.PI
+          const r = Math.sqrt(1 - z * z)
+          start.push([r * Math.cos(t), r * Math.sin(t), z])
+        }
+        const cand = forceDirectedLayout(start, uniq, 250 + order * 8, seed + 101 + k)
+        const c = crossingCount(cand, uniq)
+        if (c < bestCross) {
+          bestCand = cand
+          bestCross = c
+        }
+      }
+      const R0 = sphereRadiusFor(order)
+      dirs = climbDirections(bestCand, uniq, seed + 1)
+      if (crossingCount(dirs, uniq) === 0) {
+        dirs = climbDirections(dirs, uniq, seed + 500, (0.42 + 0.05) / R0)
+        dirs = repairClearance(dirs, uniq, (0.42 + 0.05) / R0)
+        let minAng = Infinity
+        for (const e of uniq) {
+          const s = greatArcSamples(dirs[e.fromIdx], dirs[e.toIdx], SEGMENTS)
+          if (!s) continue
+          const m = minAngularToNodes(s, dirs, e.fromIdx, e.toIdx)
+          if (m < minAng) minAng = m
+        }
+        console.log('FD-pass2', order, 'cross', crossingCount(dirs, uniq), 'minAng', minAng.toFixed(4), 'clr', ((0.42 + 0.05) / R0).toFixed(4))
+      } else {
+        console.log('FD-nonzero', order, uniq.length, 'bestCand', bestCross, 'afterClimb', crossingCount(dirs, uniq))
+      }
     }
   }
 
@@ -1128,8 +1502,10 @@ export function embedSphereGraph(order: number, edges: SphereEdge[], opts?: Embe
     for (const a of arcs) {
       layers[layerIdx].arcs.push({ fromIdx: a.fromIdx, toIdx: a.toIdx, samples: a.samples })
     }
-    residual = rest
+residual = rest
     if (residual.length === 0) break
+    // 残边 ≤ chordCap 时直接转内部弦（弦与表面弧数学上永不交叉）；
+    // 否则继续下沉分层，层用尽才强制弦（避免「分层+弦并存」的视觉矛盾）。
     if (residual.length <= chordCap || layers.length >= maxLayers) {
       chords.push(...buildChords(residual, dirs, (0.42 + 0.05) / R, seed + 31))
       break

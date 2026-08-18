@@ -83,9 +83,9 @@ interface CayleyEdgeData {
 | `lattice` | 全循环因子直积群（兜底） | 晶格布局，因子贪心分配 XYZ 轴组 |
 | `cylinder` | 2因子直积，恰好一个循环因子 | 循环因子沿Y轴分层 |
 | `torus` | 2因子直积，无循环因子 | 环面主/次方向 |
-| `truncatedTetrahedron` | A₄（阶12） | 截角四面体顶点分布 |
-| `truncatedCube` | S₄（阶24，默认） | 截角立方体顶点分布 |
-| `truncatedOctahedron2/3` | S₄（备选） | 截角八面体变体 |
+| `truncatedTetrahedron` | A₄（阶12，默认） | 截角四面体顶点分布 |
+| `truncatedCube` | S₄（备选） | 截角立方体顶点分布（与 S₄ 新凯莱图非同构，仅作占位） |
+| `truncatedOctahedron2` | S₄（阶24，默认） | 截角八面体顶点分布——S₄ 标准生成元 (12),(1234) 凯莱图骨架 |
 | `rhombicuboctahedron` | S₄（备选） | 菱形截角立方八面体 |
 | `truncatedIcosahedron` | A₅（阶60，默认） | 截角二十面体顶点分布 |
 | `truncatedDodecahedron` | A₅（备选） | 截角十二面体顶点分布 |

@@ -12,7 +12,7 @@ const zh: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': '群论可视化平台',
-  'welcome.version': 'v1.13.0',
+  'welcome.version': 'v1.13.1',
   'welcome.tagline': '探索抽象代数的对称之美 — 交互式群论可视化与学习工具',
   'welcome.enter': '进入应用',
   'welcome.section.done': '已实现',
@@ -230,6 +230,8 @@ const zh: TranslationMap = {
   'cayley3d.multiplyLeft': '左乘',
   'cayley3d.autoRotate': '自动旋转',
   'cayley3d.resetView': '复位视图',
+  'cayley3d.embedChordMode': '非平面：内部弦边 ×{n}',
+  'cayley3d.embedLayerMode': '非平面：{n} 层同心球面',
 
   /* Symmetry View */
   'symmetry.reset': '复位中...',
@@ -673,7 +675,7 @@ const en: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': 'Group Theory Visualization Platform',
-  'welcome.version': 'v1.13.0',
+  'welcome.version': 'v1.13.1',
   'welcome.tagline': 'Explore the beauty of symmetry in abstract algebra — Interactive group theory visualization & learning tool',
   'welcome.enter': 'Enter',
   'welcome.section.done': 'Implemented',
@@ -891,6 +893,8 @@ const en: TranslationMap = {
   'cayley3d.multiplyLeft': 'Left Multiply',
   'cayley3d.autoRotate': 'Auto Rotate',
   'cayley3d.resetView': 'Reset View',
+  'cayley3d.embedChordMode': 'Non-planar: {n} interior chord edge(s)',
+  'cayley3d.embedLayerMode': 'Non-planar: {n} concentric sphere layer(s)',
   'cayley.action.enabled': 'Enabled',
   'cayley.action.disabled': 'Disabled',
   'cayley.action.byElement': 'by element',

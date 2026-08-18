@@ -8,6 +8,7 @@ import {
 } from './ringOrder'
 import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
 import { truncatedTetrahedron } from '../polyhedra'
+import { sphericalNodeDirections } from './sphereGraph'
 
 type Vec3 = [number, number, number]
 
@@ -1151,8 +1152,9 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
     case 'spherical':
     default: {
       const sphereRadius = Math.max(5, Math.pow(n, 1 / 3) * 2.2)
+      const dirs = sphericalNodeDirections(n)
       for (let i = 0; i < n; i++) {
-        positions[i] = fibonacciSphere(n, sphereRadius)[i]
+        positions[i] = [dirs[i][0] * sphereRadius, dirs[i][1] * sphereRadius, dirs[i][2] * sphereRadius]
       }
       break
     }

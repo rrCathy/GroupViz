@@ -104,7 +104,7 @@ The view panel offers 9 cards; the homomorphism and orbit views open from their 
 - **Small group registry** — all 93 groups of order 1–31 (GAP SmallGroups import) with precomputed subgroup/conjugacy class/center data
 - **Import by notation** — type a group symbol (S₅ / PSL(2,7) / C₃×D₄ / SmallGroup(16,13) / Aut(S₄) …) for live TeX preview; built locally when possible, otherwise imported through the backend GAP engine (full structure pipeline afterwards)
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 41 test files, 1239 tests (Vitest)
+- **Test suite** — 43 test files, 1263 tests (Vitest)
 
 ---
 
@@ -183,7 +183,7 @@ CI (`.github/workflows/ci.yml`) runs lint, tests, coverage thresholds, productio
 .github/                # CI workflows (ci / pages / release) + issue & PR templates
 CONTRIBUTING.md         # Contribution guide (includes newcomer onboarding)
 src/
-├── __tests__/            # 41 test files (1239 tests)
+├── __tests__/            # 43 test files (1263 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -273,7 +273,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (41 files, 1239 tests)
+- [x] Test suite (43 files, 1263 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

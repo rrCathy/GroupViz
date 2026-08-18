@@ -9,6 +9,8 @@ import { useTheme } from '../../theme/useTheme'
 import type { GroupElement, Generator, CayleyEdgeData } from '../../core/types'
 import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
 import { compute3DPositions } from '../../core/algebra/layout3D'
+import { embedSphereGraph, sphereRadiusFor } from '../../core/algebra/sphereGraph'
+import type { SphereEmbedding, SphereEdge, SphereStemData, Vec3 } from '../../core/algebra/sphereGraph'
 import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
 import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
@@ -162,6 +164,117 @@ const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSe
 
 // ArrowCone removed for performance on large graphs
 
+/** 球面弧：沿采样点走 CatmullRom 管（spherical 嵌入专用） */
+const SphereArcMesh = memo(function SphereArcMesh({ samples, radius, color, isHighlighted }: {
+  samples: Vec3[]
+  radius: number
+  color: string
+  isHighlighted: boolean
+}) {
+  const geometry = useMemo(() => {
+    const pts = samples.map(s => new THREE.Vector3(s[0] * radius, s[1] * radius, s[2] * radius))
+    const curve = new THREE.CatmullRomCurve3(pts)
+    return new THREE.TubeGeometry(curve, Math.max(16, pts.length * 2), isHighlighted ? 0.08 : 0.05, isHighlighted ? 8 : 6, false)
+  }, [samples, radius, isHighlighted])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isHighlighted ? 0.7 : 0.25} roughness={0.4} />
+    </mesh>
+  )
+})
+
+/** 内部弦：穿过球内的细半透明直管 */
+const ChordEdge = memo(function ChordEdge({ from, to, color, isHighlighted }: {
+  from: THREE.Vector3
+  to: THREE.Vector3
+  color: string
+  isHighlighted: boolean
+}) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  const dir = new THREE.Vector3().subVectors(to, from)
+  const len = dir.length()
+  dir.normalize()
+  const mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5)
+  useEffect(() => {
+    if (!meshRef.current) return
+    const quat = new THREE.Quaternion()
+    quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone())
+    meshRef.current.quaternion.copy(quat)
+  }, [dir])
+  return (
+    <mesh ref={meshRef} position={mid}>
+      <cylinderGeometry args={[0.035, 0.035, len, 4, 1]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={color}
+        emissiveIntensity={isHighlighted ? 0.7 : 0.15}
+        transparent
+        opacity={0.55}
+        roughness={0.5}
+      />
+    </mesh>
+  )
+})
+
+/** 杆 + 小圆点：内层球面元素的径向连接（外层只显示圆点，最外层节点不画杆） */
+const StemRod = memo(function StemRod({ direction, outerRadius, innerRadius, color }: {
+  direction: THREE.Vector3
+  outerRadius: number
+  innerRadius: number
+  color: string
+}) {
+  const dirN = direction.clone().normalize()
+  const outer = dirN.clone().multiplyScalar(outerRadius)
+  const inner = dirN.clone().multiplyScalar(innerRadius)
+  const len = outerRadius - innerRadius
+  const mid = outer.clone().add(inner).multiplyScalar(0.5)
+  const meshRef = useRef<THREE.Mesh>(null)
+  useEffect(() => {
+    if (!meshRef.current) return
+    const quat = new THREE.Quaternion()
+    quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirN.clone())
+    meshRef.current.quaternion.copy(quat)
+  }, [dirN])
+  return (
+    <group>
+      <mesh ref={meshRef} position={mid}>
+        <cylinderGeometry args={[0.03, 0.03, len, 4, 1]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.3} roughness={0.4} />
+      </mesh>
+      <mesh position={inner}>
+        <sphereGeometry args={[0.16, 12, 12]} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.45} roughness={0.3} />
+      </mesh>
+    </group>
+  )
+})
+
+/** 同心球壳：半透明壳 + 极淡线框，标示每层球面 */
+const LayerShells = memo(function LayerShells({ layers, radius, isDark }: {
+  layers: SphereEmbedding['layers']
+  radius: number
+  isDark: boolean
+}) {
+  const shellColor = isDark ? '#5566aa' : '#8899bb'
+  return (
+    <>
+      {layers.map((layer, i) => (
+        <group key={i}>
+          <mesh>
+            <sphereGeometry args={[radius * layer.radiusFactor, 32, 32]} />
+            <meshBasicMaterial color={shellColor} transparent opacity={0.04} side={THREE.DoubleSide} depthWrite={false} />
+          </mesh>
+          <mesh>
+            <sphereGeometry args={[radius * layer.radiusFactor * 1.002, 20, 20]} />
+            <meshBasicMaterial color={shellColor} wireframe transparent opacity={0.05} depthWrite={false} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  )
+})
+
 function SceneContent() {
   const {
     currentGroup, selectedElements, selectElement,
@@ -169,6 +282,8 @@ function SceneContent() {
   } = useGroup()
   const { hoverElement, setHoverElement } = useHover()
   const { t } = useTranslation()
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const { gl, camera, scene } = useThree()
   const [autoRotate, setAutoRotate] = useState(false)
   // 自定义轨道状态（替代 drei OrbitControls）：theta/phi 球坐标，phi 无界（可无限翻越上下极点，无 makeSafe 钳制）
@@ -207,12 +322,57 @@ function SceneContent() {
     return (len >= 8 ? 0.35 + Math.min(0.65, len / 360) : 1) * 2 * Math.PI
   }, [])
 
+  const sphericalThreshold = 400
+  const isLargeGroup = currentGroup ? (
+    cayleyShape3D === 'spherical' ? currentGroup.order > sphericalThreshold : currentGroup.order > 100
+  ) : false
+  const visibleElementIds = useMemo(() => {
+    if (!currentGroup) return new Set<string>()
+    if (!isLargeGroup) return new Set(currentGroup.elements.map(e => e.id))
+    const ids = new Set<string>([currentGroup.identity.id])
+    for (const a of cayleyActions.filter(x => x.enabled).slice(0, 4)) ids.add(a.elementId)
+    for (const id of selectedElements) ids.add(id)
+    for (let i = 0; i < currentGroup.elements.length; i += Math.max(1, Math.ceil(currentGroup.order / 24))) {
+      ids.add(currentGroup.elements[i].id)
+    }
+    return ids
+  }, [currentGroup, cayleyActions, selectedElements, isLargeGroup])
+
+  const cayleyEdges = useMemo(() => {
+    if (!currentGroup) return [] as CayleyEdgeData[]
+    return computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType)
+  }, [currentGroup, cayleyActions, cayleyMultiplyType])
+
+  // spherical 嵌入：把可见边嵌入球面（路由 → 弦 → 分层三级降级），方向同时驱动节点位置
+  const sphereEmbedding = useMemo<SphereEmbedding | null>(() => {
+    if (!currentGroup || cayleyShape3D !== 'spherical') return null
+    const edges: SphereEdge[] = []
+    const seen = new Set<string>()
+    for (const edge of cayleyEdges) {
+      if (edge.isSelfLoop) continue
+      if (isLargeGroup && !visibleElementIds.has(edge.fromId) && !visibleElementIds.has(edge.toId)) continue
+      const key = `${Math.min(edge.fromIdx, edge.toIdx)}|${Math.max(edge.fromIdx, edge.toIdx)}|${edge.actionElementId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      edges.push({ fromIdx: edge.fromIdx, toIdx: edge.toIdx })
+    }
+    return embedSphereGraph(currentGroup.order, edges)
+  }, [currentGroup, cayleyShape3D, cayleyEdges, isLargeGroup, visibleElementIds])
+
+  const sphereRadius = currentGroup && cayleyShape3D === 'spherical' ? sphereRadiusFor(currentGroup.order) : 5
+
   const positions = useMemo(() => {
     if (!currentGroup) return [] as THREE.Vector3[]
+    if (cayleyShape3D === 'spherical') {
+      const emb = sphereEmbedding
+      if (!emb) return [] as THREE.Vector3[]
+      const R = sphereRadiusFor(currentGroup.order)
+      return emb.directions.map(d => new THREE.Vector3(d[0] * R, d[1] * R, d[2] * R))
+    }
     return compute3DPositions(currentGroup, cayleyShape3D).map(
       p => new THREE.Vector3(p[0], p[1], p[2])
     )
-  }, [currentGroup, cayleyShape3D])
+  }, [currentGroup, cayleyShape3D, sphereEmbedding])
 
   // 外接球：节点云质心为球心，最大距离为半径（含节点球/自环余量），复位与初始视角均基于它
   const bounds = useMemo(() => {
@@ -450,27 +610,6 @@ function SceneContent() {
     return () => unregisterCayley3DControls(api)
   }, [currentGroup, gl, scene, camera, displayAngVel])
 
-  const cayleyEdges = useMemo(() => {
-    if (!currentGroup) return [] as CayleyEdgeData[]
-    return computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType)
-  }, [currentGroup, cayleyActions, cayleyMultiplyType])
-
-  const sphericalThreshold = 400
-  const isLargeGroup = currentGroup ? (
-    cayleyShape3D === 'spherical' ? currentGroup.order > sphericalThreshold : currentGroup.order > 100
-  ) : false
-  const visibleElementIds = useMemo(() => {
-    if (!currentGroup) return new Set<string>()
-    if (!isLargeGroup) return new Set(currentGroup.elements.map(e => e.id))
-    const ids = new Set<string>([currentGroup.identity.id])
-    for (const a of cayleyActions.filter(x => x.enabled).slice(0, 4)) ids.add(a.elementId)
-    for (const id of selectedElements) ids.add(id)
-    for (let i = 0; i < currentGroup.elements.length; i += Math.max(1, Math.ceil(currentGroup.order / 24))) {
-      ids.add(currentGroup.elements[i].id)
-    }
-    return ids
-  }, [currentGroup, cayleyActions, selectedElements, isLargeGroup])
-
   const elementLookup = useMemo(() => {
     const m = new Map<string, GroupElement>()
     if (!currentGroup) return m
@@ -529,6 +668,29 @@ function SceneContent() {
     }
     return m
   }, [cayleyEdges, positions, currentGroup, isLargeGroup, visibleElementIds, elementLookup])
+
+  // spherical 嵌入渲染辅助：按「端点对 min|max」取首胜颜色/高亮（弧/弦共用）
+  const pairColorMap = useMemo(() => {
+    const m = new Map<string, { color: string; isHighlighted: boolean }>()
+    for (const edge of edgeDataMap.values()) {
+      if (edge.isSelfLoop) continue
+      const key = `${Math.min(edge.fromIdx, edge.toIdx)}|${Math.max(edge.fromIdx, edge.toIdx)}`
+      if (m.has(key)) continue
+      const fromEl = elementLookup.get(edge.fromId)
+      const toEl = elementLookup.get(edge.toId)
+      const isHighlighted = !!((fromEl && selectedElements.has(fromEl.id)) || (toEl && selectedElements.has(toEl.id)))
+      m.set(key, { color: edge.gen.color, isHighlighted })
+    }
+    return m
+  }, [edgeDataMap, elementLookup, selectedElements])
+
+  const stemMap = useMemo(() => {
+    const m = new Map<number, SphereStemData>()
+    if (sphereEmbedding) {
+      for (const s of sphereEmbedding.stems) m.set(s.idx, s)
+    }
+    return m
+  }, [sphereEmbedding])
 
   if (!currentGroup) return null
 
@@ -607,7 +769,94 @@ function SceneContent() {
         </Html>
       )}
 
-      {Array.from(edgeDataMap.values()).map((edge) => {
+      {sphereEmbedding && sphereEmbedding.mode !== 'planar' && (
+        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
+          <div style={{
+            position: 'absolute', top: 54, left: '50%', transform: 'translateX(-50%)',
+            background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
+            padding: '6px 14px', borderRadius: 999, fontSize: 13,
+            fontFamily: 'monospace', pointerEvents: 'none',
+            border: '1px solid var(--border-primary)'
+          }}>
+            {sphereEmbedding.mode === 'chord'
+              ? t('cayley3d.embedChordMode', { n: sphereEmbedding.chords.length })
+              : t('cayley3d.embedLayerMode', { n: sphereEmbedding.layers.length })}
+          </div>
+        </Html>
+      )}
+
+      {sphereEmbedding ? (
+        <>
+          <LayerShells layers={sphereEmbedding.layers} radius={sphereRadius} isDark={isDark} />
+          {sphereEmbedding.layers.map((layer, li) =>
+            layer.arcs.map((arc, ai) => {
+              const key = `${Math.min(arc.fromIdx, arc.toIdx)}|${Math.max(arc.fromIdx, arc.toIdx)}`
+              const info = pairColorMap.get(key)
+              const color = info?.color || '#ffffff'
+              return (
+                <SphereArcMesh
+                  key={`arc-${li}-${ai}`}
+                  samples={arc.samples}
+                  radius={sphereRadius * layer.radiusFactor}
+                  color={color}
+                  isHighlighted={info?.isHighlighted || false}
+                />
+              )
+            })
+          )}
+          {sphereEmbedding.chords.map((chord, ci) => {
+            const key = `${Math.min(chord.fromIdx, chord.toIdx)}|${Math.max(chord.fromIdx, chord.toIdx)}`
+            const info = pairColorMap.get(key)
+            const color = info?.color || '#ffffff'
+            return (
+              <ChordEdge
+                key={`chord-${ci}`}
+                from={positions[chord.fromIdx]}
+                to={positions[chord.toIdx]}
+                color={color}
+                isHighlighted={info?.isHighlighted || false}
+              />
+            )
+          })}
+          {sphereEmbedding.stems.map(stem => {
+            const el = currentGroup.elements[stem.idx]
+            if (!el) return null
+            if (isLargeGroup && !visibleElementIds.has(el.id)) return null
+            const layer = sphereEmbedding.layers[stem.layer]
+            const color = getElementColor(stem.idx, currentGroup.order, currentGroup.isAbelian)
+            return (
+              <StemRod
+                key={`stem-${stem.idx}`}
+                direction={positions[stem.idx]}
+                outerRadius={sphereRadius}
+                innerRadius={sphereRadius * layer.radiusFactor}
+                color={color}
+              />
+            )
+          })}
+          {Array.from(edgeDataMap.values()).filter(e => e.isSelfLoop).map(edge => {
+            const fromEl = elementLookup.get(edge.fromId)
+            const toEl = elementLookup.get(edge.toId)
+            if (!fromEl || !toEl) return null
+            const isHighlighted = (
+              selectedElements.has(fromEl.id) ||
+              selectedElements.has(toEl.id)
+            )
+            return (
+              <EdgeLine
+                key={`loop-${edge.fromIdx}`}
+                start={edge.fromPos}
+                end={edge.toPos}
+                color={edge.gen.color}
+                isHighlighted={isHighlighted}
+                isSelfLoop={edge.isSelfLoop}
+                isBidirectional={edge.isBidirectional}
+              />
+            )
+          })}
+        </>
+      ) : (
+      Array.from(edgeDataMap.values()).map((edge) => {
         const fromEl = elementLookup.get(edge.fromId)
         const toEl = elementLookup.get(edge.toId)
         if (!fromEl || !toEl) return null
@@ -626,11 +875,13 @@ function SceneContent() {
             isBidirectional={edge.isBidirectional}
           />
         )
-      })}
+      })
+      )}
 
       {positions.map((pos, i) => {
         const el = currentGroup.elements[i]
         if (isLargeGroup && !visibleElementIds.has(el.id)) return null
+        if (stemMap.has(i)) return null
         const isSelected = selectedElements.has(el.id)
         const parentSubset = subsetOf.get(el.id)
         return (

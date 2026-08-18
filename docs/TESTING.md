@@ -16,7 +16,7 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，41 文件 / 1239 tests）
+## 3. 测试文件清单（src/__tests__，43 文件 / 1263 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -35,6 +35,8 @@
 | forceLayout.test.ts | 66 | forceLayout/planarCycleLayout/子群格布局、cosetStripLayout（空群、S₃ A₃ 两条带、topPadding）、节点位置稳定性、直积因子工具（factorPipeGroups/parseCompactFactors 紧凑符号分组 C₂²×S₃=2 组、buildFactorSubgroup 因子临时群提取）、cylinderLayout2D（C₄×D₄ 32 点同心多环 distinct 半径 ≥8、C₂×S₃ 12 点、C₂×C₃×S₃ 36 点、注册表 Z₂×D₄/Z₂×Q₈ 2 层同心 16 点 distinct 半径=2、D₈ null、C₃×S₃ 各层半格交错 π/6、注册表 C₃×S₃ 18,2 三层 S₃ 环含反射/旋转边层内）、torusLayout2D（S₃×D₄ 48 点 maxR≤400、C₂²×S₃ 24 点、3 因子嵌套 96 点、注册表 (24,13) 24 点）、classifyDirectProduct2D 归组分类（C₂²×S₃→torus、C₂×C₃×S₃→cylinder、C₂³→grid、3 非循环因子→torus、注册表 (24,13)→torus）、semidirectProductLayout（注册表 (16,2) 16 点全有限、S₃ null、C3⋊C2 6 点）、splitDihedralElements（注册表 D₈/D₉ 双环分类、基本 D₄、C₂³/A₄ null）、dualRingLayout 注册表 D₈/D₉ 双环（外环 0.38·min + 内环 0.55 配对）、ringGridLayout2D（pipe C₄×C₂×C₂ 16 点 4 环 2×2 网格：簇质心环半径一致/弦长 2r·sin(π/n)/格距>2r、注册表 16,9 16 点、C₄×C₄ null）、normalizeLayout2D（单位化）、directProductGridLayout2D（注册表群 C₄×C₄ 4×4 满网格 unique=16、(Z₄×Z₂):Z₂ 半直积 null、S₃×C₂ 6×2 grid） |
 | elementRotation.test.ts | 6 | 群元素 → 几何旋转映射（Cₙ/Dₙ/A₄/S₄/A₅ 轴与角） |
 | layout3D.test.ts | 4 | compute3DPositions：3D 形状模板布局（群形状映射、球面/环面投影） |
+| sphereGraph.test.ts | 19 | 球面嵌入（sphereGraph.ts）：mulberry32 确定性、fibonacciSphere 北极/单位化、最小角距、greatArcSamples（对径弧 null、9 点采样与 toBeCloseTo(0,9)）、greatArcsCross（共面重叠/共享端点非交叉/内部交叉/对径跨弧补区间）、embedSphereGraph（C6 单环 planar 0 残留、不带 seed 500 次全 planar、K5 chord 5 根、K6 chordCap=0 3 层、seed 确定性、stems 端点含非节点、radius 公式）、compute3DPositions spherical 回归 |
+| diagReal.test.ts | 2 | 真实渲染通路诊断回归：cycleSeeding 赤道断言（S₃/C₆ 方向 z≈0）、11 群真实边集（C6/V4/S3/D4/Q8/D5/A4/S4/D6/Q16真=SmallGroup(16,8)/C2xC2xC2，computeCayleyActionEdges+去重）边守恒（各层弧+弦=边数）与平面群（C6/V4/S3/D4/D5/A4/D6/C2xC2xC2）零弦零分层零 4.5° 近贴断言 |
 | quotientS4.test.ts | 2 | S₄/V₄ 商群创建与 Cayley 边 |
 | quotientFlow.test.ts | 1 | 商群流程 |
 | quotientRendering.test.ts | 1 | 商群渲染数据 |

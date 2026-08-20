@@ -17,19 +17,23 @@ export function loadHomomorphismsFromStorage(): Homomorphism[] {
     const raw = localStorage.getItem(HOMO_STORAGE_KEY)
     if (!raw) return []
     const stored: StoredHomomorphism[] = JSON.parse(raw)
+    if (!Array.isArray(stored)) return []
     return stored
       .map(s => {
-        const source = createGroupFromSymbol(s.sourceSymbol)
-        const target = createGroupFromSymbol(s.targetSymbol)
-        if (!source || !target) return null
-        return {
-          id: s.id,
-          source,
-          target,
-          mapping: new Map(Object.entries(s.mapping)),
-          result: s.result,
-          name: s.name,
-        } as Homomorphism
+        try {
+          const source = createGroupFromSymbol(s.sourceSymbol)
+          const target = createGroupFromSymbol(s.targetSymbol)
+          if (!source || !target) return null
+          if (!s.mapping || typeof s.mapping !== 'object') return null
+          return {
+            id: s.id,
+            source,
+            target,
+            mapping: new Map(Object.entries(s.mapping)),
+            result: s.result,
+            name: s.name,
+          } as Homomorphism
+        } catch { /* skip corrupt entry */ return null }
       })
       .filter(Boolean) as Homomorphism[]
   } catch { /* ignore */ }

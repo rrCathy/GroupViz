@@ -129,6 +129,7 @@ export function computeCosetActionPerms(group: Group, subgroupElements: GroupEle
 
 // Verify Φ(g·a) = Φ(g)∘Φ(a) for all g and every generator a
 export function verifyAllRelations(group: Group, perms: Map<string, number[]>): { ok: boolean; violation?: { g: string; a: string; x: number } } {
+  if (perms.size === 0) return { ok: false }
   for (const g of group.elements) {
     const permG = perms.get(g.id)!
     for (const gen of group.generators) {

@@ -742,8 +742,10 @@ function presentationOfDirectProduct(group: Group): GroupPresentation | null {
   const names: string[] = []
   const relators: string[] = []
   const factorRelTerms: PresentationTerm[][] = []
+  const factorGenStarts: number[] = []
   let genOffset = 0
   for (const { fp } of factors) {
+    factorGenStarts.push(genOffset)
     fp.generators.forEach((_, idx) => {
       const gi = genOffset + idx
       names.push(gi < 8 ? 'abcdefgh'[gi] : `g_{${gi}}`)
@@ -762,10 +764,15 @@ function presentationOfDirectProduct(group: Group): GroupPresentation | null {
   factorRelTerms.forEach(terms => {
     relators.push(wordToCanonicalString(terms, names))
   })
-  const aCount = factors[0].fp.generators.length
-  for (let i = 0; i < aCount; i++) {
-    for (let j = aCount; j < names.length; j++) {
-      relators.push(`${names[i]}${names[j]}${names[i]}^{-1}${names[j]}^{-1}`)
+  const bound = (idx: number): number =>
+    idx + 1 < factorGenStarts.length ? factorGenStarts[idx + 1] : names.length
+  for (let fi = 0; fi < factorGenStarts.length; fi++) {
+    for (let fj = fi + 1; fj < factorGenStarts.length; fj++) {
+      for (let i = factorGenStarts[fi]; i < bound(fi); i++) {
+        for (let j = factorGenStarts[fj]; j < bound(fj); j++) {
+          relators.push(`${names[i]}${names[j]}${names[i]}^{-1}${names[j]}^{-1}`)
+        }
+      }
     }
   }
   try {

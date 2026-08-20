@@ -11,15 +11,19 @@ import type { Group, GroupElement } from '../../core/types'
 
 type SymmetryType = 'cyclic' | 'dihedral' | 'tetrahedron' | 'cube' | 'icosahedron' | 'rectangle' | 'unsupported'
 
-function getSymmetryType(group: Group): SymmetryType {
+// eslint-disable-next-line react-refresh/only-export-components
+export function getSymmetryType(group: Group): SymmetryType {
   const sym = group.symbol
+  // Direct products / powers are not full symmetry groups of a single 3D figure.
+  // These must be checked before the C/D prefix classes (whose symbols they share).
+  if (sym === 'C_{2}^{2}' || sym === 'C_{2}\\times C_{2}') return 'rectangle'
+  if (sym.includes('\\times') || sym.includes('^{')) return 'unsupported'
   if (sym.startsWith('C')) return 'cyclic'
   if (sym.startsWith('D')) return 'dihedral'
   if (sym === 'A_{4}') return 'tetrahedron'
   if (sym === 'S_{4}') return 'cube'
   if (sym === 'A_{5}') return 'icosahedron'
   if (sym === 'V_{4}') return 'rectangle'
-  if (sym.includes('\\times') || sym.includes('^{')) return 'unsupported'
   if (sym.startsWith('S') || sym.startsWith('A')) return 'unsupported'
   return 'unsupported'
 }

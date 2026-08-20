@@ -462,11 +462,12 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
           vbs.height,
           { initialPositions: existingPositions }
         ).then(positions => {
-          if (core.currentGroup !== groupAtStart) return
+          if (core.currentGroupRef.current !== groupAtStart) return
           core.batchSetNodePositions(positions)
           core.addOperationHistory(t('op.layout', { view: core.getViewLabel(core.currentView) }))
           core.setHintMessage(t('hint.layoutDone'))
         }).catch(() => {
+          if (core.currentGroupRef.current !== groupAtStart) return
           core.setHintMessage(t('hint.layoutFailed'))
         })
       } else {

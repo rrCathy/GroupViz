@@ -117,12 +117,14 @@ export function createAlternatingGroup(n: number): Group {
     generators.push(getGenerator('a', '(12)(34)', '#ff6b6b', a))
     generators.push(getGenerator('b', '(234)', '#4ecdc4', b))
   } else if (n === 5) {
-    // A5: a=(12)(34) order 2, b=(135) order 3, ab order 5 -> each vertex degree 3, 60*3/2=90 edges = truncated icosahedron
-    const a = Array.from({ length: n }, (_, j) => j + 1); [a[0], a[1], a[2], a[3]] = [a[1], a[0], a[3], a[2]]
-    const b = Array.from({ length: n }, (_, j) => j + 1)
-    const b0 = b[0]; b[0] = b[2]; b[2] = b[4]; b[4] = b0
-    generators.push(getGenerator('a', '(12)(34)', '#ff6b6b', a))
-    generators.push(getGenerator('b', '(135)', '#4ecdc4', b))
+    // A5: a=(12345) order 5, b=(12)(34) order 2 -> 3-regular 60 vertices 90 edges,
+    // Cayley graph ≅ truncated icosahedron skeleton (planar, Group Explorer style).
+    // 旧生成元 (12)(34),(135) 的凯莱图非截角二十面体骨架（DFS 同构失败 601 calls）。
+    const a = Array.from({ length: n }, (_, j) => j + 1)
+    const a0 = a[0]; a[0] = a[1]; a[1] = a[2]; a[2] = a[3]; a[3] = a[4]; a[4] = a0
+    const b = Array.from({ length: n }, (_, j) => j + 1); [b[0], b[1], b[2], b[3]] = [b[1], b[0], b[3], b[2]]
+    generators.push(getGenerator('a', '(12345)', '#ff6b6b', a))
+    generators.push(getGenerator('b', '(12)(34)', '#4ecdc4', b))
   }
 
   function multiply(a: GroupElement, b: GroupElement): GroupElement {

@@ -858,7 +858,7 @@ function getOrderDistribution(group: Group): Map<number, number> {
   return dist
 }
 
-function distributionsEqual(a: Map<number, number>, b: Map<number, number>): boolean {
+export function distributionsEqual(a: Map<number, number>, b: Map<number, number>): boolean {
   if (a.size !== b.size) return false
   for (const [k, v] of a) {
     if (b.get(k) !== v) return false
@@ -882,7 +882,7 @@ function eulerPhi(n: number): number {
 // All chains [d1, ..., dk] with d1 | d2 | ... | dk and product = n.
 // Each chain is an abelian invariant tuple; distinct chains = distinct
 // abelian groups of order n (finite abelian classification theorem).
-function abelianFactorChains(n: number): number[][] {
+export function abelianFactorChains(n: number): number[][] {
   const out: number[][] = []
   const rec = (rem: number, upper: number, chain: number[]): void => {
     if (rem === 1) {
@@ -902,7 +902,7 @@ function abelianFactorChains(n: number): number[][] {
 
 // Order distribution of C_{d1} x ... x C_{dk}: count(o) = sum over
 // e_i | d_i with lcm(e_1..e_k) = o of prod phi(e_i).
-function abelianChainDistribution(ds: number[]): Map<number, number> {
+export function abelianChainDistribution(ds: number[]): Map<number, number> {
   const dist = new Map<number, number>()
   const rec = (i: number, lcmVal: number, acc: number): void => {
     if (i === ds.length) {

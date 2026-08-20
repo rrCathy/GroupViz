@@ -8,7 +8,7 @@ import {
 } from './ringOrder'
 import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
 import { truncatedTetrahedron } from '../polyhedra'
-import { sphericalNodeDirections } from './sphereGraph'
+import { computeConeRingOrder } from './forceLayout'
 
 type Vec3 = [number, number, number]
 
@@ -734,6 +734,36 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
       break
     }
 
+    case 'cone': {
+      if (n === 0) break
+      // 圆锥兜底：恒等元（1 阶）在顶点，其余元素按阶 k=2..maxOrder
+      // 沿母线分圈向下摆（无 k 阶元素则空圈跳过），每圈按共轭类分扇区
+      const { orderOf, maxK, slots, totalSlots } = computeConeRingOrder(group)
+      for (let i = 0; i < n; i++) {
+        const el = group.elements[i]
+        const k = orderOf.get(el.id) ?? 1
+        if (k <= 1) {
+          positions[i] = [0, radius, 0]
+          continue
+        }
+        let slot: number
+        if (slots) {
+          slot = slots.get(el.id) ?? 0
+        } else {
+          let s = 0
+          for (let j = 0; j < i; j++) {
+            if ((orderOf.get(group.elements[j].id) ?? 1) === k) s++
+          }
+          slot = s
+        }
+        const total = totalSlots.get(k) ?? 1
+        const t = k / maxK
+        const angle = -Math.PI / 2 + (slot * 2 * Math.PI) / total
+        positions[i] = [Math.cos(angle) * radius * t, radius - 2 * radius * t, Math.sin(angle) * radius * t]
+      }
+      break
+    }
+
     case 'circular': {
       if (n === 0) break
       // 二面体结构：单环无法免交叉 → 双环（旋转外环 + 反射内环，径向配对），
@@ -1068,6 +1098,27 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
       break
     }
 
+    case 'truncatedOctahedron3': {
+      if (n === 24) {
+        // 三换位生成元 ((12),(23),(34)) 的 S4 凯莱图 = 截角八面体 24 顶点 36 棱。
+        // 坐标取截角八面体 (0,±1,±2) 全排列的 1/3 缩放，旋转后与截角八面体同构。
+        const coords: [number, number, number][] = [
+          [0.333, -0.667, 0], [0, -0.333, -0.667], [0.667, 0, -0.333],
+          [0, -0.667, 0.333], [-0.667, -0.333, 0], [-0.333, 0, 0.667],
+          [-0.333, 0, -0.667], [0, 0.667, -0.333], [-0.667, 0.333, 0],
+          [-0.667, 0, -0.333], [-0.333, 0.667, 0], [0, 0.333, -0.667],
+          [0.667, 0.333, 0], [0.333, 0, 0.667], [0, 0.667, 0.333],
+          [0, 0.333, 0.667], [0.667, 0, 0.333], [0.333, 0.667, 0],
+          [0, -0.333, 0.667], [-0.667, 0, 0.333], [-0.333, -0.667, 0],
+          [0.667, -0.333, 0], [0.333, 0, -0.667], [0, -0.667, -0.333],
+        ]
+        placeS4Elements(group, coords, positions, radius)
+      } else {
+        for (let i = 0; i < n; i++) positions[i] = fibonacciSphere(n, radius)[i]
+      }
+      break
+    }
+
     case 'truncatedIcosahedron': {
       if (n === 60) {
         const coords: [number, number, number][] = [
@@ -1130,13 +1181,8 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
       break
     }
 
-    case 'spherical':
     default: {
-      const sphereRadius = Math.max(5, Math.pow(n, 1 / 3) * 2.2)
-      const dirs = sphericalNodeDirections(n)
-      for (let i = 0; i < n; i++) {
-        positions[i] = [dirs[i][0] * sphereRadius, dirs[i][1] * sphereRadius, dirs[i][2] * sphereRadius]
-      }
+      for (let i = 0; i < n; i++) positions[i] = fibonacciSphere(n, radius)[i]
       break
     }
   }

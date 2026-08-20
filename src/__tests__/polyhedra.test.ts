@@ -7,6 +7,7 @@ import {
   truncatedIcosahedron,
   truncatedDodecahedron,
   computeSkeletonEdges,
+  type Vec3,
 } from '../core/polyhedra'
 import { computeElementRotation } from '../core/elementRotation'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
@@ -50,6 +51,49 @@ describe('polyhedra vertex generation', () => {
         expect(a).toBeGreaterThanOrEqual(0)
         expect(b).toBeGreaterThanOrEqual(0)
       }
+    }
+  })
+
+  it('truncated dodecahedron skeleton has exactly 90 edges (coordinate regression)', () => {
+    // Regression: sets[1]/sets[2] used to read [1/phi,1,2*phi]/[1/phi,phi,1+2*phi],
+    // which is not the truncated dodecahedron (60 vertices, 90 edges, degree 3).
+    const edges = computeSkeletonEdges(truncatedDodecahedron(5))
+    expect(edges.length).toBe(90)
+    const dists = edges.map(([a, b]) => {
+      const v1 = truncatedDodecahedron(5)[a] as number[]
+      const v2 = truncatedDodecahedron(5)[b] as number[]
+      return Math.hypot(v1[0] - v2[0], v1[1] - v2[1], v1[2] - v2[2])
+    })
+    const first = dists[0]
+    for (const d of dists) expect(d).toBeCloseTo(first, 9)
+  })
+
+  it('rhombicuboctahedron skeleton has exactly 48 edges (4-regular support)', () => {
+    // Regression: computeSkeletonEdges hard-coded target = 3n/2, which rejected
+    // the 4-regular rhombicuboctahedron (24 vertices, 48 edges) and fell back to
+    // a 24-edge pseudo-skeleton.
+    const edges = computeSkeletonEdges(rhombicuboctahedron())
+    expect(edges.length).toBe(48)
+  })
+
+  it('every vertex has the expected degree in each skeleton', () => {
+    const solids: [() => Vec3[], number][] = [
+      [truncatedTetrahedron, 3],
+      [truncatedCube, 3],
+      [rhombicuboctahedron, 4],
+      [truncatedOctahedron, 3],
+      [truncatedIcosahedron, 3],
+      [truncatedDodecahedron, 3],
+    ]
+    for (const [fn, degree] of solids) {
+      const verts = fn()
+      const edges = computeSkeletonEdges(verts)
+      const deg = new Array(verts.length).fill(0)
+      for (const [a, b] of edges) {
+        deg[a as number]++
+        deg[b as number]++
+      }
+      for (const d of deg) expect(d).toBe(degree)
     }
   })
 })

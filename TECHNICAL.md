@@ -8,7 +8,7 @@ GroupViz 是一个交互式群论可视化 Web 应用，帮助数学研究者和
 - 支持 11 种群类型（Cₙ, Dₙ, Sₙ, Aₙ, V₄, Q₈ + 直积群），覆盖阶 1-144
 - 7 种视图模式（集合、Cayley 图 2D/3D、圆圈图、乘法表、对称性、子群格）
 - 广义 Cayley 图系统：边由任意群元素定义（不限于生成元），支持左乘/右乘切换
-- 17 种 3D 布局形状模板，按群性质自动分配
+- 18 种 3D 布局形状模板，按群性质自动分配
 - 子群/正规子群/共轭类/陪集/中心的全套群论计算
 - 多视图浮动窗口、会话保存、深色/浅色主题、中英文国际化
 
@@ -85,7 +85,7 @@ src/
 │       ├── cayleyEdges.ts   # Cayley 边计算
 │       ├── cycleLayouts.ts  # 圆圈图 / 循环子群布局
 │       ├── ringOrder.ts     # Cayley 环排序 / 数字感知排序
-│       └── shapeLayouts.ts  # 12 种 2D 布局函数（grid/concentric/dualRing/spiral 等）
+│       └── shapeLayouts.ts  # 14 种 2D 布局函数（grid/concentric/dualRing/spiral 等）
 ├── components/
 │   ├── Canvas/              # 视图渲染组件
 │   │   ├── GroupCanvas.tsx  # 主画布（SVG 2D Cayley 图）
@@ -331,7 +331,7 @@ SVG 画布，支持：
 
 **节点位置优先级**：
 1. 用户拖拽保存的位置（~1px 容差）
-2. `gridPositions`（grid/spherical 布局）
+2. `gridPositions`（grid/cone 布局）
 3. `circlePositions`（circular 兜底）
 
 **2D 形状系统**：
@@ -340,7 +340,7 @@ SVG 画布，支持：
 |------|---------|--------|
 | `circular` | 等角圆形排列 | 所有群（默认） |
 | `grid` | `directProductGridLayout2D()` | 直积群 |
-| `spherical` | `fibonacci2DLayout()` | 所有群 |
+| `cone` | `coneLayout2D()` | 所有群 |
 
 `directProductGridLayout2D()` 智能选择：
 - 双循环因子 → `matrixGridLayout` (网格)
@@ -357,11 +357,11 @@ Three.js + R3F 渲染，节点不可拖拽。
 
 #### 3D 形状模板系统
 
-形状按**群的性质**分配，支持 17 种模板：
+形状按**群的性质**分配，支持 18 种模板：
 
 | 形状 | 适用群 | 布局描述 |
 |------|-------|---------|
-| `spherical` | 所有群（兜底） | Fibonacci 球面分布 |
+| `cone` | 所有群（兜底） | 圆锥：顶点恒等元、沿母线按元素阶分圈 |
 | `circular` | 循环群、阿贝尔群 | XZ 平面圆周 |
 | `dihedral` | 二面体群 Dₙ | 上下两个平行环 |
 | `hexagon` | S₃（非阿贝尔阶6） | 平面六边形 + 中心 |
@@ -383,7 +383,7 @@ Three.js + R3F 渲染，节点不可拖拽。
 3. 循环群 → circular
 4. 阿贝尔群 → circular
 5. 特定群符号匹配 → 对应多面体
-6. 兜底 → spherical
+6. 兜底 → cone
 
 **S₄/A₅ 边预设**：切换 3D 形状时，`getSpecialCayleyActions()` 返回适配该多面体对称性的 Cayley 边配置。
 
@@ -452,7 +452,7 @@ Hasse 图：
 - `cayleyEdges.ts` — Cayley 边计算 (`computeCayleyActionEdges`)
 - `cycleLayouts.ts` — 圆圈图 + 循环群布局 (`planarCycleLayout`, `computeCycleSubgroups`)
 - `ringOrder.ts` — Cayley 环排序 + 数字感知排序 (`cayleyRingKeys`)
-- `shapeLayouts.ts` — 9 种 2D 布局函数 (`fibonacci2DLayout`, `concentricLayout`, `dualRingLayout`, `archimedeanSpiralLayout`, `spiralLayout`, `coilLayout`, `projection3DLayout`, `directProductGridLayout2D`, 等)；`cosetStripLayout` 保留在 `forceLayout.ts` 中仅供独立陪集条带视图使用
+- `shapeLayouts.ts` — 14 种 2D 布局函数 (`coneLayout2D`, `concentricLayout`, `dualRingLayout`, `archimedeanSpiralLayout`, `spiralLayout`, `coilLayout`, `projection3DLayout`, `directProductGridLayout2D`, 等)；`cosetStripLayout` 保留在 `forceLayout.ts` 中仅供独立陪集条带视图使用
 
 ### 6.1 力导向布局 (`forceLayout`)
 
@@ -481,12 +481,12 @@ Hasse 图：
 - 每个外环位置放置 H 的微型内环
 - 内外环半径自适应间距
 
-### 6.4 Fibonacci 2D 布局 (`fibonacci2DLayout`)
+### 6.4 Cone 2D 布局 (`coneLayout2D`)
 
-用于 spherical 形状：
-- `φ = π(3-√5)` 黄金角
-- 取画布半径 38%
-- 均匀散布，无重叠
+用于 cone（圆锥）形状：
+- 中心放恒等元，其余按元素阶分同心环
+- 第 k 环半径取画布最小边 42% × k/maxOrder
+- 环内元素均匀角分布，无重叠（≤60 阶时同阶环内按共轭类分扇区，类内连续、类间留 gap）
 
 ### 6.5 Cayley 边计算 (`computeCayleyActionEdges`)
 

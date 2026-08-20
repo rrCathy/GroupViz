@@ -22,7 +22,7 @@ describe('Quotient Group S4/V4 Full Flow', () => {
 
     // Verify quotient groups have no 3D shapes
     const default3D = getDefaultLayout3D(qg!)
-    expect(default3D).toBe('spherical')
+    expect(default3D).toBe('cone')
 
     // Simulate setCurrentGroup initializing node positions with default shape
     const positions = initializeNodePositions(qg!, 'cayley', defaultShape)

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useCallback, useMemo, useTransition, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useMemo, useRef, useTransition, type ReactNode } from 'react'
 import type { Group, ViewMode, CanvasTransform, SubgroupCheckResult } from '../../core/types'
 import { type CayleyShape2D, getDefaultShape2D } from '../../core/types'
 import { getViewBoxSize, type ViewBoxSize } from '../../core/viewBox'
@@ -8,6 +8,9 @@ import { initializeNodePositions, type NodePositionsMap } from '../positionUtils
 
 interface GroupCoreState {
   currentGroup: Group | null
+  /** Live ref of the current group, updated synchronously on every setCurrentGroup/clearCurrentGroup call.
+   *  Use this in async callbacks (e.g. forceLayoutAsync.then) to avoid stale-closure races. */
+  currentGroupRef: { current: Group | null }
   currentView: ViewMode
   selectedElements: Set<string>
   canvasTransform: CanvasTransform
@@ -71,6 +74,7 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
   }, [t])
 
   const [currentGroup, setCurrentGroupState] = useState<Group | null>(null)
+  const currentGroupRef = useRef<Group | null>(null)
   const [currentView, setCurrentViewState] = useState<ViewMode>('set')
   const [selectedElements, setSelectedElements] = useState<Set<string>>(new Set())
   const [canvasTransform, setCanvasTransformState] = useState<CanvasTransform>({ x: 0, y: 0, scale: 1 })
@@ -99,6 +103,7 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setCurrentGroup = useCallback((group: Group) => {
+    currentGroupRef.current = group
     startTransition(() => {
       setCurrentGroupState(group)
       setSelectedElements(new Set())
@@ -119,6 +124,7 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
   }, [addOperationHistory, startTransition, t])
 
   const clearCurrentGroup = useCallback(() => {
+    currentGroupRef.current = null
     startTransition(() => {
       setCurrentGroupState(null)
       setCurrentViewState('tree')
@@ -335,7 +341,7 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
   }, [currentGroup])
 
   const value: GroupCoreContextType = {
-    currentGroup, currentView, selectedElements, canvasTransform, operationHistory,
+    currentGroup, currentGroupRef, currentView, selectedElements, canvasTransform, operationHistory,
     nodePositions, viewTabs, activeTabId, showMaximalCycles,
     hintMessage, forceShowLargeGroupViews, viewBoxSize, isPending, isLargeGroup,
     setCurrentGroup, clearCurrentGroup, setCurrentView, selectElement, clearSelection, setCanvasTransform,

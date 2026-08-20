@@ -269,7 +269,7 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
   const showCosetFromElements = useCallback((elementIds: string[], label: string, isNormal: boolean): string | null => {
     if (!currentGroup) return null
 
-    const sortedIds = elementIds.sort().join(',')
+    const sortedIds = [...elementIds].sort().join(',')
     const existing = subsets.find(s => [...s.elementIds].sort().join(',') === sortedIds)
     if (existing) {
       setCosetSubsetId(existing.id)

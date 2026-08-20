@@ -40,10 +40,10 @@
 | 视图 | 说明 |
 |------|------|
 | **集合视图** | 群元素网格排列展示 |
-| **凯莱图 (2D)** | SVG 渲染，12 种形状布局，节点可拖拽，边可配置 |
+| **凯莱图 (2D)** | SVG 渲染，14 种形状布局，节点可拖拽，边可配置 |
 | **圆圈图** | 循环子群可视化，支持极大循环筛选 |
 | **凯莱表** | 交互式乘法表，行列高亮，陪集条纹；|G| > 16 提供三策略（子群展示 / 随机展示 / 全量展示全屏模式、缩放滑块、SVG 导出） |
-| **凯莱图 (3D)** | Three.js 渲染，17 种形状模板，轨道控制 |
+| **凯莱图 (3D)** | Three.js 渲染，18 种形状模板，轨道控制 |
 | **对称性视图** | 多面体几何 + 元素操作动画 + 旋转轴与交点标记 |
 | **子群格图** | Hasse 图，按层级布局 |
 | **同态视图** | 源/目标双凯莱图 + 映射边，核/像高亮，第一同构定理动画证明 |
@@ -87,8 +87,8 @@
 
 ### 核心亮点
 - **基于群元素作用的凯莱图** — 边由任意群元素定义（广义 Cayley 图），支持右乘/左乘切换
-- **17 种 3D 形状模板** — 按群性质自动分配（S₄、A₄、A₅ 使用截角多面体）；直积群智能形状选择（lattice/cylinder/torus）
-- **13 种 2D 凯莱图形状** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring（半直积专属）/cylinder（直积一循环因子）/torus（直积无循环因子）/ringGrid（环×2×2 网格；≥3 个循环因子），按群类型智能选择默认形状
+- **18 种 3D 形状模板** — 按群性质自动分配（S₄、A₄、A₅ 使用截角多面体）；直积群智能形状选择（lattice/cylinder/torus）；圆锥（cone）为所有群兜底
+- **14 种 2D 凯莱图形状** — circular/grid/cone/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring（半直积专属）/cylinder（直积一循环因子）/torus（直积无循环因子）/ringGrid（环×2×2 网格；≥3 个循环因子）/pythagoreanSquare（Q₈），按群类型智能选择默认形状
 - **多视图浮动窗口** — 同时打开多个视图进行对比分析
 - **子集分析** — 保存元素选择集；通过封闭性检验自动检测子群/正规子群
 - **自逆元素检测** — 高亮 g⁻¹ = g 的元素
@@ -101,7 +101,7 @@
 - **记号导入群** — 输入群记号（S₅ / PSL(2,7) / C₃×D₄ / SmallGroup(16,13) / Aut(S₄) …）实时 TeX 预览；本地可建则直接创建，否则经后端 GAP 引擎导入（导入后完整结构计算管线可用）
 - **性能守卫** — 子群/共轭类 cutoff 60；Cayley 边限流；自同构枚举组合 >30000 放弃
 - **群展示系统** — ⟨S|R⟩ 创建任意有限群（Todd–Coxeter），群信息栏自动识别标准展示（Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈），tree/展示乘法表视图，草稿自动保存
-- **测试体系** — 43 个测试文件 1263 tests（vitest）
+- **测试体系** — 44 个测试文件 1272 tests（vitest）
 ---
 
 ## 🚀 快速开始
@@ -177,7 +177,7 @@ CI（`.github/workflows/ci.yml`）在每次 push/PR 自动运行 lint、测试�
 .github/                # CI 工作流（ci / pages / release）+ issue / PR 模板
 CONTRIBUTING.md         # 参与贡献指南（含新手引导）
 src/
-├── __tests__/            # 43 个测试文件（1263 tests）
+├── __tests__/            # 44 个测试文件（1272 tests）
 ├── components/
 │   ├── Canvas/           # 视图组件（Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/多视图窗口）
@@ -250,12 +250,12 @@ GroupViz 可视化抽象代数与有限群论中的概念。
 - [x] 自同构群 Aut(G)
 - [x] 同态映射 + 第一同构定理动画证明
 - [x] 群作用系统（共轭/自定义、轨道视图、轨道-稳定化子验证）
-- [x] 2D 凯莱图多形状布局（12 种，含 rewiring/cylinder/torus）
+- [x] 2D 凯莱图多形状布局（14 种，含 rewiring/cylinder/torus）
 - [x] 深色/浅色主题
 - [x] 会话保存与恢复
 - [x] 视图导出（SVG/PNG/GIF）+ 批量导出 CLI
 - [x] 混合计算（本地 TS + FastAPI 后端，本地兜底 + 进度条）
-- [x] 测试体系（43 文件 1263 tests）
+- [x] 测试体系（44 文件 1272 tests）
 - [ ] 群运算律验证动画
 - [x] 自定义有限群输入（⟨S|R⟩ 群展示系统）
 - [ ] 教学模式

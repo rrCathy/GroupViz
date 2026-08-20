@@ -1,7 +1,6 @@
 import type { Group, NodePosition, CayleyShape2D } from '../types'
 import {
   directProductGridLayout2D,
-  fibonacci2DLayout,
   concentricLayout,
   dualRingLayout,
   archimedeanSpiralLayout,
@@ -13,6 +12,7 @@ import {
   torusLayout2D,
   ringGridLayout2D,
   q8PythagoreanLayout,
+  coneLayout2D,
 } from './forceLayout'
 
 export function computeShape2DPositions(
@@ -22,8 +22,6 @@ export function computeShape2DPositions(
   height: number,
 ): Map<string, NodePosition> | null {
   switch (shape) {
-    case 'spherical':
-      return fibonacci2DLayout(group, width, height)
     case 'grid':
       return directProductGridLayout2D(group, width, height)
     case 'concentric':
@@ -48,6 +46,8 @@ export function computeShape2DPositions(
       return ringGridLayout2D(group, width, height)
     case 'pythagoreanSquare':
       return q8PythagoreanLayout(group, width, height)
+    case 'cone':
+      return coneLayout2D(group, width, height)
     default:
       return null
   }

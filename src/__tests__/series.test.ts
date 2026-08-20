@@ -234,4 +234,27 @@ describe('Subgroup Series', () => {
       expect(factors.map(f => f.label)).toEqual(['C_{2}', 'A_4'])
     })
   })
+
+  describe('abelian factor labels (rank >= 3)', () => {
+    it('C_2^4 upper-central factor gets exact invariant-chain label (was C_2 x C_8)', () => {
+      const v4 = createKleinFour()
+      const c24 = createDirectProduct(v4, v4)
+      const series = computeSubgroupSeries(c24, 'upperCentral')!
+      const bigFactor = series.factors.find(f => f.order === 16)!
+      expect(bigFactor.label).toBe('C_{2} \\times C_{2} \\times C_{2} \\times C_{2}')
+    })
+
+    it('C_4 x C_2^2 factor gets exact three-term chain label', () => {
+      const g = createDirectProduct(createCyclicGroup(4), createKleinFour())
+      const series = computeSubgroupSeries(g, 'upperCentral')!
+      const bigFactor = series.factors.find(f => f.order === 16)!
+      expect(bigFactor.label).toBe('C_{2} \\times C_{2} \\times C_{4}')
+    })
+
+    it('cyclic quotients still get the plain C_n label', () => {
+      const c6 = createCyclicGroup(6)
+      const series = computeSubgroupSeries(c6, 'upperCentral')!
+      expect(series.factors.map(f => f.label)).toEqual(['C_{6}'])
+    })
+  })
 })

@@ -91,7 +91,7 @@ The view panel offers 9 cards; the homomorphism and orbit views open from their 
 ### Key Features
 - **Cayley graph by element action** — edges defined by any group element (generalized Cayley graph), right/left multiply switchable
 - **17 3D shape templates** — auto-assigned by group properties (truncated polyhedra for S₄, A₄, A₅); smart direct-product shapes (lattice/cylinder/torus)
-- **13 2D Cayley layout shapes** — circular/grid/spherical/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring (semidirect-specific)/cylinder (interleaved concentric circles; direct product, one cyclic factor)/torus (direct product, no cyclic factor)/ringGrid (ring × 2×2 grid; ≥3 cyclic factors), intelligent default by group type
+- **14 2D Cayley layout shapes** — circular/grid/cone/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring (semidirect-specific)/cylinder (interleaved concentric circles; direct product, one cyclic factor)/torus (direct product, no cyclic factor)/ringGrid (ring × 2×2 grid; ≥3 cyclic factors)/pythagoreanSquare (Q₈), intelligent default by group type
 - **Multi-view floating windows** — open multiple views simultaneously for comparative analysis
 - **Subset analysis** — save element selections; auto-detect subgroup / normal subgroup via closure tests
 - **Self-inverse element detection** — highlights elements where g⁻¹ = g
@@ -104,7 +104,7 @@ The view panel offers 9 cards; the homomorphism and orbit views open from their 
 - **Small group registry** — all 93 groups of order 1–31 (GAP SmallGroups import) with precomputed subgroup/conjugacy class/center data
 - **Import by notation** — type a group symbol (S₅ / PSL(2,7) / C₃×D₄ / SmallGroup(16,13) / Aut(S₄) …) for live TeX preview; built locally when possible, otherwise imported through the backend GAP engine (full structure pipeline afterwards)
 - **Performance guards** — subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (>30000 combos)
-- **Test suite** — 43 test files, 1263 tests (Vitest)
+- **Test suite** — 44 test files, 1272 tests (Vitest)
 
 ---
 
@@ -183,7 +183,7 @@ CI (`.github/workflows/ci.yml`) runs lint, tests, coverage thresholds, productio
 .github/                # CI workflows (ci / pages / release) + issue & PR templates
 CONTRIBUTING.md         # Contribution guide (includes newcomer onboarding)
 src/
-├── __tests__/            # 43 test files (1263 tests)
+├── __tests__/            # 44 test files (1272 tests)
 ├── components/
 │   ├── Canvas/           # Views (Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/
@@ -273,7 +273,7 @@ Edge semantics:
 - [x] Session save/restore
 - [x] View export (SVG/PNG/GIF) + batch export CLI
 - [x] Hybrid computation (local TS + FastAPI, local fallback + progress bar)
-- [x] Test suite (43 files, 1263 tests)
+- [x] Test suite (44 files, 1272 tests)
 - [ ] Group operation law verification animations
 - [x] Custom finite group input (⟨S|R⟩ presentation system)
 - [ ] Tutorial mode

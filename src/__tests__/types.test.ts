@@ -148,7 +148,7 @@ describe('getAvailableShapes3D', () => {
 
   it('offers semidirectCylinder/circular for semidirect products', () => {
     const shapes = getAvailableShapes3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))
-    expect(shapes).toEqual(['spherical', 'semidirectCylinder', 'circular'])
+    expect(shapes).toEqual(['cone', 'semidirectCylinder', 'circular'])
   })
 
   it('offers hypercube for C2^4 (registry (16,14))', () => {
@@ -158,24 +158,24 @@ describe('getAvailableShapes3D', () => {
   })
 
   it('handles direct products by factor type', () => {
-    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toEqual(['spherical', 'lattice', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times S_{3}' }))).toEqual(['spherical', 'cylinder', 'lattice', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3} \\times C_{5}' }))).toEqual(['spherical', 'lattice', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'S_{3} \\times S_{4} \\times S_{5}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toEqual(['cone', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times S_{3}' }))).toEqual(['cone', 'cylinder', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3} \\times C_{5}' }))).toEqual(['cone', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{3} \\times S_{4} \\times S_{5}' }))).toEqual(['cone', 'lattice', 'torus', 'circular'])
     // 多因子混合：C₂×C₃×S₃（两个不同循环因子）→ cylinder（任意因子数）；
     // C₂×C₂ 合并为非循环 C₂² → 全非循环 → torus
-    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3} \\times S_{3}' }))).toEqual(['spherical', 'cylinder', 'lattice', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{2} \\times S_{3}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'C_{2}^{2} \\times S_{3}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{3} \\times S_{3}' }))).toEqual(['cone', 'cylinder', 'lattice', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2} \\times C_{2} \\times S_{3}' }))).toEqual(['cone', 'lattice', 'torus', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{2}^{2} \\times S_{3}' }))).toEqual(['cone', 'lattice', 'torus', 'circular'])
     // 全非循环多因子 → torus（嵌套环）
-    expect(getAvailableShapes3D(mk({ symbol: 'S_{3} \\times S_{3} \\times S_{4}' }))).toEqual(['spherical', 'lattice', 'torus', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{3} \\times S_{3} \\times S_{4}' }))).toEqual(['cone', 'lattice', 'torus', 'circular'])
   })
 
   it('handles cyclic, dihedral, abelian order-4 and generic groups', () => {
-    expect(getAvailableShapes3D(mk({ symbol: 'C_{7}' }))).toEqual(['spherical', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'D_4' }))).toEqual(['spherical', 'dihedral', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'V_{4}', isAbelian: true, order: 4 }))).toEqual(['spherical', 'circular', 'tetrahedron'])
-    expect(getAvailableShapes3D(mk({ symbol: 'V_{4}', isAbelian: true, order: 8 }))).toEqual(['spherical', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'C_{7}' }))).toEqual(['cone', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'D_4' }))).toEqual(['cone', 'dihedral', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'V_{4}', isAbelian: true, order: 4 }))).toEqual(['cone', 'circular', 'tetrahedron'])
+    expect(getAvailableShapes3D(mk({ symbol: 'V_{4}', isAbelian: true, order: 8 }))).toEqual(['cone', 'circular'])
   })
 
   it('assigns special polyhedra for named groups', () => {
@@ -184,14 +184,14 @@ describe('getAvailableShapes3D', () => {
     expect(getAvailableShapes3D(mk({ symbol: 'Q_{8}' }))).toContain('cube')
     expect(getAvailableShapes3D(mk({ symbol: 'A_{4}' }))).toContain('truncatedTetrahedron')
     expect(getAvailableShapes3D(mk({ symbol: 'A_{5}' }))).toContain('truncatedIcosahedron')
-    expect(getAvailableShapes3D(mk({ symbol: 'A_{6}' }))).toEqual(['spherical', 'circular'])
-    expect(getAvailableShapes3D(mk({ symbol: 'S_{6}' }))).toEqual(['spherical', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'A_{6}' }))).toEqual(['cone', 'circular'])
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{6}' }))).toEqual(['cone', 'circular'])
   })
 })
 
 describe('getDefaultLayout3D', () => {
   it('chooses layout per family', () => {
-    expect(getDefaultLayout3D(mk({ symbol: 'S_{4}/N' }))).toBe('spherical')
+    expect(getDefaultLayout3D(mk({ symbol: 'S_{4}/N' }))).toBe('cone')
     expect(getDefaultLayout3D(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}' }))).toBe('semidirectCylinder')
     expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times C_{3}' }))).toBe('lattice')
     expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times S_{3}' }))).toBe('cylinder')
@@ -205,7 +205,7 @@ describe('getDefaultLayout3D', () => {
     expect(getDefaultLayout3D(mk({ symbol: 'A_{5}' }))).toBe('truncatedIcosahedron')
     expect(getDefaultLayout3D(mk({ symbol: 'S_{4}' }))).toBe('truncatedOctahedron2')
     expect(getDefaultLayout3D(mk({ symbol: 'S_{6}' }))).toBe('circular')
-    expect(getDefaultLayout3D(mk({ symbol: 'Weird_{x}' }))).toBe('spherical')
+    expect(getDefaultLayout3D(mk({ symbol: 'Weird_{x}' }))).toBe('cone')
   })
 
   it('uses semidirectCylinder for all semidirect products', () => {
@@ -468,17 +468,16 @@ describe('getAvailableShapesForView', () => {
 
   it('cayley view per family', () => {
     expect(getAvailableShapesForView(mk({ symbol: 'S_{4}/N' }), 'cayley')).toEqual(['circular'])
-    expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}', order: 12 }), 'cayley')).toEqual(['rewiring', 'circular', 'spherical'])
-    expect(getAvailableShapesForView(getSmallGroup(16, 2)!.group, 'cayley')).toEqual(['rewiring', 'circular', 'spherical'])
-    expect(getAvailableShapesForView(mk({ symbol: 'C_{12}', order: 12 }), 'cayley')).toEqual(['circular', 'spherical', 'spiral', 'coil'])
-    expect(getAvailableShapesForView(mk({ symbol: 'D_{4}', order: 8 }), 'cayley')).toEqual(['circular', 'spherical', 'dualRing'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}', order: 12 }), 'cayley')).toEqual(['rewiring', 'circular', 'cone'])
+    expect(getAvailableShapesForView(getSmallGroup(16, 2)!.group, 'cayley')).toEqual(['rewiring', 'circular', 'cone'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{12}', order: 12 }), 'cayley')).toEqual(['circular', 'spiral', 'coil', 'cone'])
+    expect(getAvailableShapesForView(mk({ symbol: 'D_{4}', order: 8 }), 'cayley')).toEqual(['circular', 'dualRing', 'cone'])
 
     const s3 = getAvailableShapesForView(mk({ symbol: 'S_{3}', order: 6 }), 'cayley')
     expect(s3).toEqual(['circular']) // ≤7 阶只有圆形
 
     const s4 = getAvailableShapesForView(mk({ symbol: 'S_{4}', order: 24 }), 'cayley')
     expect(s4).toContain('projection3D')
-    expect(s4).toContain('spherical')
 
     const g = getAvailableShapesForView(mk({ symbol: 'C_{2} \\times S_{3}', order: 12 }), 'cayley')
     expect(g).toContain('grid')

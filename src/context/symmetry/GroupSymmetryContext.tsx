@@ -40,6 +40,7 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
     queueMicrotask(() => {
       setSelfInverseElementIdState(null)
       setSymmetryActionElementIdState(null)
+      setSymmetryShowActionState(false)
     })
   }, [currentGroup])
 

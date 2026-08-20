@@ -70,6 +70,14 @@ describe('findAllAutomorphisms', () => {
     expect(autos.length).toBe(8)
   })
 
+  it('Aut(C_7^2) should enumerate all 2016 automorphisms (|GL(2,7)| = 48·42) without truncation', () => {
+    const C7x2 = createDirectProduct(createCyclicGroup(7), createCyclicGroup(7))
+    const autos = findAllAutomorphisms(C7x2)
+    expect(autos.length).toBe(2016)
+    const ids = new Set(autos.map(a => a.id))
+    expect(ids.size).toBe(2016)
+  })
+
   it('huge automorphism groups should be rejected by the guard (Z2^4)', () => {
     const Z2 = createCyclicGroup(2)
     const Z2sq = createDirectProduct(Z2, Z2)

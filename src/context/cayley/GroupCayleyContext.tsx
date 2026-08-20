@@ -43,8 +43,8 @@ export function GroupCayleyProvider({ children }: { children: ReactNode }) {
 
   const [cayleyMultiplyType, setCayleyMultiplyTypeState] = useState<MultiplyType>('right')
   const [cayleyActions, setCayleyActionsState] = useState<CayleyAction[]>([])
-  const [cayleyShape3D, setCayleyShape3DState] = useState<Layout3D>('spherical')
-  const [cayleyAvailableShapes3D, setCayleyAvailableShapes3D] = useState<Layout3D[]>(['spherical', 'circular'])
+  const [cayleyShape3D, setCayleyShape3DState] = useState<Layout3D>('cone')
+  const [cayleyAvailableShapes3D, setCayleyAvailableShapes3D] = useState<Layout3D[]>(['cone', 'circular'])
   const [cayleyShape2D, setCayleyShape2DState] = useState<CayleyShape2D>('circular')
   const [cayleyAvailableShapes2D, setCayleyAvailableShapes2D] = useState<CayleyShape2D[]>(['circular', 'grid'])
   const prevGroupRef = useRef<string | null>(null)

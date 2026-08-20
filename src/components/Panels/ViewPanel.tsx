@@ -59,6 +59,7 @@ export function ViewPanel() {
       if (cayleyShape3D === 'rhombicuboctahedron') return ['4,1,2,3', '3,1,2,4']
       if (cayleyShape3D === 'truncatedOctahedron2') return ['2,3,4,1', '2,1,3,4']
       if (cayleyShape3D === 'truncatedCube') return ['1,4,2,3', '2,1,3,4']
+      if (cayleyShape3D === 'truncatedOctahedron3') return ['2,1,3,4', '1,3,2,4', '1,2,4,3']
     }
     if (sym === 'A_{5}' || sym === 'A5' || sym === 'A₅') {
       if (cayleyShape3D === 'truncatedIcosahedron') return ['2,3,4,5,1', '2,1,4,3,5']

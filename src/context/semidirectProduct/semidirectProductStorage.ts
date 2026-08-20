@@ -20,7 +20,8 @@ export function loadSemidirectProductSpecsFromStorage(): StoredSemidirectProduct
   try {
     const raw = localStorage.getItem(SD_STORAGE_KEY)
     if (raw) {
-      return JSON.parse(raw) as StoredSemidirectProduct[]
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed as StoredSemidirectProduct[]
     }
   } catch { /* ignore */ }
   return []

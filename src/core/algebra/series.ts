@@ -1,5 +1,5 @@
 import type { Group, GroupElement } from '../types'
-import { findAllSubgroups } from './subgroups'
+import { findAllSubgroups, abelianChainDistribution, abelianFactorChains, distributionsEqual } from './subgroups'
 import { commutatorClosure, computeGroupProperties } from './properties'
 
 // Subgroup series: normal series, central series (upper/lower), composition
@@ -142,9 +142,32 @@ function computeFactor(
 
   let label: string
   if (isAbelian) {
-    let maxO = 1
-    for (const g of big) maxO = Math.max(maxO, quotientElementOrder(group, g, smallSet))
-    label = maxO === order ? `C_{${order}}` : `C_{${maxO}} \\times C_{${order / maxO}}`
+    // Exact identification via the finite abelian classification theorem:
+    // match the quotient's order distribution against every invariant-factor
+    // chain d1|d2|...|dk with product = order. This is correct even for
+    // rank >= 3 quotients (C_2^4 etc.), where the old two-term heuristic
+    // produced wrong structure labels like C_2 x C_8.
+    const dist = new Map<number, number>()
+    for (const g of big) {
+      const ord = quotientElementOrder(group, g, smallSet)
+      dist.set(ord, (dist.get(ord) ?? 0) + 1)
+    }
+    // Each coset of small contributes |small| representatives with the same
+    // order, so normalize counts to get the quotient's actual order
+    // distribution (e.g. S3  A3   C2: {1:3,2:3} -> {1:1,2:1}).
+    const distQ = new Map<number, number>()
+    for (const [ord, c] of dist) {
+      if (c % small.length !== 0) return { order, isAbelian: true, isSimple: isComposition ? order > 1 : isPrime(order), label: `G_{${order}}` }
+      distQ.set(ord, c / small.length)
+    }
+    let matched: string | null = null
+    for (const chain of abelianFactorChains(order)) {
+      if (distributionsEqual(distQ, abelianChainDistribution(chain))) {
+        matched = chain.map(d => `C_{${d}}`).join(' \\times ')
+        break
+      }
+    }
+    label = matched ?? `G_{${order}}`
   } else if (order === 8) {
     let involutions = 0
     for (const g of big) if (quotientElementOrder(group, g, smallSet) === 2) involutions++

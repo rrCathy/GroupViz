@@ -12,7 +12,7 @@ const zh: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': '群论可视化平台',
-  'welcome.version': 'v1.14.0',
+  'welcome.version': 'v1.15.0',
   'welcome.tagline': '探索抽象代数的对称之美 — 交互式群论可视化与学习工具',
   'welcome.enter': '进入应用',
   'welcome.section.done': '已实现',
@@ -106,9 +106,9 @@ const zh: TranslationMap = {
   'panel.multiplyLeft': '左乘 c·a',
   'panel.shape': '图形状',
   'panel.shape.circular': '圆形',
+  'panel.shape.cone': '圆锥',
   'panel.shape.grid': '网格',
   'panel.shape.rewiring': '重布线',
-  'panel.shape.spherical': '球面投影',
   'panel.shape.concentric': '共轭类同心环',
   'panel.shape.dualRing': '双环（旋转/反射）',
   'panel.shape.cylinder': '交错同心圆',
@@ -230,8 +230,6 @@ const zh: TranslationMap = {
   'cayley3d.multiplyLeft': '左乘',
   'cayley3d.autoRotate': '自动旋转',
   'cayley3d.resetView': '复位视图',
-  'cayley3d.embedChordMode': '非平面：内部弦边 ×{n}',
-  'cayley3d.embedLayerMode': '非平面：{n} 层同心球面',
 
   /* Symmetry View */
   'symmetry.reset': '复位中...',
@@ -675,7 +673,7 @@ const en: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': 'Group Theory Visualization Platform',
-  'welcome.version': 'v1.14.0',
+  'welcome.version': 'v1.15.0',
   'welcome.tagline': 'Explore the beauty of symmetry in abstract algebra — Interactive group theory visualization & learning tool',
   'welcome.enter': 'Enter',
   'welcome.section.done': 'Implemented',
@@ -769,9 +767,9 @@ const en: TranslationMap = {
   'panel.multiplyLeft': 'Left c·a',
   'panel.shape': 'Shape',
   'panel.shape.circular': 'Circular',
+  'panel.shape.cone': 'Cone',
   'panel.shape.grid': 'Grid',
   'panel.shape.rewiring': 'Rewiring',
-  'panel.shape.spherical': 'Spherical',
   'panel.shape.concentric': 'Concentric (Conjugacy)',
   'panel.shape.dualRing': 'Dual Ring (Rotation/Reflection)',
   'panel.shape.cylinder': 'Interleaved Concentric Circles',
@@ -893,8 +891,6 @@ const en: TranslationMap = {
   'cayley3d.multiplyLeft': 'Left Multiply',
   'cayley3d.autoRotate': 'Auto Rotate',
   'cayley3d.resetView': 'Reset View',
-  'cayley3d.embedChordMode': 'Non-planar: {n} interior chord edge(s)',
-  'cayley3d.embedLayerMode': 'Non-planar: {n} concentric sphere layer(s)',
   'cayley.action.enabled': 'Enabled',
   'cayley.action.disabled': 'Disabled',
   'cayley.action.byElement': 'by element',

@@ -2,9 +2,9 @@ export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' 
 
 export type MultiplyType = 'right' | 'left'
 
-export type Layout3D = 'circular' | 'dihedral' | 'spherical' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedIcosahedron' | 'truncatedDodecahedron' | 'hypercube'
+export type Layout3D = 'cone' | 'circular' | 'dihedral' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron' | 'hypercube'
 
-export type CayleyShape2D = 'grid' | 'circular' | 'spherical' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'ringGrid' | 'pythagoreanSquare'
+export type CayleyShape2D = 'cone' | 'grid' | 'circular' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'ringGrid' | 'pythagoreanSquare'
 
 export interface InternalEdgeData {
   fromInnerIdx: number
@@ -384,7 +384,7 @@ export function isCyclicFactorKeys(keys: string[]): boolean {
 export function getAvailableShapes3D(group: Group): Layout3D[] {
   if (isQuotientGroup(group)) return []
   const sym = group.symbol
-  const shapes: Layout3D[] = ['spherical']
+  const shapes: Layout3D[] = ['cone']
 
   if (isGroupSemidirectProduct(group) || isNamedRewiringGroup(group)) {
     // lattice/torus 依赖直积因子结构，半直积群布局失败会静默球化 → 不提供
@@ -435,7 +435,7 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
   if (sym === 'S_{3}' || sym === 'S3' || sym === 'S₃') {
     shapes.push('circular', 'hexagon')
   } else if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') {
-    shapes.push('circular', 'truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2')
+    shapes.push('circular', 'truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3')
   } else if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') {
     shapes.push('cube')
   } else if (sym === 'Q_{16}' || sym === 'Q16' || sym === 'Q₁₆') {
@@ -455,7 +455,7 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
 }
 
 export function getDefaultLayout3D(group: Group): Layout3D {
-  if (isQuotientGroup(group)) return 'spherical'
+  if (isQuotientGroup(group)) return 'cone'
   // 半直积默认 N⋊H 圆柱（N 环 + H 沿轴，对应 2D rewiring 的 3D 形态）
   if (isGroupSemidirectProduct(group) || isNamedRewiringGroup(group)) return 'semidirectCylinder'
   // C₂³ 凯莱图 = 立方体（优先于直积/阿贝尔分类）
@@ -482,7 +482,7 @@ export function getDefaultLayout3D(group: Group): Layout3D {
   if (sym === 'A_{5}' || sym === 'A5') return 'truncatedIcosahedron'
   if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedOctahedron2'
   if (sym.startsWith('S') || sym.startsWith('A')) return 'circular'
-  return 'spherical'
+  return 'cone'
 }
 
 export function classifyDirectProduct2D(group: Group): CayleyShape2D {
@@ -689,10 +689,10 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
       return ['circular']
     }
     if (isGroupSemidirectProduct(group)) {
-      return ['rewiring', 'circular', 'spherical']
+      return ['rewiring', 'circular', 'cone']
     }
     if (isNamedRewiringGroup(group)) {
-      return ['rewiring', 'circular', 'spherical']
+      return ['rewiring', 'circular', 'cone']
     }
     if (isC2Cube(group)) {
       return ['circular', 'dualRing', 'grid']
@@ -702,10 +702,10 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
       if (group.order === 9 || group.order === 10) {
         return ['circular']
       }
-      return ['circular', 'spherical', 'spiral', 'coil']
+      return ['circular', 'spiral', 'coil', 'cone']
     }
     if (isGroupDihedral(group)) {
-      return ['circular', 'spherical', 'dualRing']
+      return ['circular', 'dualRing', 'cone']
     }
 const shapes: CayleyShape2D[] = ['circular']
     const sym = group.symbol
@@ -721,7 +721,8 @@ const shapes: CayleyShape2D[] = ['circular']
     }
     // 注册表等非直积来源的环网格群（如 GAP 表群 C₄×C₂×C₂）也提供该形状
     if (isRingGridGroup(group) && !shapes.includes('ringGrid')) shapes.push('ringGrid')
-    shapes.push('spherical')
+    // 圆锥同心环兜底（任何群都可用）
+    shapes.push('cone')
     return shapes
   }
   // set, cycle, and other views have a single default layout

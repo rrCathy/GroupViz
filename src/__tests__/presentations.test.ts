@@ -335,4 +335,28 @@ describe('presentationOf', () => {
     const built = buildGroupFromPresentation(parsePresentation('⟨a | a^4⟩'))
     expect(isGroupPresentation(built.group!)).toBe(true)
   })
+
+  it('direct product presentation adds commutators between every factor pair (C2 x C3 x C5)', () => {
+    const g = createDirectProduct(
+      createDirectProduct(createCyclicGroup(2), createCyclicGroup(3)),
+      createCyclicGroup(5),
+    )
+    const pres = presentationOf(g)
+    expect(pres).not.toBeNull()
+    if (!pres) return
+    expect(pres.generators).toHaveLength(3)
+    const joined = pres.relators.join('|')
+    // factor relators a², b³, c⁵
+    expect(joined).toContain('a^2')
+    expect(joined).toContain('b^3')
+    expect(joined).toContain('c^5')
+    // commutators for every factor pair: [a,b], [a,c], [b,c]
+    expect(joined).toContain('aba^{-1}b^{-1}')
+    expect(joined).toContain('aca^{-1}c^{-1}')
+    expect(joined).toContain('bcb^{-1}c^{-1}')
+    // Todd-Coxeter round-trip reconstructs the order-30 group
+    const rebuilt = buildGroupFromPresentation(pres)
+    expect(rebuilt.ok).toBe(true)
+    expect(rebuilt.order).toBe(30)
+  })
 })

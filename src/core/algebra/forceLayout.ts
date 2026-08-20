@@ -3,6 +3,7 @@ import { getDefaultLayout3D, isC2Cube, isGroupDirectProduct, isGroupDihedral, fi
 import { compute3DPositions } from './layout3D'
 import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
 import { parseProductFactors, matrixGridLayout, ringOrder, detectS3PermSet, S3_PERM_IDS, factorPipeGroupsOrTokens, parseCompactFactors, clusterFactorGroups, clusterIsCyclic, factorPipeGroupsGrouped, powerRingOrder, tableFactorSearch, splitDihedralElements, dihedralSnakeOrder, quaternionCosetMap } from './ringOrder'
+import { getConjugacyClasses } from './subgroups'
 
 // Re-export everything from submodules for backward compatibility
 export {
@@ -481,42 +482,6 @@ function nestedTorusPlacement(
   return result
 }
 
-// ─── Fibonacci 2D spherical distribution ───────────────────────────────
-
-export function fibonacci2DLayout(
-  group: Group,
-  width: number,
-  height: number
-): Map<string, NodePosition> {
-  const n = group.order
-  const cx = width / 2
-  const cy = height / 2
-  const r = Math.min(width, height) * 0.38
-
-  const result = new Map<string, NodePosition>()
-
-  if (n === 0) return result
-  if (n === 1) {
-    result.set(group.elements[0].id, { x: cx, y: cy })
-    return result
-  }
-
-  const phi = Math.PI * (3 - Math.sqrt(5))
-
-  for (let i = 0; i < n; i++) {
-    const y = 1 - (i / (n - 1)) * 2
-    const radiusAtY = Math.sqrt(1 - y * y)
-    const theta = phi * i
-
-    result.set(group.elements[i].id, {
-      x: cx + Math.cos(theta) * radiusAtY * r,
-      y: cy + y * r
-    })
-  }
-
-  return result
-}
-
 // ─── Element Order ─────────────────────────────────────────────────────────
 
 export function computeElementOrder(el: GroupElement, group: Group): number {
@@ -610,6 +575,105 @@ export function concentricLayout(
     if (!isIdentityRing) ringIndex++
   }
 
+  return result
+}
+
+// ─── Cone Layout (2D 同心环，圆锥俯视) ───────────────────────────────────
+
+export interface ConeRingOrderInfo {
+  /** 元素 id → 元素阶 */
+  orderOf: Map<string, number>
+  /** 最大元素阶 */
+  maxK: number
+  /** 元素 id → 环内格号（共轭类分扇区，≤60 阶；>60 为 null 走原序） */
+  slots: Map<string, number> | null
+  /** 环 k → 该环总格数（类内元素 + 类间 gap） */
+  totalSlots: Map<number, number>
+}
+
+/**
+ * cone 布局的环序计算：按元素阶分环，环内按共轭类分扇区
+ * （同类元素连续摆放，类间留 1 格 gap）。共轭保持元素阶，
+ * 故每个共轭类完整落在单一环内。>60 阶时退化每元素单类，
+ * 直接返回 null slots 走原序（性能守卫）。
+ */
+export function computeConeRingOrder(group: Group): ConeRingOrderInfo {
+  const orderOf = new Map<string, number>()
+  let maxK = 1
+  for (const el of group.elements) {
+    const k = computeElementOrder(el, group)
+    orderOf.set(el.id, k)
+    if (k > maxK) maxK = k
+  }
+  const totalSlots = new Map<number, number>()
+  for (const k of orderOf.values()) {
+    totalSlots.set(k, (totalSlots.get(k) ?? 0) + 1)
+  }
+  let slots: Map<string, number> | null = null
+  if (group.order > 0 && group.order <= 60) {
+    const classesByK = new Map<number, GroupElement[][]>()
+    for (const cls of getConjugacyClasses(group, false)) {
+      const k = orderOf.get(cls[0].id) ?? 1
+      const list = classesByK.get(k) ?? []
+      list.push(cls)
+      classesByK.set(k, list)
+    }
+    slots = new Map<string, number>()
+    for (const [k, clsList] of classesByK) {
+      let cursor = 0
+      for (const cls of clsList) {
+        for (const el of cls) {
+          slots.set(el.id, cursor)
+          cursor++
+        }
+        cursor++
+      }
+      totalSlots.set(k, cursor)
+    }
+  }
+  return { orderOf, maxK, slots, totalSlots }
+}
+
+/**
+ * 圆锥布局的 2D 俯视版本：恒等元在中心，其余元素按阶 k=2..maxOrder
+ * 分同心环（无 k 阶元素则空环跳过），每环元素按共轭类分扇区分布。
+ */
+export function coneLayout2D(
+  group: Group,
+  width: number,
+  height: number
+): Map<string, NodePosition> {
+  const n = group.order
+  const cx = width / 2
+  const cy = height / 2
+  const result = new Map<string, NodePosition>()
+  if (n === 0) return result
+
+  const { orderOf, maxK, slots, totalSlots } = computeConeRingOrder(group)
+
+  for (let i = 0; i < n; i++) {
+    const el = group.elements[i]
+    const k = orderOf.get(el.id) ?? 1
+    if (k <= 1) {
+      result.set(el.id, { x: cx, y: cy })
+      continue
+    }
+    let slot: number
+    if (slots) {
+      slot = slots.get(el.id) ?? 0
+    } else {
+      let s = 0
+      for (let j = 0; j < i; j++) {
+        if ((orderOf.get(group.elements[j].id) ?? 1) === k) s++
+      }
+      slot = s
+    }
+    const total = totalSlots.get(k) ?? 1
+    const t = k / maxK
+    const ringRadius = Math.min(width, height) * 0.42 * t
+    const angle = -Math.PI / 2 + (slot * 2 * Math.PI) / total
+    result.set(el.id, { x: cx + ringRadius * Math.cos(angle), y: cy + ringRadius * Math.sin(angle) })
+  }
   return result
 }
 
@@ -1300,7 +1364,6 @@ function projectionLayoutForGroup(group: Group): Layout3D {
   if (sym === 'A_{4}' || sym === 'A4') return 'truncatedTetrahedron'
   if (sym === 'A_{5}' || sym === 'A5') return 'truncatedIcosahedron'
   if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') return 'cube'
-  if (sym.startsWith('S') || sym.startsWith('A')) return 'spherical'
   return getDefaultLayout3D(group)
 }
 

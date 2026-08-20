@@ -86,12 +86,15 @@ export function PresentationTableView() {
 
   const { elements, multiply } = group
 
-  const cellSize = 50
   const gridN = isLargeTable ? visibleIndices.length : elements.length
-  const tableWidth = gridN * cellSize
-  const tableHeight = gridN * cellSize
   const vw = viewBoxSize.width
   const vh = viewBoxSize.height
+  // Fit the full grid into the viewBox; the preview view has no pan/zoom,
+  // so oversized tables would clip at the bottom-right corner.
+  const cellSize = Math.min(50, Math.max(20, Math.floor((Math.min(vw, vh) - 140) / gridN)))
+  const cellFont = Math.max(10, Math.min(13, Math.floor(cellSize * 0.4)))
+  const tableWidth = gridN * cellSize
+  const tableHeight = gridN * cellSize
   const offsetX = vw / 2 - tableWidth / 2
   const offsetY = vh / 2 - tableHeight / 2
 
@@ -118,7 +121,7 @@ export function PresentationTableView() {
                   y={cellSize / 2 + 5}
                   textAnchor="end"
                   fill={isSel ? '#ffd93d' : elementColors[ri % elementColors.length]}
-                  fontSize={14}
+                  fontSize={cellFont + 1}
                   fontFamily="serif"
                   fontWeight={isSel ? 'bold' : 'normal'}
                   style={{ userSelect: 'none' }}
@@ -138,7 +141,7 @@ export function PresentationTableView() {
                   y={-12}
                   textAnchor="middle"
                   fill={isSel ? '#ffd93d' : elementColors[ci % elementColors.length]}
-                  fontSize={14}
+                  fontSize={cellFont + 1}
                   fontFamily="serif"
                   fontWeight={isSel ? 'bold' : 'normal'}
                   style={{ userSelect: 'none' }}
@@ -176,7 +179,7 @@ export function PresentationTableView() {
                     y={cellSize / 2 + 5}
                     textAnchor="middle"
                     fill={resColor}
-                    fontSize={13}
+                    fontSize={cellFont}
                     fontFamily="serif"
                     style={{ userSelect: 'none', pointerEvents: 'none' }}
                   >

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   directProductGridLayout2D,
-  fibonacci2DLayout,
   computeElementOrder,
   concentricLayout,
   dualRingLayout,
@@ -412,20 +411,6 @@ describe('torusLayout2D', () => {
       expect(Number.isFinite(p.x)).toBe(true)
       expect(Number.isFinite(p.y)).toBe(true)
     }
-  })
-})
-
-describe('fibonacci2DLayout', () => {
-  it('returns a position for every element', () => {
-    const pos = fibonacci2DLayout(createCyclicGroup(6), 800, 600)
-    expect(pos.size).toBe(6)
-  })
-
-  it('centers a single-element group', () => {
-    const c1 = createCyclicGroup(1)
-    const pos = fibonacci2DLayout(c1, 800, 600)
-    expect(pos.size).toBe(1)
-    expect(pos.get(c1.identity.id)).toEqual({ x: 400, y: 300 })
   })
 })
 

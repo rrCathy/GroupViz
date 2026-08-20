@@ -56,7 +56,7 @@ interface CayleyEdgeData {
 
 **节点位置优先级**：
 1. 用户拖拽保存的位置（~1px 容差）
-2. `gridPositions`（grid/spherical/新形状布局）
+2. `gridPositions`（grid/新形状布局）
 3. `circlePositions`（circular 兜底）
 
 初始化居中：`initializeNodePositions` 与运行时 `viewBoxSize` 使用相同 force 标志（默认 false），避免大群节点偏移出画布。
@@ -68,13 +68,13 @@ interface CayleyEdgeData {
 - 节点标签：`Html` + KaTeX；**自定义球坐标轨道**（非 OrbitControls）：左键旋转（theta/phi 无极角钳制，可连续翻越上下两极点，`up=sign(sinφ)` 翻转保持画面正立）、右键平移 target、滚轮缩放（方向修正 dY>0 拉近，radius 钳 [minRadius, maxRadius]）；▶ 自动旋转沿用同一状态（最后拖拽方向与速率）；**相机外接球适配**（节点云质心 + 最大距离+1.4 为半径，`fitOrbit` 默认视角 = 外接球直径占视口高 2/3，minRadius = R+0.8 不可进入外接球、maxRadius = 3×适配距；初始视角/双击复位用适配视角，**切群/切 3D 形状自动回正**，camera far=400）
 - 3D 导出 PNG（`preserveDrawingBuffer: true`）+ **3D GIF 导出**（`exportCayley3DGif`：`cayley3dControls` 注册桥 + **离屏渲染**——`beginRotation` 记录基准轨道并创建独立离屏 WebGLRenderer+相机（不触碰实时画面，导出期间展示区照常旋转），`frameAt(i, frameDelayMs)` 按帧序号精确求角（基准 + 角速度×帧延时×帧序号，与实时渲染耗时无关），`displayAngVel()` 返回 ▶ 自动旋转当前角速度用于**帧数重推导**（总转角恒为 cycles×2π 无缝循环，导出动图与展示区转速一致）；gifenc 逐帧 quantize 编码，结束后仅释放离屏渲染器）
 
-## 6. 3D 形状模板（17 种）
+## 6. 3D 形状模板（18 种）
 
-形状按**群的性质**分配（`getDefaultLayout3D` 优先级：直积 → 二面 → 循环 → 阿贝尔 → 特定群 → spherical）：
+形状按**群的性质**分配（`getDefaultLayout3D` 优先级：直积 → 二面 → 循环 → 阿贝尔 → 特定群 → cone）：
 
 | 形状 | 适用群性质 | 布局描述 |
 |------|-----------|---------|
-| `spherical` | 所有群（兜底） | Fibonacci球面分布 |
+| `cone` | 所有群（兜底） | 圆锥：顶点恒等元、沿母线按元素阶分圈（俯视 = 2D cone 同心环） |
 | `circular` | 循环群 Zₙ、阿贝尔群 | xz平面圆环 |
 | `dihedral` | 二面体群 Dₙ | 上下两平行环 |
 | `hexagon` | S₃（非阿贝尔阶6） | 平面六边形 |
@@ -93,15 +93,15 @@ interface CayleyEdgeData {
 
 > S₄/A₄/A₅ 群切换 3D 形状时自动切换预设 Cayley 边配置（`getSpecialCayleyActions`），以适配多面体对称性。
 >
-> 直积群 3D 形状由 `analyzeDPFactors` 智能选择：全循环→lattice、一循环→cylinder、无循环→torus、多因子→lattice。半直积群可用 ['spherical','lattice','torus','circular']，默认 'lattice'。半直积/命名半直积（QD16、SmallGroup(16,13)，`isGroupSemidirectProduct || isNamedRewiringGroup`）3D 可用 ['spherical','semidirectCylinder','lattice','torus','circular']，**默认 `semidirectCylinder`**（N 环沿 Y 轴分层圆柱，`semidirectCylinder` 内部经 `getSemidirectProductMeta`+`semidirectFactorMap` 支持命名特判，QD16 实测默认生效）。
+> 直积群 3D 形状由 `analyzeDPFactors` 智能选择：全循环→lattice、一循环→cylinder、无循环→torus、多因子→lattice。半直积/命名半直积（QD16、SmallGroup(16,13)，`isGroupSemidirectProduct || isNamedRewiringGroup`）3D 可用 ['cone','semidirectCylinder','circular']，**默认 `semidirectCylinder`**（N 环沿 Y 轴分层圆柱，`semidirectCylinder` 内部经 `getSemidirectProductMeta`+`semidirectFactorMap` 支持命名特判，QD16 实测默认生效）。
 
-## 7. 2D 形状系统（13 种）
+## 7. 2D 形状系统（14 种）
 
 | 形状 | 布局函数 | 适用群 | 描述 |
 |------|---------|--------|------|
 | `circular` | 圆形排列 | 所有群（默认） | 节点均匀分布在圆周上 |
 | `grid` | `directProductGridLayout2D()` | 直积群 | m×n 网格布局，行列交换优化 |
-| `spherical` | `fibonacci2DLayout()` | 所有群 | Fibonacci 球面分布 2D 投影 |
+| `cone` | `coneLayout2D()` | 所有群 | 圆锥俯视：同心环按元素阶分层，中心恒等元 |
 | `concentric` | `concentricLayout()` | 所有群 | 按共轭类分层同心环，单位元居中 |
 | `dualRing` | `dualRingLayout()` | 二面体群 Dₙ | 旋转元外环、反射元内环 |
 | `archimedean` | `archimedeanSpiralLayout()` | 所有群 | 阿基米德螺旋，按元素阶排序 |
@@ -113,13 +113,13 @@ interface CayleyEdgeData {
 | `torus` | `torusLayout2D()` | 2因子直积，无循环因子 | 主轴环 + 每点挂另一因子副本（甜甜圈） |
 | `ringGrid` | `ringGridLayout2D()` | ≥3 个循环因子直积（Cₙ×C₂×…×C₂ 型） | n 边形环（环生成元 x 幂序）× 2×2 网格（V₄），每格中心挂一个完整环 |
 
-**智能默认 2D 形状**（`getDefaultShape2D`）：直积→`classifyDirectProduct2D`（全循环→grid、恰一循环因子→cylinder、无循环→torus、多因子→grid；C₄×C₂×C₂ 类 ≥3 循环因子→ringGrid）、S₃/S₄/S₅/A₄/A₅/Q₈→projection3D、循环→circular（spiral 仅作手动可选）、二面→dualRing、半直积→rewiring（**QD16 / SmallGroup(16,13) 命名半直积经 `isNamedRewiringGroup` 同样默认 rewiring、可用 [rewiring,circular,spherical,concentric]**）、大阶非循环(order>30)→archimedean、其余→circular。可用形状列表自动追加分类形状 + grid（`getAvailableShapesForView`）。Q₁₆ 生成元按 Group Explorer 标准化为 (a,b)（a 阶 8 / b 阶 4、b²=a⁴、aba=b）且走 4 同心 ⟨b⟩-陪集环专用布局（见下「Q₁₆ 专用布局」）。
+**智能默认 2D 形状**（`getDefaultShape2D`）：直积→`classifyDirectProduct2D`（全循环→grid、恰一循环因子→cylinder、无循环→torus、多因子→grid；C₄×C₂×C₂ 类 ≥3 循环因子→ringGrid）、S₃/S₄/S₅/A₄/A₅/Q₈→projection3D、循环→circular（spiral 仅作手动可选）、二面→dualRing、半直积→rewiring（**QD16 / SmallGroup(16,13) 命名半直积经 `isNamedRewiringGroup` 同样默认 rewiring、可用 [rewiring,circular,cone]**）、大阶非循环(order>30)→archimedean、其余→circular。可用形状列表自动追加分类形状 + grid（`getAvailableShapesForView`）。Q₁₆ 生成元按 Group Explorer 标准化为 (a,b)（a 阶 8 / b 阶 4、b²=a⁴、aba=b）且走 4 同心 ⟨b⟩-陪集环专用布局（见下「Q₁₆ 专用布局」）。
 
 **环网格探测**（`findRingGridDecomposition`/`isRingGridGroup`，types.ts）：纯群论探测 Cₙ×C₂² 分解——阶≤2 元素两两生成 V₄ 网格、遍历阶 n=order/4 环生成元做幂×V 唯一覆盖探测 + 交换性检查（拒绝 C₂×D₄ 伪分解）；**仅限 ≥3 个循环因子直积**（符号循环因子计数，C₁₀×C₂ 等两因子直积排除回 grid）。pipe 直积群、注册表 GAP 表群、同构群统一走同一条路。
 
 **注册表 Dₙ 双环**（`splitDihedralElements`，forceLayout.ts）：注册表二面体群（按阶创建面板 16-30 阶，元素 value=[k] 无旋转/反射编码）经元素阶分类——m=|G|/2，找阶 m 元素 r，旋转=⟨r⟩ 幂闭包（m 个），反射=其余（m 个），配对 sᵢ=rⁱ·s₀；`dualRingLayout` 与 `cayleyCircleLayout` 的 value 分类失败时自动回退此路径（外环旋转幂序角 + 内环反射同角），对 D_m、C₂ₘ、C_m×C₂、Q₈、C₈:C₂ 均匹配（A₄/C₂³ 无阶 m 元素返回 null 走原 fallback）。
 
-**Q₁₆ 专用布局**（`quaternionCosetMap` ringOrder.ts + `quaternionRingLayout2D` forceLayout.ts，参考 Group Explorer Q16 圆柱——GE 中记作 Q₈，下标=阶/2）：`quaternionCosetMap` 对每个元素求 g=a^j·b^i 唯一分解（j,i∈0..3，扫 a⁻ʲ·g ∈ ⟨b⟩），结构校验 order=16 + a 阶 8 / b 阶 4 / a⁴=b² / b·a·b⁻¹=a⁻¹，任一失败返回 null（回退单环，不影响其他群）。2D：4 个右陪集 a^j⟨b⟩ 画成同心圆（j=0 含 e 最内，r_j=R·(0.34+0.66j/3)），角度 90°·i 四环对齐——b 边=环内 90° 弧（4 个干净正方形 b-循环），a 边=12 条纯径向辐条（i 偶向外 j→j+1、i 奇向内 j→j−1）+ 4 条 wrap 直径（(3,0)→(0,2)、(0,1)→(3,3)、(3,2)→(0,0)、(0,3)→(3,1)，即 2 条中心直径线各两个方向）。全参数数值扫描确认这是 4 环族最优（4 处交叉集中在圆心，教科书式画法）。3D：`quaternionCylinder3D`（layout3D.ts semidirectCylinder fallback 分支）4 层 y 环 × 4 节点对齐，a 边竖直、b 边层内弧，即 GE 圆柱原貌；`getDefaultLayout3D(Q16)`='semidirectCylinder'、3D 可用形状 [spherical, semidirectCylinder]。**位置预置修复**（positionUtils.ts `initializeNodePositions`）：cayley 视图 + circular 形状且 computeShape2DPositions 返回 null 时改用 cayleyCircleLayout 生成预置位置（与 GroupCanvas 兜底一致），此前 Q16 专用 4 环永远被 ringOrder 单环预置覆盖。
+**Q₁₆ 专用布局**（`quaternionCosetMap` ringOrder.ts + `quaternionRingLayout2D` forceLayout.ts，参考 Group Explorer Q16 圆柱——GE 中记作 Q₈，下标=阶/2）：`quaternionCosetMap` 对每个元素求 g=a^j·b^i 唯一分解（j,i∈0..3，扫 a⁻ʲ·g ∈ ⟨b⟩），结构校验 order=16 + a 阶 8 / b 阶 4 / a⁴=b² / b·a·b⁻¹=a⁻¹，任一失败返回 null（回退单环，不影响其他群）。2D：4 个右陪集 a^j⟨b⟩ 画成同心圆（j=0 含 e 最内，r_j=R·(0.34+0.66j/3)），角度 90°·i 四环对齐——b 边=环内 90° 弧（4 个干净正方形 b-循环），a 边=12 条纯径向辐条（i 偶向外 j→j+1、i 奇向内 j→j−1）+ 4 条 wrap 直径（(3,0)→(0,2)、(0,1)→(3,3)、(3,2)→(0,0)、(0,3)→(3,1)，即 2 条中心直径线各两个方向）。全参数数值扫描确认这是 4 环族最优（4 处交叉集中在圆心，教科书式画法）。3D：`quaternionCylinder3D`（layout3D.ts semidirectCylinder fallback 分支）4 层 y 环 × 4 节点对齐，a 边竖直、b 边层内弧，即 GE 圆柱原貌；`getDefaultLayout3D(Q16)`='semidirectCylinder'、3D 可用形状 [cone, semidirectCylinder]。**位置预置修复**（positionUtils.ts `initializeNodePositions`）：cayley 视图 + circular 形状且 computeShape2DPositions 返回 null 时改用 cayleyCircleLayout 生成预置位置（与 GroupCanvas 兜底一致），此前 Q16 专用 4 环永远被 ringOrder 单环预置覆盖。
 
 **直积因子识别**（`factorPipeGroups` / `factorPipeGroupsOrTokens`，ringOrder.ts）：按紧凑符号解析因子（`parseCompactFactors`，`C_{2}^{2}` 幂展开为 1 因子 2 段），与 pipe token 段数对齐后按因子分组（C₂²×S₃ = 2 组）；紧凑幂合并（S₃²）时按 pipe 段拆分为多因子，保证 cylinder/torus 布局与 `buildFactorSubgroup` 正常。
 

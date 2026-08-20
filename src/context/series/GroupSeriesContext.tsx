@@ -95,7 +95,7 @@ export function GroupSeriesProvider({ children }: { children: ReactNode }) {
     if (!currentGroup || seriesType !== 'composition') return null
     if (currentGroup.order > SERIES_MAX_ORDER) {
       // GAP returns a single (greedy) chain; no full enumeration available.
-      if (gapSeries) return { chains: [gapSeries.terms], truncated: false }
+      if (gapSeries && gapSeries.type === 'composition') return { chains: [gapSeries.terms], truncated: false }
       return { chains: [], truncated: false }
     }
     return enumerateCompositionSeries(currentGroup, 20)
@@ -104,7 +104,7 @@ export function GroupSeriesProvider({ children }: { children: ReactNode }) {
   const seriesFlags = useMemo(() => {
     if (!currentGroup || seriesType === null) return null
     if (currentGroup.order > SERIES_MAX_ORDER) {
-      if (!gapSeries) return null
+      if (!gapSeries || gapSeries.type !== seriesType) return null
       return { solvable: gapSeries.solvable, nilpotent: gapSeries.nilpotent }
     }
     const props = computeGroupProperties(currentGroup, true)

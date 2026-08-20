@@ -489,6 +489,7 @@ function renderEdgePath(
   const dx = toPos.x - fromPos.x
   const dy = toPos.y - fromPos.y
   const dist = Math.sqrt(dx * dx + dy * dy)
+  if (dist < 1) return null
 
   const baseColor = edge.color
   const color = isHighlighted ? baseColor : `${baseColor}99`

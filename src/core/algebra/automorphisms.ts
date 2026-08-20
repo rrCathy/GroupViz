@@ -78,7 +78,6 @@ export function findAllAutomorphisms(group: Group): Automorphism[] {
 
   const totalCombinations = candidatesPerGen.reduce((acc, c) => acc * c.length, 1)
   const MAX_COMBINATIONS = 30000
-  const MAX_RESULTS = 1000
   if (totalCombinations > MAX_COMBINATIONS) {
     // Too many generator mapping combinations (e.g. Z2^4: 15^4 = 50625, |Aut| = 20160)
     // Computing the full automorphism group would freeze the page — bail out.
@@ -131,7 +130,6 @@ export function findAllAutomorphisms(group: Group): Automorphism[] {
     const candidates = candidatesPerGen[idx]
     const genEl = genPairs[idx].el
     for (const candidate of candidates) {
-      if (results.length >= MAX_RESULTS) return
       const newMap = new Map(genMap)
       newMap.set(genEl.id, candidate.id)
       enumerate(idx + 1, newMap)

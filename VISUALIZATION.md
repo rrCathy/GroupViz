@@ -625,7 +625,7 @@ KaTeX 渲染覆盖所有位置：2D/3D节点标签、面板内容、图例、提
 
 ### 12.11 2D Cayley图多形状布局
 
-- 九种节点排列形状：circular（圆形）、grid（网格，直积群）、spherical（球面投影）、concentric（共轭类同心环）、dualRing（双环旋转/反射）、archimedean（阿基米德螺旋）、spiral（多圈螺旋）、coil（线圈）、projection3D（3D平面投影）（另有独立陪集条带视图）
+- 十种节点排列形状：circular（圆形）、grid（网格，直积群）、cone（圆锥同心环，按元素阶分环）、concentric（共轭类同心环）、dualRing（双环旋转/反射）、archimedean（阿基米德螺旋）、spiral（多圈螺旋）、coil（线圈）、projection3D（3D平面投影）、pythagoreanSquare（勾股正方形，Q₈）（另有独立陪集条带视图）
 - 通过左侧面板下拉菜单切换
 - 可用的形状集合按群类型动态过滤
 - 智能默认形状选择（按群类型自动匹配最佳形状）

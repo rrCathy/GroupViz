@@ -122,7 +122,7 @@ appears at the top:
 For |G| > 30 the full display asks for confirmation first.
 
 ### 4.5 3d — 3D Cayley graph
-A Three.js scene. The 3D shape is auto-picked from 17 templates (spherical, lattice,
+A Three.js scene. The 3D shape is auto-picked from 18 templates (cone, lattice,
 torus, semidirect cylinder, hypercube for C₂⁴, …) and can be overridden from the
 dropdown.
 
@@ -346,7 +346,7 @@ then try the constructions (C₂×S₃, S₃⋊C₂, QD16) and, finally, a prese
   brings you back where you were. Custom action drafts and presentation drafts are
   also auto-saved.
 - **A layout looks tangled**: switch the 2D shape manually (12 layouts), or the 3D shape
-  (17 templates) — for product/semidirect groups the cylinder/torus/rewiring presets
+  (18 templates) — for product/semidirect groups the cylinder/torus/rewiring presets
   are usually the readable ones.
 - **Subgroups of very large groups** may come from the backend; the right panel shows a
   loading hint while fetching.

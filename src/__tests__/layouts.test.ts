@@ -4,6 +4,7 @@ import { compute3DPositions } from '../core/algebra/layout3D'
 import { ringOrder, computeElementOrder, cayleyCircleLayout } from '../core/algebra/forceLayout'
 import { quaternionCosetMap } from '../core/algebra/ringOrder'
 import { computeCayleyActionEdges } from '../core/algebra/cayleyEdges'
+import { getConjugacyClasses } from '../core/algebra/subgroups'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createS3, createSymmetricGroup } from '../core/groups/SymmetricGroup'
@@ -20,13 +21,6 @@ describe('computeShape2DPositions', () => {
   it('returns null for the circular fallback shape', () => {
     const C6 = createCyclicGroup(6)
     expect(computeShape2DPositions(C6, 'circular', W, H)).toBeNull()
-  })
-
-  it('spherical layout covers every element', () => {
-    const C6 = createCyclicGroup(6)
-    const pos = computeShape2DPositions(C6, 'spherical', W, H)!
-    expect(pos.size).toBe(6)
-    for (const el of C6.elements) expect(pos.has(el.id)).toBe(true)
   })
 
   it('grid layout works for direct products and returns null otherwise', () => {
@@ -70,6 +64,21 @@ describe('computeShape2DPositions', () => {
       expect(Math.abs(p.y)).toBeLessThanOrEqual(H)
     }
   })
+
+  it('cone layout (2D concentric rings) covers every element by order', () => {
+    const D6 = createDihedralGroup(6)
+    const pos = computeShape2DPositions(D6, 'cone', W, H)!
+    expect(pos.size).toBe(12)
+    const center = pos.get(D6.identity.id)!
+    expect(center.x).toBe(W / 2)
+    expect(center.y).toBe(H / 2)
+    const ringOf = (id: string) => Math.hypot(pos.get(id)!.x - W / 2, pos.get(id)!.y - H / 2)
+    const e3 = D6.elements.find(el => computeElementOrder(el, D6) === 3)!
+    const e2 = D6.elements.find(el => computeElementOrder(el, D6) === 2)!
+    expect(ringOf(e3.id)).toBeGreaterThan(ringOf(e2.id))
+    const r2s = D6.elements.filter(el => computeElementOrder(el, D6) === 2).map(el => ringOf(el.id))
+    for (const r of r2s) expect(r).toBeCloseTo(r2s[0], 5)
+  })
 })
 
 describe('compute3DPositions', () => {
@@ -78,6 +87,44 @@ describe('compute3DPositions', () => {
     const pos = compute3DPositions(C12, 'circular')
     expect(pos.length).toBe(12)
     expect(pos.every(p => p !== undefined)).toBe(true)
+  })
+
+  it('cone layout puts identity at the apex and rings by element order', () => {
+    const S3 = createS3()
+    const pos = compute3DPositions(S3, 'cone')
+    expect(pos.length).toBe(6)
+    const apexY = pos[S3.elements.findIndex(el => el.id === S3.identity.id)][1]
+    expect(apexY).toBeGreaterThan(Math.max(...pos.filter((_, i) => S3.elements[i].id !== S3.identity.id).map(p => p[1])))
+    const ord2 = S3.elements.findIndex(el => computeElementOrder(el, S3) === 2)
+    const ord3 = S3.elements.findIndex(el => computeElementOrder(el, S3) === 3)
+    expect(pos[ord2][1]).toBeGreaterThan(pos[ord3][1])
+    const ringOf = (id: string) => Math.hypot(pos[S3.elements.findIndex(el => el.id === id)][0], pos[S3.elements.findIndex(el => el.id === id)][2])
+    const r2 = ringOf(S3.elements[ord2].id)
+    const r3 = ringOf(S3.elements[ord3].id)
+    expect(r3).toBeGreaterThan(r2)
+  })
+
+  it('cone ring sectors group conjugacy classes together (D6, order-2 ring)', () => {
+    const D6 = createDihedralGroup(6)
+    const pos = compute3DPositions(D6, 'cone')
+    const ord2 = D6.elements.filter(el => el.id !== D6.identity.id && computeElementOrder(el, D6) === 2)
+    const classes = getConjugacyClasses(D6, false).filter(c => computeElementOrder(c[0], D6) === 2)
+    const idxOf = (id: string) => D6.elements.findIndex(el => el.id === id)
+    const ang = (id: string) => Math.atan2(pos[idxOf(id)][2], pos[idxOf(id)][0])
+    const sorted = ord2.map(el => el.id).sort((a, b) => ang(a) - ang(b))
+    const inSameClass = (a: string, b: string) => classes.some(c => c.some(e => e.id === a) && c.some(e => e.id === b))
+    const inner: number[] = []
+    const gap: number[] = []
+    for (let t = 0; t < sorted.length; t++) {
+      const a = sorted[t]
+      const b = sorted[(t + 1) % sorted.length]
+      let d = ang(b) - ang(a)
+      if (d < 0) d += 2 * Math.PI
+      if (inSameClass(a, b)) inner.push(d)
+      else gap.push(d)
+    }
+    expect(inner.length).toBeGreaterThan(0)
+    expect(Math.max(...inner)).toBeLessThan(Math.min(...gap))
   })
 
   it('circular layout lies in the xz plane', () => {
@@ -134,14 +181,8 @@ describe('compute3DPositions', () => {
     expect(pos.every(p => p !== undefined)).toBe(true)
   })
 
-  it('spherical layout works for any group', () => {
-    const D6 = createDihedralGroup(6)
-    const pos = compute3DPositions(D6, 'spherical')
-    expect(pos.length).toBe(12)
-  })
-
   it('all 3D layouts produce finite coordinates', () => {
-    const layouts: Layout3D[] = ['lattice', 'cylinder', 'circular', 'torus', 'hexagon', 'dihedral', 'tetrahedron', 'cube', 'cuboctahedron', 'spherical']
+    const layouts: Layout3D[] = ['lattice', 'cylinder', 'circular', 'torus', 'hexagon', 'dihedral', 'tetrahedron', 'cube', 'cuboctahedron']
     const group: Group = createS3()
     for (const layout of layouts) {
       const pos = compute3DPositions(group, layout)

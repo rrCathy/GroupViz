@@ -5,7 +5,7 @@ export function getInitialCayleyActions(group: Group): CayleyAction[] {
   return group.generators.map((gen, i) => {
     const targetEl = gen.apply(group.identity)
     return {
-      elementId: targetEl?.id || group.elements[0].id,
+      elementId: targetEl?.id || group.elements[0]?.id || group.identity.id,
       enabled: true,
       color: COLOR_PALETTE[i % COLOR_PALETTE.length]
     }
@@ -22,7 +22,7 @@ export interface CayleyShapeConfig {
 export function getCayleyShapeConfig(group: Group): CayleyShapeConfig {
   if (isQuotientGroup(group)) {
     return {
-      defaultShape3D: 'spherical' as Layout3D,
+      defaultShape3D: 'cone' as Layout3D,
       availableShapes3D: [],
       defaultShape2D: 'circular',
       availableShapes2D: ['circular'] as CayleyShape2D[],
@@ -59,6 +59,12 @@ export function getSpecialCayleyActions(group: Group, shape: Layout3D): CayleyAc
       return [
         { elementId: '1,4,2,3', enabled: true, color: COLOR_PALETTE[0] },
         { elementId: '2,1,3,4', enabled: true, color: COLOR_PALETTE[1] },
+      ]
+    } else if (shape === 'truncatedOctahedron3') {
+      return [
+        { elementId: '2,1,3,4', enabled: true, color: COLOR_PALETTE[0] },
+        { elementId: '1,3,2,4', enabled: true, color: COLOR_PALETTE[1] },
+        { elementId: '1,2,4,3', enabled: true, color: COLOR_PALETTE[2] },
       ]
     }
   }
@@ -103,6 +109,7 @@ export function addAllCayleyActionsHelper(
       if (cayleyShape3D === 'rhombicuboctahedron') return new Set(['4,1,2,3', '3,1,2,4'])
       if (cayleyShape3D === 'truncatedOctahedron2') return new Set(['2,3,4,1', '2,1,3,4'])
       if (cayleyShape3D === 'truncatedCube') return new Set(['1,4,2,3', '2,1,3,4'])
+      if (cayleyShape3D === 'truncatedOctahedron3') return new Set(['2,1,3,4', '1,3,2,4', '1,2,4,3'])
     }
     if (sym === 'A_{5}' || sym === 'A5' || sym === 'A₅') {
       if (cayleyShape3D === 'truncatedIcosahedron') return new Set(['2,3,4,5,1', '2,1,4,3,5'])

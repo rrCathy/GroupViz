@@ -32,8 +32,13 @@ export function GroupBackendProvider({ children }: { children: ReactNode }) {
         const reqSymbol = currentGroup.symbol
         fetchBackendResults(currentGroup).then(results => {
           setBackendCache(prev => {
-            if (prev.groupSymbol === reqSymbol || prev.groupSymbol === currentGroup.symbol) return results
-            return prev
+            if (prev.groupSymbol !== reqSymbol) return prev
+            return results
+          })
+        }).catch(() => {
+          setBackendCache(prev => {
+            if (prev.groupSymbol !== reqSymbol) return prev
+            return { ...prev, loading: false, error: 'backend.unreachable' }
           })
         })
       } else {

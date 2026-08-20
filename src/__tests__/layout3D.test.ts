@@ -20,16 +20,6 @@ function mockGroup(n: number, idPrefix = 'x'): Group {
 }
 
 describe('compute3DPositions', () => {
-  it('fills every position for a plain group on a sphere', () => {
-    const group = mockGroup(10)
-    const pos = compute3DPositions(group, 'spherical')
-    expect(pos).toHaveLength(10)
-    for (const p of pos) {
-      expect(p).toBeDefined()
-      expect(p).toHaveLength(3)
-    }
-  })
-
   it('fills every position even when element ids do not match the canonical permutation format', () => {
     const group = mockGroup(24, 'x')
     const pos = compute3DPositions(group, 'rhombicuboctahedron')

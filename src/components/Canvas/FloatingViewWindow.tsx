@@ -99,6 +99,7 @@ function CayleyGraphViewLocal() {
           const dx = toPos.x - fromPos.x
           const dy = toPos.y - fromPos.y
           const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist < 1) return null
           
           const isHighlighted = selectedElements.has(edge.fromId) || selectedElements.has(edge.toId)
           const baseColor = edge.color

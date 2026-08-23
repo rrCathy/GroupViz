@@ -5,8 +5,9 @@ import { isAutomorphismGroup } from '../../core/types'
 import type { CosetInfo, Subgroup } from '../../core/algebra/subgroups'
 import { computeQuotientGroup, detectIsomorphicGroup } from '../../core/algebra/subgroups'
 
-import { saveQuotientsToStorage, loadAndReconstructQuotients } from './quotientStorage'
-import { saveAutomorphismsToStorage, loadAndReconstructAutomorphisms } from './automorphismStorage'
+import { saveQuotientsToStorage, loadAndReconstructQuotients, storedQuotientEntrySchema } from './quotientStorage'
+import { saveAutomorphismsToStorage, loadAndReconstructAutomorphisms, storedAutomorphismEntrySchema } from './automorphismStorage'
+import { loadStoredArray } from '../../utils/persistence'
 import { createAutomorphismGroup } from '../../core/algebra/automorphisms'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useGroupCore } from '../core/GroupCoreContext'
@@ -111,9 +112,8 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
     if (sym.includes('/N')) return
 
     try {
-      const raw = localStorage.getItem('groupviz-quotients')
-      if (!raw) return
-      const stored: Array<{ id: string; parentSymbol: string; normalSubgroupElementIds: string[]; normalSubgroupLabel: string; isoSymbol: string | null }> = JSON.parse(raw)
+      const stored = loadStoredArray('groupviz-quotients', storedQuotientEntrySchema)
+      if (stored.length === 0) return
       const relevantStored = stored.filter(s => s.parentSymbol === sym)
       if (relevantStored.length === 0) return
 
@@ -157,9 +157,8 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
     if (isAutomorphismGroup(currentGroup)) return
 
     try {
-      const raw = localStorage.getItem('groupviz-automorphisms')
-      if (!raw) return
-      const stored: Array<{ id: string; parentSymbol: string; isoSymbol: string | null }> = JSON.parse(raw)
+      const stored = loadStoredArray('groupviz-automorphisms', storedAutomorphismEntrySchema)
+      if (stored.length === 0) return
       const relevantStored = stored.filter(s => s.parentSymbol === sym)
       if (relevantStored.length === 0) return
 

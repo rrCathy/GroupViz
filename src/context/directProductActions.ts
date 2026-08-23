@@ -1,26 +1,23 @@
 import type { Group } from '../core/types'
 import { createDirectProduct } from '../core/groups/DirectProduct'
 import { createGroupFromSymbol } from '../utils/groupFactory'
+import { loadStoredJson, saveStoredJson } from '../utils/persistence'
+import { z } from 'zod'
 
 const DP_STORAGE_KEY = 'groupviz-dp-groups'
 
+const symbolsSchema = z.array(z.string())
+
 export function loadDirectProductGroupsFromStorage(): Group[] {
-  try {
-    const raw = localStorage.getItem(DP_STORAGE_KEY)
-    if (raw) {
-      const symbols: string[] = JSON.parse(raw)
-      const uniqueSymbols = Array.from(new Set(symbols))
-      return uniqueSymbols.map(s => createGroupFromSymbol(s)).filter(Boolean) as Group[]
-    }
-  } catch { /* ignore */ }
-  return []
+  const symbols = loadStoredJson(DP_STORAGE_KEY, symbolsSchema)
+  if (!symbols) return []
+  const uniqueSymbols = Array.from(new Set(symbols))
+  return uniqueSymbols.map(s => createGroupFromSymbol(s)).filter(Boolean) as Group[]
 }
 
 export function saveDirectProductGroupsToStorage(groups: Group[]): void {
-  try {
-    const symbols = groups.map(g => g.symbol)
-    localStorage.setItem(DP_STORAGE_KEY, JSON.stringify(symbols))
-  } catch { /* ignore */ }
+  const symbols = groups.map(g => g.symbol)
+  saveStoredJson(DP_STORAGE_KEY, symbols)
 }
 
 export function deduplicateGroups(groups: Group[]): Group[] {

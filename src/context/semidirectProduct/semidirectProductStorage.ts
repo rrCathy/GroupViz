@@ -1,9 +1,11 @@
+import { z } from 'zod'
 import type { Group } from '../../core/types'
 import { createGroupFromSymbol } from '../../utils/groupFactory'
 import { createSemidirectProduct } from '../../core/groups/SemidirectProduct'
 import { findAllAutomorphisms, createAutomorphismGroup } from '../../core/algebra/automorphisms'
 import type { Automorphism } from '../../core/algebra/automorphisms'
 import { getGeneratorElements, extendFromGenerators } from '../../core/algebra/homomorphisms'
+import { loadStoredArray, saveStoredJson } from '../../utils/persistence'
 
 export interface StoredSemidirectProduct {
   id: string
@@ -16,21 +18,21 @@ export interface StoredSemidirectProduct {
 
 const SD_STORAGE_KEY = 'groupviz-sd-groups'
 
+const storedSpecSchema = z.object({
+  id: z.string(),
+  symbol: z.string().optional(),
+  normalSymbol: z.string(),
+  actingSymbol: z.string(),
+  phiGenMapping: z.record(z.string(), z.string()),
+  name: z.string().optional(),
+}) satisfies z.ZodType<StoredSemidirectProduct>
+
 export function loadSemidirectProductSpecsFromStorage(): StoredSemidirectProduct[] {
-  try {
-    const raw = localStorage.getItem(SD_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed as StoredSemidirectProduct[]
-    }
-  } catch { /* ignore */ }
-  return []
+  return loadStoredArray(SD_STORAGE_KEY, storedSpecSchema)
 }
 
 export function saveSemidirectProductSpecsToStorage(specs: StoredSemidirectProduct[]): void {
-  try {
-    localStorage.setItem(SD_STORAGE_KEY, JSON.stringify(specs))
-  } catch { /* ignore */ }
+  saveStoredJson(SD_STORAGE_KEY, specs)
 }
 
 export function reconstructSemidirectProduct(spec: StoredSemidirectProduct): Group | null {

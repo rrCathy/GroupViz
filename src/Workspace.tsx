@@ -15,6 +15,8 @@ import { createAutomorphismGroup, isAutomorphismGroup } from './core/algebra/aut
 import { reconstructSemidirectProduct } from './context/semidirectProduct/semidirectProductStorage'
 import type { StoredSemidirectProduct } from './context/semidirectProduct/semidirectProductStorage'
 import { STORAGE_KEY } from './utils/sessionKey'
+import { z } from 'zod'
+import { loadVersionedJson, saveVersionedJson } from './utils/persistence'
 import type { Group, ViewMode } from './core/types'
 import type { Subgroup } from './core/algebra/subgroups'
 
@@ -35,20 +37,35 @@ interface SavedSession {
   semidirectData?: StoredSemidirectProduct
 }
 
+const sessionSchema: z.ZodType<SavedSession> = z.object({
+  symbol: z.string(),
+  view: z.string() as z.ZodType<ViewMode>,
+  quotientData: z.object({
+    normalSubgroupElementIds: z.array(z.string()),
+    normalSubgroupLabel: z.string(),
+    isoSymbol: z.string().nullable(),
+  }).optional(),
+  automorphismData: z.object({
+    isoSymbol: z.string().nullable(),
+  }).optional(),
+  semidirectData: z.object({
+    id: z.string(),
+    symbol: z.string().optional(),
+    normalSymbol: z.string(),
+    actingSymbol: z.string(),
+    phiGenMapping: z.record(z.string(), z.string()),
+    name: z.string().optional(),
+  }).optional(),
+})
+
 function saveSession(session: SavedSession) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-  } catch { /* ignore */ }
+  saveVersionedJson(STORAGE_KEY, session)
 }
 
 function loadSession(): SavedSession | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (parsed.symbol && parsed.view) return parsed
-  } catch { /* ignore */ }
-  return null
+  // Accepts both the versioned { __gvVersion, data } envelope and legacy raw
+  // sessions; corrupt or forged data returns null → default S3 session.
+  return loadVersionedJson(STORAGE_KEY, sessionSchema)
 }
 
 function WorkspaceContent() {

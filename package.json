@@ -22,7 +22,8 @@
         "katex": "^0.16.45",
         "react": "^19.2.5",
         "react-dom": "^19.2.5",
-        "three": "^0.184.0"
+        "three": "^0.184.0",
+        "zod": "^4.4.3"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.4",

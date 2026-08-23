@@ -325,7 +325,8 @@ def test_series_invalid_type():
         "symbol": "S_5",
         "series_type": "bogus",
     })
-    assert resp.status_code == 400
+    # D3 加固后 series_type 是 pydantic Literal，非法值在 schema 层即被 422 拒绝
+    assert resp.status_code == 422
 
 
 @needs_gap

@@ -1,12 +1,16 @@
 import type { Group, GroupElement } from '../types'
+import { SERIES_MAX_ORDER } from '../guards'
+
+// Re-exported for backwards compatibility; the canonical definition lives in
+// core/guards.ts alongside every other engine guard constant.
+export { SERIES_MAX_ORDER }
+
 import { findAllSubgroups, abelianChainDistribution, abelianFactorChains, distributionsEqual } from './subgroups'
 import { commutatorClosure, computeGroupProperties } from './properties'
 
 // Subgroup series: normal series, central series (upper/lower), composition
 // series, and their factors. All computations are local and guarded by
 // SERIES_MAX_ORDER (matching the Sylow / fallback cutoffs used elsewhere).
-
-export const SERIES_MAX_ORDER = 240
 
 export type SeriesType = 'derived' | 'upperCentral' | 'lowerCentral' | 'composition'
 

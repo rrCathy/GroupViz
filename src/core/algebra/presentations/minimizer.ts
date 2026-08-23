@@ -1,15 +1,22 @@
 import type { Group, GroupElement, GroupPresentation, PresentationTerm } from '../../types'
+import {
+  DISCOVERER_MAX_ORDER,
+  DISCOVERER_RELATOR_CAP,
+  DISCOVERER_WORD_BUDGET,
+} from '../../guards'
+
+// Re-exported for backwards compatibility; the canonical definitions live in
+// core/guards.ts alongside every other engine guard constant.
+export { DISCOVERER_MAX_ORDER, DISCOVERER_RELATOR_CAP, DISCOVERER_WORD_BUDGET }
+
 import { runToddCoxeter } from './toddCoxeter'
 import { canonicalCyclicForm, simplifyWord, wordToCanonicalString } from './wordParser'
 
-export const DISCOVERER_MAX_ORDER = 120
 // relator 候选截断：需容纳共轭组合词（a³b²a 型）之外的关键长关系
 // （QD16 的 (ba)⁴ 长 8——200 名额会被 ≤5 terms 的共轭词占满挤出；
 // TC 对千级 relators × ≤8 terms 扫描很快，2000 安全）。
-export const DISCOVERER_RELATOR_CAP = 2000
 // 词长预算：4^8 = 65536 ≤ 70000 → k=2 群可枚举到长度 8 的关系
 // （QD16 等的生成元关系 a⁸ 长度恰为 8；旧预算 40000 只能枚举到长度 7 → 识别失败）。
-export const DISCOVERER_WORD_BUDGET = 70_000
 // 验证长度序列：k≥2 时 maxL≤8（4⁸=65536 已达预算上限，9 层 4⁹=262144 不可达，被循环内
 // L > maxL 守卫自动跳过，无空转）；L=9 仅对 k=1 生效（2⁹=512 ≤ 预算，覆盖 C₁₈/⟨a²⟩≅C₉
 // 一类长度为 9 的关系）。偶数长度（8）覆盖 a⁸ 类关系，奇数上界（7）覆盖 b⁻¹aba⁻³ 类。

@@ -30,7 +30,11 @@ export interface SylowAnalysis {
   primes: SylowPrimeInfo[]
 }
 
-export const SYLOW_MAX_ORDER = 240
+import { SYLOW_MAX_ORDER } from '../guards'
+
+// Re-exported for backwards compatibility; the canonical definition lives in
+// core/guards.ts alongside every other engine guard constant.
+export { SYLOW_MAX_ORDER }
 
 export function factorizeOrder(n: number): { prime: number; exponent: number }[] {
   const factors: { prime: number; exponent: number }[] = []

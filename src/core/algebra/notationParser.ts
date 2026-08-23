@@ -8,9 +8,18 @@ import { normalizeSuperscripts } from '../algebra/presentations'
  * - 否则 gapExpr 交给后端 GAP 计算（/api/compute/import-group）
  * - 无法翻译（如含 ':' 半直积缺 φ）→ ok=false + 定向提示
  */
+/**
+ * 解析失败错误码（字面量 union，UI 侧按 === 定向提示）：
+ * - 'empty'：输入为空
+ * - 'semidirect'：含 ':' 半直积、缺 φ 无法自动翻译
+ * - 'family'：矩阵群族 GL/SL/PGL/PSL 阶公式未命中
+ * - 'unknown'：无法识别的记号
+ */
+export type NotationErrorCode = 'empty' | 'semidirect' | 'family' | 'unknown'
+
 export interface NotationParseResult {
   ok: boolean
-  error?: string
+  error?: NotationErrorCode
   input: string
   normalized: string
   tex: string
@@ -80,7 +89,7 @@ const MATRIX_FAMILIES: Record<string, string> = {
 }
 
 // parseCore 解析一个「原子或复合」记号，返回 TeX / 阶 / GAP 表达式。
-function parseCore(raw: string): CoreResult | { error: string } {
+function parseCore(raw: string): CoreResult | { error: NotationErrorCode } {
   const s = raw
 
   // SmallGroup(n, i)

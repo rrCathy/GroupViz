@@ -1,4 +1,5 @@
 import type { GroupPresentation, PresentationTerm } from '../../types'
+import { parseError } from '../../result'
 
 export function simplifyWord(terms: PresentationTerm[]): PresentationTerm[] {
   const out: PresentationTerm[] = []
@@ -23,10 +24,10 @@ function parseExponent(text: string, pos: number): { e: number; next: number } {
     i++
     const innerStart = i
     while (i < text.length && text[i] !== '}') i++
-    if (i >= text.length) throw new Error('Unbalanced braces in exponent')
+    if (i >= text.length) throw parseError('Unbalanced braces in exponent')
     const digits = text.slice(innerStart, i)
     i++
-    if (!/^[+-]?\d+$/.test(digits)) throw new Error(`Invalid exponent '${digits}'`)
+    if (!/^[+-]?\d+$/.test(digits)) throw parseError(`Invalid exponent '${digits}'`)
     const e = parseInt(digits, 10)
     return { e, next: i }
   }
@@ -35,7 +36,7 @@ function parseExponent(text: string, pos: number): { e: number; next: number } {
   else if (text[i] === '+') { i++ }
   const numStart = i
   while (i < text.length && /\d/.test(text[i])) i++
-  if (i === numStart) throw new Error('Invalid exponent')
+  if (i === numStart) throw parseError('Invalid exponent')
   const e = parseInt(text.slice(numStart, i), 10) * sign
   return { e, next: i }
 }
@@ -53,7 +54,7 @@ function parseSequence(
     if (ch === '(') {
       const inner = parseSequence(text, i + 1, gens)
       if (inner.next >= text.length || text[inner.next] !== ')') {
-        throw new Error('Unbalanced parentheses in word')
+        throw parseError('Unbalanced parentheses in word')
       }
       i = inner.next + 1
       const factor = parseExponent(text, i)
@@ -84,7 +85,7 @@ function parseSequence(
         matchedLen = sym.length
       }
     }
-    if (matched === null) throw new Error(`Unexpected character '${ch}' in word`)
+    if (matched === null) throw parseError(`Unexpected character '${ch}' in word`)
     i += matchedLen
     const factor = parseExponent(text, i)
     i = factor.next
@@ -120,7 +121,7 @@ export function parseWord(text: string, gens: string[]): PresentationTerm[] {
   const trimmed = normalizeSuperscripts(text).trim()
   const res = parseSequence(trimmed, 0, gens)
   if (res.next !== trimmed.length) {
-    throw new Error(`Unexpected character at position ${res.next}`)
+    throw parseError(`Unexpected character at position ${res.next}`)
   }
   return simplifyWord(res.terms)
 }

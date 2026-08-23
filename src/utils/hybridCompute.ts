@@ -33,11 +33,17 @@ import {
 import { computeGroupProperties as localGroupProperties } from '../core/algebra/properties'
 import {
   computeSubgroupSeries,
-  SERIES_MAX_ORDER,
   type SeriesType,
   type SubgroupSeries,
   type SeriesFactor,
 } from '../core/algebra/series'
+// Guard constants are canonicalized in core/guards.ts; LARGE_ORDER_CUTOFF
+// mirrors PROPERTIES_CUTOFF (60), FALLBACK_CUTOFF is the local-enumeration cap.
+import {
+  PROPERTIES_CUTOFF as LARGE_ORDER_CUTOFF,
+  FALLBACK_CUTOFF,
+  SERIES_MAX_ORDER,
+} from '../core/guards'
 
 export interface ResolvedGroupProperties {
   solvable: boolean
@@ -46,11 +52,9 @@ export interface ResolvedGroupProperties {
   derivedSeriesOrders: number[]
 }
 
-const LARGE_ORDER_CUTOFF = 60
-
-// Orders above this are not feasible for the local fallback (pair-join
-// subgroup enumeration explodes); they stay unavailable without a backend.
-const FALLBACK_CUTOFF = 240
+// Orders above FALLBACK_CUTOFF are not feasible for the local fallback
+// (pair-join subgroup enumeration explodes); they stay unavailable without a
+// backend.
 
 export interface BackendCache {
   subgroups: Subgroup[] | null

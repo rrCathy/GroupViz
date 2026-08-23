@@ -1,7 +1,8 @@
 import type { Group, GroupElement, Generator } from '../types'
+import { guardError } from '../result'
 
 export function createCyclicGroup(n: number): Group {
-  if (n < 1) throw new Error('Order must be positive')
+  if (n < 1) throw guardError('Order must be positive')
 
   const elements: GroupElement[] = []
   

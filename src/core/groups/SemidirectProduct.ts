@@ -1,5 +1,6 @@
 import type { Group, GroupElement, Generator } from '../types'
 import { COLOR_PALETTE } from '../types'
+import { guardError } from '../result'
 import type { Automorphism } from '../algebra/automorphisms'
 import { detectIsomorphicGroup } from '../algebra/subgroups'
 
@@ -45,7 +46,7 @@ export function createSemidirectProduct(
           const lhs = phiH12.apply(n)
           const rhs = phiH1.apply(phiH2.apply(n))
           if (lhs.id !== rhs.id) {
-            throw new Error(
+            throw guardError(
               `φ is not a homomorphism: φ(${h1.label}·${h2.label})(n)=${lhs.label} ` +
               `≠ φ(${h1.label})(φ(${h2.label})(n))=${rhs.label} for n=${n.label}`
             )

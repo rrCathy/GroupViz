@@ -1,6 +1,13 @@
 import type { Group, GroupElement, NodePosition } from '../../types'
 
 /**
+ * 布局层错误处理约定（双轨制第三轨）：
+ * 布局函数对不适用的群返回 `null`，由调用方回退到通用布局（如 circular）。
+ * 这是性能路径上的既有约定——布局探测每帧可能被调用，不构造 Error 对象、
+ * 也不走 Result 包装；仅解析/守卫类失败才使用 core/result.ts 的 EngineError。
+ */
+
+/**
  * 布局归一化：平移至原点并按最大半宽/半高缩放到单位圆，返回单位坐标与半径。
  */
 export function normalizeLayout2D(

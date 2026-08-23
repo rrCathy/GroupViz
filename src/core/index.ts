@@ -12,6 +12,8 @@ export * from './types'
 export * from './viewBox'
 export * from './elementRotation'
 export * from './polyhedra'
+export * from './result'
+export * from './guards'
 
 export * from './groups/CyclicGroup'
 export * from './groups/DihedralGroup'

@@ -1,7 +1,8 @@
 import type { Group, GroupElement, Generator } from '../types'
+import { guardError } from '../result'
 
 export function createDihedralGroup(n: number): Group {
-  if (n < 3) throw new Error('Order must be at least 3')
+  if (n < 3) throw guardError('Order must be at least 3')
 
   const elements: GroupElement[] = []
   

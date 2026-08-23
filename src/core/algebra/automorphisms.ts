@@ -1,5 +1,6 @@
 import type { Group, GroupElement, Generator, HomomorphismMap } from '../types'
 import { COLOR_PALETTE, isGroupCyclic } from '../types'
+import { AUTOMORPHISM_MAX_COMBINATIONS } from '../guards'
 import { verifyHomomorphism, getGeneratorElements } from './homomorphisms'
 import { computeElementOrderInGroup, detectIsomorphicGroup } from './subgroups'
 
@@ -77,7 +78,7 @@ export function findAllAutomorphisms(group: Group): Automorphism[] {
   })
 
   const totalCombinations = candidatesPerGen.reduce((acc, c) => acc * c.length, 1)
-  const MAX_COMBINATIONS = 30000
+  const MAX_COMBINATIONS = AUTOMORPHISM_MAX_COMBINATIONS
   if (totalCombinations > MAX_COMBINATIONS) {
     // Too many generator mapping combinations (e.g. Z2^4: 15^4 = 50625, |Aut| = 20160)
     // Computing the full automorphism group would freeze the page — bail out.

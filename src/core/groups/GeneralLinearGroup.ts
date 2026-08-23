@@ -1,4 +1,5 @@
 import type { Group, GroupElement, Generator } from '../types'
+import { guardError } from '../result'
 
 function isPrime(n: number): boolean {
   if (n < 2) return false
@@ -18,7 +19,7 @@ function modInv(a: number, p: number): number {
     ;[t, newT] = [newT, t - q * newT]
     ;[r, newR] = [newR, r - q * newR]
   }
-  if (r > 1) throw new Error(`modInv: ${a} is not invertible mod ${p}`)
+  if (r > 1) throw guardError(`modInv: ${a} is not invertible mod ${p}`)
   if (t < 0) t += p
   return t
 }
@@ -59,7 +60,7 @@ export function detGL2(m: GL2Matrix, p: number): number {
 // Since b·a·b = [[1,0],[1,1]] and SL(2,p) = <a, bab> for p >= 2 (p=2 gives S3),
 // <a, b> = SL(2,p) ∪ b·SL(2,p) = GL(2,p) because b ∉ SL (det(b) = -1 mod p).
 export function createGL2(p: number): Group {
-  if (!isPrime(p) || p < 2) throw new Error(`GL(2,${p}): p must be a prime >= 2`)
+  if (!isPrime(p) || p < 2) throw guardError(`GL(2,${p}): p must be a prime >= 2`)
 
   const mats: GL2Matrix[] = []
   const matIdx = new Map<string, number>()

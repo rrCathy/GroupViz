@@ -14,9 +14,15 @@ import {
   wordToCanonicalString,
 } from './wordParser'
 
-export const PRESENTATION_MAX_ORDER = 240
-export const TC_MAX_COSETS = 3000
-export const TC_MAX_STEPS = 5_000_000
+import {
+  PRESENTATION_MAX_ORDER,
+  TC_MAX_COSETS,
+  TC_MAX_STEPS,
+} from '../../guards'
+
+// Re-exported for backwards compatibility; the canonical definitions live in
+// core/guards.ts alongside every other engine guard constant.
+export { PRESENTATION_MAX_ORDER, TC_MAX_COSETS, TC_MAX_STEPS }
 
 // ─── Todd–Coxeter coset enumeration ──────────────────────────────────────
 

@@ -7,6 +7,18 @@
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
+/** Typed backend error: HTTP status + FastAPI detail string. */
+export class ApiError extends Error {
+  readonly status: number
+  readonly detail: string
+  constructor(status: number, detail: string) {
+    super(detail || `API error ${status}`)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
 async function apiPost<T>(path: string, body: object): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -15,7 +27,7 @@ async function apiPost<T>(path: string, body: object): Promise<T> {
   })
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(detail.detail || `API error ${res.status}`)
+    throw new ApiError(res.status, typeof detail.detail === 'string' ? detail.detail : `API error ${res.status}`)
   }
   return res.json()
 }
@@ -243,6 +255,9 @@ export async function fetchDirectProduct(
 /** Health check — returns backend+GAP availability. */
 export async function fetchHealth(): Promise<ApiHealth> {
   const res = await fetch(`${API_BASE}/health`)
+  if (!res.ok) {
+    throw new ApiError(res.status, `health check failed: ${res.statusText}`)
+  }
   return res.json()
 }
 

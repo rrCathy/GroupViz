@@ -1,5 +1,6 @@
 import { COLOR_PALETTE } from '../../types'
 import type { Group, GroupElement, Generator } from '../../types'
+import { unsupportedError } from '../../result'
 import { SMALL_GROUP_DATA, type SmallGroupRecord } from '../smallGroupData'
 import { assignWordLabels, applyDihedralNormalForm } from './wordLabels'
 
@@ -31,7 +32,7 @@ function structureToSymbol(_n: number, _i: number, structure: string): string {
 export function createTableGroup(order: number, gapIndex: number): Group {
   const rec = SMALL_GROUP_DATA.find(r => r.n === order && r.i === gapIndex)
   if (!rec) {
-    throw new Error(`SmallGroups: no data for SmallGroup(${order},${gapIndex})`)
+    throw unsupportedError(`SmallGroups: no data for SmallGroup(${order},${gapIndex})`)
   }
   const n = order
   const elements: GroupElement[] = []

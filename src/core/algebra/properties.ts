@@ -1,12 +1,16 @@
 import type { Group, GroupElement } from '../types'
+import { PROPERTIES_CUTOFF } from '../guards'
+
+// Re-exported for backwards compatibility; the canonical definition lives in
+// core/guards.ts alongside every other engine guard constant.
+export { PROPERTIES_CUTOFF }
+
 import { closeUnderMultiply } from './subgroups'
 
 // Group-theoretic properties computed from the multiplication table.
 // Local computation is only feasible for small groups (matching the hybrid
 // cutoff used by the rest of the algebra layer); larger groups should be
 // computed on the backend.
-
-export const PROPERTIES_CUTOFF = 60
 
 export interface GroupProperties {
   derivedSeries: GroupElement[][]

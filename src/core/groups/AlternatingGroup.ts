@@ -1,4 +1,5 @@
 import type { GroupElement, Generator, Group } from '../types'
+import { guardError } from '../result'
 
 function applyPermutation(p: number[], q: number[]): number[] {
   return q.map((_, i) => p[q[i] - 1])
@@ -50,8 +51,8 @@ function findPermIndex(elements: GroupElement[], perm: number[]): number {
 }
 
 export function createAlternatingGroup(n: number): Group {
-  if (n < 3) throw new Error('n must be at least 3')
-  if (n > 5) throw new Error('A_{n} for n > 5 is too large')
+  if (n < 3) throw guardError('n must be at least 3')
+  if (n > 5) throw guardError('A_{n} for n > 5 is too large', 'overflow')
 
   const allPerms: number[][] = []
 

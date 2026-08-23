@@ -101,7 +101,7 @@
 - **记号导入群** — 输入群记号（S₅ / PSL(2,7) / C₃×D₄ / SmallGroup(16,13) / Aut(S₄) …）实时 TeX 预览；本地可建则直接创建，否则经后端 GAP 引擎导入（导入后完整结构计算管线可用）
 - **性能守卫** — 子群/共轭类 cutoff 60；Cayley 边限流；自同构枚举组合 >30000 放弃
 - **群展示系统** — ⟨S|R⟩ 创建任意有限群（Todd–Coxeter），群信息栏自动识别标准展示（Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈），tree/展示乘法表视图，草稿自动保存
-- **测试体系** — 44 个测试文件 1272 tests（vitest）
+- **测试体系** — 47 个测试文件 1398 tests（vitest）
 ---
 
 ## 🚀 快速开始
@@ -177,7 +177,7 @@ CI（`.github/workflows/ci.yml`）在每次 push/PR 自动运行 lint、测试�
 .github/                # CI 工作流（ci / pages / release）+ issue / PR 模板
 CONTRIBUTING.md         # 参与贡献指南（含新手引导）
 src/
-├── __tests__/            # 44 个测试文件（1272 tests）
+├── __tests__/            # 47 个测试文件（1398 tests）
 ├── components/
 │   ├── Canvas/           # 视图组件（Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
 │   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/多视图窗口）
@@ -255,7 +255,7 @@ GroupViz 可视化抽象代数与有限群论中的概念。
 - [x] 会话保存与恢复
 - [x] 视图导出（SVG/PNG/GIF）+ 批量导出 CLI
 - [x] 混合计算（本地 TS + FastAPI 后端，本地兜底 + 进度条）
-- [x] 测试体系（44 文件 1272 tests）
+- [x] 测试体系（47 文件 1398 tests）
 - [ ] 群运算律验证动画
 - [x] 自定义有限群输入（⟨S|R⟩ 群展示系统）
 - [ ] 教学模式

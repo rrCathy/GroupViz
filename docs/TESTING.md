@@ -16,7 +16,7 @@
 - TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
 
-## 3. 测试文件清单（src/__tests__，44 文件 / 1272 tests）
+## 3. 测试文件清单（src/__tests__，47 文件 / 1398 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -60,6 +60,9 @@
 | exportApi.test.ts | 16 | 导出桥（exportApi.ts）：registerExportBridge 与 waitReady 时序、getSymmetryInfo（C/D/A₄/S₄/A₅/V₄ 映射）、getAvailableShapes2D/3D、getAvailableViewsForExport（大群去 table/直积去 symmetry）、hideOverlays/showOverlays、exportSVGContent（CSS 变量注入）、exportCanvasDataUrl、recordGIF（base64 解析） |
 | symmetryView.test.ts | 6 | 对称性分类（SymmetryView.getSymmetryType）：C/D 前缀 → cyclic/dihedral、A₄/S₄/A₅/V₄ → tetrahedron/cube/icosahedron/rectangle、**直积/幂符号优先判定**（C₄×C₂/C₂×S₃/C₂³/C₃² → unsupported，修复原 C/D startsWith 顺序 bug）、C₂²/C₂×C₂ → rectangle、S₃/Q₈/GL(2,3) → unsupported |
 | storage.test.ts | 7 | localStorage 容错：semidirectProductStorage（空/round-trip/损坏 JSON/null/{}/42/字符串 → []，H1 白屏修复回归）、homomorphismStorage（round-trip、缺 mapping 字段坏条跳过、mapping:null 坏条跳过，L4 整批容错回归） |
+| coreBoundary.test.ts | 105 | P0 阶段 A 边界回归：core 纯净性扫描（import.meta.glob ?raw 读源码 + stripComments 后正则——零 react import/localStorage/document/window/require）、core/index.ts 门面 ~100 关键符号存在性（全部 typeof function）+ 导出总数 >180、COLOR_PALETTE/SUBSET_COLORS/COSET_COLORS 调色板断言 |
+| resultGuards.test.ts | 10 | P0 阶段 C 错误模型：Result/ok/err 语义（ok:true 值透传、ok:false error 透传）、guards.ts 11 守卫常量值断言、原定义点 re-export 与 guards 同一性（series/sylow/toddCoxeter/minimizer）、EngineError 类型化 throw（wordParser parseError kind='parse'、工厂 guardError kind='guard' 消息保留 toThrow 兼容） |
+| persistenceFuzz.test.ts | 11 | P0 阶段 D 输入加固：persistence.ts（vi.stubGlobal Map 版 localStorage）坏 JSON 返回 null/schema 不符 null/loadStoredArray 逐条容错丢坏保好/版本化信封 round-trip/未来版本无 migrate 拒绝/坏信封拒绝；HOSTILE_STRINGS 25 条 fuzz 四解析器（parseWord/parsePresentation/parseRelationEquation 不抛且 ok 或错误码合法、parseNotation 不抛且 input 回显）；storage loader 吞脏数据不抛 |
 
 ## 4. 测试要点与约定
 

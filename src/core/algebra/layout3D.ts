@@ -8,7 +8,7 @@ import {
 } from './ringOrder'
 import { getSemidirectProductMeta, semidirectFactorMap } from './semidirectDecompositions'
 import { truncatedTetrahedron } from '../polyhedra'
-import { computeConeRingOrder } from './forceLayout'
+import { computeConeRingOrder } from './layouts/ringShapeLayouts'
 
 type Vec3 = [number, number, number]
 

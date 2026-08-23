@@ -1,19 +1,23 @@
 import type { Group, NodePosition, CayleyShape2D } from '../types'
 import {
   directProductGridLayout2D,
+  cylinderLayout2D,
+  torusLayout2D,
+  ringGridLayout2D,
+} from './layouts/factorLayouts'
+import {
   concentricLayout,
   dualRingLayout,
   archimedeanSpiralLayout,
   spiralLayout,
   coilLayout,
+  coneLayout2D,
+} from './layouts/ringShapeLayouts'
+import {
   projection3DLayout,
   semidirectProductLayout,
-  cylinderLayout2D,
-  torusLayout2D,
-  ringGridLayout2D,
   q8PythagoreanLayout,
-  coneLayout2D,
-} from './forceLayout'
+} from './layouts/specialLayouts'
 
 export function computeShape2DPositions(
   group: Group,

@@ -67,7 +67,7 @@ interface Group {
 | 自同构群 Aut(G) | \operatorname{Aut}(G) | \|Aut(G)\| | greedy 闭包扩张 | `automorphisms.ts` |
 | 商群 G/N | G/N | [G:N] | 陪集 | `subgroups.ts` 的 `computeQuotientGroup` |
 
-范围：C₁–C₃₀、D₃–D₁₂、S₂–S₆、A₃–A₅（UI 下拉上限 S₅，S₆ 仅工厂/会话可用）、V₄、Q₈、GL(2,2)、GL(2,3)（GL(2,5)=480 超本地兜底上限，待 E1 后端开启）。
+范围：C₁–C₃₀、D₃–D₁₂、S₂–S₆、A₃–A₅（UI 下拉上限 S₅，S₆ 仅工厂/会话可用）、V₄、Q₈、GL(2,2)、GL(2,3)（GL(2,5)=480 超本地兜底上限，可经「记号导入群」面板走后端 GAP 导入）。
 
 ## 3. 直积群 G×H
 

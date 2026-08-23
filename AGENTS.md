@@ -33,7 +33,7 @@
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 6 面板、右侧双模式、组件清单、i18n 键缺口 |
 | [docs/TESTING.md](docs/TESTING.md) | 测试体系：47 文件 1398 tests、vitest 配置、覆盖率、测试约定 |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/正则/陪集/自定义/Sylow 五来源、同态校验、轨道/稳定化子/OST、Burnside 自检、轨道视图、几何作用暂缓记录 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期（剩余待办 E1 gappy） → 中期 FGVE 引擎化 → 远期 GVL 教学实验室（只列未做事项） |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期已收官（E1 gappy 已关闭，换道直连 GAP） → 中期 FGVE 引擎化 → 远期 GVL 教学实验室（只列未做事项） |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 变更记录：已完成里程碑 + 逐次开发记录（2026-08-15 起由 ROADMAP 迁出） |
 
 ## 3. 技术栈

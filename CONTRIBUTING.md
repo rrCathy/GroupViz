@@ -26,7 +26,7 @@ If this is your first time inside the codebase, this is the recommended path:
    - [`docs/CAYLEY.md`](docs/CAYLEY.md) — Cayley graph edges, 2D/3D layouts
    - [`docs/VIEWS.md`](docs/VIEWS.md) — the 13 view modes and multi-view system
    - [`docs/STATE.md`](docs/STATE.md) — the Provider layering
-4. **Check what's done vs. planned.** [`docs/CHANGELOG.md`](docs/CHANGELOG.md) lists completed milestones and every development session; [`docs/ROADMAP.md`](docs/ROADMAP.md) lists only what remains (the single biggest open engineering item is **E1: GAP backend integration for the gappy computation engine**).
+4. **Check what's done vs. planned.** [`docs/CHANGELOG.md`](docs/CHANGELOG.md) lists completed milestones and every development session; [`docs/ROADMAP.md`](docs/ROADMAP.md) lists only what remains (currently the mid-term **FGVE engine layer**: an in-repo UI-independent engine with stable protocols).
 5. **Run the app** (see below) and click through a few views with different groups (start with D₄ or the small-group registry).
 
 ## Project map

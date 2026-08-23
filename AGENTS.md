@@ -31,7 +31,7 @@
 | [docs/STATE.md](docs/STATE.md) | 状态管理：12 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端）、GAP 大群计算引擎 |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 6 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：47 文件 1398 tests、vitest 配置、覆盖率、测试约定 |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：53 文件 1442 tests（node+dom 双项目）、Playwright E2E 13 tests、vitest 配置、覆盖率、测试约定 |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/正则/陪集/自定义/Sylow 五来源、同态校验、轨道/稳定化子/OST、Burnside 自检、轨道视图、几何作用暂缓记录 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图：近期功能夯实期已收官（E1 gappy 已关闭，换道直连 GAP） → 中期 FGVE 引擎化 → 远期 GVL 教学实验室（只列未做事项） |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 变更记录：已完成里程碑 + 逐次开发记录（2026-08-15 起由 ROADMAP 迁出） |
@@ -55,7 +55,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 47 个测试文件（1398 tests），见 docs/TESTING.md
+│   ├── __tests__/              # 53 个测试文件（1442 tests，node+dom 双项目），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
@@ -127,7 +127,7 @@ GroupViz/
 - ✅ 凯莱图圆形布局无交叉：cayleyCircleLayout 对 S₃（六边形）/二面体结构（双环）自动免交叉布局（同态/同构动画/Aut 弹窗/主视图共用）
 - ✅ 子群列（Series）：子群格视图集成四种子群列——**导列**（derived series）、**上/下中心列**（upper/lower central series）、**合成列**（composition series，Jordan–Hölder）；系列项节点彩色描边（金/青/紫）+ 序数角标，非系列节点调暗（opacity 0.22），系列路径边加粗；底部系列面板 TeX 链式展示 `G ⊵ N₁ ⊵ … ⊵ ⟨e⟩` + 各级阶 + 因子 `Nᵢ/Nᵢ₊₁ ≅ …` + 可解/幂零徽标；合成列额外显示合成因子多重集 + Jordan–Hölder 说明；小群枚举全部合成列（≤20 条守卫，面板链选择器切换）；核心算法 `src/core/algebra/series.ts`（SERIES_MAX_ORDER=240 守卫，大群二期后端）；状态在 `context/series/GroupSeriesContext`（随群切换自动重置）
 - ✅ 群展示（Presentation）系统：任意展示 ⟨a,b | f(a,b), …⟩ 输入创建有限群（Todd–Coxeter 陪集枚举，TC_MAX_COSETS=3000 守卫判有限/无限/溢出），乘法表构建 + `presentationOf` 自动识别标准展示（Cₙ/Dₙ/Sₙ Coxeter/Aₙ/V₄/Q₈，直积/半直积/商群/Aut 走通用关系发现器，PRESENTATION_MAX_ORDER=240）；**发现器极小化展示**（发现器词枚举先 `simplifyWord` + `isRedundantRelator` 前缀过滤，再 `canonicalCyclicForm` 循环旋转/逆折叠（关系 w=e 蕴含任意循环旋转与逆也是关系，QD16 的 868 条共轭冗余词折叠为少数规范词）+ 贪心移除（保护 K 条最短关系即生成元阶关系如 a⁴/b²，其余长词逐个 TC 验证移除，1.5s 预算守卫）；**`presentationOf` 对 QD16 特判返回标准展示 ⟨a⁸, b², bab=a³⟩**（按元素阶定位阶 8 生成元 a——GAP 生成元 g1 阶 4 只能导出非标准 ⟨a⁴, b², (ba)⁴⟩）+ **发现器结果缓存**（symbol|order|生成元数键，群信息栏/树视图反复调用不再重算约 1.6s）；关系支持 **Unicode 上标（a²、a⁻¹，`normalizeSuperscripts`）与 f1=f2 等式（`ab=ba` → `aba⁻¹b⁻¹`，e=f 取另一侧）**；群信息栏展示 TeX 行；左侧「群展示」面板（**两种创建方式**：直接创建 = 完整展示文本 + 持久保存/草稿自动保存 localStorage；**可视化创建** = 1/2/3 生成元模板 ⟨a|⟩/⟨a,b|⟩/⟨a,b,c|⟩ + 逐步输入单条关系（严格 f=e 或 f1=f2 校验，`parseRelationEquation`）+ 已添加关系列表实时构建校验（|G|、≅、无限判定）+ 「结束并创建群」；创建成功设置 **`activePresentationGroup` 独立状态**（不替换左侧当前群，`?? currentGroup` 回退）+ 自动切树视图；「✕ 清空当前群（回到模板树）」）；**tree视图**（退化树 = 商群凯莱图的 BFS 生成树：实线=首次到达边（按生成元着色）；粘合边不绘制，仅顶部 bar 金色「粘合边 ×N」计数，直观呈现「关系 = 砍树」；布局按群结构规则化——1 生成元直线、2 生成元交换格 → 正方形网格（不衰减，幂关系下指数按 mod 折叠，a²,b³,ab=ba → 2×3 网格）、非交换/自由积 → 谢尔宾斯基十字（层距减半防遮挡）、3 生成元 → **3D**（Three.js 立方体方向）；路径状树 0.7/稠密树 0.5 层距衰减 `stepForDepth(depth, ratio)`；展示生成元 ≠ 群生成元时用 `pres.generatorElements` 求值（`genElsOverride`，修复 S₄ Coxeter 3 生成元）；点击节点显示词、缩放/平移/双击复位；无群时展示自由模板树）、**展示乘法表视图**（行/列=群元素，顶部静态展示式 bar，order>36 自动采样）；核心算法 `src/core/algebra/presentations.ts` + `src/core/algebra/cayleyTree.ts`（见 docs/PRESENTATION.md）
-- ✅ 测试体系：47 文件 1398 tests 全绿（`npm run test`），总覆盖率 88.91% stmts / 78.22% branches / 92.32% funcs / 91.90% lines（CI 阈值：stmts/lines/funcs ≥ 85、branches ≥ 70）；**GAP 表群惰性审计**（tableGroups.audit.test.ts，279 tests 扫全部 66 表群：默认形状/全部可用形状/圆形布局/生成元边端点半直积 meta，杜绝布局静默回退回归）（`npm run test:coverage`）
+- ✅ 测试体系：53 文件 1442 tests 全绿（`npm run test`，node 47 文件/1398 + **dom 双项目 6 文件/44**：happy-dom 组件测试 Tex/AccordionSection/TabBar + 集成测试 BasicGroupPanel/Workspace/SVG 结构快照），总覆盖率 88.91% stmts / 78.22% branches / 92.32% funcs / 91.90% lines（CI 阈值：stmts/lines/funcs ≥ 85、branches ≥ 70）；vitest `test.projects` 双项目拆分（node=*.test.ts、dom=*.component.test.tsx/*.integration.test.tsx + setup.ts jest-dom/ResizeObserver/matchMedia stub）；**E2E Playwright**（`npm run test:e2e`）：e2e/ 6 spec 13 tests（欢迎页入口、三栏布局+pageerror==[]、9 视图卡遍历、建群 D₄+直积模式、session reload 恢复+主题持久化、3 截图视觉回归基线 maxDiffPixelRatio 0.02；chromium 单浏览器 workers:1 locale zh-CN webServer strictPort）；`npm run typecheck`（tsc -b）；**GAP 表群惰性审计**（tableGroups.audit.test.ts，279 tests 扫全部 66 表群：默认形状/全部可用形状/圆形布局/生成元边端点半直积 meta，杜绝布局静默回退回归）（`npm run test:coverage`）
 - ✅ **P0 引擎化预处理（v1.15.1，2026-08-23，FGVE 前置）**：行为零变化的重构五阶段（A-E 各独立 commit，全程 test/lint/build 三绿）——**A 类型拆分+门面**：types.ts(780行) 拆 types/{group,view,homomorphism,actions}.ts + algebra/groupProps.ts（性质检测/形状选择函数），原 types.ts 变 barrel 零破坏；新建 `src/core/index.ts` 门面（全量公共导出，automorphisms 内部版 isAutomorphismGroup 排除只留 groupProps 公共版）+ ESLint no-restricted-imports 边界规则（禁 UI 层深导入 types/{group,...} 与 core/**/_internal）+ `coreBoundary.test.ts`（105 tests：core 纯净性扫描零 react/localStorage/DOM + 门面 ~100 符号存在性）。**B 大文件拆分**（原文件变纯 barrel、函数体逐字迁移、私有函数不进公共面）：forceLayout(1552行)→algebra/layouts/{shared,factorLayouts,ringShapeLayouts,specialLayouts}；layout3D(1200行)→纯 dispatcher + layouts3D/{shared,polyhedraVerts,factorLayouts3D,ringShapeLayouts3D,platonicLayouts3D,archimedeanLayouts3D}；presentations(1011行)→presentations/{wordParser,toddCoxeter,minimizer,presentationOf}；subgroups(990行)→subgroups/{shared,detection,enumerate,lattice,normalSubgroups,conjugacy,quotient}；SmallGroups(713行)→groups/SmallGroups/{abelianProducts,wordLabels,tableGroup,registry}。**C 错误模型双轨制**：`src/core/result.ts`（Result<T,E> 判别联合 + EngineError{kind:'parse'|'guard'|'unsupported',reason?} + ok/err 构造器）、14 处裸 throw new Error 全部类型化（消息保留 toThrow 兼容）、notationParser error 收窄 NotationErrorCode 字面量 union、api.ts ApiError(status,detail)+fetchHealth 补 res.ok、`src/core/guards.ts` 收敛 11 个守卫常量（SERIES/PRESENTATION/SYLOW_MAX_ORDER=240、PROPERTIES_CUTOFF=60、TC_MAX_COSETS=3000 等，各模块 re-export 保公共面）；resultGuards.test.ts 10 tests。**D 输入加固**：引入 zod@4.4.3 + `src/utils/persistence.ts`（parseStoredJson/loadStoredJson/**loadStoredArray 逐条容错**/版本化信封 {__gvVersion,data} load/saveVersionedJson），11 storage 文件 14 处裸 JSON.parse 全部迁移；Workspace.tsx 会话恢复接入版本化信封（legacy 裸数据兼容）；persistenceFuzz.test.ts 11 tests（坏 JSON/schema 不符/未来版本拒绝/HOSTILE_STRINGS 25 条 fuzz 四解析器）；后端 schemas.py pydantic Field(max_length)+Literal 加固（backend pytest 37 passed）。**E 总验收**：浏览器冒烟（视图切换/会话信封 round-trip/console 零错误）通过
 
 ## 6. 运行命令
@@ -137,9 +137,12 @@ npm run dev            # 开发启动
 npm run build          # 生产构建（tsc -b && vite build）
 npm run preview        # 预览构建
 npm run lint           # ESLint 检查
-npm run test           # 全部测试（vitest run）
+npm run test           # 全部测试（vitest run，node+dom 双项目）
+npm run test:dom       # 仅 DOM 项目（组件/集成测试，happy-dom）
 npm run test:watch     # 测试监听
 npm run test:coverage  # 覆盖率（v8 → coverage/）
+npm run typecheck      # TypeScript 类型检查（tsc -b）
+npm run test:e2e       # Playwright E2E（e2e/，自动拉起 dev server）
 npm run export         # Playwright 批量导出 → exports/batch-<timestamp>/
 # 后端（大群计算需要）：
 cd backend
@@ -221,5 +224,5 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-*文档版本: 1.15.1*
+*文档版本: 1.16.0*
 *最后更新: 2026-08-23*

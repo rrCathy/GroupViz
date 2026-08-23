@@ -1,0 +1,220 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Tex component > matches snapshot for a group symbol 1`] = `"<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>S</mi><mn>3</mn></msub><mo>×</mo><msub><mi>C</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">S_3 \\times C_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0576em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0715em;">C</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0715em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>"`;
+
+exports[`TexBlock component > matches snapshot 1`] = `
+<div
+  style="text-align: center; margin: 8px 0px;"
+>
+  <span
+    class="katex-display"
+  >
+    <span
+      class="katex"
+    >
+      <span
+        class="katex-mathml"
+      >
+        <math
+          display="block"
+          xmlns="http://www.w3.org/1998/Math/MathML"
+        >
+          <semantics>
+            <mrow>
+              <msub>
+                <mi>
+                  Q
+                </mi>
+                <mn>
+                  8
+                </mn>
+              </msub>
+              <mi
+                mathvariant="normal"
+              >
+                /
+              </mi>
+              <mi>
+                Z
+              </mi>
+              <mo
+                stretchy="false"
+              >
+                (
+              </mo>
+              <msub>
+                <mi>
+                  Q
+                </mi>
+                <mn>
+                  8
+                </mn>
+              </msub>
+              <mo
+                stretchy="false"
+              >
+                )
+              </mo>
+            </mrow>
+            <annotation
+              encoding="application/x-tex"
+            >
+              Q_8 / Z(Q_8)
+            </annotation>
+          </semantics>
+        </math>
+      </span>
+      <span
+        aria-hidden="true"
+        class="katex-html"
+      >
+        <span
+          class="base"
+        >
+          <span
+            class="strut"
+            style="height:1em;vertical-align:-0.25em;"
+          />
+          <span
+            class="mord"
+          >
+            <span
+              class="mord mathnormal"
+            >
+              Q
+            </span>
+            <span
+              class="msupsub"
+            >
+              <span
+                class="vlist-t vlist-t2"
+              >
+                <span
+                  class="vlist-r"
+                >
+                  <span
+                    class="vlist"
+                    style="height:0.3011em;"
+                  >
+                    <span
+                      style="top:-2.55em;margin-left:0em;margin-right:0.05em;"
+                    >
+                      <span
+                        class="pstrut"
+                        style="height:2.7em;"
+                      />
+                      <span
+                        class="sizing reset-size6 size3 mtight"
+                      >
+                        <span
+                          class="mord mtight"
+                        >
+                          8
+                        </span>
+                      </span>
+                    </span>
+                  </span>
+                  <span
+                    class="vlist-s"
+                  >
+                    ​
+                  </span>
+                </span>
+                <span
+                  class="vlist-r"
+                >
+                  <span
+                    class="vlist"
+                    style="height:0.15em;"
+                  >
+                    <span />
+                  </span>
+                </span>
+              </span>
+            </span>
+          </span>
+          <span
+            class="mord"
+          >
+            /
+          </span>
+          <span
+            class="mord mathnormal"
+            style="margin-right:0.0715em;"
+          >
+            Z
+          </span>
+          <span
+            class="mopen"
+          >
+            (
+          </span>
+          <span
+            class="mord"
+          >
+            <span
+              class="mord mathnormal"
+            >
+              Q
+            </span>
+            <span
+              class="msupsub"
+            >
+              <span
+                class="vlist-t vlist-t2"
+              >
+                <span
+                  class="vlist-r"
+                >
+                  <span
+                    class="vlist"
+                    style="height:0.3011em;"
+                  >
+                    <span
+                      style="top:-2.55em;margin-left:0em;margin-right:0.05em;"
+                    >
+                      <span
+                        class="pstrut"
+                        style="height:2.7em;"
+                      />
+                      <span
+                        class="sizing reset-size6 size3 mtight"
+                      >
+                        <span
+                          class="mord mtight"
+                        >
+                          8
+                        </span>
+                      </span>
+                    </span>
+                  </span>
+                  <span
+                    class="vlist-s"
+                  >
+                    ​
+                  </span>
+                </span>
+                <span
+                  class="vlist-r"
+                >
+                  <span
+                    class="vlist"
+                    style="height:0.15em;"
+                  >
+                    <span />
+                  </span>
+                </span>
+              </span>
+            </span>
+          </span>
+          <span
+            class="mclose"
+          >
+            )
+          </span>
+        </span>
+      </span>
+    </span>
+  </span>
+</div>
+`;

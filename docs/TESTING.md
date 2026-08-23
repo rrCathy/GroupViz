@@ -4,19 +4,28 @@
 
 | 命令 | 说明 |
 |------|------|
-| `npm run test` | 运行全部测试（vitest run） |
+| `npm run test` | 运行全部测试（vitest run，node + dom 双项目） |
+| `npm run test:dom` | 仅运行 DOM 项目（组件/集成测试，happy-dom） |
 | `npm run test:watch` | 监听模式 |
 | `npm run test:coverage` | 覆盖率报告（v8，include: `src/core/**`、`src/utils/**`，reporters text + html → `coverage/`） |
+| `npm run typecheck` | TypeScript 全量类型检查（tsc -b，零输出 = 通过） |
+| `npm run test:e2e` | Playwright E2E（e2e/ 目录，自动拉起 dev server localhost:5173） |
 | `npx vitest run <file>` | 运行单个测试文件 |
 
 ## 2. 配置
 
-- **vitest.config.ts**：`{ test: { globals: true, environment: 'node' } }` — Node 环境，无 jsdom、无 setupFiles
-- **coverage**：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 88.91%，lines 91.90%，branches 78.22%、funcs 92.32%）
-- TypeScript 测试源码（.ts），import 项目内部模块直接使用（ESM；不要用 `require()`）
-- lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`）
+- **vitest.config.ts**：`test.projects` 双项目——
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，47 文件）
+  - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
+  - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
+- **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 88.91%，lines 91.90%，branches 78.22%、funcs 92.32%）
+- **playwright.config.ts**：testDir `./e2e`、fullyParallel:false + workers:1（会话/localStorage 隔离靠串行）、viewport 1440×900、locale zh-CN、chromium 单浏览器、retries CI?2:0、trace on-first-retry、webServer `npm run dev -- --strictPort`（reuseExistingServer 本地复用）、`toHaveScreenshot { maxDiffPixelRatio: 0.02, animations: 'disabled' }`
+- TypeScript 测试源码（.ts/.tsx），import 项目内部模块直接使用（ESM；不要用 `require()`）；tsx 文件走 tsconfig jsx react-jsx
+- lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`/`test-results`/`playwright-report`）
 
-## 3. 测试文件清单（src/__tests__，47 文件 / 1398 tests）
+## 3. 测试文件清单
+
+### 3.1 node 项目（src/__tests__/*.test.ts，47 文件 / 1398 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -64,6 +73,28 @@
 | resultGuards.test.ts | 10 | P0 阶段 C 错误模型：Result/ok/err 语义（ok:true 值透传、ok:false error 透传）、guards.ts 11 守卫常量值断言、原定义点 re-export 与 guards 同一性（series/sylow/toddCoxeter/minimizer）、EngineError 类型化 throw（wordParser parseError kind='parse'、工厂 guardError kind='guard' 消息保留 toThrow 兼容） |
 | persistenceFuzz.test.ts | 11 | P0 阶段 D 输入加固：persistence.ts（vi.stubGlobal Map 版 localStorage）坏 JSON 返回 null/schema 不符 null/loadStoredArray 逐条容错丢坏保好/版本化信封 round-trip/未来版本无 migrate 拒绝/坏信封拒绝；HOSTILE_STRINGS 25 条 fuzz 四解析器（parseWord/parsePresentation/parseRelationEquation 不抛且 ok 或错误码合法、parseNotation 不抛且 input 回显）；storage loader 吞脏数据不抛 |
 
+### 3.2 dom 项目（src/__tests__/*.component.test.tsx + *.integration.test.tsx，6 文件 / 44 tests）
+
+| 文件 | 数量 | 覆盖范围 |
+|------|-----|---------|
+| Tex.component.test.tsx | 12 | KaTeX 渲染：tex-span 类、katex 元素存在、Unicode 下标转 TeX、displayMode 行内/块级切换、rerender 更新、HTML 快照 ×2、特殊符号映射（×→\\times 等 each 断言） |
+| AccordionSection.component.test.tsx | 8 | 折叠面板：默认收起/defaultOpen/点击切换箭头 open 类/受控 open=false 覆盖点击/受控 true 常开/onToggle 回调/icon+badge 渲染/结构类名 |
+| TabBar.component.test.tsx | 8 | 标签栏：默认首个 active/只渲染 active 内容/点击切换/defaultTab 覆盖/compact 隐藏 label 留 icon+title/非 compact 完整渲染/结构类名/空 tabs 不崩 |
+| BasicGroupPanel.integration.test.tsx | 5 | I18nProvider>GroupProvider 全链路：初始 none/二面体 slider n=4 → 创建 D_{4}/循环群 C_{12}/特殊群 Q_{8}/对称群创建后 badge 含 S（GroupProbe useContext 读 currentGroup.symbol） |
+| Workspace.integration.test.tsx | 7 | 三栏工作台集成：默认 S3 set 视图 svg circles≥6 + localStorage groupviz-session 信封 {__gvVersion,data:{symbol:'S_{3}',view:'set'}}/损坏 payload 回退 S3/键盘 ArrowRight·Left 选中环 circle[stroke="#ffd93d"]/左栏 accordion-section≥8 且默认仅 ViewPanel 展开/drawer 按钮 + Escape 关闭抽屉/9 张视图卡遍历 active 切换（含 restore 后重查 container） |
+| SvgSnapshot.integration.test.tsx | 4 | SVG 结构快照回归：set-S3 {circles:6,foreignObject:6}（元素标签是 foreignObject+KaTeX 非 `<text>`）/cayley happy-dom 边静默跳过仅断言节点/table rects≥36/cycle circles>0（inline snapshot） |
+
+### 3.3 E2E（e2e/*.spec.ts，Playwright chromium，13 tests）
+
+| 文件 | 数量 | 覆盖路径 |
+|------|-----|---------|
+| welcome.spec.ts | 2 | 欢迎页 h1 + 进入应用按钮；点击进工作台 left-sidebar + view-svg 可见 |
+| workspace.spec.ts | 3 | 默认 S3 set：circle=6 + session 信封 symbol/view；三栏布局 + 全程 pageerror==[]；9 张 view-mode-card |
+| views.spec.ts | 2 | 7 张非 WebGL 视图卡遍历 active 切换无 pageerror（跳过 3D/对称性）；active 标记移动 |
+| creation.spec.ts | 2 | 基本群二面体 tab → slider n=4 → 创建 D₄ 8 节点 + session symbol；直积模式进入/退出 toggle |
+| session.spec.ts | 2 | 桥切 table 视图 → reload 后恢复；主题按钮 → localStorage 持久化 → reload 后 data-theme 一致 |
+| visual-regression.spec.ts | 2 | 3 截图基线 set-C6/table-S3/sublattice-S3（.main-canvas 整体 toHaveScreenshot，maxDiffPixelRatio 0.02）；截图 helper 经桥 setGroupAndView |
+
 ## 4. 测试要点与约定
 
 - 群公理辅助函数 `assertGroupAxioms` 模式：对采样元素验证单位元/逆元/闭包/结合律
@@ -72,6 +103,21 @@
 - mock 外部模块（utils/api）时 `vi.mock` factory 内不要引用顶层变量；用 `vi.mocked(imported)` 拿到 mock 实例
 - fetch 类测试用 `vi.stubGlobal('fetch', ...)`（beforeEach 中 `vi.unstubAllGlobals()` 还原）
 - i18n 键已在 translations.ts 中补齐，断言提示文案时直接使用 t() 键或中文/英文文案
+
+### DOM / 集成测试约定（happy-dom）
+
+- 组件测试文件名必须为 `*.component.test.tsx`、跨 Provider 全链路用 `*.integration.test.tsx`（dom 项目 include 规则）
+- 视图卡文本 = 图标字符 + 标签（如 `⊡集合视图`），匹配用 `.includes(label)` 而非全等；点击后需重新查询再断言 active class（fireEvent.click 后旧节点引用 stale）
+- set 视图元素标签是 `foreignObject` + KaTeX，不是 SVG `<text>`——SVG 结构快照按 circles/foreignObject/rects 计数
+- happy-dom 下依赖测量 API 的绘制（cayley 边等）被应用静默跳过，属预期行为
+- happy-dom localStorage 同文件内测试间共享：beforeEach 清理；RTL 多匹配 getByText 抛错时改 container 内类选择器收窄
+
+### E2E 约定（Playwright）
+
+- 选择器策略：locale zh-CN + 类选择器为主（.view-mode-card/.create-btn/.accordion-header 等）；欢迎页入口按钮用正则 `/进入应用|enter/i`
+- 直积面板定位用 `.accordion-header-left > span:last-child` filter hasText `/^直积$/`（header 文本含图标前缀且 '直积' 会同时命中 '半直积'）
+- 大计算路径经 `window.__groupVizExport__` 桥（waitReady/createGroupFromSymbol/_setGroup/_setView）直达，避免 UI 逐级点击
+- 截图基线在 `e2e/*.spec.ts-snapshots/`，首跑写入基线显示 failed 属正常；更新基线用 `npx playwright test --update-snapshots`
 
 ## 5. 其他脚本
 

@@ -48,3 +48,7 @@ state-*.png
 snap-*.txt
 
 gl23-*.png
+
+# Playwright artifacts
+test-results/
+playwright-report/

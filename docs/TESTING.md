@@ -25,7 +25,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/*.test.ts，47 文件 / 1398 tests）
+### 3.1 node 项目（src/__tests__/*.test.ts，47 文件 / 1399 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -42,7 +42,7 @@
 | generalLinearGroup.test.ts | 16 | GL(2,p)：矩阵乘/逆/det 模 p 手算样例、GL(2,2)（阶 6、生成元阶 2/ab 阶 3、闭包 6 元素、≅ S₃）、GL(2,3)（阶 48、det 同态核=SL(2,3) 阶 24、中心 {±I}、生成元阶 3/2、全量逆、结合律抽样）、p 非素数 throw |
 | polyhedra.test.ts | 17 | 多面体顶点数（12/24/24/24/60/60）、半径缩放、computeSkeletonEdges（**回归：截角十二面体 90 棱 + 全部等距（原坐标错误 120 伪棱）、菱形立方八面体 48 棱（4-正则，原硬编码 3n/2 退化为 24 伪棱）、全 solid 顶点度数 [3,3,4,3,3,3]**）、computeElementRotation（identity 角 0、Cₙ/Dₙ 轴、A₄/S₄/A₅ 轴类型） |
 | forceLayout.test.ts | 64 | forceLayout/planarCycleLayout/子群格布局、cosetStripLayout（空群、S₃ A₃ 两条带、topPadding）、节点位置稳定性、直积因子工具（factorPipeGroups/parseCompactFactors 紧凑符号分组 C₂²×S₃=2 组、buildFactorSubgroup 因子临时群提取）、cylinderLayout2D（C₄×D₄ 32 点同心多环 distinct 半径 ≥8、C₂×S₃ 12 点、C₂×C₃×S₃ 36 点、注册表 Z₂×D₄/Z₂×Q₈ 2 层同心 16 点 distinct 半径=2、D₈ null、C₃×S₃ 各层半格交错 π/6、注册表 C₃×S₃ 18,2 三层 S₃ 环含反射/旋转边层内）、torusLayout2D（S₃×D₄ 48 点 maxR≤400、C₂²×S₃ 24 点、3 因子嵌套 96 点、注册表 (24,13) 24 点）、classifyDirectProduct2D 归组分类（C₂²×S₃→torus、C₂×C₃×S₃→cylinder、C₂³→grid、3 非循环因子→torus、注册表 (24,13)→torus）、semidirectProductLayout（注册表 (16,2) 16 点全有限、S₃ null、C3⋊C2 6 点）、splitDihedralElements（注册表 D₈/D₉ 双环分类、基本 D₄、C₂³/A₄ null）、dualRingLayout 注册表 D₈/D₉ 双环（外环 0.38·min + 内环 0.55 配对）、ringGridLayout2D（pipe C₄×C₂×C₂ 16 点 4 环 2×2 网格：簇质心环半径一致/弦长 2r·sin(π/n)/格距>2r、注册表 16,9 16 点、C₄×C₄ null）、normalizeLayout2D（单位化）、directProductGridLayout2D（注册表群 C₄×C₄ 4×4 满网格 unique=16、(Z₄×Z₂):Z₂ 半直积 null、S₃×C₂ 6×2 grid） |
-| elementRotation.test.ts | 6 | 群元素 → 几何旋转映射（Cₙ/Dₙ/A₄/S₄/A₅ 轴与角） |
+| elementRotation.test.ts | 7 | 群元素 → 几何旋转映射（Cₙ/Dₙ/A₄/S₄/S₃(S₃≅D₃)/A₅ 轴与角） |
 | layout3D.test.ts | 3 | compute3DPositions：3D 形状模板布局（群形状映射、环面投影） |
 | quotientS4.test.ts | 2 | S₄/V₄ 商群创建与 Cayley 边 |
 | quotientFlow.test.ts | 1 | 商群流程 |

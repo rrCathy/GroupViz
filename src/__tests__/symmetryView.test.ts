@@ -44,8 +44,8 @@ describe('getSymmetryType', () => {
     expect(getSymmetryType(groupWithSymbol('C_{2}\\times C_{2}'))).toBe('rectangle')
   })
 
-  it('treats other non-cyclic classes as unsupported', () => {
-    expect(getSymmetryType(groupWithSymbol('S_{3}'))).toBe('unsupported')
+  it('maps S3 to dihedral (S3 ≅ D3) and treats other non-cyclic classes as unsupported', () => {
+    expect(getSymmetryType(groupWithSymbol('S_{3}'))).toBe('dihedral')
     expect(getSymmetryType(groupWithSymbol('Q_{8}'))).toBe('unsupported')
     expect(getSymmetryType(groupWithSymbol('GL(2,3)'))).toBe('unsupported')
   })

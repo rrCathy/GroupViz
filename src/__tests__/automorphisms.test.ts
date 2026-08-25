@@ -71,12 +71,13 @@ describe('findAllAutomorphisms', () => {
   })
 
   it('Aut(C_7^2) should enumerate all 2016 automorphisms (|GL(2,7)| = 48·42) without truncation', () => {
+    // heavy enumeration: ~5s plain, slower under v8 coverage; raise timeout (CI runs test:coverage)
     const C7x2 = createDirectProduct(createCyclicGroup(7), createCyclicGroup(7))
     const autos = findAllAutomorphisms(C7x2)
     expect(autos.length).toBe(2016)
     const ids = new Set(autos.map(a => a.id))
     expect(ids.size).toBe(2016)
-  })
+  }, 30000)
 
   it('huge automorphism groups should be rejected by the guard (Z2^4)', () => {
     const Z2 = createCyclicGroup(2)

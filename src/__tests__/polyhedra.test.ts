@@ -12,7 +12,6 @@ import {
 import { computeElementRotation } from '../core/elementRotation'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
-import { createS3 } from '../core/groups/SymmetricGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
 
@@ -107,8 +106,8 @@ describe('computeElementRotation', () => {
   })
 
   it('returns null for unsupported groups', () => {
-    const S3 = createS3()
-    const rot = computeElementRotation(S3, S3.elements[1])
+    const S5 = createSymmetricGroup(5)
+    const rot = computeElementRotation(S5, S5.elements[1])
     expect(rot).toBeNull()
   })
 

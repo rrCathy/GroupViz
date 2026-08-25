@@ -53,6 +53,23 @@ describe('computeElementRotation', () => {
     expect(r!.angleRad).toBeCloseTo((2 * 2 * Math.PI) / 6)
   })
 
+  it('maps S3 3-cycle to 120° rotation and transposition to 180° flip', () => {
+    // S3 ≅ D3: identity + two 3-cycles (ct '3') + three transpositions (ct '2')
+    const group = mockGroup('S_{3}', 6, [
+      [],
+      [2, 3, 1], // 3-cycle
+      [3, 1, 2], // 3-cycle
+      [2, 1, 3], // transposition (fix 3)
+    ])
+    const r3 = computeElementRotation(group, group.elements[1])
+    expect(r3).not.toBeNull()
+    expect(Math.abs(r3!.angleRad)).toBeCloseTo((2 * Math.PI) / 3, 5)
+    const r2 = computeElementRotation(group, group.elements[3])
+    expect(r2).not.toBeNull()
+    expect(r2!.angleRad).toBe(Math.PI)
+    expect(r2!.axis[1]).toBe(0)
+  })
+
   it('maps dihedral reflection to a flip about an axis in the XZ plane', () => {
     const group = mockGroup('D_{4}', 8, [[0, 0], [1, 1]])
     const r = computeElementRotation(group, group.elements[1])

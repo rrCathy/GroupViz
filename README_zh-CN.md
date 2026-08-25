@@ -1,271 +1,133 @@
-# GroupViz · 群论可视化交互工具
-
-[![CI](https://github.com/rrCathy/GroupViz/actions/workflows/ci.yml/badge.svg)](https://github.com/rrCathy/GroupViz/actions/workflows/ci.yml)
-[![Deploy to GitHub Pages](https://github.com/rrCathy/GroupViz/actions/workflows/pages.yml/badge.svg)](https://github.com/rrCathy/GroupViz/actions/workflows/pages.yml)
+# GroupViz
 
 <p align="center">
-  <a href="./README.md">English</a> | <strong>简体中文</strong>
+  <strong>群论可视化交互工具</strong>
 </p>
 
-**GroupViz** 是一个用于可视化与探索有限群论的交互式Web应用。提供 13 种视图模式（视图面板 9 个卡片 + 同态/轨道视图经各自构建面板进入 + 群展示面板 2 个专用视图：tree/展示乘法表）、支持多种典型群族与群构建系统（直积/半直积/自同构群/商群/同态/群展示），所有数学公式均通过 KaTeX 渲染。
+<p align="center">
+  <a href="https://rrcathy.github.io/GroupViz/"><strong>在线体验</strong></a> ·
+  <a href="https://github.com/rrCathy/GroupViz">GitHub</a> ·
+  <a href="https://github.com/rrCathy/GroupViz/issues">获取帮助</a>
+</p>
 
-初次使用 GroupViz？建议先读[新手教程](docs/TUTORIAL_zh-CN.md)（English: [TUTORIAL.md](docs/TUTORIAL.md)）。
 <p align="center">
   <img src="https://img.shields.io/badge/React-19.2-blue" alt="React 19">
   <img src="https://img.shields.io/badge/TypeScript-6.0-blue" alt="TS 6">
   <img src="https://img.shields.io/badge/Three.js-0.184-orange" alt="Three.js">
-  <img src="https://img.shields.io/badge/KaTeX-0.16-green" alt="KaTeX">
   <img src="https://img.shields.io/badge/license-MIT-brightgreen" alt="MIT">
+</p>
+
+<p align="center">
+  <a href="./README.md">English</a> | <a href="./README_zh-CN.md"><strong>简体中文</strong></a>
 </p>
 
 ---
 
-## 在线使用
+## 🎯 让抽象代数变得可见、可玩
 
-`https://rrcathy.github.io/GroupViz/`
+**GroupViz** 是一款交互式 Web 应用，把抽象的群论变成可交互、可探索的 2D/3D 场景。无论你是研究子群结构的研究者、讲解凯莱图的教师，还是初次接触 Lagrange 定理的学生——GroupViz 让数学变得看得见、摸得着、玩得转。
 
-## ✨ 功能特性
-### 群结构可视化
-- **子群** — 计算、列出并高亮所有循环子群
-- **共轭类** — 自动划分共轭类
-- **中心** — 识别中心元素；子群格金色高亮（Z(G) 角标）、子群列表金色边框突出、群信息面板展示
-- **由子集生成子群 ⟨E⟩** — 任意子集一键闭包生成子群，跳转陪集条带展示 `|G| = |H|·[G:H]`
-- **正规化子/中心化子** — 任意子集 E 一键求 `N_G(E) = {g | gEg⁻¹ = E}` 与 `C_G(E) = {g | gx = xg, ∀x ∈ E}`，两者均为子群，跳转陪集条带展示 Lagrange
-- **子群格（Hasse 图）** — 节点按层级排列，正规子群高亮
-- **子群列** — 导列/上·下中心列/合成列叠加在子群格上（系列项彩色描边 + 序数角标，非系列节点调暗，系列边加粗）；底部面板 TeX 链式 `G ⊵ N₁ ⊵ … ⊵ ⟨e⟩` + 各级阶 + 因子 `Nᵢ/Nᵢ₊₁ ≅ …` + 可解/幂零徽标；合成列显示合成因子多重集 + Jordan–Hölder 说明；小群枚举全部合成列（≤20 条，链选择器切换）；`SERIES_MAX_ORDER = 240` 守卫
-- **陪集分解** — 左/右陪集彩色编码，陪集条带视图中验证 Lagrange 定理
-- **单群检测** — 自动判断是否为单群
-### 13 种视图模式
-视图面板提供 9 个视图卡片；「同态」「轨道」视图的入口分别在「同态」「群作用」面板中；「tree」「展示乘法表」两个群展示专用视图的入口在左侧「群展示」面板底部（均不在视图卡片中）。
-| 视图 | 说明 |
-|------|------|
-| **集合视图** | 群元素网格排列展示 |
-| **凯莱图 (2D)** | SVG 渲染，14 种形状布局，节点可拖拽，边可配置 |
-| **圆圈图** | 循环子群可视化，支持极大循环筛选 |
-| **凯莱表** | 交互式乘法表，行列高亮，陪集条纹；|G| > 16 提供三策略（子群展示 / 随机展示 / 全量展示全屏模式、缩放滑块、SVG 导出） |
-| **凯莱图 (3D)** | Three.js 渲染，18 种形状模板，轨道控制 |
-| **对称性视图** | 多面体几何 + 元素操作动画 + 旋转轴与交点标记 |
-| **子群格图** | Hasse 图，按层级布局 |
-| **同态视图** | 源/目标双凯莱图 + 映射边，核/像高亮，第一同构定理动画证明 |
-| **陪集条带** | 陪集按列排布，`|G| = |H|·[G:H]` Lagrange 验证，子群条带上方展示 ⟨H⟩ 圆形凯莱图 |
-| **轨道视图** | 群作用轨道簇布局（固定点 ★ 在最左），生成元作用边，hover 显示全部箭头，轨道-稳定化子定理验证 |
-| **Sylow 视图** | p-元素与全部 p-子群（p 可选），凯莱图布局，陪集条带，双选共轭视图（Sylow 第二定理） |
-| **树视图** | 退化树 = 商群凯莱图的 BFS 生成树：实线生成树边（按生成元着色）+ 粘合边不绘制（bar 计数），布局规则化（直线/网格/十字/3D），直观展示「关系 = 砍树」 |
-| **展示乘法表视图** | 乘法表式浏览（列×行），顶部静态展示式 bar，order>36 自动采样 |
+**核心亮点：**
+- ✨ 13 种视图模式：凯莱图（2D/3D）、乘法表、子群格、对称性视图、陪集条带、轨道与 Sylow 视图等
+- 🎨 18 种 3D 形状模板与 14 种 2D 布局，按群性质自动分配
+- 🏗️ 完整的群构建系统：直积、半直积、自同构群、商群、同态与群展示（⟨S|R⟩）
+- 🔄 多视图浮动窗口、深/浅主题、2D/3D **动图 GIF 导出**
+- 🌍 中英双语界面，会话保存与恢复
 
-### 群作用系统
-| 来源 | 说明 |
-|------|------|
-| 共轭作用 | G 共轭作用于自身；轨道 = 共轭类，固定点 = 中心 Z(G) |
-| 自定义作用 | 元素间画箭头、点击/拖放绑定生成元，自动补全 + 同态校验 Φ: G → Sym(X)，违规精确定位；草稿自动保存到 localStorage，按群符号自动恢复（刷新或切换群后）；**完成的作用持久保存**（面板列表按群显示、切群保留、点击激活恢复、可删除） |
-| Sylow | Sylow 型视图：p-元素与全部 p-子群（p 可选，|G| 素因子），凯莱图布局（点击子群 → 边切换为该子群生成元作用），单选 → 陪集条带（Lagrange），Ctrl/⌘ 或 ⊕ 复选两个子群 → 共轭视图（Sylow 第二定理，竖直共轭箭头 + P 青/Q 紫内部生成元边）；G 共轭作用于 Syl_p(G)（轨道大小 = n_p，稳定子 = 正规化子）经轨道视图验证 |
+<br>
 
-### 群构建系统
-| 构建 | 说明 |
-|------|------|
-| 直积 G×H | 交互式构建任意两群直积（最多 144），3 种模式（cayley/table/direct），紧凑符号（C₃×C₃→C₃²） |
-| 半直积 N⋊_φ H | φ 映射 UI、Aut(N) 自动计算、5 个预设（Z₃⋊Z₂≅S₃、Z₄⋊Z₂≅D₄、Z₅⋊Z₂≅D₅、Z₇⋊Z₂ Frobenius、V₄⋊Z₃≅A₄）、4 步构建动画、rewiring 布局 |
-| 自同构群 Aut(G) | 自动枚举全部自同构、Aut 群群律、选中元素查看重布线凯莱图与映射 |
-| 商群 G/N | 从正规子群构建，陪集元素，≅ 同构徽章 |
-| 同态映射 | 源→目标映射验证、核/像、单射/满射/同构性质分析、第一同构定理动画 |
-| 群展示 ⟨S\|R⟩ | 任意展示创建有限群（Todd–Coxeter 陪集枚举，判有限/无限/溢出），≅ 同构提示、tree/展示乘法表视图、持久保存 + 草稿自动保存 |
+<div align="center">
 
-### 支持的群
-| 群族 | 符号 | 阶 | 状态 |
-|-------|--------|-------|--------|
-| 循环群 | Zₙ (n=1..120) | n | ✅ |
-| 二面体群 | Dₙ (n=3..12) | 2n | ✅ |
-| 对称群 | S₃, S₄, S₅ | 6, 24, 120 | ✅ |
-| 交错群 | A₃, A₄, A₅ | 3, 12, 60 | ✅ |
-| Klein 四群 | V₄ | 4 | ✅ |
-| 四元数群 | Q₈ | 8 | ✅ |
-| 一般线性群 | GL(2,p)：GL(2,2) ≅ S₃ | 6 / 48 | ✅ |
-| 直积群 | Z₄×Z₂, Z₂³, Z₃×Z₄, Z₆×Z₂ 及任意 G×H | ≤144 | ✅ |
-| 半直积 | N⋊_φ H（如 Z₃⋊Z₂ ≅ S₃） | ≤144 | ✅ |
-| 自同构群 | Aut(G)（如 Aut(Z₈) ≅ C₂） | — | ✅ |
-| 商群 | G/N | \|G\|/\|N\| | ✅ |
+![二面体群 D₄ 的凯莱图（2D 双环布局）](docs/images/hero-cayley-2d-D4.png)
 
-### 核心亮点
-- **基于群元素作用的凯莱图** — 边由任意群元素定义（广义 Cayley 图），支持右乘/左乘切换
-- **18 种 3D 形状模板** — 按群性质自动分配（S₄、A₄、A₅ 使用截角多面体）；直积群智能形状选择（lattice/cylinder/torus）；圆锥（cone）为所有群兜底
-- **14 种 2D 凯莱图形状** — circular/grid/cone/concentric/dualRing/archimedean/spiral/coil/projection3D/rewiring（半直积专属）/cylinder（直积一循环因子）/torus（直积无循环因子）/ringGrid（环×2×2 网格；≥3 个循环因子）/pythagoreanSquare（Q₈），按群类型智能选择默认形状
-- **多视图浮动窗口** — 同时打开多个视图进行对比分析
-- **子集分析** — 保存元素选择集；通过封闭性检验自动检测子群/正规子群
-- **自逆元素检测** — 高亮 g⁻¹ = g 的元素
-- **会话保存与恢复** — 自动存入 localStorage，刷新后恢复（含商群/自同构/半直积重建）
-- **深色/浅色主题** — CSS自定义属性，支持系统偏好检测
-- **视图导出** — SVG（2D 视图）、PNG（3D 视图）、GIF（对称性动画 + 3D 凯莱图旋转）+ 批量导出 CLI（`npm run export`）
-- **国际化** — 中文/English UI，localStorage 持久化
-- **混合计算** — 小群本地 TS 计算（≤60），大群自动切换 FastAPI 后端（>60）
-- **小群注册表** — 阶 1–31 全部 93 个群（GAP SmallGroups 导入），预计算子群/共轭类/中心数据
-- **记号导入群** — 输入群记号（S₅ / PSL(2,7) / C₃×D₄ / SmallGroup(16,13) / Aut(S₄) …）实时 TeX 预览；本地可建则直接创建，否则经后端 GAP 引擎导入（导入后完整结构计算管线可用）
-- **性能守卫** — 子群/共轭类 cutoff 60；Cayley 边限流；自同构枚举组合 >30000 放弃
-- **群展示系统** — ⟨S|R⟩ 创建任意有限群（Todd–Coxeter），群信息栏自动识别标准展示（Cₙ/Dₙ/Sₙ/Aₙ/V₄/Q₈），tree/展示乘法表视图，草稿自动保存
-- **测试体系** — 53 个测试文件 1442 tests（vitest node+dom 双项目）+ Playwright E2E 13 tests（含截图视觉回归）
----
+*二面体群 D₄ 的凯莱图（2D 双环布局）*
+
+</div>
+
+## 📸 视图画廊
+
+<div align="center">
+
+### 凯莱图
+
+| 2D 双环布局 | 3D 多面体形状 |
+|:---:|:---:|
+| ![D4 凯莱图 2D](docs/images/hero-cayley-2d-D4.png) | ![A5 凯莱图 3D](docs/images/cayley-3d-A5.png) |
+
+### 结构与定理
+
+| S₄ 子群格 | S₄ 对称性视图 |
+|:---:|:---:|
+| ![S4 子群格](docs/images/lattice-S4.png) | ![S4 对称性视图](docs/images/symmetry-S4.png) |
+
+### 动图演示
+
+| A₅ 3D 凯莱图旋转 | S₄ 对称性作用动画 |
+|:---:|:---:|
+| ![A5 3D 动画](docs/images/cayley-3d-A5.gif) | ![S4 对称性动画](docs/images/symmetry-S4.gif) |
+
+### 乘法表与圆圈图
+
+| S₃ 凯莱表 | C₁₂ 圆圈图 | C₂₀ 元素集合 |
+|:---:|:---:|:---:|
+| ![S3 乘法表](docs/images/table-S3.png) | ![C12 圆圈图](docs/images/cycle-C12.png) | ![C20 集合视图](docs/images/set-C20.png) |
+
+</div>
+
+## ✨ 功能亮点
+
+- **群结构一目了然** —— 子群、共轭类、中心 Z(G)、正规化子/中心化子、Hasse 子群格（叠加导列/中心列/合成列）
+- **广义凯莱图** —— 边由*任意*群元素定义（右乘/左乘可切换），不限于生成元
+- **定理可视化验证** —— Lagrange（陪集条带 `|G| = |H|·[G:H]`）、Cayley（正则作用）、轨道-稳定化子、第一同构定理动画、Sylow 定理
+- **群构建实验室** —— 交互式构建 G×H、N⋊_φ H、Aut(G)、G/N 与同态
+- **群展示系统** —— 通过展示 ⟨S|R⟩（Todd–Coxeter 陪集枚举）定义任意有限群
+- **记号导入** —— 输入 `S₅`、`PSL(2,7)`、`C₃×D₄`、`Aut(S₄)` … 即可得到该群及其凯莱图与完整结构管线
+- **混合计算** —— 小群本地 TypeScript 计算，大群（阶 > 60）自动切后端 FastAPI + GAP 引擎，带本地兜底
 
 ## 🚀 快速开始
-### 环境要求
-- Node.js ≥ 18
-- npm ≥ 9
 
-### 安装运行
+在线体验：<https://rrcathy.github.io/GroupViz/>
+
+或本地运行（Node.js ≥ 18，npm ≥ 9）：
 
 ```bash
 git clone https://github.com/rrCathy/GroupViz.git
-cd groupviz
+cd GroupViz
 npm install
 npm run dev
 ```
 
-浏览器打开 `http://localhost:5173/`
-### 生产构建
+浏览器打开 `http://localhost:5173/`。大群（阶 > 60）需要启动后端：
 
-```bash
-npm run build
-npm run preview
-```
-
----
-
-## 📖 使用指南
-
-1. 在左侧面板**选择群**（循环群、二面体群、对称群、交错群或特殊群），或用构建系统创建直积/半直积/Aut(G)/商群
-2. 在视图面板**切换视图**（tree/展示乘法表两个群展示视图经「群展示」面板进入）
-3. **画布交互** — 平移（拖拽背景）、缩放（滚轮）、选中（点击）、框选（Ctrl+拖拽）
-4. **探索凯莱图** — 启用/禁用元素作用边，切换右乘/左乘，选择 2D/3D 形状，运行力导向布局
-5. **群论探索** — 保存子集检测子群、显示陪集、创建商群；构建同态并运行第一同构定理动画
-6. **键盘导航** — ←/→ 键切换元素
-7. **打开浮动视图** — 开启多视图模式，并排对比不同表示
-
-> 详细技术文档见 `docs/` 目录：群实现（GROUPS.md）、Cayley 图系统（CAYLEY.md）、视图（VIEWS.md）、状态管理（STATE.md）、后端（BACKEND.md）、UI（UI.md）、测试（TESTING.md）。
-
----
-
-## 🤝 参与贡献
-
-欢迎任何形式的贡献——从布局算法修正到新群族、新构建流程。从这里开始：
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) —— 新手引导、代码规范、开发流程与风险审查协议
-- [docs/ROADMAP.md](docs/ROADMAP.md) —— 尚未完成的事项（这里只列未做项）
-- [docs/CHANGELOG.md](docs/CHANGELOG.md) —— 已完成里程碑与逐次开发记录
-- [Issue 模板](.github/ISSUE_TEMPLATE/) —— Bug 报告与功能请求
-
-CI（`.github/workflows/ci.yml`）在每次 push/PR 自动运行 lint、测试、覆盖率阈值、生产构建与后端 pytest；`main` 自动部署 GitHub Pages，`v*` 标签发布 Release。
-
----
-
-## 🛠 技术栈
-
-| 类别 | 技术 |
-|----------|-----------|
-| 框架 | React 19 + TypeScript |
-| 构建 | Vite |
-| 样式 | CSS 自定义属性 + App.css |
-| 3D 渲染 | Three.js + React Three Fiber |
-| 数学渲染 | KaTeX |
-| 状态管理 | 模块化 React Context（12 个领域 Provider） |
-| 后端 | Python FastAPI（大群混合计算） |
-| 国际化 | 自定义 React Context |
-| 测试 | Vitest |
-
----
-
-## 📂 项目结构
-
-```
-.github/                # CI 工作流（ci / pages / release）+ issue / PR 模板
-CONTRIBUTING.md         # 参与贡献指南（含新手引导）
-src/
-├── __tests__/            # 53 个测试文件（1442 tests，node+dom 双项目）
-├── e2e/                  # Playwright E2E（6 spec 13 tests）
-├── components/
-│   ├── Canvas/           # 视图组件（Set/Cayley/Cycle/Table/3D/Symmetry/SubgroupLattice/
-│   │                    #   Homomorphism/CosetStrip/DirectProduct/SemidirectProduct/多视图窗口）
-│   ├── Panels/           # 左侧面板（BasicGroup/View/Operations/DirectProduct/
-│   │                    #   Homomorphism/SemidirectProduct）+ RightPanel + TabBar + constants
-│   ├── Tex.tsx           # KaTeX React 组件
-│   └── WelcomePage.tsx   # 硬核模式欢迎页（功能清单、即将推出、赞助链接）
-├── core/
-│   ├── types.ts          # 类型定义、色板、形状检测函数
-│   ├── groups/           # 群实现（循环/二面/对称/交错/特殊/直积/半直积/小群注册表）
-│   ├── algebra/          # 子群、陪集、同态、自同构、Cayley 边、布局算法
-│   ├── polyhedra.ts      # 多面体顶点生成
-│   ├── elementRotation.ts # 群元素 → 3D 几何旋转变换
-│   └── viewBox.ts        # SVG 视口尺寸计算
-├── context/              # 模块化状态管理（12 个领域 Provider + GroupContext 聚合）
-├── utils/                # Unicode→TeX 转换、导出、导出桥、群工厂、混合计算
-├── backend/              # FastAPI 后端（大群结构计算）
-└── docs/                 # 技术文档体系
-```
-
----
-
-## ⌨️ 命令
-
-| 命令 | 说明 |
-|---------|-------------|
-| `npm run dev` | 启动开发服务器 |
-| `npm run build` | 类型检查 + 生产构建 |
-| `npm run lint` | 运行 ESLint |
-| `npm run test` | 运行 Vitest 测试 |
-| `npm run test:watch` | 测试监听模式 |
-| `npm run preview` | 预览生产构建 |
-| `npm run export` | Playwright 批量导出视图（→ exports/batch-<时间戳>/） |
-
-后端（大群计算需要）：
 ```bash
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
----
+初次使用？[新手教程](docs/TUTORIAL_zh-CN.md)带你快速上手工作台、13 个视图与构建系统（English: [TUTORIAL.md](docs/TUTORIAL.md)）。
 
-## 📚 数学背景
+## 🛠 技术栈
 
-GroupViz 可视化抽象代数与有限群论中的概念。
-- **Lagrange 定理** — 子群的阶必整除群的阶
-- **Cayley 定理** — 任意有限群同构于某个对称群的子群
-- **类方程** — |G| = 各共轭类大小之和
-- **第一同构定理** — G/ker(φ) ≅ im(φ)
-- **半直积** — N⋊_φ H：乘法 (n₁,h₁)·(n₂,h₂) = (n₁·φ(h₁)(n₂), h₁·h₂)
+| 层级 | 技术 |
+|-------|-----|
+| 框架 | React 19 + TypeScript |
+| 构建 | Vite |
+| 3D 渲染 | Three.js + React Three Fiber |
+| 数学渲染 | KaTeX（所有数学表达式规范排版） |
+| 后端 | Python FastAPI（大群混合计算，可选 GAP 引擎） |
+| 测试 | Vitest（node+dom 双项目）+ Playwright E2E |
+| 导出 | SVG · PNG · GIF · 批量导出 CLI（`npm run export`） |
 
-凯莱图由任意群元素的作用定义。
-- **右乘模式**：若 a·c = b 则存在 a → b 的边
-- **左乘模式**：若 c·a = b 则存在 a → b 的边
-- 若作用为对合，边为无向边（不显示箭头）
----
+## 🤝 社区与贡献
 
-## 🔮 路线图
-- [x] 13 种视图模式（含同态视图、陪集条带、轨道视图、Sylow 视图）
-- [x] 群展示系统（⟨S|R⟩ 创建 + Todd–Coxeter、树视图、可视化创建、展示乘法表视图）
-- [x] 多视图浮动窗口
-- [x] 子群格（Hasse 图）
-- [x] 对称性视图（多面体旋转动画）
-- [x] 小群预计算注册表（阶 1–15）
-- [x] 国际化（中文 / English）
-- [x] 陪集分解 UI 可视化 + Lagrange 验证
-- [x] 直积群构建系统（任意 G×H）
-- [x] 半直积构建（5 预设 + φ 映射 UI + 动画）
-- [x] 自同构群 Aut(G)
-- [x] 同态映射 + 第一同构定理动画证明
-- [x] 群作用系统（共轭/自定义、轨道视图、轨道-稳定化子验证）
-- [x] 2D 凯莱图多形状布局（14 种，含 rewiring/cylinder/torus）
-- [x] 深色/浅色主题
-- [x] 会话保存与恢复
-- [x] 视图导出（SVG/PNG/GIF）+ 批量导出 CLI
-- [x] 混合计算（本地 TS + FastAPI 后端，本地兜底 + 进度条）
-- [x] 测试体系（53 文件 1442 tests + E2E 13 tests）
-- [ ] 群运算律验证动画
-- [x] 自定义有限群输入（⟨S|R⟩ 群展示系统）
-- [ ] 教学模式
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** —— 新手引导、代码规范与开发流程
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** —— 尚未完成的事项
+- **[docs/CHANGELOG.md](docs/CHANGELOG.md)** —— 已完成里程碑
+- **[Issue 模板](.github/ISSUE_TEMPLATE/)** —— Bug 报告与功能请求
 
----
+更多技术文档在 `docs/` 目录：[GROUPS](docs/GROUPS.md)、[CAYLEY](docs/CAYLEY.md)、[VIEWS](docs/VIEWS.md)、[STATE](docs/STATE.md)、[BACKEND](docs/BACKEND.md)、[UI](docs/UI.md)、[TESTING](docs/TESTING.md)。
 
 ## 📄 许可证
-MIT © 2026
 
----
-
-*为数学可视化而构建。*
+MIT © 2026 —— 为数学可视化而构建。

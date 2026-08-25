@@ -20,6 +20,7 @@ export function getSymmetryType(group: Group): SymmetryType {
   if (sym.includes('\\times') || sym.includes('^{')) return 'unsupported'
   if (sym.startsWith('C')) return 'cyclic'
   if (sym.startsWith('D')) return 'dihedral'
+  if (sym === 'S_{3}') return 'dihedral'
   if (sym === 'A_{4}') return 'tetrahedron'
   if (sym === 'S_{4}') return 'cube'
   if (sym === 'A_{5}') return 'icosahedron'

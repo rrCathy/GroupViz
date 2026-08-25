@@ -89,6 +89,24 @@ export function computeElementRotation(group: Group, element: GroupElement): Rot
     return { axis: [Math.cos(refAngle), 0, Math.sin(refAngle)], angleRad: Math.PI, label: `绕 ${Math.round(refAngle*180/Math.PI)}° 轴翻转 180°` }
   }
 
+  if (sym === 'S_{3}' && val.length >= 3) {
+    const ct = getCycleType(val)
+    if (ct === '3') {
+      const k = elementHash(3, element.id, '3c')
+      const deg = 120
+      return { axis: [0, 1, 0], angleRad: (2 * Math.PI / 3) * (k % 2 === 0 ? 1 : -1), label: `绕 Y 轴旋转 ${deg}°` }
+    }
+    if (ct === '2') {
+      // transposition: axis through fixed point (vertex of triangle)
+      const normalized = val.map((v: number) => v - 1)
+      let fixed = 0
+      for (let i = 0; i < normalized.length; i++) if (normalized[i] === i) { fixed = i; break }
+      const refAngle = (2 * Math.PI * fixed) / 3 - Math.PI / 2
+      return { axis: [Math.cos(refAngle), 0, Math.sin(refAngle)], angleRad: Math.PI, label: `绕 ${Math.round(refAngle * 180 / Math.PI)}° 轴翻转 180°` }
+    }
+    return { axis: [0, 1, 0], angleRad: 0, label: '' }
+  }
+
   if (sym === 'V_{4}') {
     const m: Record<string, RotationInfo> = {
       '1,3,2,4': { axis: [0, 1, 0], angleRad: Math.PI, label: '绕 Y 轴旋转 180°' },

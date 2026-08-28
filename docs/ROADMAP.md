@@ -14,7 +14,7 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 | 中期 | 2026-10 → 2027-04 | FGVE 引擎化 | 沉淀独立于 UI 的有限群可视化引擎 |
 | 远期 | 2027-04 → 2027-12 | GVL 教学实验室 | 面向大学抽象代数课程的教学产品形态 |
 
-核心决策（详见 §5）：近期已全部交付——群作用/Sylow + 数学缺口 M1–M4/M8；原 **E1「gappy 后端集成」经 2026-08-16 换道（弃 gappy 库，直连本机 GAP 4.16）后以 GAP 大群计算引擎 v1.13.0 交付，2026-08-23 正式关闭**；M5 移除、M6–M8/E2/P1–P3 按 2026-08-10 筛选标准不做（非可视化任务）；FGVE **先做仓库内独立引擎层**（不拆 npm 包）；GVL 定位 **大学抽象代数课程配套**（Fraleigh / Dummit & Foote 风格）。
+核心决策（详见 §5）：近期已全部交付——群作用/Sylow + 数学缺口 M1–M4/M8；原 **E1「gappy 后端集成」经 2026-08-16 换道（弃 gappy 库，直连本机 GAP 4.16）后以 GAP 大群计算引擎 v1.13.0 交付，2026-08-23 正式关闭**；M5 移除、M6–M8/E2/P1–P3 按 2026-08-10 筛选标准不做（非可视化任务）；**FGVE 阶段目标升级为「UI 与算法解耦 + 产出可导出 npm 包」**（2026-08-25 定案，见 §2.8）：保持单仓库、不拆分 monorepo，以「仓库内子目录 + vite library mode 多入口」产出 **`@groupviz/core`**（纯算法，零 UI 依赖）+ **`@groupviz/react`**（视图组件，react/three/katex 作 peerDeps）双包；GVL 定位 **大学抽象代数课程配套**（Fraleigh / Dummit & Foote 风格）。
 
 ## 1. 近期：功能夯实期（2026-08 → 2026-10）
 
@@ -44,8 +44,8 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 ### 2.1 结构演进
 
-- `src/core/` 演进为仓库内独立引擎层（`src/engine/`）：纯 TypeScript、零 UI 依赖、独立测试。
-- 渲染层、状态层（Provider 分层）仅通过引擎公共 API 访问数学能力；UI 内部细节不再渗透进引擎。
+- `src/core/` 即仓库内引擎层（**保持现名**，不另立 `src/engine/` 目录）：纯 TypeScript、零 UI 依赖、独立测试（coreBoundary.test 守护纯净性）。
+- 新增 `src/package/` 双包门面（`@groupviz/core` / `@groupviz/react`，见 §2.8）作为对外稳定入口；渲染层、状态层（Provider 分层）仅通过引擎公共 API 访问数学能力；UI 内部细节不再渗透进引擎。
 
 ### 2.2 稳定协议
 
@@ -74,11 +74,22 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 ### 2.6 可选高价值项
 
-- 引擎 API 文档 + 最小宿主示例（约 100 行代码即可嵌入任意页面）。
+- 引擎 API 文档（最小宿主示例已升格为阶段 3 正式验收项，见 §2.8）。
 
 ### 2.7 非目标
 
-- npm 包发布 / monorepo 拆分：**推迟到 GVL 阶段**出现明确宿主需求时再做，避免早期工程开销。
+- **monorepo 拆分（pnpm workspaces / packages/*）**：仍推迟（单仓库内子目录构建已覆盖打包需求，迁移收益不足）。
+- 包内嵌入 GAP 计算引擎：`@groupviz/core` 仅提供 `createBackendAdapter({ baseUrl, fetchImpl })` 适配接口，宿主自接后端。
+
+### 2.8 双包解耦与打包（2026-08-25 定案，FGVE 新增核心子任务）
+
+将「UI 与算法解耦」落地为**可消费的 npm 包**（原计划推迟到 GVL，用户 2026-08-25 拍板提前到 FGVE）：
+
+- **包形态**：`@groupviz/core`（纯算法层：GroupDescriptor 序列化 / 群构造 / 布局算法 / 视图配置，零 React/DOM 依赖）+ `@groupviz/react`（视图组件 + adapter + renderTex + 主题，peerDeps: react/three/@react-three/fiber/drei/katex）。均从现有 `src/core`、`src/components` 导出，不引入 monorepo。
+- **阶段 1 —— 序列化协议固化**：`GroupDescriptor v1`（`src/core/descriptor.ts`：元素/乘法表行序隐式索引/属性缓存/构造参数/source 溯源）+ zod 校验 + 全群族 round-trip 幂等测试；`ViewConfig` JSON 化（shape2D/3D、边类型、颜色）。
+- **阶段 2 —— 视图 props 化（行为零变化重构）**：视图组件由 `useGroup()` 读全局 Provider 改为受控 props 注入；`GroupCanvas` 拆 `<GroupCanvas {...props}/>` + `<GroupCanvasFromContext/>` adapter 壳。**分四批推进**：第一批 set/cayley/cycle/table → 第二批 3d/sublattice/cosetstrip → 第三批 homomorphism/action/sylow/symmetry → 第四批 tree/prestable。每批独立 commit，测试全绿。
+- **阶段 3 —— 打包与消费验收**：vite library mode 多入口 + `exports` 字段；`examples/host-minimal/` 最小宿主（JSON 载群 → 渲染视图 → 切形状 → 导出 SVG）；CI 跑包构建 + Playwright 消费冒烟测试。
+- **数学渲染**：算法层输出 **TeX 字符串**（零依赖），KaTeX 渲染归宿主/`@groupviz/react`（peerDep），core 不直接 renderTex。
 
 ## 3. 远期：GVL 教学实验室（2027-04 → 2027-12）
 
@@ -114,14 +125,14 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 ### 3.8 工程形态
 
-视需要将引擎正式发布为 npm 包 `@groupviz/engine`（此时 monorepo 拆分才有明确收益）。
+GVL 阶段消费 FGVE 已产出的 `@groupviz/core` + `@groupviz/react` 包（宿主即 GVL 自身/学校课程页面）；如出现 monorepo 拆分（packages/core|react|app）需求，届时再评估。
 
 ## 4. 阶段成功标准
 
 | 阶段 | 验收标准 |
 |------|----------|
 | 近期 | 全部交付收官（含 GAP 大群计算引擎 v1.13.0，E1 已关闭）；lint/test/build 全绿；覆盖率 ≥ 85% |
-| 中期 | `src/engine/` 独立成立且 UI 仅经公共 API 访问数学能力；群 JSON round-trip 可用；特征标表视图上线；最小宿主示例可运行 |
+| 中期 | `GroupDescriptor v1` round-trip 可用（全群族幂等）；视图组件 props 化拆分完成四批（第一批 set/cayley/cycle/table）；`@groupviz/core`/`@groupviz/react` 双包可构建、`examples/host-minimal/` 最小宿主（JSON 载群→渲染→切形状→导出 SVG）CI 冒烟通过；特征标表视图上线 |
 | 远期 | 教育模式上线；≥ 1 套完整大学抽象代数课程；教师"制作场景 → 分享 → 学生作答"闭环可用 |
 
 ## 5. 决策记录
@@ -136,3 +147,4 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 | 2026-08-10 | 任务筛选标准 = 新建可视化或可视化优化，非可视化任务一律不做：M5（第二/第三同构定理验证）移除，M6/M7/M8/E2/P1/P2/P3 取消；gappy IdGroup 砍除（E1 其余端点照常规划，见 §1.1）；群论计算器/多对象工作台方向搁置，作为独立新引擎另行规划 |
 | 2026-08-23 | **E1 正式关闭**：gappy 方案不采用——2026-08-16 已换道直连本机 GAP 4.16 并以 v1.13.0 交付核心能力（六端点 + series + import-group、缓存、超时守卫、S₆ 实测）；剩余收尾项（缓存/超时强化、特征标表端点、大群前端全链路验收）并入中期 §2.4/§2.5 |
 | 2026-08-24 | **FGVE 前置工程准备收官，转入中期开发**：P0 引擎化预处理（v1.15.1，类型拆分+门面/大文件拆分/错误模型双轨/输入加固）+ 测试体系建设（v1.16.0，53 文件 1442 tests + E2E 13）全部落地；终验四绿实测通过（lint / test / build / test:e2e），版本与测试计数跨文档一致核对无误；近期阶段无遗留事项，中期 §2 FGVE 引擎化自此正式启动 |
+| 2026-08-25 | **FGVE 包化范围定案（用户拍板，覆盖 §2.7 原"不拆包"决定）**：目标 = 将「UI 与算法解耦」落地为可消费 npm 包——`GroupDescriptor v1` 序列化协议 + 视图组件 props 化（从 `useGroup()` 全局 Provider 改为受控 props 注入）+ 双包产出。**包形态**：`@groupviz/core`（纯算法、零 React/DOM 依赖）+ `@groupviz/react`（视图组件 + 渲染适配，react/three/@react-three/fiber/drei/katex 作 peerDeps）。**仓库结构**：保持单仓库不转 monorepo（`src/core`、`src/package/` 子目录 + vite library mode 多入口），避免早期工程开销。**数学渲染**：算法层只输出 TeX 字符串（零依赖），KaTeX 渲染归宿主 / @groupviz/react（peer）。**视图解耦分四批推进**：第一批 set/cayley/cycle/table → 第二批 3d/sublattice/cosetstrip → 第三批 homomorphism/action/sylow/symmetry → 第四批 tree/prestable，每批行为零变化重构 + 独立 commit + 测试全绿。**验收**：`examples/host-minimal/` 最小宿主（JSON 载群→渲染→切形状→导出 SVG）CI 冒烟。详见 §2.8 |

@@ -40,6 +40,12 @@ lighthouse/
 # MCP / agent tooling artifacts
 .playwright-mcp/
 .serena/
+.mimosa/
+.zcode/
+
+# Test-page matrix captures (browser verification dumps)
+test-page/
+testpage-matrix.png
 
 # Screenshots from browser scans
 sweep-*.png

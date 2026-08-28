@@ -1,9 +1,26 @@
 import { useMemo } from 'react'
-import { useGroup } from '../../context/useGroup'
-import { useHover } from '../../context/core/HoverContext'
-import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
+import type { Group } from '../../core/types'
 import type { InternalEdgeData } from '../../core/types'
+
+export interface SetViewProps {
+  group: Group | null
+  selectedElements: Set<string>
+  canvasTransform: { x: number; y: number; scale: number }
+  viewBoxSize: { width: number; height: number }
+  subsets?: Array<{ elementIds: string[]; color: string }>
+  selfInverseElementId?: string | null
+  cosetElementMap?: Map<string, number>
+  cosetHighlightSet?: Set<number>
+  cosetColors?: string[]
+  onSelect?: (elId: string, additive: boolean) => void
+  onHover?: (el: Group['elements'][number] | null) => void
+  noGroupText?: string
+  nodeRadius?: number
+  gap?: number
+  columns?: number
+  showLabels?: boolean
+}
 
 const INNER_NODE_COLORS = [
   '#ff6b6b','#4ecdc4','#ffd93d','#a78bfa','#f97316','#06b6d4',
@@ -166,34 +183,52 @@ function renderCompoundNode(
   )
 }
 
-export function SetView() {
-  const { currentGroup, selectedElements, selectElement, canvasTransform, viewBoxSize, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors } = useGroup()
-  const { setHoverElement } = useHover()
-  const { t } = useTranslation()
-
+export function SetView({
+  group,
+  selectedElements,
+  canvasTransform,
+  viewBoxSize,
+  subsets,
+  selfInverseElementId,
+  cosetElementMap,
+  cosetHighlightSet,
+  cosetColors,
+  onSelect,
+  onHover,
+  noGroupText,
+  nodeRadius: nodeRadiusOverride,
+  gap: gapOverride,
+  columns: columnsOverride,
+  showLabels: showLabelsOverride,
+}: SetViewProps) {
+  type SubsetView = { elementIds: string[]; color: string }
   const subsetDetailMap = useMemo(() => {
-    const m = new Map<string, typeof subsets[0]>()
-    subsets.forEach(s => s.elementIds.forEach(id => { if (!m.has(id)) m.set(id, s) }))
+    const m = new Map<string, SubsetView>()
+    subsets?.forEach(s => s.elementIds.forEach(id => { if (!m.has(id)) m.set(id, s) }))
     return m
   }, [subsets])
 
-  if (!currentGroup) {
+  const cosetPalette = cosetColors ?? []
+
+  if (!group) {
     return (
       <div className="view-empty">
-        <p>{t('canvas.noGroup')}</p>
+        <p>{noGroupText ?? ''}</p>
       </div>
     )
   }
 
-  const isLarge = currentGroup.order > 60
-  const hasCompoundNodes = currentGroup.elements.some(el => el.cosetMemberLabels && el.cosetMemberLabels.length > 0)
-  const nodeRadius = hasCompoundNodes ? 72 : 26
-  const gap = hasCompoundNodes ? 12 : 8
+  const isLarge = group.order > 60
+  const hasCompoundNodes = group.elements.some(el => el.cosetMemberLabels && el.cosetMemberLabels.length > 0)
+  const nodeRadius = nodeRadiusOverride ?? (hasCompoundNodes ? 72 : 26)
+  const gap = gapOverride ?? (hasCompoundNodes ? 12 : 8)
   const cellSize = nodeRadius * 2 + gap
-  const cols = hasCompoundNodes
-    ? Math.min(currentGroup.order, Math.max(1, Math.floor(viewBoxSize.width / cellSize)))
-    : Math.ceil(Math.sqrt(currentGroup.order))
-  const rows = currentGroup.order / cols
+  const cols = columnsOverride
+    ? columnsOverride > 0 ? columnsOverride : Math.ceil(Math.sqrt(group.order))
+    : hasCompoundNodes
+      ? Math.min(group.order, Math.max(1, Math.floor(viewBoxSize.width / cellSize)))
+      : Math.ceil(Math.sqrt(group.order))
+  const rows = group.order / cols
   const totalWidth = cols * cellSize
   const totalHeight = rows * cellSize
   const startX = Math.max(nodeRadius, (viewBoxSize.width - totalWidth) / 2 + cellSize / 2)
@@ -228,13 +263,13 @@ export function SetView() {
         </defs>
       )}
       <g transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale})`}>
-        {currentGroup.elements.map((el, i) => {
+        {group.elements.map((el, i) => {
           const pos = getPos(el.id, i)
           if (!isNodeOnScreen(pos.x, pos.y)) return null
           const isSelected = selectedElements.has(el.id)
           const parentSubset = subsetDetailMap.get(el.id)
-          const cosetIdx = cosetElementMap.get(el.id)
-          const isInHighlightedCoset = cosetIdx !== undefined && cosetHighlightSet.has(cosetIdx)
+          const cosetIdx = cosetElementMap?.get(el.id)
+          const isInHighlightedCoset = cosetIdx !== undefined && (cosetHighlightSet?.has(cosetIdx) ?? false)
           
           let fillColor = 'var(--node-fill)'
           let strokeColor = 'var(--node-stroke)'
@@ -244,9 +279,9 @@ export function SetView() {
             fillColor = 'var(--node-fill-selected)'
             strokeColor = '#ffd93d'
             strokeWidth = 3
-          } else if (isInHighlightedCoset && cosetIdx !== undefined) {
-            fillColor = cosetColors[cosetIdx] + '33'
-            strokeColor = cosetColors[cosetIdx]
+          } else if (isInHighlightedCoset && cosetIdx !== undefined && cosetPalette[cosetIdx]) {
+            fillColor = cosetPalette[cosetIdx] + '33'
+            strokeColor = cosetPalette[cosetIdx]
             strokeWidth = 3
           } else if (parentSubset) {
             fillColor = parentSubset.color + '33'
@@ -262,10 +297,10 @@ export function SetView() {
               transform={`translate(${pos.x}, ${pos.y})`}
               onClick={(e) => {
                 e.stopPropagation()
-                selectElement(el.id, e.ctrlKey || e.metaKey)
+                onSelect?.(el.id, e.ctrlKey || e.metaKey)
               }}
-              onMouseEnter={() => setHoverElement(el)}
-              onMouseLeave={() => setHoverElement(null)}
+              onMouseEnter={() => onHover?.(el)}
+              onMouseLeave={() => onHover?.(null)}
               style={{ cursor: 'pointer' }}
             >
               {isCompound ? (
@@ -279,10 +314,10 @@ export function SetView() {
                     strokeWidth={strokeWidth}
                     filter={isLarge ? undefined : "url(#node-shadow)"}
                   />
-                  {isInHighlightedCoset && cosetIdx !== undefined && (
+                  {isInHighlightedCoset && cosetIdx !== undefined && cosetPalette[cosetIdx] && (
                     <circle
                       r={nodeRadius}
-                      fill={`${cosetColors[cosetIdx]}22`}
+                      fill={`${cosetPalette[cosetIdx]}22`}
                       stroke="none"
                     />
                   )}
@@ -293,31 +328,31 @@ export function SetView() {
                       stroke="none"
                     />
                   )}
-                  {(!isLarge || isSelected || selectedElements.size === 0) && (
-                    <foreignObject
-                       x={-nodeRadius}
-                       y={-16}
-                       width={nodeRadius * 2}
-                       height={32}
-                       style={{ pointerEvents: 'none', userSelect: 'none' }}
-                     >
-                       <div
-                         style={{
-                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLarge ? '10px' : '15px'
-                         }}
-                         dangerouslySetInnerHTML={{
-                           __html: renderTex(texify(el.label))
-                         }}
-                       />
-                     </foreignObject>
-                   )}
+{showLabelsOverride !== false && (!isLarge || isSelected || selectedElements.size === 0) && (
+                     <foreignObject
+                        x={-nodeRadius}
+                        y={-16}
+                        width={nodeRadius * 2}
+                        height={32}
+                        style={{ pointerEvents: 'none', userSelect: 'none' }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                             width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLarge ? '10px' : '15px'
+                          }}
+                          dangerouslySetInnerHTML={{
+                            __html: renderTex(texify(el.label))
+                          }}
+                        />
+                      </foreignObject>
+                    )}
                 </>
               )}
-              {isInHighlightedCoset && cosetIdx !== undefined && isCompound && (
+              {isInHighlightedCoset && cosetIdx !== undefined && cosetPalette[cosetIdx] && isCompound && (
                 <circle
                   r={nodeRadius + 2}
-                  fill={`${cosetColors[cosetIdx]}22`}
+                  fill={`${cosetPalette[cosetIdx]}22`}
                   stroke="none"
                 />
               )}

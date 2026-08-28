@@ -15,7 +15,7 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`test.projects` 双项目——
-  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，47 文件）
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，49 文件）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
 - **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 88.91%，lines 91.90%，branches 78.22%、funcs 92.32%）
@@ -25,7 +25,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/*.test.ts，47 文件 / 1399 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，49 文件 / 1412 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -72,14 +72,19 @@
 | coreBoundary.test.ts | 105 | P0 阶段 A 边界回归：core 纯净性扫描（import.meta.glob ?raw 读源码 + stripComments 后正则——零 react import/localStorage/document/window/require）、core/index.ts 门面 ~100 关键符号存在性（全部 typeof function）+ 导出总数 >180、COLOR_PALETTE/SUBSET_COLORS/COSET_COLORS 调色板断言 |
 | resultGuards.test.ts | 10 | P0 阶段 C 错误模型：Result/ok/err 语义（ok:true 值透传、ok:false error 透传）、guards.ts 11 守卫常量值断言、原定义点 re-export 与 guards 同一性（series/sylow/toddCoxeter/minimizer）、EngineError 类型化 throw（wordParser parseError kind='parse'、工厂 guardError kind='guard' 消息保留 toThrow 兼容） |
 | persistenceFuzz.test.ts | 11 | P0 阶段 D 输入加固：persistence.ts（vi.stubGlobal Map 版 localStorage）坏 JSON 返回 null/schema 不符 null/loadStoredArray 逐条容错丢坏保好/版本化信封 round-trip/未来版本无 migrate 拒绝/坏信封拒绝；HOSTILE_STRINGS 25 条 fuzz 四解析器（parseWord/parsePresentation/parseRelationEquation 不抛且 ok 或错误码合法、parseNotation 不抛且 input 回显）；storage loader 吞脏数据不抛 |
+| core/descriptor.test.ts | 5 | FGVE 阶段 2 批次一：GroupDescriptor v1 序列化协议（serializeDescriptor/deserializeDescriptor/descriptorToSymbol 全群族 round-trip 幂等、symbol/order 恢复、schema 校验拒绝非法） |
+| core/viewConfig.test.ts | 8 | FGVE 阶段 2 批次一：ViewConfig JSON 化（ViewWindowConfig/SetViewParams/CayleyActionParam/CayleyViewParams/ViewWindowGeometry/ViewWindowPersistData 全 zod schema 解析、actions 上限 240 拒绝、缺省值回退、非法字段静默丢弃） |
 
-### 3.2 dom 项目（src/__tests__/*.component.test.tsx + *.integration.test.tsx，6 文件 / 44 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，9 文件 / 69 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
 | Tex.component.test.tsx | 12 | KaTeX 渲染：tex-span 类、katex 元素存在、Unicode 下标转 TeX、displayMode 行内/块级切换、rerender 更新、HTML 快照 ×2、特殊符号映射（×→\\times 等 each 断言） |
 | AccordionSection.component.test.tsx | 8 | 折叠面板：默认收起/defaultOpen/点击切换箭头 open 类/受控 open=false 覆盖点击/受控 true 常开/onToggle 回调/icon+badge 渲染/结构类名 |
 | TabBar.component.test.tsx | 8 | 标签栏：默认首个 active/只渲染 active 内容/点击切换/defaultTab 覆盖/compact 隐藏 label 留 icon+title/非 compact 完整渲染/结构类名/空 tabs 不崩 |
+| CayleyView.component.test.tsx | 11 | FGVE 阶段 2 批次一受控凯莱视图（CayleyView.tsx）：C₄ 默认 4 节点/4 有向边/1 marker、identity 作用自环裁剪、自逆元素无向边、S₃ 左/右乘边集不同、D₄ 双生成元（r 有向+s 无向）、nodeRadius/showLabels 参数、选中金圈高亮、每实例唯一 marker id（cv{n} 前缀防多窗口冲突）、normalizeCayleyActions（bogus 过滤/默认色/enabled:false 无 marker）、actions=[] 无有向边、group=null 空态 |
+| CayleyWindowParams.component.test.tsx | 8 | 凯莱受控窗口（ViewWindow view=cayley）：C₄ 默认渲染、C₁₂ 形状下拉可选列表+默认 circular、参数面板受控回调（shape2D/multiplyType 累积）、edge-action 单元素 checkbox 翻 enabled/None→[]/All→全作用、versioned 持久化（gv-vw- 键 + __gvVersion 信封 + debounce）、坏 schema 回退默认不崩溃、默认持久化键含视图名、缩放滑块无双应用 transform |
+| ViewWindowParams.component.test.tsx | 6 | set 视图受控窗口（ViewWindow view=set）参数：nodeRadius/gap/columns/showLabels 同步、锁定（locked 禁拖/zoomLocked 禁缩放/resizable:false 隐藏手柄）、Reset to defaults 恢复、参数面板开关 |
 | BasicGroupPanel.integration.test.tsx | 5 | I18nProvider>GroupProvider 全链路：初始 none/二面体 slider n=4 → 创建 D_{4}/循环群 C_{12}/特殊群 Q_{8}/对称群创建后 badge 含 S（GroupProbe useContext 读 currentGroup.symbol） |
 | Workspace.integration.test.tsx | 7 | 三栏工作台集成：默认 S3 set 视图 svg circles≥6 + localStorage groupviz-session 信封 {__gvVersion,data:{symbol:'S_{3}',view:'set'}}/损坏 payload 回退 S3/键盘 ArrowRight·Left 选中环 circle[stroke="#ffd93d"]/左栏 accordion-section≥8 且默认仅 ViewPanel 展开/drawer 按钮 + Escape 关闭抽屉/9 张视图卡遍历 active 切换（含 restore 后重查 container） |
 | SvgSnapshot.integration.test.tsx | 4 | SVG 结构快照回归：set-S3 {circles:6,foreignObject:6}（元素标签是 foreignObject+KaTeX 非 `<text>`）/cayley happy-dom 边静默跳过仅断言节点/table rects≥36/cycle circles>0（inline snapshot） |

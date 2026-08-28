@@ -1,5 +1,6 @@
 import type { Group, ViewMode, CayleyAction, Layout3D } from '../core/types'
 import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, isQuotientGroup, type CayleyShape2D } from '../core/types'
+import type { CayleyActionParam } from '../core/types/viewConfig'
 
 export function getInitialCayleyActions(group: Group): CayleyAction[] {
   return group.generators.map((gen, i) => {
@@ -10,6 +11,23 @@ export function getInitialCayleyActions(group: Group): CayleyAction[] {
       color: COLOR_PALETTE[i % COLOR_PALETTE.length]
     }
   })
+}
+
+/**
+ * 归一化凯莱视图作用边参数：过滤群中不存在的 elementId，补全 enabled（默认 true）与
+ * color（默认 COLOR_PALETTE 按序）。actions 未提供时返回群生成元集合。
+ * ViewWindow 参数面板与 CayleyView 渲染共用，保证两边对「当前边集合」的判定一致。
+ */
+export function normalizeCayleyActions(group: Group, actions?: CayleyActionParam[]): CayleyAction[] {
+  if (!actions) return getInitialCayleyActions(group)
+  const known = new Set(group.elements.map(e => e.id))
+  return actions
+    .filter(a => known.has(a.elementId))
+    .map((a, i) => ({
+      elementId: a.elementId,
+      enabled: a.enabled !== false,
+      color: a.color ?? COLOR_PALETTE[i % COLOR_PALETTE.length],
+    }))
 }
 
 export interface CayleyShapeConfig {

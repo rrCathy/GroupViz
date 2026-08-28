@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect, useMemo, lazy, Suspense } fro
 import { useGroup } from '../../context/useGroup'
 import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
-import { SetView } from './SetView'
+import { SetViewFromContext } from './SetViewFromContext'
 import { CycleView } from './CycleView'
 import { TableView } from './TableView'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
@@ -382,7 +382,7 @@ export function GroupCanvas() {
 
     switch (currentView) {
       case 'set':
-        return <SetView />
+        return <SetViewFromContext />
       case 'cayley':
         return <CayleyGraphView gRef={gRef} />
       case 'cycle':
@@ -408,7 +408,7 @@ export function GroupCanvas() {
       case 'prestable':
         return <PresentationTableView />
       default:
-        return <SetView />
+        return <SetViewFromContext />
     }
   }
 

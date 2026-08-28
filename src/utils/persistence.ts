@@ -72,6 +72,17 @@ export function removeStoredKey(key: string): void {
   } catch { /* ignore */ }
 }
 
+export function removeAllStoredKeys(prefix: string): void {
+  try {
+    const doomed: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith(prefix)) doomed.push(k)
+    }
+    doomed.forEach(k => localStorage.removeItem(k))
+  } catch { /* ignore */ }
+}
+
 interface VersionedEnvelope {
   __gvVersion: number
 }

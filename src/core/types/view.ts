@@ -4,7 +4,12 @@ export type MultiplyType = 'right' | 'left'
 
 export type Layout3D = 'cone' | 'circular' | 'dihedral' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron' | 'hypercube'
 
-export type CayleyShape2D = 'cone' | 'grid' | 'circular' | 'concentric' | 'dualRing' | 'archimedean' | 'spiral' | 'coil' | 'projection3D' | 'rewiring' | 'cylinder' | 'torus' | 'ringGrid' | 'pythagoreanSquare'
+export const CAYLEY_SHAPES_2D = [
+  'cone', 'grid', 'circular', 'concentric', 'dualRing', 'archimedean', 'spiral', 'coil',
+  'projection3D', 'rewiring', 'cylinder', 'torus', 'ringGrid', 'pythagoreanSquare',
+] as const
+
+export type CayleyShape2D = typeof CAYLEY_SHAPES_2D[number]
 
 export interface InternalEdgeData {
   fromInnerIdx: number

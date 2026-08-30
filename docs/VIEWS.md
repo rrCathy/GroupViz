@@ -15,7 +15,7 @@
 
 ## 3. 圆圈图 (CycleView.tsx)
 
-- `cycleGraphLayout`（精确复刻 Group Explorer CycleGraphView）：单位元 e 固定在原点（永不重放）；每个极大循环 = 「花瓣」圆弧——第 k 个非单位元 gᵏ 落在圆心 (0,R) 半径 R 的弧上 `(-R·cosθ, R(1+sinθ))`，θ=2π(k/n−0.25)；循环按共享非单位元聚成 part（并查集 uniteParts：合并时被并入 part 的每个循环经 `bestPowerRelativeTo` 重新轮换，使共享元素在同一弧索引对齐）；各 part 按循环长度之和比例分配角度弧（单 part 退化用半圆弧；若最大 part 占 >1/2 则各弧长封顶 total/2），最大 part（循环数最多）弧中心旋转正下方；part 内多循环用 `gravity=ringNum/part.length` 拉向弧中心；共享元素只由首个循环放置、后续循环引用同一位置（「蝴蝶」双花瓣例 Z₂×Z₄；SL(2,3) 7 个循环共点 −I 太阳放射）；不在任何 ≥3 阶循环里的 2 阶元素 = 从 e 出去的「叶柄」线段；复杂点共享（C₅×S₃ 等）为 GE 平面固有的少量边交叉（无回退）
+- `cycleGraphLayout`（精确复刻 Group Explorer CycleGraphView）：单位元 e 固定在原点（永不重放）；每个极大循环 = 「花瓣」圆弧——第 k 个非单位元 gᵏ 落在圆心 (0,R) 半径 R 的弧上 `(-R·cosθ, R(1+sinθ))`，θ=2π(k/n−0.25)；循环按共享非单位元聚成 part（并查集 uniteParts：合并时被并入 part 的每个循环经 `bestPowerRelativeTo` 重新轮换，使共享元素在同一弧索引对齐）；各 part 按循环长度之和比例分配角度弧（单 part 退化用半圆弧；若最大 part 占 >1/2 则各弧长封顶 total/2），最大 part（循环数最多）弧中心旋转正下方；part 内多循环用 `gravity=ringNum/part.length` 拉向弧中心；共享元素只由首个循环放置、后续循环引用同一位置（「蝴蝶」双花瓣例 Z₂×Z₄；SL(2,3) 7 个循环共点 −I 太阳放射）；不在任何 ≥3 阶循环里的 2 阶元素 = 从 e 出去的「叶柄」线段；**风车式改进**：所有极大循环都「只共享 e」的群（S3/Dn/A4/A5/V4/纯直积等，partition 全是单循环 part）不走最大 part 朝下旋转——每片花瓣/叶柄均匀绕 e 分一整圈（360° 等分扇区，g=0 无 gravity），且共享判定必须排除 e（含 e 恒相交会把所有 part 并成一个半圆弧）；复杂点共享（C₅×S₃ 等）为 GE 平面固有的少量边交叉（无回退）
 - 极大模式画风：细实线多边形、无填充、无虚线、无 `⟨g⟩ ≅ Z_n` 标注（对齐 Nathan Carter《群论彩图版》/ Group Explorer）
 - `showMaximalCycles` 默认 **true**（只画极大循环）；关掉后回退到「全部循环 + 彩色虚线标注」的诊断视图
 - 2 阶极大循环（V₄ 的三条线段）以 `<line>` 呈现，≥3 阶以闭合多边形呈现

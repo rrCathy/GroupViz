@@ -573,6 +573,11 @@ function gcd(a: number, b: number): number { return b ? gcd(b, a % b) : a }
  *    最大 part（循环数最多）的弧中心旋转到正下方。
  * 4. part 内多个循环用 gravity = ringNum/part.length 拉向弧中心；共享元素只由
  *    首个摆放它的循环放置，后续循环引用同一位置（蝴蝶 / SL(2,3) / C5×S3 等）。
+ *
+ * 风车式改进：所有极大循环都「只共享 e」的群（S3/Dn/A4/A5/V4/纯直积等，partition
+ * 中每个 part 都只有单个循环）不走第 3. 条的半球旋转——那会把循环数均分的 S3 型
+ * 群的全部 2 阶叶柄压到下半圆并与花瓣交叉。改为每片花瓣/叶柄绕 e 均匀分一整圈
+ * （360° 等分扇区，无 gravity），S3 呈现教科书式「三角花瓣 + 三条放射叶柄」。
  */
 export function cycleGraphLayout(
   elements: GroupElement[],
@@ -595,8 +600,12 @@ export function cycleGraphLayout(
   // 每次合并把被并入 part 的每个循环按 bestPowerRelativeTo 重新轮换，
   // 使共享元素与锚点循环在圆弧索引上对齐（纯元素 ID 运算，faithful GE）。
   const partition: string[][][] = normCycles.map(cycle => [cycle])
-  const arraysIntersect = (a: string[], b: string[]): boolean => a.some(elt => b.includes(elt))
-  const flattenPart = (part: string[][]): string[] => part.reduce((acc, c) => acc.concat(c), [])
+  // 注意：循环数组是「含 e 的身份优先」形式，但 e 出现在每个循环里，共享判定
+  // 必须排除 e（faithful GE 的循环本就不含 e），否则所有循环恒相交、全部并入一个
+  // part——风车式门与 GE 多 part 比例弧都会失效（S3 全部压下半圆即此 bug）。
+  const arraysIntersect = (a: string[], b: string[]): boolean =>
+    a.slice(1).some(elt => b.slice(1).includes(elt))
+  const flattenPart = (part: string[][]): string[] => part.reduce((acc, c) => acc.concat(c.slice(1)), [])
   const uniteParts = (partIndex1: number, partIndex2: number): void => {
     const anchor = partition[partIndex1][0]
     partition[partIndex2].forEach(cycle => {
@@ -615,6 +624,36 @@ export function cycleGraphLayout(
         }
       }
     }
+  }
+
+  // 花瓣半径 R 与基础花瓣缩放（基础花瓣最远点距原点 2，除以 2 归一到 R）。
+  const R = Math.min(width, height) * 0.40
+  const scale = R / 2
+
+  // 风车式（windmill）：对「所有极大循环都只共享 e」的群（partition 里每个 part
+  // 都只有单个循环，如 S3/D3..D8/A4/A5/V4/Cn×Cm 纯直积），跳过 GE 的「最大 part
+  // 朝下」旋转——那把循环数均分的 S3 型群的所有 2 阶叶柄压到下半圆并与花瓣交叉。
+  // 改为每片花瓣/叶柄均匀绕 e 分一整圈（360° 等分扇区，无 gravity）。
+  if (partition.length > 1 && partition.every(p => p.length === 1)) {
+    const sectorCount = partition.length
+    const sectorWidth = (2 * Math.PI) / sectorCount
+    partition.forEach((part, partIndex) => {
+      const center = partIndex * sectorWidth + Math.PI / 2 // 第一片朝上
+      const alpha = center - sectorWidth / 2
+      const beta = center + sectorWidth / 2
+      const cycle = part[0]
+      const n = cycle.length
+      for (let kk = 1; kk < n; kk++) {
+        if (result.has(cycle[kk])) continue
+        const base = basePetalPoint(kk, n)
+        const p = mutateArc(base.x, base.y, alpha, beta, 0)
+        result.set(cycle[kk], { x: cx + p.x * scale, y: cy - p.y * scale })
+      }
+    })
+    for (const el of elements) {
+      if (!result.has(el.id)) result.set(el.id, { x: cx + R, y: cy })
+    }
+    return result
   }
 
   // GE 弧分配：parts 按循环长度总和比例分配圆周；最大 part 超半圆截断到半圆；
@@ -644,8 +683,6 @@ export function cycleGraphLayout(
   cumsums = cumsums.map(a => a + rotateDiff)
 
   // 花瓣半径：part 内循环数占最大 part 比例开方，下限 0.25（GE 的 r/R 缩放）。
-  const R = Math.min(width, height) * 0.40
-  const scale = R / 2 // basePetalPoint 最远点距离原点为 2，除以 2 归一化
   const partR = partition.map(part => Math.sqrt(Math.max(part.length / maxPartLength, 0.25)))
 
   // 放置元素：共享元素只由第一个摆放它的循环放置（后续循环通过 result.has

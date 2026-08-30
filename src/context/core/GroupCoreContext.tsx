@@ -19,6 +19,7 @@ interface GroupCoreState {
   viewTabs: { id: string; view: ViewMode; label: string }[]
   activeTabId: string
   showMaximalCycles: boolean
+  showHeatmap: boolean
   hintMessage: string
   forceShowLargeGroupViews: Set<ViewMode>
   viewBoxSize: ViewBoxSize
@@ -46,6 +47,7 @@ interface GroupCoreActions {
   selectNextElement: () => void
   selectPrevElement: () => void
   setShowMaximalCycles: (show: boolean) => void
+  setShowHeatmap: (show: boolean) => void
   setHintMessage: (msg: string) => void
   setForceShowLargeGroupForView: (view: ViewMode, allow: boolean) => void
   resetNodePositions: (shape2D?: CayleyShape2D) => void
@@ -68,7 +70,7 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
       sublattice: 'view.sublattice', homomorphism: 'view.homomorphism',
       cosetstrip: 'view.cosetstrip', action: 'view.action',
       sylow: 'view.sylow', tree: 'view.tree',
-      prestable: 'view.prestable',
+      prestable: 'view.prestable', heatmap: 'view.heatmap',
     }
     return t(keyMap[view])
   }, [t])
@@ -86,7 +88,8 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
     [viewTabsBase, getViewLabel]
   )
   const [activeTabId, setActiveTabId] = useState('tab-1')
-  const [showMaximalCycles, setShowMaximalCycles] = useState(false)
+  const [showMaximalCycles, setShowMaximalCycles] = useState(true)
+  const [showHeatmap, setShowHeatmap] = useState(false)
   const [hintMessage, setHintMessage] = useState('')
   const [forceShowLargeGroupViews, setForceShowLargeGroupViewsState] = useState<Set<ViewMode>>(new Set())
 
@@ -342,13 +345,13 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
 
   const value: GroupCoreContextType = {
     currentGroup, currentGroupRef, currentView, selectedElements, canvasTransform, operationHistory,
-    nodePositions, viewTabs, activeTabId, showMaximalCycles,
+    nodePositions, viewTabs, activeTabId, showMaximalCycles, showHeatmap,
     hintMessage, forceShowLargeGroupViews, viewBoxSize, isPending, isLargeGroup,
     setCurrentGroup, clearCurrentGroup, setCurrentView, selectElement, clearSelection, setCanvasTransform,
     resetCanvasTransform, addOperationHistory, setNodePosition, batchSetNodePositions,
     getNodePosition, addViewTab, closeViewTab, setActiveTab,
     checkSubsetProperty, generateSubgroups, selectNextElement, selectPrevElement,
-    setShowMaximalCycles, setHintMessage, setForceShowLargeGroupForView, resetNodePositions, clearAllNodePositions, getViewLabel,
+    setShowMaximalCycles, setShowHeatmap, setHintMessage, setForceShowLargeGroupForView, resetNodePositions, clearAllNodePositions, getViewLabel,
   }
 
   return (

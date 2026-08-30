@@ -46,6 +46,13 @@ export function initializeNodePositions(group: Group, view: ViewMode, shape2D?: 
     if (gridPos && gridPos.size > 0) return gridPos
   }
 
+  if (view === 'cycle') {
+    // cycle 视图的布局由 CycleView 内部的 cycleGraphLayout 生成（花瓣 / 叶柄 / 蝴蝶），
+    // 这里不预置位置，否则会作为「外部覆盖」压过花瓣布局（nodePositions 的 getNodePosition
+    // 优先级高于 CycleView 内部布局）。返回空 Map 表示「无持久化位置，交由视图自行布局」。
+    return new Map()
+  }
+
   if (view === 'set') {
     const nodeRadius = 26
     const gap = 8
@@ -68,12 +75,7 @@ export function initializeNodePositions(group: Group, view: ViewMode, shape2D?: 
     return positions
   }
 
-  let radius: number
-  if (view === 'cycle') {
-    radius = Math.min(vbs.width * 0.28, 50 + n * 20)
-  } else {
-    radius = Math.min(vbs.width * 0.3, 180 + n * 10)
-  }
+  const radius = Math.min(vbs.width * 0.3, 180 + n * 10)
 
   let ordered: GroupElement[]
   const isPipe = group.elements.length > 0 && group.elements[0]?.id.includes('|')

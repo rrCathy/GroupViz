@@ -5,11 +5,12 @@
  */
 import { useMemo, useState } from 'react';
 import { ViewWindow } from './Canvas/FloatingViewWindow'
+import type { ViewParams } from './Canvas/FloatingViewWindow'
 import { resetAllViewWindows } from '../utils/resetViewWindows';
 import { createCyclicGroup } from '../core/groups/CyclicGroup';
 import { createDihedralGroup } from '../core/groups/DihedralGroup';
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup';
-import type { CayleyViewParams } from '../core/types/viewConfig';
+import { useTheme } from '../theme/useTheme';
 
 const row = { display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 12 };
 const card: React.CSSProperties = { background: '#1e293b', borderRadius: 8, padding: 8, fontSize: 12, color: '#94a3b8', flex: 1, minWidth: 140, maxWidth: 200 };
@@ -22,8 +23,9 @@ export default function TestPage() {
   const d6 = useMemo(() => createDihedralGroup(6), []);
   const d4 = useMemo(() => createDihedralGroup(4), []);
   const s3 = useMemo(() => createSymmetricGroup(3), []);
+  const { viewWindowTheme, toggleViewWindowTheme } = useTheme();
   const [lockCfg, setLockCfg] = useState<{ locked?: boolean; zoomLocked?: boolean }>({ locked: true, zoomLocked: true });
-  const [ctlParams, setCtlParams] = useState<CayleyViewParams>({});
+  const [ctlParams, setCtlParams] = useState<ViewParams>({});
 
   const handleResetAll = () => {
     setLockCfg({});
@@ -34,11 +36,18 @@ export default function TestPage() {
     <div style={{ padding: 24, background: '#0f172a', minHeight: '100vh', color: '#e2e8f0', position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <h1 style={{ margin: 0 }}>FGVE ViewWindow 参数 API 测试矩阵</h1>
-        <button
-          title="Reset ALL windows to defaults (clears gv-vw-* persistence)"
-          onClick={handleResetAll}
-          style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #475569', background: '#f97316', color: '#0f172a', fontWeight: 600, cursor: 'pointer' }}
-        >↺ 一键重置所有窗口</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            title={viewWindowTheme === 'dark' ? '视图窗口切换为浅色' : '视图窗口切换为深色'}
+            onClick={toggleViewWindowTheme}
+            style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #475569', background: viewWindowTheme === 'dark' ? '#4ecdc4' : '#ffd93d', color: '#0f172a', fontWeight: 600, cursor: 'pointer' }}
+          >{viewWindowTheme === 'dark' ? '■ 视图窗口：深色' : '□ 视图窗口：浅色'}</button>
+          <button
+            title="Reset ALL windows to defaults (clears gv-vw-* persistence)"
+            onClick={handleResetAll}
+            style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #475569', background: '#f97316', color: '#0f172a', fontWeight: 600, cursor: 'pointer' }}
+          >↺ 一键重置所有窗口</button>
+        </div>
       </div>
 
       <div style={row}>
@@ -112,12 +121,40 @@ export default function TestPage() {
         defaultPosition={{ x: 420, y: 1830 }} defaultSize={{ width: 360, height: 320 }}
         viewParams={ctlParams} onViewParamsChange={setCtlParams} />
 
+      <div style={{ ...row, marginTop: 380 }}>
+        <div style={card}><div style={label}>C₄ 循环图默认</div>全部循环子群，节点可拖拽</div>
+        <div style={card}><div style={label}>D₆ 循环图极大</div>showMaximalCycles=true，planar 布局</div>
+        <div style={card}><div style={label}>C₄ 乘法表</div>4×4 全表，单元格选中</div>
+        <div style={card}><div style={label}>C₁₂ 乘法表子群策略</div>strategy=subgroup，大群抽样</div>
+        <div style={card}><div style={label}>C₄ 热力图</div>纯色块无文字，无最小尺寸</div>
+        <div style={card}><div style={label}>C₁₂ 热力图</div>大群抽样热力图</div>
+      </div>
+
+      <ViewWindow view="cycle" group={c4} title="C₄ · 循环图默认" storageKey="test-cyc-c4-def"
+        defaultPosition={{ x: 20, y: 2220 }} defaultSize={{ width: 380, height: 320 }} />
+      <ViewWindow view="cycle" group={d6} title="D₆ · 循环图极大" storageKey="test-cyc-d6-max"
+        defaultPosition={{ x: 420, y: 2220 }} defaultSize={{ width: 380, height: 320 }}
+        viewParams={{ showMaximalCycles: true }} />
+      <ViewWindow view="table" group={c4} title="C₄ · 乘法表" storageKey="test-tbl-c4-def"
+        defaultPosition={{ x: 820, y: 2220 }} defaultSize={{ width: 360, height: 360 }} />
+      <ViewWindow view="table" group={c12} title="C₁₂ · 乘法表子群" storageKey="test-tbl-c12-sub"
+        defaultPosition={{ x: 20, y: 2580 }} defaultSize={{ width: 380, height: 380 }}
+        viewParams={{ strategy: 'subgroup' }} />
+      <ViewWindow view="heatmap" group={c4} title="C₄ · 热力图" storageKey="test-heat-c4-def"
+        defaultPosition={{ x: 420, y: 2580 }} defaultSize={{ width: 300, height: 300 }} />
+      <ViewWindow view="heatmap" group={c12} title="C₁₂ · 热力图抽样" storageKey="test-heat-c12-sub"
+        defaultPosition={{ x: 820, y: 2580 }} defaultSize={{ width: 300, height: 300 }}
+        viewParams={{ strategy: 'subgroup' }} />
+
       <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 480 }}>
         每个窗口独立持久化（key: gv-vw-test-*），位置/尺寸/参数刷新恢复。
         覆盖：nodeRadius 极值(10/60)、gap 极值(2/30)、columns 强制(1/3)、
         showLabels 关闭、locked/zoomLocked 锁定、showInfo 隐藏；
         凯莱窗口覆盖：形状切换（circular/dualRing/spiral）、左/右乘、
-        作用边元素勾选（All/None）、节点拖拽、选中高亮、受控参数模式。
+        作用边元素勾选（All/None）、节点拖拽、选中高亮、受控参数模式；
+        循环图窗口覆盖：showMaximalCycles 切换、节点半径、标签开关；
+        乘法表窗口覆盖：strategy（subgroup/random/full）、单元格尺寸、全屏导出；
+        热力图窗口覆盖：纯色块无文字、无最小尺寸（可缩到很小）、strategy 抽样。
       </p>
     </div>
   );

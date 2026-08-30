@@ -22,10 +22,18 @@ export interface CayleyViewProps {
   actions?: CayleyActionParam[]
   /** 缺省 28（与主视图非复合节点一致） */
   nodeRadius?: number
-  /** 缺省 true；>60 阶沿用主视图自适应规则（选中后仅选中节点显示标签） */
+  /** 缺省 true；>60 阶沿用主视图自适应规则（选中后仅选中节点显示标签）。嵌入小窗（ViewWindow）传 false 彻底不显示节点标签、读元素靠悬停就地气泡 */
   showLabels?: boolean
+  /** 缺省 false；true 时禁用节点拖拽（供 ViewWindow 锁定状态使用，点击选中仍保留） */
+  locked?: boolean
   onSelect?: (elId: string, additive: boolean) => void
-  onHover?: (el: GroupElement | null) => void
+  /**
+   * 悬停回调：第一个参数是元素，第二个是节点在 viewport 内的屏幕锚点
+   * （viewBox 坐标经 canvasTransform 映射，供上层渲染"就地气泡"tooltip）。
+   */
+  onHover?: (el: GroupElement | null, anchor?: { x: number; y: number } | null) => void
+  /** 当前悬停元素 id；用于在该节点外圈绘制高亮环（让"悬停→信息"在视觉上立得住） */
+  hoveredElementId?: string | null
   noGroupText?: string
 }
 
@@ -107,8 +115,10 @@ export function CayleyView({
   actions: actionsProp,
   nodeRadius: nodeRadiusProp,
   showLabels: showLabelsProp,
+  locked = false,
   onSelect,
   onHover,
+  hoveredElementId,
   noGroupText,
 }: CayleyViewProps) {
   // 惰性初始化的每实例唯一前缀（useState 初始化器每实例只执行一次）
@@ -277,6 +287,7 @@ export function CayleyView({
             onSelect?.(el.id, e.ctrlKey || e.metaKey)
           }}
           onMouseDown={e => {
+            if (locked) return
             if (e.button !== 0) return
             e.stopPropagation()
             const svg = e.currentTarget.closest('svg')
@@ -321,8 +332,8 @@ export function CayleyView({
             window.addEventListener('mousemove', handleMove)
             window.addEventListener('mouseup', handleUp)
           }}
-          onMouseEnter={() => onHover?.(el)}
-          onMouseLeave={() => onHover?.(null)}
+          onMouseEnter={() => onHover?.(el, { x: sx, y: sy })}
+          onMouseLeave={() => onHover?.(null, null)}
           style={{ cursor: 'grab' }}
         >
           <circle
@@ -332,6 +343,17 @@ export function CayleyView({
             strokeWidth={strokeWidth}
             filter={isLargeGraph ? undefined : `url(#${markerPrefix}-node-shadow)`}
           />
+          {/* 悬停高亮环：让"我悬停的就是这个节点"一眼可见，配合就地气泡形成"节点环+元素名"双重反馈 */}
+          {el.id === hoveredElementId && (
+            <circle
+              r={nodeRadius + 5}
+              fill="none"
+              stroke="#4ecdc4"
+              strokeWidth={3.5}
+              opacity={0.95}
+              style={{ filter: 'drop-shadow(0 0 4px rgba(78,205,196,0.7))' }}
+            />
+          )}
           {showLabelsProp !== false && (!isLargeGraph || selectedCount === 0) && (
             <foreignObject
               x={-nodeRadius}
@@ -361,7 +383,7 @@ export function CayleyView({
   }, [
     group, nodePositionsCache, selectedCount, sdMeta, sdFixedMap, nodeRadius, isLargeGraph,
     canvasTransform, viewBoxSize, cx, cy, labelHtmlCache, shape, getNodePos, onSelect, onHover,
-    markerPrefix, showLabelsProp, setDragPositionsEntry,
+    markerPrefix, showLabelsProp, setDragPositionsEntry, locked, hoveredElementId,
   ])
 
   // 选中金圈 overlay（大群时附带选中节点标签），绘制于节点之上

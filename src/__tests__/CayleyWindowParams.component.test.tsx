@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useState } from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ViewWindow } from '../components/Canvas/FloatingViewWindow'
+import type { ViewParams } from '../components/Canvas/FloatingViewWindow'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
-import type { CayleyViewParams, SetViewParams } from '../core/types/viewConfig'
+import type { CayleyViewParams } from '../core/types/viewConfig'
 
 const c4 = createCyclicGroup(4)
 const c12 = createCyclicGroup(12)
@@ -40,9 +41,9 @@ describe('ViewWindow · cayley view', () => {
     // C₁₂（>7 阶循环群）可用形状：circular/spiral/coil/cone，默认 circular
     expect(Array.from(select.options).map(o => o.value)).toEqual(['circular', 'spiral', 'coil', 'cone'])
     expect(select.value).toBe('circular')
-    // 仅 1 个滑杆（节点半径）；面板整体复选框 = 4 窗口配置 + 标签 + 1 条作用边
+    // 仅 1 个滑杆（节点半径）；复选框 = 6 窗口配置（锁移动/锁缩放/信息/固定/控件/滑杆）+ 1 条作用边
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(1)
-    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(6)
+    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(7)
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
@@ -53,7 +54,7 @@ describe('ViewWindow · cayley view', () => {
     const received: Array<Record<string, unknown>> = []
     function Controlled() {
       const [p, setP] = useState<CayleyViewParams>({})
-      const handleChange = (next: SetViewParams | CayleyViewParams) => {
+      const handleChange = (next: ViewParams) => {
         received.push({ ...next })
         setP(next as CayleyViewParams)
       }

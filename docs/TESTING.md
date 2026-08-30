@@ -15,7 +15,7 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`test.projects` 双项目——
-  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，49 文件）
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，50 文件）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
 - **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 88.91%，lines 91.90%，branches 78.22%、funcs 92.32%）
@@ -25,7 +25,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，49 文件 / 1412 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，50 文件 / 1426 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -49,12 +49,13 @@
 | quotientRendering.test.ts | 1 | 商群渲染数据 |
 | quotientLayout.test.ts | 1 | 商群 projection2D 布局 |
 | hybridCompute.test.ts | 27 | 混合计算：order ≤60 本地 / >60 后端缓存、fetchBackendResults 合并转换、computeGroupProperties 本地/后端、后端失败本地兜底（computeLocalFallbackResults：S₅ 子群/共轭类/性质、>240 空兜底）、fetchBackendCayleyEdges/ElementOrder |
-| types.test.ts | 45 | 群类型判定函数、analyzeDPFactors、analyzeDPFactorsGrouped2D（相邻同底循环因子归组：C₂×C₂×S₃→[C₂²,S₃]、C₂×C₂×C₂ 合并 C₂³、S₃×S₃ 不合并、非 DP null）、isCyclicFactorKeys、isGroupSemidirectProduct（顶层 ':' 检测）、isRingGridGroup（C₄×C₂×C₂ pipe+注册表 16,9、C₆×C₂² true；C₁₀×C₂ 仅两因子/C₁₂×C₂/C₂³/C₄×C₄/C₄×C₂/C₂×D₄/S₃ false）、getAvailableShapes2D/形状与布局默认值（循环群默认 circular、classifyDirectProduct2D 直积 2D 分类与注册表群分类：C₂²×S₃→torus、(24,13)→torus、半直积→rewiring、hasTopLevelTimes 顶层 \\times 检测、注册表群直积判定、C₄×C₂×C₂ 默认 ringGrid）、getViewBoxSize 全分支 |
+| types.test.ts | 55 | 群类型判定函数、analyzeDPFactors、analyzeDPFactorsGrouped2D（相邻同底循环因子归组：C₂×C₂×S₃→[C₂²,S₃]、C₂×C₂×C₂ 合并 C₂³、S₃×S₃ 不合并、非 DP null）、isCyclicFactorKeys、isGroupSemidirectProduct（顶层 ':' 检测）、isRingGridGroup（C₄×C₂×C₂ pipe+注册表 16,9、C₆×C₂² true；C₁₀×C₂ 仅两因子/C₁₂×C₂/C₂³/C₄×C₄/C₄×C₂/C₂×D₄/S₃ false）、getAvailableShapes2D/形状与布局默认值（循环群默认 circular、classifyDirectProduct2D 直积 2D 分类与注册表群分类：C₂²×S₃→torus、(24,13)→torus、半直积→rewiring、hasTopLevelTimes 顶层 \\times 检测、注册表群直积判定、C₄×C₂×C₂ 默认 ringGrid）、getViewBoxSize 全分支 |
 | api.test.ts | 14 | 后端 API 客户端：9 端点 URL/method/body、错误路径（detail 优先、否则 statusText） |
-| cycleLayouts.test.ts | 15 | computeCycleSubgroups、computeMaximalCycles、forceLayout（自环/initialPositions/cycleSubgroups）、planarCycleLayout |
+| cycleLayouts.test.ts | 23 | computeCycleSubgroups、computeMaximalCycles、forceLayout（自环/initialPositions/cycleSubgroups）、planarCycleLayout、**cycleGraphLayout**（GE 忠实复刻：C4 中心+dist>0、S3 三角叶+3 叶柄、C4×C2 蝴蝶、V4 3 叶柄、3 C3 循环共享 1 元素仍全放、C6×C2/GL(2,3) 全部 ≥4 多边形无自交） |
+| cycleGraphCrossings.test.ts | 5 | 循环图交叉度检测（self/cross/overlap 三探测器）：38 群目录硬不变式（C2..C16、D3..D8、S3..S5、A4/A5、V4、Q8、C4×C2、C6×C2、C3×C3、C2³、C4×C4、C8×C2、C3×C6、GL(2,3)、SL(2,3)）self=0 且 overlap=0，唯一异常 C5×S3 self==1（GE 固有）；软基线：S3/D3 cross≤6、C4×C4≤12、SL(2,3) 7 循环共点 −I 交叉≤8 |
 | ringOrder.test.ts | 33 | S2 排列/Z₂ 位向量/整数/eN 排序、parseProductFactors、matrixGridLayout、nestedFactorLayout2D、factorPipeGroups/parseCompactFactors、factorPipeGroupsGrouped（相邻同底循环归组：C₂²×S₃→2 组、C₂×C₂×C₃→[C₂²,C₃]、段数不符 null）、powerRingOrder（C₆ 幂序、V₄ bit 向量方形环序、C₄×C₂ pipe 特判（外圈 t0 升序 + 内圈 t1 降序）、直积 4 覆盖、S₃ 置换序、无生成元回退字典序）、tableGroupGridFactors（注册表群 C₄×C₄ 4×4、C₄×C₂×C₂ 4×4、C₂⁴ 4×4、C₂×D₄ 2×8、D₈ null）、clusterFactorGroups/tableGroupFactorSplit/clusterIsCyclic（Z₂×D₄ 聚类 2+8、D₈ null） |
 | viewBox.test.ts | 8 | getViewBoxSize（table clamp、sublattice、force 放大）、isTooLarge 各视图阈值 |
-| semidirectProduct.test.ts | 15 | createSemidirectProduct：C2⋊C2→D2、平凡φ→直接积、幂等回退、非同态φ抛错、exponent=lcm、生成元提升；getSemidirectProductMeta（pipe 元数据直返、注册表 (16,2) findSemidirectDecompositions 恢复 N/H/φ 且 normal.order·acting.order=16、S₃/C5 null、**QD16 命名半直积恢复 C₈⋊C₂ 且 φ(b)(a)=a³**）、semidirectFactorMap（pipe id 拆分、注册表 n=g·h⁻¹ 代数分解）、semidirectFixedPoints（identity φ 空 map、inversion φ 仅单位元固定） |
+| semidirectProduct.test.ts | 16 | createSemidirectProduct：C2⋊C2→D2、平凡φ→直接积、幂等回退、非同态φ抛错、exponent=lcm、生成元提升；getSemidirectProductMeta（pipe 元数据直返、注册表 (16,2) findSemidirectDecompositions 恢复 N/H/φ 且 normal.order·acting.order=16、S₃/C5 null、**QD16 命名半直积恢复 C₈⋊C₂ 且 φ(b)(a)=a³**）、semidirectFactorMap（pipe id 拆分、注册表 n=g·h⁻¹ 代数分解）、semidirectFixedPoints（identity φ 空 map、inversion φ 仅单位元固定） |
 | semidirectDecompositions.test.ts | 29 | 半直积分解（semidirectDecompositions.ts）：findAutoByMap（命中/不命中/空）、verifyPhiHomomorphism（C4⋊C2 反转≅D4、C2⋊C2 平凡 φ、错阶 auto 拒绝、缺失回退 identity）、buildPhiFromGroup（round-trip/非半直积 null）、minimalGenerators（V4⊂A4 2 生成元、{e}→[]、全群）、buildSubgroupGroup（S3 换位 order2、C6 偶数子群 order3）、findSemidirectDecompositions（S3 3 候选全 verified、D4 8 候选、A4 4 候选 Frobenius、S4 ≥9 双型、C6 2 候选、Q8 []、D12 19 候选全 verified、S5 守卫 []、C7 []） |
 | properties.test.ts | 13 | 群性质：S₃/A₄/S₄ 导出列可解非幂零、A₅ 完美不可解、D₈ 幂零/D₁₂ 非幂零、Q₈、Cₙ/V₄、S₃×C₂、>60 cutoff 返回 null、导出列均为子群 |
 | i18n.test.ts | 3 | i18n 键完整性：zh/en 键集合相等、非空字符串、占位符参数一致 |
@@ -75,16 +76,18 @@
 | core/descriptor.test.ts | 5 | FGVE 阶段 2 批次一：GroupDescriptor v1 序列化协议（serializeDescriptor/deserializeDescriptor/descriptorToSymbol 全群族 round-trip 幂等、symbol/order 恢复、schema 校验拒绝非法） |
 | core/viewConfig.test.ts | 8 | FGVE 阶段 2 批次一：ViewConfig JSON 化（ViewWindowConfig/SetViewParams/CayleyActionParam/CayleyViewParams/ViewWindowGeometry/ViewWindowPersistData 全 zod schema 解析、actions 上限 240 拒绝、缺省值回退、非法字段静默丢弃） |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，9 文件 / 69 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，11 文件 / 83 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
 | Tex.component.test.tsx | 12 | KaTeX 渲染：tex-span 类、katex 元素存在、Unicode 下标转 TeX、displayMode 行内/块级切换、rerender 更新、HTML 快照 ×2、特殊符号映射（×→\\times 等 each 断言） |
 | AccordionSection.component.test.tsx | 8 | 折叠面板：默认收起/defaultOpen/点击切换箭头 open 类/受控 open=false 覆盖点击/受控 true 常开/onToggle 回调/icon+badge 渲染/结构类名 |
 | TabBar.component.test.tsx | 8 | 标签栏：默认首个 active/只渲染 active 内容/点击切换/defaultTab 覆盖/compact 隐藏 label 留 icon+title/非 compact 完整渲染/结构类名/空 tabs 不崩 |
-| CayleyView.component.test.tsx | 11 | FGVE 阶段 2 批次一受控凯莱视图（CayleyView.tsx）：C₄ 默认 4 节点/4 有向边/1 marker、identity 作用自环裁剪、自逆元素无向边、S₃ 左/右乘边集不同、D₄ 双生成元（r 有向+s 无向）、nodeRadius/showLabels 参数、选中金圈高亮、每实例唯一 marker id（cv{n} 前缀防多窗口冲突）、normalizeCayleyActions（bogus 过滤/默认色/enabled:false 无 marker）、actions=[] 无有向边、group=null 空态 |
-| CayleyWindowParams.component.test.tsx | 8 | 凯莱受控窗口（ViewWindow view=cayley）：C₄ 默认渲染、C₁₂ 形状下拉可选列表+默认 circular、参数面板受控回调（shape2D/multiplyType 累积）、edge-action 单元素 checkbox 翻 enabled/None→[]/All→全作用、versioned 持久化（gv-vw- 键 + __gvVersion 信封 + debounce）、坏 schema 回退默认不崩溃、默认持久化键含视图名、缩放滑块无双应用 transform |
-| ViewWindowParams.component.test.tsx | 6 | set 视图受控窗口（ViewWindow view=set）参数：nodeRadius/gap/columns/showLabels 同步、锁定（locked 禁拖/zoomLocked 禁缩放/resizable:false 隐藏手柄）、Reset to defaults 恢复、参数面板开关 |
+| CayleyView.component.test.tsx | 13 | FGVE 阶段 2 批次一受控凯莱视图（CayleyView.tsx）：C₄ 默认 4 节点/4 有向边/1 marker、identity 作用自环裁剪、自逆元素无向边、S₃ 左/右乘边集不同、D₄ 双生成元（r 有向+s 无向）、nodeRadius/showLabels 参数（showLabels=false 不渲染 foreignObject）、选中金圈高亮、每实例唯一 marker id（cv{n} 前缀防多窗口冲突）、normalizeCayleyActions（bogus 过滤/默认色/enabled:false 无 marker）、actions=[] 无有向边、group=null 空态、**hoveredElementId 在该节点外圈绘制 #4ecdc4 青色高亮环（无 hoveredElementId 时无环）** |
+| CayleyWindowParams.component.test.tsx | 8 | 凯莱受控窗口（ViewWindow view=cayley）：C₄ 默认渲染、C₁₂ 形状下拉可选列表+默认 circular、参数面板受控回调（shape2D/multiplyType 累积）、edge-action 单元素 checkbox 翻 enabled/None→[]/All→全作用、versioned 持久化（gv-vw- 键 + __gvVersion 信封 + debounce）、坏 schema 回退默认不崩溃、默认持久化键含视图名、缩放滑块无双应用 transform（**面板无 Show labels/LOD 开关，复选框 7 个**） |
+| ViewWindowParams.component.test.tsx | 9 | set 视图受控窗口（ViewWindow view=set）参数：nodeRadius/gap/columns/showLabels 同步、锁定（locked 禁拖/zoomLocked 禁缩放/resizable:false 隐藏手柄）、Reset to defaults 恢复、参数面板开关、**嵌入 chrome：showControls=false 隐藏全部标题栏按钮、showZoomSlider=false 隐藏滑杆（ctrl+wheel 仍可用）、hover HUD 就地气泡——悬停节点旁浮出"元素名 + 阶"+ 指向节点的小三角 + 节点青色高亮环，节点靠顶部时翻转到节点下方，离场消失** |
+| CycleTableWindowParams.component.test.tsx | 8 | cycle/table 受控窗口（ViewWindow view=cycle/table）：CycleView 参数面板（showMaximalCycles 勾选/showLabels/nodeRadius 滑块）受控回调、TableView 参数面板（strategy 下拉=子群展示/随机展示/全量展示、cellSize、forceShowLargeGroup 勾选）受控回调、窗口最小尺寸（最小面积撑大）、defaultSize 应用、坏 schema 回退默认 |
+| CycleView.integration.test.tsx | 1 | 循环图视图集成（Workspace→循环图卡片）：S3 极大循环 = 花瓣——≥1 闭合多边形 + ≥3 条 2 阶叶柄线段（非圆形），视图切换回退后无花瓣 |
 | BasicGroupPanel.integration.test.tsx | 5 | I18nProvider>GroupProvider 全链路：初始 none/二面体 slider n=4 → 创建 D_{4}/循环群 C_{12}/特殊群 Q_{8}/对称群创建后 badge 含 S（GroupProbe useContext 读 currentGroup.symbol） |
 | Workspace.integration.test.tsx | 7 | 三栏工作台集成：默认 S3 set 视图 svg circles≥6 + localStorage groupviz-session 信封 {__gvVersion,data:{symbol:'S_{3}',view:'set'}}/损坏 payload 回退 S3/键盘 ArrowRight·Left 选中环 circle[stroke="#ffd93d"]/左栏 accordion-section≥8 且默认仅 ViewPanel 展开/drawer 按钮 + Escape 关闭抽屉/9 张视图卡遍历 active 切换（含 restore 后重查 container） |
 | SvgSnapshot.integration.test.tsx | 4 | SVG 结构快照回归：set-S3 {circles:6,foreignObject:6}（元素标签是 foreignObject+KaTeX 非 `<text>`）/cayley happy-dom 边静默跳过仅断言节点/table rects≥36/cycle circles>0（inline snapshot） |

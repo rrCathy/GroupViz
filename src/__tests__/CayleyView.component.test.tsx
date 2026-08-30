@@ -166,4 +166,25 @@ describe('CayleyView (pure props)', () => {
     expect(container.querySelector('.view-empty')).not.toBeNull()
     expect(container.textContent).toContain('No group')
   })
+
+  it('hoveredElementId draws a cyan ring on that node (visual hover feedback)', () => {
+    // 节点外圈 #4ecdc4 高亮环：让"悬停的就是这个节点"一眼可见，配合 ViewWindow 的 HUD 形成双重反馈
+    const { container } = render(
+      <CayleyView group={d4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        hoveredElementId={d4.elements[0].id} />,
+    )
+    // 4 个 d4 节点中只有一个高亮环
+    const rings = container.querySelectorAll('svg circle[stroke="#4ecdc4"]')
+    expect(rings).toHaveLength(1)
+    // 环的半径 > 节点半径（nodeRadius=28，环 r=33）
+    const ringR = Number((rings[0] as SVGCircleElement).getAttribute('r'))
+    expect(ringR).toBeGreaterThan(28)
+  })
+
+  it('no hoveredElementId means no hover ring', () => {
+    const { container } = render(
+      <CayleyView group={d4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,
+    )
+    expect(container.querySelectorAll('svg circle[stroke="#4ecdc4"]')).toHaveLength(0)
+  })
 })

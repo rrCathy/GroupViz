@@ -5,12 +5,17 @@ export type Theme = 'dark' | 'light'
 interface ThemeContextValue {
   theme: Theme
   toggleTheme: () => void
+  /** 视图窗口（浮动窗/ViewWindow）独立的深浅色主题，与主界面 theme 解耦 */
+  viewWindowTheme: Theme
+  toggleViewWindowTheme: () => void
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const ThemeContext = createContext<ThemeContextValue>({
   theme: 'dark',
   toggleTheme: () => { },
+  viewWindowTheme: 'dark',
+  toggleViewWindowTheme: () => { },
 })
 
 function getSystemTheme(): Theme {
@@ -28,6 +33,15 @@ function getStoredTheme(): Theme | null {
   return null
 }
 
+function getStoredViewWindowTheme(): Theme | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const stored = localStorage.getItem('groupviz-viewwindow-theme')
+    if (stored === 'dark' || stored === 'light') return stored
+  } catch { /* localStorage unavailable (e.g., privacy mode) */ }
+  return null
+}
+
 function applyTheme(theme: Theme) {
   if (typeof document === 'undefined') return
   document.documentElement.setAttribute('data-theme', theme)
@@ -40,10 +54,23 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return getSystemTheme()
   })
 
+  // 视图窗口主题：独立于主界面 theme，默认深色（图形对比度更佳）
+  const [viewWindowTheme, setViewWindowThemeState] = useState<Theme>(() => {
+    return getStoredViewWindowTheme() ?? 'dark'
+  })
+
   const toggleTheme = useCallback(() => {
     setThemeState(prev => {
       const next = prev === 'dark' ? 'light' : 'dark'
       localStorage.setItem('groupviz-theme', next)
+      return next
+    })
+  }, [])
+
+  const toggleViewWindowTheme = useCallback(() => {
+    setViewWindowThemeState(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('groupviz-viewwindow-theme', next)
       return next
     })
   }, [])
@@ -70,7 +97,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [setTheme])
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, viewWindowTheme, toggleViewWindowTheme }}>
       {children}
     </ThemeContext.Provider>
   )

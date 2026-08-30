@@ -9,6 +9,8 @@ const zh: TranslationMap = {
   'ui.openToolbar': '打开工具栏',
   'ui.openInfo': '打开信息面板',
   'ui.computing': '计算中',
+  'theme.viewWindowDark': '视图窗口切换为浅色',
+  'theme.viewWindowLight': '视图窗口切换为深色',
 
   /* Welcome Page */
   'welcome.subtitle': '群论可视化平台',
@@ -90,6 +92,8 @@ const zh: TranslationMap = {
   'view.sylow.desc': 'p-元素与 Sylow p-子群',
   'view.tree': '树视图',
   'view.prestable': '展示乘法表',
+  'view.heatmap': '热力图',
+  'view.heatmap.desc': '乘法结果染色',
 
   /* Free Group Tree / Presentation Table views */
   'prestable.noPresentation': '当前群没有可用的群展示（⟨… | …⟩）。请先在左侧「群展示」面板创建，或选择较小的群。',
@@ -99,6 +103,7 @@ const zh: TranslationMap = {
   'panel.multiView': '多视图模式',
   'panel.floatView': '+ {label}',
   'panel.showMaximalCycles': '仅显示极大循环',
+  'panel.showHeatmap': '热力图模式',
   'panel.showAction': '显示元素操作',
   'panel.speed': '速度',
   'panel.multiplyType': '乘法类型',
@@ -274,6 +279,7 @@ const zh: TranslationMap = {
   'table.strategy.full': '全量展示',
   'table.subgroupCaption': '子群 {label}（|H| = {order}）',
   'table.randomCaption': '随机采样 {n} 个元素',
+  'table.heatmapAggCaption': '完整乘法表 |G| = {n}，热力图缩略 {res}×{res}（众数色块）',
   'table.fullConfirmTitle': '全量展示确认',
   'table.fullConfirmMsg': '该群阶数 |G| = {n}，全量展示将进入全屏模式并可能占用较多内存。确定继续吗？',
   'table.confirmOk': '确定',
@@ -670,6 +676,8 @@ const en: TranslationMap = {
   'ui.openToolbar': 'Open Toolbar',
   'ui.openInfo': 'Open Info Panel',
   'ui.computing': 'Computing',
+  'theme.viewWindowDark': 'View windows: switch to light',
+  'theme.viewWindowLight': 'View windows: switch to dark',
 
   /* Welcome Page */
   'welcome.subtitle': 'Group Theory Visualization Platform',
@@ -751,6 +759,8 @@ const en: TranslationMap = {
   'view.sylow.desc': 'p-elements & Sylow p-subgroups',
   'view.tree': 'Group Tree',
   'view.prestable': 'Presentation Table',
+  'view.heatmap': 'Heatmap',
+  'view.heatmap.desc': 'Multiplication color map',
 
   /* Free Group Tree / Presentation Table views */
   'prestable.noPresentation': 'No group presentation ⟨… | …⟩ is available for the current group. Create one in the left "Group Presentation" panel, or pick a smaller group.',
@@ -760,6 +770,7 @@ const en: TranslationMap = {
   'panel.multiView': 'Multi-View Mode',
   'panel.floatView': '+ {label}',
   'panel.showMaximalCycles': 'Show Maximal Cycles Only',
+  'panel.showHeatmap': 'Heatmap mode',
   'panel.showAction': 'Show Element Action',
   'panel.speed': 'Speed',
   'panel.multiplyType': 'Multiply Type',
@@ -939,6 +950,7 @@ const en: TranslationMap = {
   'table.strategy.full': 'Full',
   'table.subgroupCaption': 'Subgroup {label} (|H| = {order})',
   'table.randomCaption': 'Random sample of {n} elements',
+  'table.heatmapAggCaption': 'Full table |G| = {n}, heatmap thumbnail {res}×{res} (mode blocks)',
   'table.fullConfirmTitle': 'Confirm full table',
   'table.fullConfirmMsg': 'This group has order |G| = {n}. Showing the full table enters fullscreen mode and may use noticeable memory. Continue?',
   'table.confirmOk': 'OK',

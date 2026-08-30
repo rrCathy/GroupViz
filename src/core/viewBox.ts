@@ -43,8 +43,12 @@ export function getViewBoxSize(order: number, view: ViewMode, force = false): Vi
 }
 
 export function isTooLarge(order: number, view: ViewMode): boolean {
-  if (view === 'table') {
+  if (view === 'table' || view === 'prestable') {
     return order > 100
+  }
+  if (view === 'heatmap') {
+    // 热力图聚合缩略图，超大群也能展示宏观结构，阈值放宽到 240（与 sylow 一致）
+    return order > 240
   }
   if (view === 'symmetry' || view === 'sublattice' || view === 'action') {
     return order > 120

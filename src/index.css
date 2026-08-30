@@ -14,7 +14,10 @@ body {
   min-height: 100vh;
 }
 
-:root {
+/* 深色为默认（:root），并额外匹配 [data-theme="dark"]，使视图窗口等子树的
+   data-theme 属性可以独立强制深色（与全局浅色解耦） */
+:root,
+[data-theme="dark"] {
   --bg-primary: #0f0f1a;
   --bg-secondary: #151525;
   --bg-canvas: #0a0a14;

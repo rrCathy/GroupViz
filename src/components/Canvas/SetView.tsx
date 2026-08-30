@@ -14,7 +14,7 @@ export interface SetViewProps {
   cosetHighlightSet?: Set<number>
   cosetColors?: string[]
   onSelect?: (elId: string, additive: boolean) => void
-  onHover?: (el: Group['elements'][number] | null) => void
+  onHover?: (el: Group['elements'][number] | null, anchor?: { x: number; y: number } | null) => void
   noGroupText?: string
   nodeRadius?: number
   gap?: number
@@ -208,6 +208,13 @@ export function SetView({
     return m
   }, [subsets])
 
+  // KaTeX 标签 HTML 开销大：每群只渲染一次（与 CayleyView 的 labelHtmlCache 一致）
+  const labelHtmlCache = useMemo(() => {
+    const m = new Map<string, string>()
+    group?.elements.forEach(el => m.set(el.id, renderTex(texify(el.label))))
+    return m
+  }, [group])
+
   const cosetPalette = cosetColors ?? []
 
   if (!group) {
@@ -299,8 +306,8 @@ export function SetView({
                 e.stopPropagation()
                 onSelect?.(el.id, e.ctrlKey || e.metaKey)
               }}
-              onMouseEnter={() => onHover?.(el)}
-              onMouseLeave={() => onHover?.(null)}
+              onMouseEnter={() => onHover?.(el, { x: pos.x * canvasTransform.scale + canvasTransform.x, y: pos.y * canvasTransform.scale + canvasTransform.y })}
+              onMouseLeave={() => onHover?.(null, null)}
               style={{ cursor: 'pointer' }}
             >
               {isCompound ? (
@@ -342,7 +349,7 @@ export function SetView({
                              width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLarge ? '10px' : '15px'
                           }}
                           dangerouslySetInnerHTML={{
-                            __html: renderTex(texify(el.label))
+                            __html: labelHtmlCache.get(el.id) ?? ''
                           }}
                         />
                       </foreignObject>

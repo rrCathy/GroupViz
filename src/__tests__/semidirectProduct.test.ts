@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createSemidirectProduct } from '../core/groups/SemidirectProduct'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
+import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { getSmallGroup, getAllSmallGroups } from '../core/groups/SmallGroups'
 import { createS3 } from '../core/groups/SymmetricGroup'
 import type { Group, GroupElement } from '../core/types'
@@ -209,6 +210,21 @@ describe('getSemidirectProductMeta (rewiring shape metadata)', () => {
     expect(a3).toBeDefined()
     const cub = entry.group.multiply(entry.group.multiply(a, a), a)
     expect(a3).toBe(cub.id)
+  })
+
+  it('recovers A₄ as V₄⋊C₃ (no ":"/⋊ notation, no QD16/SmallGroup symbol)', () => {
+    // A₄ 符号是干净的 "A_{4}"，不在 isGroupSemidirectProduct（⋊/:）和
+    // isNamedRewiringGroup（QD16/SmallGroup）覆盖范围里，符号门特判放行后
+    // 走 findSemidirectDecompositions 的 verified 路径。
+    const a4 = createAlternatingGroup(4)
+    const meta = getSemidirectProductMeta(a4)
+    expect(meta).not.toBeNull()
+    expect(meta!.normal.order * meta!.acting.order).toBe(12)
+    // V₄（Klein 四元） = C₂×C₂（交换、4 阶），C₃（3 阶）
+    expect(meta!.normal.order).toBe(4)
+    expect(meta!.acting.order).toBe(3)
+    expect(meta!.normal.isAbelian).toBe(true)
+    expect(meta!.phiMap.size).toBe(3)
   })
 })
 

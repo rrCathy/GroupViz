@@ -3,8 +3,8 @@ import { useGroup } from '../../context/useGroup'
 import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { SetViewFromContext } from './SetViewFromContext'
-import { CycleView } from './CycleView'
-import { TableView } from './TableView'
+import { CycleViewFromContext } from './CycleViewFromContext'
+import { TableViewFromContext } from './TableViewFromContext'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
@@ -386,9 +386,9 @@ export function GroupCanvas() {
       case 'cayley':
         return <CayleyGraphView gRef={gRef} />
       case 'cycle':
-        return <CycleView />
+        return <CycleViewFromContext />
       case 'table':
-        return <TableView />
+        return <TableViewFromContext />
       case '3d':
         return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><Cayley3DViewLazy /></Suspense>
       case 'symmetry':

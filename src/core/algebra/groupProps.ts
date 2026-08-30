@@ -526,10 +526,6 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     if (isQuotientGroup(group)) {
       return ['circular']
     }
-    // 7 阶（含）以内所有群只需圆形
-    if (group.order <= 7) {
-      return ['circular']
-    }
     if (isGroupSemidirectProduct(group)) {
       return ['rewiring', 'circular', 'cone']
     }
@@ -540,8 +536,8 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
       return ['circular', 'dualRing', 'grid']
     }
     if (isGroupCyclic(group) && !isGroupDirectProduct(group)) {
-      // C9/C10 只需圆形
-      if (group.order === 9 || group.order === 10) {
+      // 循环群：≤7 阶（含 C9/C10）螺旋无意义，只保留圆形；>7 才给 spiral/coil
+      if (group.order <= 7 || group.order === 9 || group.order === 10) {
         return ['circular']
       }
       return ['circular', 'spiral', 'coil', 'cone']
@@ -555,6 +551,9 @@ export function getAvailableShapesForView(group: Group | null, view: ViewMode): 
     if (isProjection3DGroup(group) || isSpecial) {
       shapes.push(isSpecial ? 'pythagoreanSquare' : 'projection3D')
     }
+    // A₄ = V₄⋊C₃：最小非平凡半直积，额外提供 rewiring（默认仍 projection3D 球面投影，
+    // 但作者可在形状下拉手动切换，看 φ-不动点重布线形态）
+    if (sym === 'A_{4}') shapes.push('rewiring')
     if (isGroupDirectProduct(group)) {
       const cls = classifyDirectProduct2D(group)
       if (cls !== 'grid') shapes.push(cls)

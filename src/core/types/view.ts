@@ -1,4 +1,4 @@
-export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow' | 'tree' | 'prestable'
+export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | 'heatmap' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow' | 'tree' | 'prestable'
 
 export type MultiplyType = 'right' | 'left'
 

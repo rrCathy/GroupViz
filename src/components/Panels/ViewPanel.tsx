@@ -18,6 +18,8 @@ export function ViewPanel() {
     openFloatingView,
     showMaximalCycles,
     setShowMaximalCycles,
+    showHeatmap,
+    setShowHeatmap,
     symmetryShowAction,
     symmetryRotateSpeed,
     setSymmetryShowAction,
@@ -198,6 +200,13 @@ export function ViewPanel() {
             </div>
           </div>
         </div>
+      )}
+
+      {currentView === 'table' && (
+        <label className="panel-checkbox" style={{ marginTop: '6px' }}>
+          <input type="checkbox" checked={showHeatmap} onChange={(e) => setShowHeatmap(e.target.checked)} disabled={!currentGroup} />
+          <span>{t('panel.showHeatmap')}</span>
+        </label>
       )}
 
       {currentView === 'cycle' && (

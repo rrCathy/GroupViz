@@ -469,3 +469,205 @@ export function planarCycleLayout(
   }
   return result
 }
+
+// ===== Group Explorer 风格循环图（cycle graph）布局 =====
+//
+// 约定（对齐 Nathan Carter《群论彩图版》与 Group Explorer 的 CycleGraphView）：
+// - 单位元 e 居中，所有极大循环子群都经过 e。
+// - 每个极大循环 = 一片「花瓣」：循环的非单位元落在一个圆弧上（e 在圆弧底部，向外张开）。
+// - 共享的非单位元 = 花瓣在共享顶点处相交（例 Z₂×Z₄ 的两只「蝴蝶」菱形，共享 e 与一个 2 阶元素）。
+// - 不在任何 ≥3 阶循环里的 2 阶元素 = 从 e 出去的「叶柄」（短花瓣）。
+//
+// 布局策略（精确复刻 GE）：
+// - 基础花瓣：非单位元 g^k 落在圆心 (0,R)、半径 R 的圆弧上，坐标 (-R·cosθ, R(1+sinθ))，θ=2π(k/n-0.25)。
+// - 循环按共享非单位元聚成 part（并查集），各 part 依循环长度之和比例分配不相交的角度弧，最大 part 垂直向下。
+// - part 内多个循环用 gravity=ringNum/part.length 拉向弧中心，共享元素只在首个循环放置、后续循环引用同位置。
+
+export interface OrderedCycleInput {
+  /** 子群顺序元素 [e, g, g², ...]，首元素为单位元 */
+  elementIds: string[]
+}
+
+/**
+ * GE CycleGraphView 的花瓣布局原语（精确对齐 Nathan Carter / Group Explorer）：
+ * - 基础花瓣：循环的非单位元落在以 (0,R) 为圆心、半径 R 的圆弧上，单位元在圆弧底部原点。
+ *   第 k 个非单位元 g^k（k=1..n-1）的基础坐标为 (-R·cosθ, R(1+sinθ))，θ = 2π(k/n - 0.25)。
+ * - mutateArc：把基础花瓣映射到 part 弧 [alpha,beta]，并按 gravity g 拉向弧中心（半径 1/2），
+ *   使同一 part 内共享元素的多个循环错开、不重叠。
+ */
+
+/** 基础花瓣上第 k 个非单位元（g^k，k=1..n-1）的基础坐标（R=1，未映射）。 */
+function basePetalPoint(k: number, n: number): { x: number; y: number } {
+  const theta = 2 * Math.PI * (k / n - 0.25)
+  return { x: -Math.cos(theta), y: 1 + Math.sin(theta) }
+}
+
+/** 旋转循环使单位元排在最前（保持循环顺序 [e, g, g², ...]）。 */
+function normalizeCycle(elementIds: string[], identityId: string): OrderedCycleInput {
+  const idx = elementIds.indexOf(identityId)
+  if (idx <= 0) return { elementIds }
+  return { elementIds: [...elementIds.slice(idx), ...elementIds.slice(0, idx)] }
+}
+
+/** GE mutate：把点 (x,y) 映射到弧 [alpha,beta]，并按 g（0..1）拉向弧中心。 */
+function mutateArc(
+  x: number,
+  y: number,
+  alpha: number,
+  beta: number,
+  g: number,
+): { x: number; y: number } {
+  const r = Math.sqrt(x * x + y * y)
+  const theta = Math.atan2(y, x)
+  const theta2 = alpha + (theta / Math.PI) * (beta - alpha)
+  const x2 = r * Math.cos(theta2)
+  const y2 = r * Math.sin(theta2)
+  const cx = Math.cos((alpha + beta) / 2) / 2
+  const cy = Math.sin((alpha + beta) / 2) / 2
+  return { x: x2 + (cx - x2) * g, y: y2 + (cy - y2) * g }
+}
+
+/** GE bestPowerRelativeTo（纯基于元素 ID）：找 t（与 order(h) 互素）使 h^t 轨道与 g 轨道最早相交。 */
+function bestPowerRelativeTo(hOrbit: string[], gOrbit: string[]): number {
+  const n = hOrbit.length
+  if (n <= 2) return 1
+  const gSet = new Set(gOrbit.slice(1))
+  let bestT = 1
+  let bestGIdx = Infinity
+  for (let t = 1; t < n; t++) {
+    if (gcd(t, n) !== 1) continue
+    for (let i = 1; i < n; i++) {
+      const el = hOrbit[(i * t) % n]
+      if (gSet.has(el)) {
+        const gIdx = gOrbit.indexOf(el) - 1
+        if (gIdx >= 0 && gIdx < bestGIdx) { bestGIdx = gIdx; bestT = t }
+        break
+      }
+    }
+  }
+  return bestT
+}
+
+/** 重新轮换循环：取 [e, g^t, g^{2t}, ...]。 */
+function reorbitCycle(cycleIds: string[], t: number): string[] {
+  if (t <= 1) return cycleIds
+  const n = cycleIds.length
+  const out = new Array<string>(n)
+  out[0] = cycleIds[0]
+  for (let k = 1; k < n; k++) out[k] = cycleIds[(k * t) % n]
+  return out
+}
+
+function gcd(a: number, b: number): number { return b ? gcd(b, a % b) : a }
+
+/**
+ * 循环图（cycle graph）布局：单位元居中，极大循环作为花瓣展开。
+ *
+ * 设计原则（精确复刻 Group Explorer 的 CycleGraphView.layoutElementsAndPaths）：
+ * 1. 单位元 e 固定在原点，永不重放。
+ * 2. 每个极大循环 = 一片「花瓣」：非单位元 g^k 落在圆心 (0,R) 半径 R 的圆弧上，
+ *    e 在圆弧底部（basePetalPoint）。循环按共享非单位元聚成 part（并查集，
+ *    合并时用 bestPowerRelativeTo 重新轮换被并入 part 的每个循环，使共享元素
+ *    在圆弧索引上对齐）。
+ * 3. 各 part 按「循环长度之和」比例分配不相交的角度弧；单个 part 退化用半圆弧；
+ *    最大 part（循环数最多）的弧中心旋转到正下方。
+ * 4. part 内多个循环用 gravity = ringNum/part.length 拉向弧中心；共享元素只由
+ *    首个摆放它的循环放置，后续循环引用同一位置（蝴蝶 / SL(2,3) / C5×S3 等）。
+ */
+export function cycleGraphLayout(
+  elements: GroupElement[],
+  cycles: OrderedCycleInput[],
+  width: number,
+  height: number,
+  identityIdOverride?: string,
+): Map<string, NodePosition> {
+  const cx = width / 2
+  const cy = height / 2
+  if (elements.length === 0) return new Map()
+  const identityId = identityIdOverride ?? elements[findIdentityIdx(elements)].id
+  const result = new Map<string, NodePosition>()
+  result.set(identityId, { x: cx, y: cy })
+  if (cycles.length === 0) return result
+
+  const normCycles: string[][] = cycles.map(c => normalizeCycle(c.elementIds, identityId).elementIds)
+
+  // GE uniteParts：把「共享非单位元」的循环按共享关系并成 part；
+  // 每次合并把被并入 part 的每个循环按 bestPowerRelativeTo 重新轮换，
+  // 使共享元素与锚点循环在圆弧索引上对齐（纯元素 ID 运算，faithful GE）。
+  const partition: string[][][] = normCycles.map(cycle => [cycle])
+  const arraysIntersect = (a: string[], b: string[]): boolean => a.some(elt => b.includes(elt))
+  const flattenPart = (part: string[][]): string[] => part.reduce((acc, c) => acc.concat(c), [])
+  const uniteParts = (partIndex1: number, partIndex2: number): void => {
+    const anchor = partition[partIndex1][0]
+    partition[partIndex2].forEach(cycle => {
+      partition[partIndex1].push(reorbitCycle(cycle, bestPowerRelativeTo(cycle, anchor)))
+    })
+    partition.splice(partIndex2, 1)
+  }
+  let keepChecking = true
+  while (keepChecking) {
+    keepChecking = false
+    for (let i = 0; !keepChecking && i < partition.length; i++) {
+      for (let j = 0; !keepChecking && j < i; j++) {
+        if (arraysIntersect(flattenPart(partition[i]), flattenPart(partition[j]))) {
+          uniteParts(i, j)
+          keepChecking = true
+        }
+      }
+    }
+  }
+
+  // GE 弧分配：parts 按循环长度总和比例分配圆周；最大 part 超半圆截断到半圆；
+  // 只有一个 part 的退化情形用半圆。
+  let cumsums: number[]
+  if (partition.length > 1) {
+    let partSizes = partition.map(p => p.reduce((acc, c) => acc + c.length, 0))
+    let total = partSizes.reduce((a, b) => a + b, 0)
+    if (Math.max(...partSizes) > total / 2) {
+      partSizes = partSizes.map(x => Math.min(x, total / 2))
+      total = partSizes.reduce((a, b) => a + b, 0)
+    }
+    cumsums = [0]
+    for (const s of partSizes) cumsums.push(cumsums[cumsums.length - 1] + (s * 2 * Math.PI) / total)
+  } else {
+    cumsums = [0, Math.PI]
+  }
+
+  // GE 旋转：循环数最多的 part 的弧中心朝正下方（-π/2）。
+  let maxPartLength = 0
+  let maxPartIndex = 0
+  partition.forEach((p, idx) => {
+    if (p.length > maxPartLength) { maxPartLength = p.length; maxPartIndex = idx }
+  })
+  const maxPartCenter = (cumsums[maxPartIndex] + cumsums[maxPartIndex + 1]) / 2
+  const rotateDiff = -Math.PI / 2 - maxPartCenter
+  cumsums = cumsums.map(a => a + rotateDiff)
+
+  // 花瓣半径：part 内循环数占最大 part 比例开方，下限 0.25（GE 的 r/R 缩放）。
+  const R = Math.min(width, height) * 0.40
+  const scale = R / 2 // basePetalPoint 最远点距离原点为 2，除以 2 归一化
+  const partR = partition.map(part => Math.sqrt(Math.max(part.length / maxPartLength, 0.25)))
+
+  // 放置元素：共享元素只由第一个摆放它的循环放置（后续循环通过 result.has
+  // 引用同一位置）；gravity = ringNum/part.length 沿弧中心拉，faithful GE。
+  partition.forEach((part, partIndex) => {
+    const pr = partR[partIndex]
+    part.forEach((cycle, ringNum) => {
+      const n = cycle.length
+      const g = ringNum / part.length
+      for (let kk = 1; kk < n; kk++) {
+        if (result.has(cycle[kk])) continue
+        const base = basePetalPoint(kk, n)
+        const p = mutateArc(base.x * pr, base.y * pr, cumsums[partIndex], cumsums[partIndex + 1], g)
+        result.set(cycle[kk], { x: cx + p.x * scale, y: cy - p.y * scale })
+      }
+    })
+  })
+
+  // 兜底
+  for (const el of elements) {
+    if (!result.has(el.id)) result.set(el.id, { x: cx + R, y: cy })
+  }
+
+  return result
+}

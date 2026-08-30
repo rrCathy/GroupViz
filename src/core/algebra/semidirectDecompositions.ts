@@ -527,7 +527,9 @@ export function getSemidirectProductMeta(group: Group): SemidirectProductMeta | 
   const namedPair = namedSemidirectOrderPair(group)
   // 符号冲突回退类（symbol 被替换为 'SmallGroup(n,i)'，如 (20,3) ≈ C₅⋊C₄）
   // 同样无 ':' 记号，但结构是半直积 → 放行走结构恢复
-  if (!isGroupSemidirectProduct(group) && !namedPair && !group.symbol.startsWith('SmallGroup(')) {
+  // A₄ = V₄⋊C₃ 是最小非平凡半直积，符号无 ':'/'⋊' 记号（命名群），同样放行
+  const isA4 = group.symbol === 'A_{4}' && group.order === 12
+  if (!isGroupSemidirectProduct(group) && !namedPair && !group.symbol.startsWith('SmallGroup(') && !isA4) {
     return null
   }
   const decs = findSemidirectDecompositions(group)

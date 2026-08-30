@@ -6,13 +6,13 @@ import {
   useState,
   type PointerEvent as RPointerEvent,
 } from 'react'
-import { useGroup } from '../../context/useGroup'
-import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { isTooLarge } from '../../core/viewBox'
 import { findAllSubgroups } from '../../core/algebra/subgroups'
 import { triggerDownload } from '../../utils/export'
-import type { Group, Subset } from '../../core/types'
+import type { CanvasTransform, Group, GroupElement, Subset } from '../../core/types'
+import type { CosetInfo } from '../../core/algebra/subgroups'
+import type { TableStrategy } from '../../core/types/viewConfig'
 
 const elementColors = [
   '#ff6b6b', '#4ecdc4', '#ffd93d', '#6bcb77', '#9b59b6',
@@ -20,13 +20,55 @@ const elementColors = [
   '#f39c12', '#8e44ad', '#3071a9', '#d35400', '#c0392b'
 ]
 
-type TableStrategy = 'subgroup' | 'random' | 'full'
+// 完整表格（网格 + 行表头 + 列表头 + 页脚）的 viewBox 内容尺寸余量
+export const TABLE_PAD_W = 44   // 行表头 ~38px + 右侧小余量
+export const TABLE_PAD_H = 74   // 列表头 ~16px + 页脚 ~50px + 余量
+
+// 热力图大群聚合：超过该阶数的热力图 full 策略降采样为众数色块缩略图，
+// 既用颜色密度呈现乘法表宏观结构，又将渲染成本恒定在 HEATMAP_AGG_RES² 量级。
+const HEATMAP_AGG_THRESHOLD = 60
+const HEATMAP_AGG_RES = 80
+
+export interface TableViewProps {
+  group: Group | null
+  selectedElements: Set<string>
+  canvasTransform: CanvasTransform
+  viewBoxSize: { width: number; height: number }
+  /** 子集（含子群标记），用于子群/非子群着色；缺省空 */
+  subsets?: Subset[]
+  cosetElementMap?: Map<string, number>
+  cosetColors?: string[]
+  cosetData?: CosetInfo | null
+  cosetType?: 'left' | 'right'
+  showAllCosets?: boolean
+  /** 大群告警已解除（对应主画布 forceShowLargeGroupViews.has('table')）；缺省 false */
+  forceShowLargeGroup?: boolean
+  /** 解除大群告警回调；缺省使用本地状态 */
+  onForceShowLargeGroup?: (allow: boolean) => void
+  /** 大群（>16 阶）展示策略；缺省 'subgroup' */
+  strategy?: TableStrategy
+  /** 单元格尺寸；缺省 50 */
+  cellSize?: number
+  /** 热力图模式：只显示颜色，不显示元素和行/列表头；缺省 false */
+  showHeatmap?: boolean
+  /** 策略被内部 UI 切换时回传（供外部 viewParams 同步） */
+  onStrategyChange?: (s: TableStrategy) => void
+  /** 实际渲染的表格内容尺寸回传（行数×cellSize + 表头/页脚），用于 ViewWindow 设定最小窗口尺寸；
+   *  大群告警/全屏占位时回传 null（无表格可显示） */
+  onLayoutSize?: (size: { width: number; height: number } | null) => void
+  onSelect?: (elId: string, additive: boolean) => void
+  onHover?: (el: GroupElement | null) => void
+  noGroupText?: string
+}
 
 interface SubgroupPick {
   indices: number[]
   label: string
   order: number
 }
+
+const EMPTY_IDX_MAP = new Map<string, number>()
+const EMPTY_SUBSETS: Subset[] = []
 
 function pickRandomSample(group: Group, idToIdx: Map<string, number>): number[] {
   const n = group.order
@@ -115,27 +157,38 @@ function pickSubgroup(group: Group, idToIdx: Map<string, number>, subsets: Subse
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-export function TableView() {
-  const {
-    currentGroup,
-    selectedElements,
-    selectElement,
-    viewBoxSize,
-    canvasTransform,
-    forceShowLargeGroupViews,
-    setForceShowLargeGroupForView,
-    subsets,
-    cosetElementMap,
-    cosetColors,
-    cosetData,
-    cosetType,
-    showAllCosets,
-  } = useGroup()
-  const { setHoverElement } = useHover()
+export function TableView({
+  group,
+  selectedElements,
+  viewBoxSize,
+  canvasTransform,
+  subsets: subsetsProp,
+  cosetElementMap,
+  cosetColors,
+  cosetData: cosetDataProp,
+  cosetType: cosetTypeProp,
+  showAllCosets: showAllCosetsProp,
+  forceShowLargeGroup,
+  onForceShowLargeGroup,
+  strategy: strategyProp,
+  cellSize: cellSizeProp,
+  showHeatmap = false,
+  onStrategyChange,
+  onLayoutSize,
+  onSelect,
+  onHover,
+  noGroupText,
+}: TableViewProps) {
   const { t } = useTranslation()
-  const isLargeTable = currentGroup ? currentGroup.order > 16 : false
+  const subsets = subsetsProp ?? EMPTY_SUBSETS
+  const cem = cosetElementMap ?? EMPTY_IDX_MAP
+  const cosetData = cosetDataProp ?? null
+  const cosetType = cosetTypeProp ?? 'left'
+  const showAllCosets = showAllCosetsProp ?? false
 
-  const [strategy, setStrategy] = useState<TableStrategy>('subgroup')
+  const isLargeTable = group ? group.order > 16 : false
+
+  const [strategy, setStrategy] = useState<TableStrategy>(() => strategyProp ?? 'subgroup')
   const [reroll, setReroll] = useState(0)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [fullscreenOpen, setFullscreenOpen] = useState(false)
@@ -148,23 +201,43 @@ export function TableView() {
   const fsSvgRef = useRef<SVGSVGElement>(null)
   const fsDragRef = useRef<{ x: number; y: number; sl: number; st: number } | null>(null)
 
+  // 大群告警：外部受控（主画布）优先，否则本地状态兜底（ViewWindow）
+  const [localForceShow, setLocalForceShow] = useState(false)
+  const forceShow = forceShowLargeGroup ?? localForceShow
+  const requestForceShow = useCallback(() => {
+    if (onForceShowLargeGroup) onForceShowLargeGroup(true)
+    else setLocalForceShow(true)
+  }, [onForceShowLargeGroup])
+
+  // 外部 strategy 受控同步：渲染期比对 props 变化（参数面板驱动），避免 effect 内 setState
+  const [prevStrategyProp, setPrevStrategyProp] = useState<TableStrategy | undefined>(strategyProp)
+  if (strategyProp !== prevStrategyProp) {
+    setPrevStrategyProp(strategyProp)
+    if (strategyProp !== undefined) setStrategy(strategyProp)
+  }
+
+  const applyStrategy = useCallback((s: TableStrategy) => {
+    setStrategy(s)
+    onStrategyChange?.(s)
+  }, [onStrategyChange])
+
   const idToIdx = useMemo(() => {
-    if (!currentGroup) return new Map<string, number>()
+    if (!group) return new Map<string, number>()
     const m = new Map<string, number>()
-    currentGroup.elements.forEach((el, i) => m.set(el.id, i))
+    group.elements.forEach((el, i) => m.set(el.id, i))
     return m
-  }, [currentGroup])
+  }, [group])
 
   const labelToIdx = useMemo(() => {
-    if (!currentGroup) return new Map<string, number>()
+    if (!group) return new Map<string, number>()
     const m = new Map<string, number>()
-    currentGroup.elements.forEach((el, i) => m.set(el.label, i))
+    group.elements.forEach((el, i) => m.set(el.label, i))
     return m
-  }, [currentGroup])
+  }, [group])
 
   const table = useMemo(() => {
-    if (!currentGroup) return null
-    const { elements, multiply } = currentGroup
+    if (!group) return null
+    const { elements, multiply } = group
     const n = elements.length
     const tableData: { label: string; id: string }[][] = []
     for (let i = 0; i < n; i++) {
@@ -176,7 +249,7 @@ export function TableView() {
       tableData.push(row)
     }
     return tableData
-  }, [currentGroup])
+  }, [group])
 
   const getElementColor = (label: string): string => {
     const idx = labelToIdx.get(label)
@@ -194,7 +267,7 @@ export function TableView() {
   }, [selectedElements, idToIdx])
 
   const subgroupIndexSets = useMemo(() => {
-    if (!currentGroup) return [] as { color: string; indices: Set<number> }[]
+    if (!group) return [] as { color: string; indices: Set<number> }[]
     return subsets
       .filter(s => s.isSubgroup)
       .map(s => {
@@ -205,7 +278,7 @@ export function TableView() {
         })
         return { color: s.color, indices }
       })
-  }, [subsets, idToIdx, currentGroup])
+  }, [subsets, idToIdx, group])
 
   const nonSubgroupSubsetIndices = useMemo(() => {
     const set = new Set<number>()
@@ -235,7 +308,7 @@ export function TableView() {
   }, [subsets, idToIdx])
 
   const subgroupCellColors = useMemo(() => {
-    if (!currentGroup) return new Map<string, string>()
+    if (!group) return new Map<string, string>()
     const map = new Map<string, string>()
     for (const sg of subgroupIndexSets) {
       for (const ri of sg.indices) {
@@ -245,20 +318,20 @@ export function TableView() {
       }
     }
     return map
-  }, [subgroupIndexSets, currentGroup])
+  }, [subgroupIndexSets, group])
 
   const cosetSubgroupIndices = useMemo(() => {
     const set = new Set<number>()
-    if (!currentGroup || !cosetData) return set
+    if (!group || !cosetData) return set
     for (const el of cosetData.subgroup.elements) {
       const idx = idToIdx.get(el.id)
       if (idx !== undefined) set.add(idx)
     }
     return set
-  }, [currentGroup, cosetData, idToIdx])
+  }, [group, cosetData, idToIdx])
 
   const cosetActiveRowIds = useMemo(() => {
-    if (!currentGroup || !cosetData) return new Set<string>()
+    if (!group || !cosetData) return new Set<string>()
     if (showAllCosets) {
       const reps = new Set<string>()
       const cosets = cosetType === 'left' ? cosetData.leftCosets : cosetData.rightCosets
@@ -268,10 +341,10 @@ export function TableView() {
       return reps
     }
     return new Set(selectedElements)
-  }, [currentGroup, cosetData, showAllCosets, cosetType, selectedElements])
+  }, [group, cosetData, showAllCosets, cosetType, selectedElements])
 
   const cosetActiveColIds = useMemo(() => {
-    if (!currentGroup || !cosetData) return new Set<string>()
+    if (!group || !cosetData) return new Set<string>()
     if (showAllCosets) {
       const reps = new Set<string>()
       const cosets = cosetType === 'right' ? cosetData.rightCosets : cosetData.leftCosets
@@ -281,7 +354,7 @@ export function TableView() {
       return reps
     }
     return new Set(selectedElements)
-  }, [currentGroup, cosetData, showAllCosets, cosetType, selectedElements])
+  }, [group, cosetData, showAllCosets, cosetType, selectedElements])
 
   const elementsInAnySubgroup = useMemo(() => {
     const set = new Set<number>()
@@ -292,29 +365,87 @@ export function TableView() {
   }, [subgroupIndexSets])
 
   const subgroupInfo = useMemo(() => {
-    if (!currentGroup || !isLargeTable || strategy !== 'subgroup') return null
-    return pickSubgroup(currentGroup, idToIdx, subsets)
+    if (!group || !isLargeTable || strategy !== 'subgroup') return null
+    return pickSubgroup(group, idToIdx, subsets)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentGroup, isLargeTable, strategy, subsets, idToIdx, reroll])
+  }, [group, isLargeTable, strategy, subsets, idToIdx, reroll])
 
   const randomSample = useMemo(() => {
-    if (!currentGroup || !isLargeTable) return [] as number[]
-    return pickRandomSample(currentGroup, idToIdx)
+    if (!group || !isLargeTable) return [] as number[]
+    return pickRandomSample(group, idToIdx)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentGroup, isLargeTable, idToIdx, reroll])
+  }, [group, isLargeTable, idToIdx, reroll])
 
   const strategyIndices = useMemo(() => {
-    if (!currentGroup) return [] as number[]
-    if (!isLargeTable) return currentGroup.elements.map((_, i) => i)
-    if (strategy === 'full') return currentGroup.elements.map((_, i) => i)
+    if (!group) return [] as number[]
+    if (!isLargeTable) return group.elements.map((_, i) => i)
+    if (strategy === 'full') return group.elements.map((_, i) => i)
     if (strategy === 'random') return randomSample
     return subgroupInfo ? subgroupInfo.indices : randomSample
-  }, [currentGroup, isLargeTable, strategy, subgroupInfo, randomSample])
+  }, [group, isLargeTable, strategy, subgroupInfo, randomSample])
+
+  // 热力图 full 大群聚合：把 n×n 乘法表降采样到固定分辨率的众数色块网格。
+  // 每个聚合色块覆盖原表一个矩形区域，颜色取该区域结果元素的众数。
+  const heatmapAgg = useMemo(() => {
+    if (!group || !table || !(showHeatmap && strategy === 'full' && group.order > HEATMAP_AGG_THRESHOLD)) return null
+    const n = group.order
+    const res = Math.min(HEATMAP_AGG_RES, n)
+    const grid: number[][] = []
+    for (let ai = 0; ai < res; ai++) {
+      const r0 = Math.floor((ai * n) / res)
+      const r1 = Math.floor(((ai + 1) * n) / res)
+      const rowArr = new Array<number>(res)
+      for (let aj = 0; aj < res; aj++) {
+        const c0 = Math.floor((aj * n) / res)
+        const c1 = Math.floor(((aj + 1) * n) / res)
+        const counter = new Map<number, number>()
+        for (let i = r0; i < r1; i++) {
+          const row = table[i]
+          for (let j = c0; j < c1; j++) {
+            const v = idToIdx.get(row[j].id) ?? 0
+            counter.set(v, (counter.get(v) ?? 0) + 1)
+          }
+        }
+        let mode = idToIdx.get(table[r0][c0].id) ?? 0
+        let best = -1
+        for (const [v, c] of counter) {
+          if (c > best) { best = c; mode = v }
+        }
+        rowArr[aj] = mode
+      }
+      grid.push(rowArr)
+    }
+    return grid
+  }, [group, table, idToIdx, showHeatmap, strategy])
+
+  // 向宿主上报实际渲染表格的内容尺寸（供 ViewWindow 设定最小窗口尺寸）：
+  // 大群告警 / 全屏占位时不渲染网格，回传 null（不强制窗口大小）
+  const cellSize = cellSizeProp ?? 50
+  // 热力图自适应 cell：显示「全表」（小群全表 或 大群 full 策略）时，cell 无需容纳文字，
+  // 自适应缩小使整表在 viewBox 内可见，但不超过 cellSize 上限（不放大）。
+  // 这样热力图窗口无论缩到多小都能看清整体色块模式（核心价值）。
+  const isFullTable = group !== null && (!isLargeTable || strategy === 'full')
+  const heatmapAutoFit = showHeatmap && isFullTable
+  const heatmapRenderDim = heatmapAgg ? heatmapAgg.length : strategyIndices.length
+  const fitCell = Math.max(4, Math.floor((Math.min(viewBoxSize.width, viewBoxSize.height) - 60) / Math.max(1, heatmapRenderDim)))
+  const renderCell = heatmapAutoFit ? Math.min(cellSize, fitCell) : cellSize
+  // 热力图（纯色块 + 聚合缩略图）可展示更大群，阈值放宽到 240；普通乘法表（文字）保持 100
+  const tableBlocked = group ? isTooLarge(group.order, showHeatmap ? 'heatmap' : 'table') && !forceShow : false
+  // 热力图模式下的 full 策略不占位：纯色 cell 直接渲染整表，无需进入全屏
+  const tablePlaceholder = !showHeatmap && isLargeTable && strategy === 'full' && !!group && group.order > 30 && !fullscreenOpen
+  useEffect(() => {
+    if (!group || !table) { onLayoutSize?.(null); return }
+    if (tableBlocked || tablePlaceholder) { onLayoutSize?.(null); return }
+    const k = heatmapAgg ? heatmapAgg.length : strategyIndices.length
+    const padW = showHeatmap ? 0 : TABLE_PAD_W
+    const padH = showHeatmap ? 40 : TABLE_PAD_H
+    onLayoutSize?.({ width: k * renderCell + padW, height: k * renderCell + padH })
+  }, [group, table, tableBlocked, tablePlaceholder, strategyIndices.length, heatmapAgg, renderCell, onLayoutSize, showHeatmap])
 
   const exitFullscreen = useCallback(() => {
     setFullscreenOpen(false)
-    setStrategy('subgroup')
-  }, [])
+    applyStrategy('subgroup')
+  }, [applyStrategy])
 
   useEffect(() => {
     if (!fullscreenOpen) return
@@ -346,14 +477,15 @@ export function TableView() {
       return
     }
     if (s === 'full') {
-      if (currentGroup && currentGroup.order > 30) {
+      // 热力图模式的 full 策略：纯色 cell 直接渲染，不弹确认框、不进全屏
+      if (!showHeatmap && group && group.order > 30) {
         setConfirmOpen(true)
         return
       }
-      setStrategy('full')
+      applyStrategy('full')
       return
     }
-    setStrategy(s)
+    applyStrategy(s)
   }
 
   const confirmFull = () => {
@@ -430,7 +562,7 @@ export function TableView() {
 
   const exportFullscreen = () => {
     const svg = fsSvgRef.current
-    if (!svg || !currentGroup) return
+    if (!svg || !group) return
     const clone = svg.cloneNode(true) as SVGSVGElement
     const vb = (svg.getAttribute('viewBox') || '0 0 800 600').trim().split(/\s+/).map(Number)
     clone.setAttribute('width', String(vb[2] || 800))
@@ -439,34 +571,33 @@ export function TableView() {
     const blob = new Blob([new XMLSerializer().serializeToString(clone)], {
       type: 'image/svg+xml;charset=utf-8',
     })
-    const sym = currentGroup.symbol.replace(/[^A-Za-z0-9]+/g, '_')
-    triggerDownload(blob, `table_${sym}_${currentGroup.order}x${currentGroup.order}.svg`)
+    const sym = group.symbol.replace(/[^A-Za-z0-9]+/g, '_')
+    triggerDownload(blob, `table_${sym}_${group.order}x${group.order}.svg`)
   }
 
-  if (!currentGroup || !table) {
+  if (!group || !table) {
     return (
       <div className="view-empty">
-        <p>{t('canvas.noGroup')}</p>
+        <p>{noGroupText ?? t('canvas.noGroup')}</p>
       </div>
     )
   }
 
-  if (isTooLarge(currentGroup.order, 'table') && !forceShowLargeGroupViews.has('table')) {
+  if (isTooLarge(group.order, 'table') && !forceShow) {
     return (
       <div className="large-group-warning">
-        <p>{t('canvas.orderTooLarge', { n: currentGroup.order })}</p>
-        <button className="panel-btn" onClick={() => setForceShowLargeGroupForView('table', true)}>
+        <p>{t('canvas.orderTooLarge', { n: group.order })}</p>
+        <button className="panel-btn" onClick={requestForceShow}>
           {t('canvas.show')}
         </button>
       </div>
     )
   }
 
-  const { elements } = currentGroup
+  const { elements } = group
 
-  const cellSize = 50
-  const tableWidth = strategyIndices.length * cellSize
-  const tableHeight = strategyIndices.length * cellSize
+  const tableWidth = heatmapRenderDim * renderCell
+  const tableHeight = heatmapRenderDim * renderCell
   const vw = viewBoxSize.width
   const vh = viewBoxSize.height
   const offsetX = vw / 2 - tableWidth / 2
@@ -477,10 +608,12 @@ export function TableView() {
       ? t('table.subgroupCaption', { label: subgroupInfo.label, order: subgroupInfo.order })
       : strategy === 'random'
         ? t('table.randomCaption', { n: strategyIndices.length })
-        : ''
+        : strategy === 'full' && heatmapAgg
+          ? t('table.heatmapAggCaption', { n: group.order, res: heatmapAgg.length })
+          : ''
     : ''
 
-  const showFullPlaceholder = isLargeTable && strategy === 'full' && currentGroup.order > 30 && !fullscreenOpen
+  const showFullPlaceholder = !showHeatmap && isLargeTable && strategy === 'full' && group.order > 30 && !fullscreenOpen
 
   if (showFullPlaceholder) {
     return (
@@ -501,7 +634,7 @@ export function TableView() {
           ))}
         </div>
         <div className="large-group-warning">
-          <p>{t('table.fullPlaceholderMsg', { n: currentGroup.order })}</p>
+          <p>{t('table.fullPlaceholderMsg', { n: group.order })}</p>
           <button className="panel-btn" onClick={openFullscreen}>
             {t('table.fullEnter')}
           </button>
@@ -534,21 +667,21 @@ export function TableView() {
       <svg viewBox={`0 0 ${vw} ${vh}`} className="view-svg" style={{ userSelect: 'none' }}>
         <g transform={`translate(${canvasTransform.x}, ${canvasTransform.y}) scale(${canvasTransform.scale}) translate(${offsetX}, ${offsetY})`}>
 
-          {/* Row headers */}
-          {strategyIndices.map((rowIdx, ri) => {
+          {/* Row headers — hidden in heatmap mode */}
+          {!showHeatmap && strategyIndices.map((rowIdx, ri) => {
             const rowEl = elements[rowIdx]
             const isSelected = selectedIndices.has(rowIdx)
             const sInfo = subsetElemMap.get(rowIdx)
             const inSubgroup = elementsInAnySubgroup.has(rowIdx)
             const cosetMode = cosetData !== null
             const rowIsCosetAnchor = cosetActiveRowIds.has(rowEl.id)
-            const rowCosetIdx = cosetElementMap.get(rowEl.id)
+            const rowCosetIdx = cem.get(rowEl.id)
             const rowCosetHl = rowIsCosetAnchor && rowCosetIdx !== undefined
 
             let headerFill = elementColors[rowIdx % elementColors.length]
             let bg: string | null = null
             if (!cosetMode && isSelected) bg = '#ffd93d33'
-            else if (rowCosetHl) bg = cosetColors[rowCosetIdx] + '33'
+            else if (rowCosetHl) bg = (cosetColors ?? [])[rowCosetIdx] + '33'
             else if (!cosetMode && inSubgroup && sInfo) bg = sInfo.color + '33'
             if (!cosetMode && isSelected) headerFill = '#ffd93d'
 
@@ -556,7 +689,7 @@ export function TableView() {
               <g
                 key={rowEl.id}
                 transform={`translate(0, ${ri * cellSize})`}
-                onClick={() => selectElement(rowEl.id, true)}
+                onClick={() => onSelect?.(rowEl.id, true)}
                 style={{ cursor: 'pointer' }}
               >
                 {bg && (
@@ -578,28 +711,28 @@ export function TableView() {
             )
           })}
 
-          {/* Column headers */}
-          {strategyIndices.map((colIdx, ci) => {
+          {/* Column headers — hidden in heatmap mode */}
+          {!showHeatmap && strategyIndices.map((colIdx, ci) => {
             const colEl = elements[colIdx]
             const isSelected = selectedIndices.has(colIdx)
             const sInfo = subsetElemMap.get(colIdx)
             const inSubgroup = elementsInAnySubgroup.has(colIdx)
             const cosetMode = cosetData !== null
             const colIsCosetAnchor = cosetActiveColIds.has(colEl.id)
-            const colCosetIdx = cosetElementMap.get(colEl.id)
+            const colCosetIdx = cem.get(colEl.id)
             const colCosetHl = colIsCosetAnchor && colCosetIdx !== undefined
 
             let headerFill = elementColors[colIdx % elementColors.length]
             let bg: string | null = null
             if (!cosetMode && isSelected) bg = '#ffd93d33'
-            else if (colCosetHl) bg = cosetColors[colCosetIdx] + '33'
+            else if (colCosetHl) bg = (cosetColors ?? [])[colCosetIdx] + '33'
             else if (!cosetMode && inSubgroup && sInfo) bg = sInfo.color + '33'
             if (!cosetMode && isSelected) headerFill = '#ffd93d'
 
             return (
               <g
                 key={`head-${colEl.id}`}
-                onClick={() => selectElement(colEl.id, true)}
+                onClick={() => onSelect?.(colEl.id, true)}
                 style={{ cursor: 'pointer' }}
               >
                 {bg && (
@@ -621,8 +754,32 @@ export function TableView() {
             )
           })}
 
+          {/* Heatmap aggregate thumbnail: downsampled mode-color blocks for large groups */}
+          {heatmapAgg && heatmapAgg.map((aggRow, ai) =>
+            aggRow.map((resultIdx, aj) => {
+              const resultColor = elementColors[resultIdx % elementColors.length]
+              const heatGap = renderCell <= 8 ? 0.5 : renderCell <= 20 ? 1 : 2
+              const heatR = renderCell <= 8 ? 1 : renderCell <= 20 ? 2 : 3
+              return (
+                <g
+                  key={`agg-${ai}-${aj}`}
+                  transform={`translate(${aj * renderCell}, ${ai * renderCell})`}
+                >
+                  <rect
+                    width={renderCell - heatGap}
+                    height={renderCell - heatGap}
+                    fill={resultColor}
+                    stroke="rgba(0,0,0,0.12)"
+                    strokeWidth={renderCell <= 8 ? 0.2 : 0.5}
+                    rx={heatR}
+                  />
+                </g>
+              )
+            })
+          )}
+
           {/* Table cells */}
-          {strategyIndices.map((rowIdx, ri) =>
+          {!heatmapAgg && strategyIndices.map((rowIdx, ri) =>
             strategyIndices.map((colIdx, ci) => {
               const rowEl = elements[rowIdx]
               const colEl = elements[colIdx]
@@ -635,7 +792,7 @@ export function TableView() {
               const sgKey = `${rowIdx},${colIdx}`
               const sgColor = subgroupCellColors.get(sgKey)
 
-              const identityIdx = idToIdx.get(currentGroup.identity.id) ?? -1
+              const identityIdx = idToIdx.get(group.identity.id) ?? -1
               const nonSubRow = identityIdx >= 0 && rowIdx === identityIdx && nonSubgroupSubsetIndices.has(colIdx)
               const nonSubCol = identityIdx >= 0 && colIdx === identityIdx && nonSubgroupSubsetIndices.has(rowIdx)
 
@@ -649,14 +806,72 @@ export function TableView() {
               const isRightCosetCell = cosetType === 'right' && colIsCosetAnchor && rowInSubgroup
               const isCosetCell = isLeftCosetCell || isRightCosetCell
 
+              // Heatmap mode: solid fill, thin border
+              if (showHeatmap) {
+                // 大群热力图：cell 很小时用更小的间隙与圆角，保证色块紧凑、宏观结构清晰
+                const heatGap = renderCell <= 8 ? 0.5 : renderCell <= 20 ? 1 : 2
+                const heatR = renderCell <= 8 ? 1 : renderCell <= 20 ? 2 : 3
+                let cellFill = resultColor
+                let cellStroke = 'rgba(0,0,0,0.18)'
+                let cellStrokeW = renderCell <= 8 ? 0.2 : 0.5
+
+                if (isCosetCell) {
+                  const elId = cosetType === 'left' ? rowEl.id : colEl.id
+                  const cIdx = cem.get(elId)
+                  const cColor = cIdx !== undefined ? (cosetColors ?? [])[cIdx] : '#888'
+                  cellStroke = cColor
+                  cellStrokeW = 3
+                } else if (sgColor) {
+                  cellStroke = sgColor
+                  cellStrokeW = 2.5
+                } else if (!cosetMode && isRowSel && isColSel) {
+                  cellStroke = '#ffd93d'
+                  cellStrokeW = 2.5
+                } else if (!cosetMode && (isRowSel || isColSel)) {
+                  cellStroke = '#ffd93d88'
+                  cellStrokeW = 1.5
+                } else if (nonSubRow || nonSubCol) {
+                  cellFill = 'var(--table-cell-bg)'
+                  cellStroke = 'var(--table-cell-border)'
+                  cellStrokeW = 1.5
+                }
+
+                return (
+                  <g
+                    key={`${rowEl.id}-${colEl.id}`}
+                    transform={`translate(${ci * renderCell}, ${ri * renderCell})`}
+                    onClick={() => {
+                      const targetEl = elements.find(e => e.id === result.id)
+                      if (targetEl) onSelect?.(targetEl.id, true)
+                    }}
+                    onMouseEnter={() => {
+                      const targetEl = elements.find(e => e.id === result.id)
+                      if (targetEl) onHover?.(targetEl)
+                    }}
+                    onMouseLeave={() => onHover?.(null)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <rect
+                      width={renderCell - heatGap}
+                      height={renderCell - heatGap}
+                      fill={cellFill}
+                      stroke={cellStroke}
+                      strokeWidth={cellStrokeW}
+                      rx={heatR}
+                    />
+                  </g>
+                )
+              }
+
+              // Normal table mode: semi-transparent fill + text
               let cellFill = resultColor + '22'
               let cellStroke = resultColor
               let cellStrokeW = 0.5
 
               if (isCosetCell) {
                 const elId = cosetType === 'left' ? rowEl.id : colEl.id
-                const cIdx = cosetElementMap.get(elId)
-                const cColor = cIdx !== undefined ? cosetColors[cIdx] : '#888'
+                const cIdx = cem.get(elId)
+                const cColor = cIdx !== undefined ? (cosetColors ?? [])[cIdx] : '#888'
                 cellFill = cColor + '40'
                 cellStroke = cColor
                 cellStrokeW = 2.5
@@ -681,29 +896,29 @@ export function TableView() {
               return (
                 <g
                   key={`${rowEl.id}-${colEl.id}`}
-                  transform={`translate(${ci * cellSize}, ${ri * cellSize})`}
+                  transform={`translate(${ci * renderCell}, ${ri * renderCell})`}
                   onClick={() => {
                     const targetEl = elements.find(e => e.id === result.id)
-                    if (targetEl) selectElement(targetEl.id, true)
+                    if (targetEl) onSelect?.(targetEl.id, true)
                   }}
                   onMouseEnter={() => {
                     const targetEl = elements.find(e => e.id === result.id)
-                    if (targetEl) setHoverElement(targetEl)
+                    if (targetEl) onHover?.(targetEl)
                   }}
-                  onMouseLeave={() => setHoverElement(null)}
+                  onMouseLeave={() => onHover?.(null)}
                   style={{ cursor: 'pointer' }}
                 >
                   <rect
-                    width={cellSize - 2}
-                    height={cellSize - 2}
+                    width={renderCell - 2}
+                    height={renderCell - 2}
                     fill={cellFill}
                     stroke={cellStroke}
                     strokeWidth={cellStrokeW}
                     rx={4}
                   />
                   <text
-                    x={cellSize / 2}
-                    y={cellSize / 2 + 5}
+                    x={renderCell / 2}
+                    y={renderCell / 2 + 5}
                     textAnchor="middle"
                     fill={resultColor}
                     fontSize={13}
@@ -732,7 +947,7 @@ export function TableView() {
           <div className="table-confirm-modal">
             <div className="table-confirm-title">{t('table.fullConfirmTitle')}</div>
             <div className="table-confirm-msg">
-              {t('table.fullConfirmMsg', { n: currentGroup.order })}
+              {t('table.fullConfirmMsg', { n: group.order })}
             </div>
             <div className="table-confirm-actions">
               <button className="panel-btn" onClick={() => setConfirmOpen(false)}>
@@ -750,7 +965,7 @@ export function TableView() {
         <div className="table-fullscreen">
           <div className="table-fullscreen-header">
             <div className="table-fullscreen-title">
-              {t('table.fullTitle', { symbol: currentGroup.symbol, n: currentGroup.order })}
+              {t('table.fullTitle', { symbol: group.symbol, n: group.order })}
             </div>
             <div className="table-fullscreen-toolbar">
               <button
@@ -802,20 +1017,20 @@ export function TableView() {
             onPointerLeave={onFwPointerUp}
           >
             {(() => {
-              const n = currentGroup.order
+              const n = group.order
               const fsCell = 32
               const padL = 44
               const padT = 26
               const padB = 34
               const tw = n * fsCell + padL + 16
               const th = n * fsCell + padT + padB
-              const fsIdentityIdx = idToIdx.get(currentGroup.identity.id) ?? -1
-              const vw = fsViewport.w || 960
-              const vh = fsViewport.h || 600
+              const fsIdentityIdx = idToIdx.get(group.identity.id) ?? -1
+              const fvw = fsViewport.w || 960
+              const fvh = fsViewport.h || 600
               const viewL = fsScroll.l / fsScale
               const viewT = fsScroll.t / fsScale
-              const viewW = vw / fsScale
-              const viewH = vh / fsScale
+              const viewW = fvw / fsScale
+              const viewH = fvh / fsScale
               const buf = 3
               const cStart = Math.max(0, Math.floor((viewL - padL) / fsCell) - buf)
               const cEnd = Math.min(n - 1, Math.ceil((viewL + viewW - padL) / fsCell) + buf)
@@ -830,8 +1045,8 @@ export function TableView() {
                   viewBox={`0 0 ${tw} ${th}`}
                   style={{ width: tw * fsScale, height: th * fsScale }}
                 >
-                  <g transform={`translate(${padL}, ${padT})`}>
-                    {rowIdxList.map((rowIdx) => {
+                  <g transform={`translate(${showHeatmap ? 8 : padL}, ${showHeatmap ? 8 : padT})`}>
+                    {!showHeatmap && rowIdxList.map((rowIdx) => {
                       const rowEl = elements[rowIdx]
                       return (
                         <text
@@ -847,7 +1062,7 @@ export function TableView() {
                         </text>
                       )
                     })}
-                    {colIdxList.map((colIdx) => {
+                    {!showHeatmap && colIdxList.map((colIdx) => {
                       const colEl = elements[colIdx]
                       return (
                         <text
@@ -884,14 +1099,54 @@ export function TableView() {
                         const isRightCosetCell = cosetType === 'right' && colIsCosetAnchor && rowInSubgroup
                         const isCosetCell = isLeftCosetCell || isRightCosetCell
 
+                        if (showHeatmap) {
+                          let cellFill = resultColor
+                          let cellStroke = 'rgba(0,0,0,0.18)'
+                          let cellStrokeW = 0.5
+
+                          if (isCosetCell) {
+                            const elId = cosetType === 'left' ? rowEl.id : colEl.id
+                            const cIdx = cem.get(elId)
+                            const cColor = cIdx !== undefined ? (cosetColors ?? [])[cIdx] : '#888'
+                            cellStroke = cColor
+                            cellStrokeW = 3
+                          } else if (sgColor) {
+                            cellStroke = sgColor
+                            cellStrokeW = 2.5
+                          } else if (!cosetMode && isRowSel && isColSel) {
+                            cellStroke = '#ffd93d'
+                            cellStrokeW = 2.5
+                          } else if (!cosetMode && (isRowSel || isColSel)) {
+                            cellStroke = '#ffd93d88'
+                            cellStrokeW = 1.5
+                          } else if (nonSubRow || nonSubCol) {
+                            cellFill = 'var(--table-cell-bg)'
+                            cellStroke = 'var(--table-cell-border)'
+                            cellStrokeW = 1.5
+                          }
+
+                          return (
+                            <g key={`${rowEl.id}-${colEl.id}`} transform={`translate(${colIdx * fsCell}, ${rowIdx * fsCell})`}>
+                              <rect
+                                width={fsCell - 2}
+                                height={fsCell - 2}
+                                fill={cellFill}
+                                stroke={cellStroke}
+                                strokeWidth={cellStrokeW}
+                                rx={2}
+                              />
+                            </g>
+                          )
+                        }
+
                         let cellFill = resultColor + '30'
                         let cellStroke = resultColor
                         let cellStrokeW = 0.5
 
                         if (isCosetCell) {
                           const elId = cosetType === 'left' ? rowEl.id : colEl.id
-                          const cIdx = cosetElementMap.get(elId)
-                          const cColor = cIdx !== undefined ? cosetColors[cIdx] : '#888'
+                          const cIdx = cem.get(elId)
+                          const cColor = cIdx !== undefined ? (cosetColors ?? [])[cIdx] : '#888'
                           cellFill = cColor + '40'
                           cellStroke = cColor
                           cellStrokeW = 2.5

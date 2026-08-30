@@ -4,12 +4,15 @@ import type { GroupContextType } from '../../context/GroupContext'
 import { useGroup } from '../../context/useGroup'
 import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
+import { useTheme } from '../../theme/useTheme'
 import type { ViewMode, CanvasTransform } from '../../core/types'
-import type { Group } from '../../core/types'
+import type { Group, GroupElement } from '../../core/types'
 import { SetView, type SetViewProps } from './SetView'
 import { SetViewFromContext } from './SetViewFromContext'
 import { CycleView } from './CycleView'
-import { TableView } from './TableView'
+import { CycleViewFromContext } from './CycleViewFromContext'
+import { TableView, TABLE_PAD_W, TABLE_PAD_H } from './TableView'
+import { TableViewFromContext } from './TableViewFromContext'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { HomomorphismView } from './HomomorphismView'
 import { CosetStripView } from './CosetStripView'
@@ -19,9 +22,10 @@ import { PresentationTableView } from './PresentationTableView'
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
-import type { ViewWindowConfig, SetViewParams, CayleyViewParams } from '../../core/types/viewConfig'
-import { setViewParamsSchema, cayleyViewParamsSchema } from '../../core/types/viewConfig'
+import type { ViewWindowConfig, SetViewParams, CayleyViewParams, CycleViewParams, TableViewParams, TableStrategy } from '../../core/types/viewConfig'
+import { setViewParamsSchema, cayleyViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema } from '../../core/types/viewConfig'
 import { getDefaultShape2D, getAvailableShapesForView } from '../../core/types'
+import { getViewBoxSize } from '../../core/viewBox'
 import type { CayleyShape2D } from '../../core/types'
 import { toggleCayleyActionReducer, addAllCayleyActionsHelper, normalizeCayleyActions } from '../../context/cayleyActions'
 import { CayleyView } from './CayleyView'
@@ -50,7 +54,7 @@ function CayleyGraphViewLocal() {
 
   const edges = useMemo(() => currentGroup ? computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType) : [], [currentGroup, cayleyActions, cayleyMultiplyType])
 
-  const isLargeGraph = n > 100
+  const isLargeGraph = n > 60
 
   const subsetDetailMap = useMemo(() => {
     const m = new Map<string, typeof subsets[0]>()
@@ -65,15 +69,7 @@ function CayleyGraphViewLocal() {
     return m
   }, [enabledActions])
 
-  if (!currentGroup) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <p style={{ color: 'var(--text-dim)' }}>{t('canvas.noGroup')}</p>
-      </div>
-    )
-  }
-
-  const getNodePos = (elId: string) => {
+  const getNodePos = useCallback((elId: string) => {
     const defPos = circLayout.get(elId)
     if (!defPos) return { x: cx, y: cy }
     const saved = getNodePosition(elId)
@@ -81,12 +77,23 @@ function CayleyGraphViewLocal() {
       return saved
     }
     return defPos
-  }
+  }, [circLayout, cx, cy, getNodePosition])
 
-  const nodePositionsCache = new Map<string, { x: number; y: number }>()
-  currentGroup.elements.forEach((el) => {
-    nodePositionsCache.set(el.id, getNodePos(el.id))
-  })
+  const nodePositionsCache = useMemo(() => {
+    const cache = new Map<string, { x: number; y: number }>()
+    currentGroup?.elements.forEach((el) => {
+      cache.set(el.id, getNodePos(el.id))
+    })
+    return cache
+  }, [currentGroup, getNodePos])
+
+  if (!currentGroup) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+        <p style={{ color: 'var(--text-dim)' }}>{t('canvas.noGroup')}</p>
+      </div>
+    )
+  }
 
   return (
     <svg viewBox={`0 0 ${viewBoxSize.width} ${viewBoxSize.height}`} style={{ width: '100%', height: '100%', userSelect: 'none', background: 'var(--bg-primary)' }}>
@@ -291,19 +298,31 @@ function TableZoomable({ children }: { children: React.ReactNode }) {
 
   const handleMouseUp = useCallback(() => { isDragging.current = false }, [])
 
+  // 双击空白处复位缩放与平移（表头/单元格上双击不触发，保留交互）
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('text') || (e.target as HTMLElement).closest('rect')) return
+    setTableZoom(1)
+    setTablePan({ x: 0, y: 0 })
+  }, [])
+
   return (
     <div
       style={{
         width: '100%', height: '100%', overflow: 'hidden', position: 'relative',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onDoubleClick={handleDoubleClick}
     >
       <div style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         transform: `translate(${tablePan.x}px, ${tablePan.y}px) scale(${tableZoom})`,
         transformOrigin: 'center center',
       }}>
@@ -314,7 +333,7 @@ function TableZoomable({ children }: { children: React.ReactNode }) {
 }
 
 function SvgPanZoom({ children }: { children: React.ReactNode }) {
-  const { canvasTransform, setCanvasTransform, viewBoxSize } = useGroup()
+  const { canvasTransform, setCanvasTransform, viewBoxSize, resetCanvasTransform } = useGroup()
   const isDragging = useRef(false)
   const dragStart = useRef({ x: 0, y: 0, tx: 0, ty: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
@@ -357,6 +376,12 @@ function SvgPanZoom({ children }: { children: React.ReactNode }) {
     isDragging.current = false
   }, [])
 
+  // 双击空白处复位 pan/zoom（节点上双击不触发，保留选中语义）
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('circle') || (e.target as HTMLElement).closest('foreignObject')) return
+    resetCanvasTransform()
+  }, [resetCanvasTransform])
+
   return (
     <div
       ref={containerRef}
@@ -366,6 +391,7 @@ function SvgPanZoom({ children }: { children: React.ReactNode }) {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onDoubleClick={handleDoubleClick}
     >
       {children}
     </div>
@@ -379,9 +405,9 @@ function renderViewContent(view: ViewMode) {
     case 'cayley':
       return <SvgPanZoom><CayleyGraphViewLocal /></SvgPanZoom>
     case 'cycle':
-      return <SvgPanZoom><CycleView /></SvgPanZoom>
+      return <SvgPanZoom><CycleViewFromContext /></SvgPanZoom>
     case 'table':
-      return <TableZoomable><TableView /></TableZoomable>
+      return <TableZoomable><TableViewFromContext /></TableZoomable>
     case '3d':
       return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><Cayley3DViewLazy /></Suspense>
     case 'sublattice':
@@ -407,9 +433,24 @@ let globalZCounter = 1000
 
 export function FloatingViewWindow({ id, view, title }: { id: string; view: ViewMode; title: string }) {
   const globalCtx = useGroup()
+  const { viewWindowTheme } = useTheme()
   
   const [position, setPosition] = useState({ x: 100 + globalCtx.floatingViews.length * 40, y: 80 + globalCtx.floatingViews.length * 30 })
-  const [size, setSize] = useState({ width: 500, height: 400 })
+  // 乘法表窗口最小尺寸：含文字需看清，最小 = viewBox + 标题栏
+  const legacyTableMin = (() => {
+    if (view !== 'table') return null
+    const g = globalCtx.currentGroup
+    if (!g || g.order > 100) return null
+    const vb = getViewBoxSize(g.order, 'table')
+    return {
+      width: Math.min(900, vb.width),
+      height: Math.min(900, vb.height + 40),
+    }
+  })()
+  const [size, setSize] = useState(() => {
+    if (legacyTableMin) return { width: Math.max(500, legacyTableMin.width), height: Math.max(400, legacyTableMin.height) }
+    return { width: 500, height: 400 }
+  })
   const [isDragging, setIsDragging] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
   const [zIndex, setZIndex] = useState(() => ++globalZCounter)
@@ -464,6 +505,10 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
     setNodePosition: setNodePositionLocal,
     batchSetNodePositions: batchSetNodePositionsLocal,
     nodePositions: localNodePositions,
+    // 悬浮窗用自身视图计算 viewBox（尤其 table 的紧凑 400~1800 尺寸，避免误用主画布的 2000×2000 导致表格被缩得很小）
+    viewBoxSize: globalCtx.currentGroup
+      ? getViewBoxSize(globalCtx.currentGroup.order, view, globalCtx.forceShowLargeGroupViews.has(view))
+      : globalCtx.viewBoxSize,
   }
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -492,11 +537,11 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
       const dw = e.clientX - resizeStart.current.x
       const dh = e.clientY - resizeStart.current.y
       setSize({
-        width: Math.max(280, resizeStart.current.w + dw),
-        height: Math.max(200, resizeStart.current.h + dh)
+        width: Math.max(legacyTableMin?.width ?? 280, resizeStart.current.w + dw),
+        height: Math.max(legacyTableMin?.height ?? 200, resizeStart.current.h + dh)
       })
     }
-  }, [isDragging, isResizing])
+  }, [isDragging, isResizing, legacyTableMin])
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false)
@@ -507,6 +552,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
     <GroupContext.Provider value={localOverrides as GroupContextType}>
       <div
         className="floating-view-window"
+        data-theme={viewWindowTheme}
         style={{
           position: 'fixed',
           left: position.x,
@@ -602,6 +648,8 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
 
 // ── Controlled ViewWindow (FGVE engine) ─────────────────────
 
+export type ViewParams = SetViewParams | CayleyViewParams | CycleViewParams | TableViewParams
+
 interface ViewWindowProps {
   view: ViewMode
   group: Group | null
@@ -609,8 +657,8 @@ interface ViewWindowProps {
   storageKey?: string
   config?: ViewWindowConfig
   onConfigChange?: (c: ViewWindowConfig) => void
-  viewParams?: SetViewParams | CayleyViewParams
-  onViewParamsChange?: (p: SetViewParams | CayleyViewParams) => void
+  viewParams?: ViewParams
+  onViewParamsChange?: (p: ViewParams) => void
   defaultPosition?: { x: number; y: number }
   defaultSize?: { width: number; height: number }
   onClose?: () => void
@@ -625,6 +673,8 @@ const VW_PERSIST_SCHEMA = z.object({
     showInfo: z.boolean().optional(),
     viewportFixed: z.boolean().optional(),
     resizable: z.boolean().optional(),
+    showControls: z.boolean().optional(),
+    showZoomSlider: z.boolean().optional(),
   }),
   viewParams: z.record(z.string(), z.unknown()),
 })
@@ -678,13 +728,15 @@ function resizeHandleStyle(dir: ResizeDir): React.CSSProperties {
 
 interface VwGeometry { position: { x: number; y: number }; size: { width: number; height: number } }
 
-function clampResize(dir: ResizeDir, startGeo: VwGeometry, dx: number, dy: number): VwGeometry {
+function clampResize(dir: ResizeDir, startGeo: VwGeometry, dx: number, dy: number, min?: { width: number; height: number }): VwGeometry {
+  const mw = min?.width ?? MIN_W
+  const mh = min?.height ?? MIN_H
   let { x: px, y: py } = startGeo.position
   let { width: w, height: h } = startGeo.size
-  if (dir.includes('e')) { w = Math.max(MIN_W, startGeo.size.width + dx) }
-  if (dir.includes('w')) { const nw = Math.max(MIN_W, startGeo.size.width - dx); px += startGeo.size.width - nw; w = nw }
-  if (dir.includes('s')) { h = Math.max(MIN_H, startGeo.size.height + dy) }
-  if (dir.includes('n')) { const nh = Math.max(MIN_H, startGeo.size.height - dy); py += startGeo.size.height - nh; h = nh }
+  if (dir.includes('e')) { w = Math.max(mw, startGeo.size.width + dx) }
+  if (dir.includes('w')) { const nw = Math.max(mw, startGeo.size.width - dx); px += startGeo.size.width - nw; w = nw }
+  if (dir.includes('s')) { h = Math.max(mh, startGeo.size.height + dy) }
+  if (dir.includes('n')) { const nh = Math.max(mh, startGeo.size.height - dy); py += startGeo.size.height - nh; h = nh }
   return { position: { x: px, y: py }, size: { width: w, height: h } }
 }
 
@@ -735,6 +787,9 @@ export function ViewWindow({
   onClose,
 }: ViewWindowProps) {
 
+  // 视图窗口独立深浅色（与主界面 theme 解耦），通过 data-theme 覆盖子树
+  const { viewWindowTheme } = useTheme()
+
   // 默认持久化键含视图名：同群的 set/cayley 窗口各自独立持久化，互不覆盖
   const persistKey = storageKey ?? (group ? `${group.symbol}|${group.order}|${view}` : null)
   const persisted = useMemo(() => persistKey ? loadVwPersist(persistKey) : null, [persistKey])
@@ -746,16 +801,20 @@ export function ViewWindow({
 
   const [config, setConfig] = useState<ViewWindowConfig>(() =>
     configProp ?? persisted?.config ?? {})
-  const [viewParams, setViewParams] = useState<SetViewParams | CayleyViewParams>(() => {
+  const [viewParams, setViewParams] = useState<ViewParams>(() => {
     if (viewParamsProp) return viewParamsProp
     if (persisted) {
       // 按视图用对应 schema 校验持久化参数：键残留他视图参数/手改坏值时回退默认
-      const schema = view === 'cayley' ? cayleyViewParamsSchema : view === 'set' ? setViewParamsSchema : null
+      const schema = view === 'cayley' ? cayleyViewParamsSchema
+        : view === 'set' ? setViewParamsSchema
+          : view === 'cycle' ? cycleViewParamsSchema
+            : (view === 'table' || view === 'heatmap') ? tableViewParamsSchema
+              : null
       if (schema) {
         const parsed = schema.safeParse(persisted.viewParams)
-        if (parsed.success) return parsed.data as SetViewParams | CayleyViewParams
+        if (parsed.success) return parsed.data as ViewParams
       } else {
-        return persisted.viewParams as SetViewParams | CayleyViewParams
+        return persisted.viewParams as ViewParams
       }
     }
     return {}
@@ -765,6 +824,8 @@ export function ViewWindow({
   const [dragging, setDragging] = useState(false)
   const [resizing, setResizing] = useState<ResizeDir | null>(null)
   const [paramsOpen, setParamsOpen] = useState(false)
+  // 乘法表实际渲染内容尺寸（TableView 经 onLayoutSize 上报），用于设定最小窗口尺寸
+  const [tableLayoutSize, setTableLayoutSize] = useState<{ width: number; height: number } | null>(null)
   // resizable=false：宿主禁止用户调整窗口尺寸（隐藏 resize 手柄，移动不受影响）
   const resizable = config.resizable !== false
 
@@ -801,12 +862,45 @@ export function ViewWindow({
     onConfigChange?.(next)
   }, [config, configProp, onConfigChange])
 
-  const updateViewParams = useCallback((p: Partial<SetViewParams> | Partial<CayleyViewParams>) => {
+  const updateViewParams = useCallback((p: Partial<SetViewParams> | Partial<CayleyViewParams> | Partial<CycleViewParams> | Partial<TableViewParams>) => {
     // 参数对象按 view 判别（同一时刻只属于一种视图），跨类型合并不需要判别字段
-    const next = { ...(viewParamsProp ?? viewParams), ...p } as SetViewParams | CayleyViewParams
+    const next = { ...(viewParamsProp ?? viewParams), ...p } as ViewParams
     if (!viewParamsProp) setViewParams(next)
     onViewParamsChange?.(next)
   }, [viewParams, viewParamsProp, onViewParamsChange])
+
+  // ── 乘法表窗口最小尺寸 ──────────────────────────────────────
+  // 最小尺寸 = 完整表格内容（行数×cellSize + 表头/页脚）+ 标题栏，保证整张表可见。
+  // 优先用 TableView 上报的精确尺寸（覆盖大群抽样/随机策略）；小群（≤16 阶）回调未
+  // 到前可直接推导 k=n，避免首帧跳动。仅普通乘法表（含文字）设置最小尺寸；热力图不设。
+  const tableVp = viewParams as TableViewParams
+  const tableMinSize = useMemo<{ width: number; height: number } | null>(() => {
+    if (view !== 'table' || !group) return null
+    if (tableLayoutSize) {
+      return {
+        width: Math.max(MIN_W, tableLayoutSize.width),
+        height: Math.max(MIN_H, tableLayoutSize.height + TBAR_H),
+      }
+    }
+    if (group.order <= 16) {
+      const cell = tableVp.cellSize ?? 50
+      const k = group.order
+      return {
+        width: Math.max(MIN_W, k * cell + TABLE_PAD_W),
+        height: Math.max(MIN_H, k * cell + TABLE_PAD_H + TBAR_H),
+      }
+    }
+    return null
+  }, [view, group, tableLayoutSize, tableVp.cellSize])
+
+  // 渲染期调整：表格尺寸变大（换群/改策略/改单元格尺寸）时把窗口撑到最小所需尺寸
+  if (tableMinSize && (geometry.size.width < tableMinSize.width || geometry.size.height < tableMinSize.height)) {
+    setGeometry(g =>
+      g.size.width < tableMinSize.width || g.size.height < tableMinSize.height
+        ? { ...g, size: { width: Math.max(g.size.width, tableMinSize.width), height: Math.max(g.size.height, tableMinSize.height) } }
+        : g,
+    )
+  }
 
   // Drag
   const onDragStart = useCallback((e: React.MouseEvent) => {
@@ -838,7 +932,7 @@ export function ViewWindow({
         if (resizing) {
           const rdx = e.clientX - resizeRef.current.sx
           const rdy = e.clientY - resizeRef.current.sy
-          setGeometry(clampResize(resizing, resizeRef.current.geo, rdx, rdy))
+          setGeometry(clampResize(resizing, resizeRef.current.geo, rdx, rdy, tableMinSize ?? undefined))
         } else if (dragging) {
           setGeometry(prev => ({
             ...prev,
@@ -858,7 +952,7 @@ export function ViewWindow({
       window.removeEventListener('mouseup', onUp)
       if (windowMoveRaf.current) { cancelAnimationFrame(windowMoveRaf.current); windowMoveRaf.current = 0 }
     }
-  }, [dragging, resizing])
+  }, [dragging, resizing, tableMinSize])
 
   // Content area pan/zoom
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -903,13 +997,26 @@ export function ViewWindow({
     ctDragRef.current = { sx: e.clientX, sy: e.clientY, tx: ct.x, ty: ct.y, active: true }
   }, [ct, config.locked, config.zoomLocked])
 
+  // 缩放围绕视图中心而非原点：避免凯莱图（默认居中）被"推"向左上并被裁剪
   const setZoomScale = useCallback((v: number) => {
-    setCt(prev => ({ ...prev, scale: Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v)) }))
-  }, [])
+    const cx = vbSize.width / 2
+    const cy = vbSize.height / 2
+    setCt(prev => {
+      const ns = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v))
+      const sc = ns / prev.scale
+      return { x: cx - (cx - prev.x) * sc, y: cy - (cy - prev.y) * sc, scale: ns }
+    })
+  }, [vbSize.width, vbSize.height])
 
   const zoomBy = useCallback((f: number) => {
-    setCt(prev => ({ ...prev, scale: Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, prev.scale * f)) }))
-  }, [])
+    const cx = vbSize.width / 2
+    const cy = vbSize.height / 2
+    setCt(prev => {
+      const ns = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, prev.scale * f))
+      const sc = ns / prev.scale
+      return { x: cx - (cx - prev.x) * sc, y: cy - (cy - prev.y) * sc, scale: ns }
+    })
+  }, [vbSize.width, vbSize.height])
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -930,13 +1037,17 @@ export function ViewWindow({
   // default config, default view params and reset the viewport transform.
   const resetAll = useCallback(() => {
     if (persistKey) removeStoredKey(`gv-vw-${persistKey}`)
-    setGeometry({ position: defaultPosition, size: defaultSize })
+    // 重置尺寸也受表格最小尺寸约束，避免 reset 后表格被裁切
+    const resetSize = tableMinSize
+      ? { width: Math.max(defaultSize.width, tableMinSize.width), height: Math.max(defaultSize.height, tableMinSize.height) }
+      : defaultSize
+    setGeometry({ position: defaultPosition, size: resetSize })
     if (!configProp) setConfig({})
     onConfigChange?.({})
     if (!viewParamsProp) setViewParams({})
     onViewParamsChange?.({})
     resetCt()
-  }, [persistKey, defaultPosition, defaultSize, configProp, onConfigChange, viewParamsProp, onViewParamsChange, resetCt])
+  }, [persistKey, defaultPosition, defaultSize, tableMinSize, configProp, onConfigChange, viewParamsProp, onViewParamsChange, resetCt])
 
   // Global "reset all windows" broadcast: every ViewWindow resets itself.
   useEffect(() => {
@@ -955,6 +1066,36 @@ export function ViewWindow({
       return n
     })
   }, [])
+
+  // 悬停就地气泡（C 方案）：标签随 LOD 隐藏时，悬停节点在节点旁浮出元素名与阶。
+  // 切换展示群/视图时清空悬停：渲染期状态调整（React 官方 pattern，避免 effect 内 setState）
+  const [hoverEl, setHoverEl] = useState<GroupElement | null>(null)
+  const [hoverAnchor, setHoverAnchor] = useState<{ x: number; y: number } | null>(null)
+  const displayKey = view + (group ? `|${group.symbol}|${group.order}` : '')
+  const [curDisplayKey, setCurDisplayKey] = useState(displayKey)
+  if (curDisplayKey !== displayKey) {
+    setCurDisplayKey(displayKey)
+    setHoverEl(null)
+    setHoverAnchor(null)
+  }
+  const handleHover = useCallback(
+    (el: GroupElement | null, anchor?: { x: number; y: number } | null) => {
+      setHoverEl(el)
+      setHoverAnchor(anchor ?? null)
+    },
+    [],
+  )
+  const hoverOrder = useMemo(() => {
+    if (!group || !hoverEl) return 0
+    let cur = hoverEl
+    for (let i = 1; i <= group.order; i++) {
+      if (cur.id === group.identity.id) return i
+      cur = group.multiply(cur, hoverEl)
+    }
+    return 0
+  }, [group, hoverEl])
+  const showControls = config.showControls !== false
+  const showZoomSlider = config.showZoomSlider !== false
 
   const infoText = useMemo(() => {
     if (!group || !config.showInfo) return ''
@@ -978,7 +1119,68 @@ export function ViewWindow({
           multiplyType={cvp.multiplyType}
           actions={cvp.actions}
           nodeRadius={cvp.nodeRadius}
-          showLabels={cvp.showLabels}
+          showLabels={false}
+          locked={config.locked}
+          onSelect={handleSelect}
+          onHover={handleHover}
+          hoveredElementId={hoverEl?.id ?? null}
+        />
+      )
+    }
+
+    if (view === 'cycle') {
+      const cyvp = viewParams as CycleViewParams
+      return (
+        <CycleView
+          key={`cycle-${group.symbol}-${group.order}-${cyvp.showMaximalCycles ? 'max' : 'all'}`}
+          group={group}
+          selectedElements={sel}
+          canvasTransform={ct}
+          viewBoxSize={vbSize}
+          showMaximalCycles={cyvp.showMaximalCycles}
+          nodeRadius={cyvp.nodeRadius}
+          showLabels={cyvp.showLabels}
+          showCycleLabels={cyvp.showCycleLabels}
+          locked={config.locked}
+          onSelect={handleSelect}
+          onHover={handleHover}
+        />
+      )
+    }
+
+    if (view === 'table') {
+      const tvp = viewParams as TableViewParams
+      return (
+        <TableView
+          key={`table-${group.symbol}-${group.order}`}
+          group={group}
+          selectedElements={sel}
+          canvasTransform={ct}
+          viewBoxSize={vbSize}
+          strategy={tvp.strategy}
+          cellSize={tvp.cellSize}
+          onStrategyChange={s => updateViewParams({ strategy: s })}
+          onLayoutSize={setTableLayoutSize}
+          onSelect={handleSelect}
+          onHover={() => {}}
+        />
+      )
+    }
+
+    if (view === 'heatmap') {
+      // 热力图独立窗口：无文字、纯色块；不设最小尺寸，颜色密度呈现宏观结构
+      const tvp = viewParams as TableViewParams
+      return (
+        <TableView
+          key={`heatmap-${group.symbol}-${group.order}`}
+          group={group}
+          selectedElements={sel}
+          canvasTransform={ct}
+          viewBoxSize={vbSize}
+          strategy={tvp.strategy}
+          cellSize={tvp.cellSize}
+          showHeatmap
+          onStrategyChange={s => updateViewParams({ strategy: s })}
           onSelect={handleSelect}
           onHover={() => {}}
         />
@@ -998,7 +1200,7 @@ export function ViewWindow({
       columns: svp.columns,
       showLabels: svp.showLabels,
       onSelect: handleSelect,
-      onHover: () => {},
+      onHover: handleHover,
     }
     return (
       <SetView
@@ -1015,6 +1217,7 @@ export function ViewWindow({
   )
   const cayleyVp = viewParams as CayleyViewParams
   const setVp = viewParams as SetViewParams
+  const cycleVp = viewParams as CycleViewParams
   const cayleyDefaultShape = useMemo<CayleyShape2D>(
     () => (group ? getDefaultShape2D(group) : 'circular'),
     [group],
@@ -1044,6 +1247,7 @@ export function ViewWindow({
   return (
     <>
       <div
+        data-theme={viewWindowTheme}
         style={{
           position: config.viewportFixed ? 'fixed' : 'absolute', left: geometry.position.x, top: geometry.position.y,
           width: geometry.size.width, height: geometry.size.height, zIndex: z,
@@ -1061,25 +1265,28 @@ export function ViewWindow({
             {title ?? (group ? group.symbol : 'View')}
             {infoText && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-dim)', marginLeft: 8 }}>{infoText}</span>}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <button title="Lock move" style={tglBtn(!!config.locked, '#f97316')}
-              onClick={() => updateConfig({ locked: !config.locked })}>{config.locked ? '📌' : '📍'}</button>
-            <button title="Lock zoom" style={tglBtn(!!config.zoomLocked, '#38bdf8')}
-              onClick={() => updateConfig({ zoomLocked: !config.zoomLocked })}>{config.zoomLocked ? '🔒' : '🔍'}</button>
-            <button title="Toggle info" style={tglBtn(!!config.showInfo, '#84cc16')}
-              onClick={() => updateConfig({ showInfo: !config.showInfo })}>i</button>
-          <button title="Parameters" style={tglBtn(paramsOpen, '#a78bfa')}
-            onClick={() => {
-              const next = !paramsOpen
-              setParamsOpen(next)
-              // 打开面板时窗口置顶，避免外置面板被更高层的相邻窗口盖住
-              if (next) bringFront()
-            }}>⚙</button>
-            <button title="Close" style={BTN_STYLE}
-              onClick={onClose}
-              onMouseEnter={e => (e.currentTarget.style.color = '#f44')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-dim)')}>×</button>
-          </div>
+          {/* 博客插图等专注阅读场景可 config.showControls=false 整组隐藏 */}
+          {showControls && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <button title="Lock move" style={tglBtn(!!config.locked, '#f97316')}
+                onClick={() => updateConfig({ locked: !config.locked })}>{config.locked ? '📌' : '📍'}</button>
+              <button title="Lock zoom" style={tglBtn(!!config.zoomLocked, '#38bdf8')}
+                onClick={() => updateConfig({ zoomLocked: !config.zoomLocked })}>{config.zoomLocked ? '🔒' : '🔍'}</button>
+              <button title="Toggle info" style={tglBtn(!!config.showInfo, '#84cc16')}
+                onClick={() => updateConfig({ showInfo: !config.showInfo })}>i</button>
+              <button title="Parameters" style={tglBtn(paramsOpen, '#a78bfa')}
+                onClick={() => {
+                  const next = !paramsOpen
+                  setParamsOpen(next)
+                  // 打开面板时窗口置顶，避免外置面板被更高层的相邻窗口盖住
+                  if (next) bringFront()
+                }}>⚙</button>
+              <button title="Close" style={BTN_STYLE}
+                onClick={onClose}
+                onMouseEnter={e => (e.currentTarget.style.color = '#f44')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-dim)')}>×</button>
+            </div>
+          )}
         </div>
 
         {/* content */}
@@ -1094,30 +1301,86 @@ export function ViewWindow({
               resetCt()
             }}
           >
-            <svg viewBox={`0 0 ${vbSize.width} ${vbSize.height}`}
-              style={{ width: '100%', height: '100%', userSelect: 'none' }}>
-              {/* 视图组件自含 canvasTransform（SetView/CayleyView 在自身 <g> 上应用）；
-                  此处再包一层 <g transform> 会造成平移/缩放双重应用 */}
-              {renderContent()}
-            </svg>
+            {/* 视图组件自含 canvasTransform（SetView/CayleyView 在自身 <g> 上应用），
+                直接渲染，不再包外层 <svg>（避免嵌套 svg 冗余 viewport） */}
+            {renderContent()}
 
             {/* zoom slider overlay (avoids wheel/page-scroll conflict) */}
-            <div style={{
-              position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
-              display: 'flex', alignItems: 'center', gap: 4,
-              background: 'var(--bg-interactive)', borderRadius: 6, padding: '2px 6px',
-              border: '1px solid var(--border-primary)', zIndex: 5, fontSize: 12,
-              color: 'var(--text-secondary)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              opacity: config.zoomLocked ? 0.4 : 0.85, pointerEvents: config.zoomLocked ? 'none' : 'auto',
-            }}>
-              <button title="Zoom out" style={BTN_STYLE} onClick={() => zoomBy(0.8)}>−</button>
-              <input type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={0.05}
-                value={ct.scale}
-                onChange={e => setZoomScale(Number(e.target.value))}
-                style={{ width: 120 }} />
-              <button title="Zoom in" style={BTN_STYLE} onClick={() => zoomBy(1.25)}>+</button>
-              <button title="Reset view" style={BTN_STYLE} onClick={resetCt}>⟲</button>
-            </div>
+            {showZoomSlider && (
+              <div style={{
+                position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
+                display: 'flex', alignItems: 'center', gap: 4,
+                background: 'var(--bg-interactive)', borderRadius: 6, padding: '2px 6px',
+                border: '1px solid var(--border-primary)', zIndex: 5, fontSize: 12,
+                color: 'var(--text-secondary)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                opacity: config.zoomLocked ? 0.4 : 0.85, pointerEvents: config.zoomLocked ? 'none' : 'auto',
+              }}>
+                <button title="Zoom out" style={BTN_STYLE} onClick={() => zoomBy(0.8)}>−</button>
+                <input type="range" min={ZOOM_MIN} max={ZOOM_MAX} step={0.05}
+                  value={ct.scale}
+                  onChange={e => setZoomScale(Number(e.target.value))}
+                  style={{ width: 120 }} />
+                <button title="Zoom in" style={BTN_STYLE} onClick={() => zoomBy(1.25)}>+</button>
+                <button title="Reset view" style={BTN_STYLE} onClick={resetCt}>⟲</button>
+              </div>
+            )}
+
+            {/* 概览引导：未悬停时显示底部居中提示，让"悬停可读元素"主动被发现（标签隐藏态下唯一的信息取回方式） */}
+            {!hoverEl && (
+              <div
+                data-testid="figure-hint"
+                style={{
+                  position: 'absolute',
+                  bottom: showZoomSlider ? 48 : 12, left: '50%', transform: 'translateX(-50%)',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(78,205,196,0.4)',
+                  borderRadius: 8, padding: '5px 14px', zIndex: 6, fontSize: 12,
+                  color: '#94a3b8', pointerEvents: 'none', backdropFilter: 'blur(4px)',
+                }}
+              >
+                <span style={{ color: '#4ecdc4' }}>💡</span>
+                悬停节点查看元素名与阶
+              </div>
+            )}
+
+            {/* 就地气泡：悬停节点旁浮出元素名+阶（HTML 层、字号不随图缩放），带指向节点的小三角，
+                节点靠近顶部时翻转到节点下方，配合节点青色高亮环形成"环+就近气泡"双重反馈 */}
+            {hoverEl && hoverAnchor && (
+              <div
+                data-testid="hover-hud"
+                style={{
+                  position: 'absolute', left: hoverAnchor.x, top: hoverAnchor.y,
+                  zIndex: 8, pointerEvents: 'none',
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute', left: 0, top: 0,
+                    transform: hoverAnchor.y < 72 ? 'translate(-50%, 14px)' : 'translate(-50%, calc(-100% - 14px))',
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    background: 'rgba(15,23,42,0.95)', border: '1px solid #4ecdc4',
+                    borderRadius: 9, padding: '6px 14px', fontSize: 16,
+                    color: '#f1f5f9', whiteSpace: 'nowrap',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.45), 0 0 0 2px rgba(78,205,196,0.15)',
+                  }}
+                >
+                  <span dangerouslySetInnerHTML={{ __html: renderTex(texify(hoverEl.label)) }} />
+                  <span style={{ color: '#64748b', fontSize: 12 }}>·</span>
+                  <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 500 }}>order {hoverOrder}</span>
+                  {/* 指向节点的小三角 */}
+                  <span
+                    style={{
+                      position: 'absolute',
+                      ...(hoverAnchor.y < 72
+                        ? { top: -7, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '7px solid #4ecdc4' }
+                        : { bottom: -7, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '7px solid #4ecdc4' }),
+                      left: '50%', transform: 'translateX(-50%)',
+                      width: 0, height: 0,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1132,6 +1395,7 @@ export function ViewWindow({
       {/* params panel — outside the window so it never covers the view */}
       {paramsOpen && (
         <div
+          data-theme={viewWindowTheme}
           style={{
             position: config.viewportFixed ? 'fixed' : 'absolute',
             left: paramsLeft, top: geometry.position.y, width: PARAMS_W,
@@ -1158,6 +1422,14 @@ export function ViewWindow({
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
             <input type="checkbox" checked={!!config.viewportFixed} onChange={e => updateConfig({ viewportFixed: e.target.checked })} />
             Fixed to viewport
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <input type="checkbox" checked={config.showControls !== false} onChange={e => updateConfig({ showControls: e.target.checked })} />
+            Show controls
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <input type="checkbox" checked={config.showZoomSlider !== false} onChange={e => updateConfig({ showZoomSlider: e.target.checked })} />
+            Show zoom slider
           </label>
 
           {view === 'set' && (
@@ -1220,11 +1492,6 @@ export function ViewWindow({
                   onChange={e => updateViewParams({ nodeRadius: Number(e.target.value) })} style={{ width: '100%' }} />
                 <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyVp.nodeRadius ?? 28}px</span>
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <input type="checkbox" checked={cayleyVp.showLabels !== false}
-                  onChange={e => updateViewParams({ showLabels: e.target.checked })} />
-                Show labels
-              </label>
               <div style={{ marginBottom: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600 }}>Edge actions</span>
@@ -1253,6 +1520,62 @@ export function ViewWindow({
                   })}
                 </div>
               </div>
+            </>
+          )}
+
+          {view === 'cycle' && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Cycle View</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <input type="checkbox" checked={!!cycleVp.showMaximalCycles}
+                  onChange={e => updateViewParams({ showMaximalCycles: e.target.checked })} />
+                Maximal cycles only
+              </label>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Node radius</div>
+                <input type="range" min={8} max={60} value={cycleVp.nodeRadius ?? 24}
+                  onChange={e => updateViewParams({ nodeRadius: Number(e.target.value) })} style={{ width: '100%' }} />
+                <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cycleVp.nodeRadius ?? 24}px</span>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <input type="checkbox" checked={cycleVp.showLabels !== false}
+                  onChange={e => updateViewParams({ showLabels: e.target.checked })} />
+                Show labels
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={cycleVp.showCycleLabels !== false}
+                  onChange={e => updateViewParams({ showCycleLabels: e.target.checked })} />
+                Show ⟨g⟩ ≅ Zₙ captions
+              </label>
+            </>
+          )}
+
+          {(view === 'table' || view === 'heatmap') && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>{view === 'table' ? 'Table View' : 'Heatmap View'}</div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Strategy</div>
+                <select
+                  value={tableVp.strategy ?? 'subgroup'}
+                  onChange={e => updateViewParams({ strategy: e.target.value as TableStrategy })}
+                  style={{
+                    width: '100%', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-primary)', borderRadius: 4, padding: '2px 4px',
+                  }}
+                >
+                  <option value="subgroup">subgroup</option>
+                  <option value="random">random</option>
+                  <option value="full">full</option>
+                </select>
+              </div>
+              {view === 'table' && (
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ marginBottom: 2 }}>Cell size</div>
+                  <input type="range" min={20} max={120} value={tableVp.cellSize ?? 50}
+                    onChange={e => updateViewParams({ cellSize: Number(e.target.value) })} style={{ width: '100%' }} />
+                  <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{tableVp.cellSize ?? 50}px</span>
+                </div>
+              )}
             </>
           )}
 

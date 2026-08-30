@@ -13,8 +13,9 @@ export {
 } from './cayleyEdges'
 export {
   computeCycleSubgroups, computeMaximalCycles, forceLayout, forceLayoutAsync, planarCycleLayout,
+  cycleGraphLayout,
 } from './cycleLayouts'
-export type { PlanarCycleInput } from './cycleLayouts'
+export type { PlanarCycleInput, OrderedCycleInput } from './cycleLayouts'
 export {
   ringOrder, detectS3PermSet, S3_PERM_IDS, cayleyRingKeys, parseProductFactors,
   type ProductFactors, matrixGridLayout, nestedFactorLayout2D, factorPipeGroups,

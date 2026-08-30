@@ -4,10 +4,14 @@ import {
   computeMaximalCycles,
   forceLayout,
   planarCycleLayout,
+  cycleGraphLayout,
 } from '../core/algebra/cycleLayouts'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createS3 } from '../core/groups/SymmetricGroup'
-import type { GroupElement } from '../core/types'
+import { createZ4xZ2, createZ6xZ2 } from '../core/groups/SmallGroups'
+import { createKleinFour } from '../core/groups/SpecialGroup'
+import { createGL2 } from '../core/groups/GeneralLinearGroup'
+import type { Group, GroupElement } from '../core/types'
 
 const el = (id: string): GroupElement => ({ id, label: id, value: [] })
 
@@ -141,3 +145,128 @@ describe('planarCycleLayout', () => {
     expect(pos.size).toBe(5)
   })
 })
+
+describe('cycleGraphLayout', () => {
+  /** 从群计算极大循环子群，返回顺序数组 [g, g², ..., e]（末位单位元，布局内部会规范化）。 */
+  function orderedMaximalCycles(group: Group): { elementIds: string[] }[] {
+    const all: { elementIds: string[] }[] = []
+    const seen = new Set<string>()
+    for (const g of group.elements) {
+      const seq: string[] = []
+      const visited = new Set<string>()
+      let cur = g
+      while (!visited.has(cur.id)) {
+        visited.add(cur.id)
+        seq.push(cur.id)
+        cur = group.multiply(cur, g)
+      }
+      if (seq.length <= 1) continue
+      const key = [...seq].sort().join(',')
+      if (seen.has(key)) continue
+      seen.add(key)
+      all.push({ elementIds: seq })
+    }
+    return all.filter(c => {
+      const set = new Set(c.elementIds)
+      return !all.some(o => {
+        if (o === c) return false
+        const other = new Set(o.elementIds)
+        return [...set].every(id => other.has(id)) && set.size < other.size
+      })
+    })
+  }
+
+  it('centers identity and positions every element for a cyclic group', () => {
+    const c4 = createCyclicGroup(4)
+    const pos = cycleGraphLayout(c4.elements, orderedMaximalCycles(c4), 800, 800)
+    expect(pos.size).toBe(c4.elements.length)
+    const e = c4.identity
+    expect(pos.get(e.id)).toEqual({ x: 400, y: 400 })
+    for (const x of c4.elements) {
+      if (x.id === e.id) continue
+      const p = pos.get(x.id)!
+      const dist = Math.hypot(p.x - 400, p.y - 400)
+      expect(dist).toBeGreaterThan(0)
+    }
+  })
+
+  it('lays out S3 as a triangle petal plus three order-2 spokes', () => {
+    const s3 = createS3()
+    const pos = cycleGraphLayout(s3.elements, orderedMaximalCycles(s3), 800, 800)
+    expect(pos.size).toBe(s3.elements.length)
+    const e = s3.identity
+    expect(pos.get(e.id)).toEqual({ x: 400, y: 400 })
+  })
+
+  it('handles the butterfly case C4×C2 (two 4-cycles sharing one element)', () => {
+    const g = createZ4xZ2()
+    const pos = cycleGraphLayout(g.elements, orderedMaximalCycles(g), 800, 800)
+    expect(pos.size).toBe(g.elements.length)
+    const e = g.identity
+    expect(pos.get(e.id)).toEqual({ x: 400, y: 400 })
+  })
+
+  it('lays out the Klein four-group as three spokes from the identity', () => {
+    const v4 = createKleinFour()
+    const pos = cycleGraphLayout(v4.elements, orderedMaximalCycles(v4), 800, 800)
+    expect(pos.size).toBe(v4.elements.length)
+    const e = v4.identity
+    expect(pos.get(e.id)).toEqual({ x: 400, y: 400 })
+  })
+
+  it('falls back without throwing for complex sharing (3 cycles sharing one element)', () => {
+    const elements = [el('e'), el('a'), el('b'), el('c'), el('d'), el('f'), el('g'), el('h')]
+    const pos = cycleGraphLayout(elements, [
+      { elementIds: ['e', 'a', 'b', 'c'] },
+      { elementIds: ['e', 'd', 'c', 'f'] },
+      { elementIds: ['e', 'g', 'c', 'h'] },
+    ], 800, 800)
+    expect(pos.size).toBe(elements.length)
+  })
+
+  // 多公共点（多个循环共享非单位元）不应产生自交/重叠的花瓣
+  it.each([
+    ['C6×C2 (three 6-cycles sharing two 3-elements)', () => createZ6xZ2()],
+    ['GL(2,3) (48-elements, cycles sharing non-tip elements)', () => createGL2(3)],
+  ])('produces non-self-intersecting petals for %s', (_name, makeGroup) => {
+    const g = makeGroup()
+    const cycles = orderedMaximalCycles(g)
+    const pos = cycleGraphLayout(g.elements, cycles, 800, 800, g.identity.id)
+    expect(pos.size).toBe(g.elements.length)
+    expect(pos.get(g.identity.id)).toEqual({ x: 400, y: 400 })
+
+    const eId = g.identity.id
+    for (const c of cycles) {
+      const ids = c.elementIds
+      const ei = ids.indexOf(eId)
+      const ordered = ei >= 0 ? [...ids.slice(ei), ...ids.slice(0, ei)] : ids
+      if (ordered.length < 4) continue
+      const pts = ordered.map(id => { const p = pos.get(id)!; return [p.x, p.y] as [number, number] })
+      expect(isSelfIntersecting(pts)).toBe(false)
+    }
+  })
+
+  it('returns empty for empty input', () => {
+    expect(cycleGraphLayout([], [], 800, 800).size).toBe(0)
+  })
+})
+
+function isSelfIntersecting(pts: [number, number][]): boolean {
+  const n = pts.length
+  const ccw = (a: [number, number], b: [number, number], c: [number, number]) =>
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+  const seg = (p1: [number, number], p2: [number, number], p3: [number, number], p4: [number, number]) => {
+    const d1 = ccw(p3, p4, p1)
+    const d2 = ccw(p3, p4, p2)
+    const d3 = ccw(p1, p2, p3)
+    const d4 = ccw(p1, p2, p4)
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  }
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (j === (i + 1) % n || i === (j + 1) % n) continue
+      if (seg(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true
+    }
+  }
+  return false
+}

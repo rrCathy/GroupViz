@@ -4,6 +4,7 @@ import 'katex/dist/katex.min.css'
 import './index.css'
 import App from './App.tsx'
 import TestPage from './components/TestPage.tsx'
+import { ThemeProvider } from './theme/useTheme'
 
 // Suppress THREE.Clock deprecation warning
 const originalWarn = console.warn
@@ -19,6 +20,8 @@ const isTestPage = params.get('test') === '1' || params.get('page') === 'test'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isTestPage ? <TestPage /> : <App />}
+    <ThemeProvider>
+      {isTestPage ? <TestPage /> : <App />}
+    </ThemeProvider>
   </StrictMode>,
 )

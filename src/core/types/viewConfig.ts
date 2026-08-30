@@ -12,6 +12,10 @@ export interface ViewWindowConfig {
   viewportFixed?: boolean
   /** 是否允许用户拖拽调整窗口尺寸。缺省 true；false 时隐藏 8 个 resize 手柄（移动不受影响，用 locked 全禁） */
   resizable?: boolean
+  /** 是否显示标题栏右侧的窗口控件按钮（锁移动/锁缩放/信息/参数/关闭）。缺省 true；false 供博客插图等专注阅读场景 */
+  showControls?: boolean
+  /** 是否显示底部缩放滑杆浮层。缺省 true；false 时 Ctrl+滚轮缩放仍可用 */
+  showZoomSlider?: boolean
 }
 
 export const viewWindowConfigSchema = z.object({
@@ -20,6 +24,8 @@ export const viewWindowConfigSchema = z.object({
   showInfo: z.boolean().optional(),
   viewportFixed: z.boolean().optional(),
   resizable: z.boolean().optional(),
+  showControls: z.boolean().optional(),
+  showZoomSlider: z.boolean().optional(),
 })
 
 export interface SetViewParams {
@@ -54,7 +60,7 @@ export interface CayleyViewParams {
   actions?: CayleyActionParam[]
   /** 节点半径；缺省 28（与主视图一致） */
   nodeRadius?: number
-  /** 是否显示节点标签；缺省 true（>60 阶沿用主视图自适应规则） */
+  /** 是否显示节点标签；缺省 true（>60 阶沿用主视图自适应规则）。嵌入小窗（ViewWindow）传 false 彻底不显示节点标签、读元素靠悬停就地气泡 */
   showLabels?: boolean
 }
 
@@ -73,6 +79,39 @@ export const cayleyViewParamsSchema = z.object({
     .optional(),
   nodeRadius: z.number().min(8).max(120).optional(),
   showLabels: z.boolean().optional(),
+})
+
+export interface CycleViewParams {
+  /** 仅显示极大循环（缺省 false，显示全部循环子群） */
+  showMaximalCycles?: boolean
+  /** 节点半径；缺省 24（与主视图循环图一致） */
+  nodeRadius?: number
+  /** 是否显示节点标签；缺省 true（>60 阶沿用主视图自适应规则） */
+  showLabels?: boolean
+  /** 是否显示每个循环的 ⟨g⟩ ≅ Z_n 标注；缺省 true */
+  showCycleLabels?: boolean
+}
+
+export const cycleViewParamsSchema = z.object({
+  showMaximalCycles: z.boolean().optional(),
+  nodeRadius: z.number().min(8).max(80).optional(),
+  showLabels: z.boolean().optional(),
+  showCycleLabels: z.boolean().optional(),
+})
+
+/** 大群（>16 阶）乘法表展示策略 */
+export type TableStrategy = 'subgroup' | 'random' | 'full'
+
+export interface TableViewParams {
+  /** 大群（>16 阶）展示策略；缺省 'subgroup'（≤16 阶始终全表） */
+  strategy?: TableStrategy
+  /** 单元格尺寸；缺省 50 */
+  cellSize?: number
+}
+
+export const tableViewParamsSchema = z.object({
+  strategy: z.enum(['subgroup', 'random', 'full']).optional(),
+  cellSize: z.number().min(20).max(120).optional(),
 })
 
 export interface ViewWindowGeometry {

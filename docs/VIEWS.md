@@ -15,8 +15,10 @@
 
 ## 3. 圆圈图 (CycleView.tsx)
 
-- `planarCycleLayout`：单位元居中，循环子群按角度扇区排列
-- "显示极大循环子群"筛选（`showMaximalCycles`）
+- `cycleGraphLayout`（精确复刻 Group Explorer CycleGraphView）：单位元 e 固定在原点（永不重放）；每个极大循环 = 「花瓣」圆弧——第 k 个非单位元 gᵏ 落在圆心 (0,R) 半径 R 的弧上 `(-R·cosθ, R(1+sinθ))`，θ=2π(k/n−0.25)；循环按共享非单位元聚成 part（并查集 uniteParts：合并时被并入 part 的每个循环经 `bestPowerRelativeTo` 重新轮换，使共享元素在同一弧索引对齐）；各 part 按循环长度之和比例分配角度弧（单 part 退化用半圆弧；若最大 part 占 >1/2 则各弧长封顶 total/2），最大 part（循环数最多）弧中心旋转正下方；part 内多循环用 `gravity=ringNum/part.length` 拉向弧中心；共享元素只由首个循环放置、后续循环引用同一位置（「蝴蝶」双花瓣例 Z₂×Z₄；SL(2,3) 7 个循环共点 −I 太阳放射）；不在任何 ≥3 阶循环里的 2 阶元素 = 从 e 出去的「叶柄」线段；复杂点共享（C₅×S₃ 等）为 GE 平面固有的少量边交叉（无回退）
+- 极大模式画风：细实线多边形、无填充、无虚线、无 `⟨g⟩ ≅ Z_n` 标注（对齐 Nathan Carter《群论彩图版》/ Group Explorer）
+- `showMaximalCycles` 默认 **true**（只画极大循环）；关掉后回退到「全部循环 + 彩色虚线标注」的诊断视图
+- 2 阶极大循环（V₄ 的三条线段）以 `<line>` 呈现，≥3 阶以闭合多边形呈现
 
 ## 4. 乘法表 (TableView.tsx)
 

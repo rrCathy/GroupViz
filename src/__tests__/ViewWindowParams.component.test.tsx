@@ -92,4 +92,58 @@ describe('ViewWindow params panel (external overlay)', () => {
       expect(win.textContent).toContain('C₄')
     })
   })
+
+  describe('embed chrome (blog figure)', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('showControls=false hides all titlebar buttons, title text remains', () => {
+      render(
+        <ViewWindow view="set" group={c4} title="图 1" storageKey="vw-test-nocontrols"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }}
+          config={{ showControls: false }} />,
+      )
+      expect(screen.getByText('图 1')).toBeInTheDocument()
+      expect(screen.queryByTitle('Lock move')).toBeNull()
+      expect(screen.queryByTitle('Lock zoom')).toBeNull()
+      expect(screen.queryByTitle('Parameters')).toBeNull()
+      expect(screen.queryByTitle('Close')).toBeNull()
+    })
+
+    it('showZoomSlider=false hides the zoom slider overlay (ctrl+wheel zoom still active)', () => {
+      const { container } = render(
+        <ViewWindow view="cayley" group={c4} title="C₄ 凯莱" storageKey="vw-test-noslider"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }}
+          config={{ showZoomSlider: false }} />,
+      )
+      const win = container.firstElementChild as HTMLElement
+      // 参数面板未打开时，窗口内唯一的 range 控件就是缩放滑杆
+      expect(win.querySelector('input[type="range"]')).toBeNull()
+
+      // 默认（未配置）时滑杆存在
+      const { container: withSlider } = render(
+        <ViewWindow view="cayley" group={c4} title="C₄ 凯莱" storageKey="vw-test-slider-def"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }} />,
+      )
+      expect((withSlider.firstElementChild as HTMLElement).querySelector('input[type="range"]')).not.toBeNull()
+    })
+
+    it('hovering a node shows the element HUD (label + order), leaving hides it', () => {
+      const { container } = render(
+        <ViewWindow view="cayley" group={c4} title="C₄ 凯莱" storageKey="vw-test-hud"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }} />,
+      )
+      const win = container.firstElementChild as HTMLElement
+      expect(win.querySelector('[data-testid="hover-hud"]')).toBeNull()
+
+      // 节点 g：circle 的父级即携带 onMouseEnter 的节点容器
+      const node = (win.querySelector('circle') as Element).closest('g') as Element
+      fireEvent.mouseEnter(node)
+      const hud = win.querySelector('[data-testid="hover-hud"]') as HTMLElement
+      expect(hud).not.toBeNull()
+      expect(hud.textContent).toContain('order')
+
+      fireEvent.mouseLeave(node)
+      expect(win.querySelector('[data-testid="hover-hud"]')).toBeNull()
+    })
+  })
 })

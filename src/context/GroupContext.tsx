@@ -3,7 +3,7 @@ import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResul
 import { isGroupDirectProduct, type CayleyShape2D } from '../core/types'
 import { getViewBoxSize, type ViewBoxSize } from '../core/viewBox'
 import { type CosetInfo } from '../core/algebra/subgroups'
-import { forceLayout, forceLayoutAsync, planarCycleLayout, computeCycleSubgroups, computeMaximalCycles } from '../core/algebra/forceLayout'
+import { forceLayout, forceLayoutAsync, cycleGraphLayout, computeCycleSubgroups } from '../core/algebra/forceLayout'
 import { computeShape2DPositions } from '../core/algebra/shapeLayouts'
 import { useTranslation } from '../i18n/useTranslation'
 import type { BackendCache } from '../utils/hybridCompute'
@@ -38,6 +38,7 @@ interface GroupContextState {
   activeTabId: string
   isSimpleGroup: boolean
   showMaximalCycles: boolean
+  showHeatmap: boolean
   hintMessage: string
   forceShowLargeGroupViews: Set<ViewMode>
   viewBoxSize: ViewBoxSize
@@ -143,6 +144,7 @@ interface GroupContextActions {
   selectNextElement: () => void
   selectPrevElement: () => void
   setShowMaximalCycles: (show: boolean) => void
+  setShowHeatmap: (show: boolean) => void
   setHintMessage: (msg: string) => void
   setForceShowLargeGroupForView: (view: ViewMode, allow: boolean) => void
   setCayleyMultiplyType: (type: MultiplyType) => void
@@ -411,23 +413,27 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
 
     if (core.currentView === 'cycle') {
       const cycleSubgroups = computeCycleSubgroups(core.currentGroup)
-      let cycles = cycleSubgroups
-        .map(indices => ({
-          elements: indices.map(i => ({ id: core.currentGroup!.elements[i].id })),
-          order: indices.length
-        }))
-        .filter(c => c.order > 1)
+      let cycleIds = cycleSubgroups
+        .map(indices => indices.map(i => core.currentGroup!.elements[i].id))
+        .filter(ids => ids.length > 1)
 
       if (core.showMaximalCycles) {
-        cycles = computeMaximalCycles(cycles)
+        cycleIds = cycleIds.filter((ids, i) => {
+          const set = new Set(ids)
+          return !cycleIds.some((other, j) => {
+            if (i === j) return false
+            const otherSet = new Set(other)
+            return [...set].every(id => otherSet.has(id)) && set.size < otherSet.size
+          })
+        })
       }
 
-      const positions = planarCycleLayout(
+      const positions = cycleGraphLayout(
         core.currentGroup.elements,
-        cycles,
+        cycleIds.map(elementIds => ({ elementIds })),
         vbs.width,
         vbs.height,
-        { initialPositions: existingPositions }
+        core.currentGroup.identity.id,
       )
       core.batchSetNodePositions(positions)
       core.addOperationHistory(t('op.layout', { view: core.getViewLabel(core.currentView) }))
@@ -530,6 +536,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     activeTabId: core.activeTabId,
     isSimpleGroup: backend.isSimpleGroup,
     showMaximalCycles: core.showMaximalCycles,
+    showHeatmap: core.showHeatmap,
     hintMessage: core.hintMessage,
     forceShowLargeGroupViews: core.forceShowLargeGroupViews,
     viewBoxSize: core.viewBoxSize,
@@ -644,6 +651,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     selectNextElement: core.selectNextElement,
     selectPrevElement: core.selectPrevElement,
     setShowMaximalCycles: core.setShowMaximalCycles,
+    setShowHeatmap: core.setShowHeatmap,
     setHintMessage: core.setHintMessage,
     setForceShowLargeGroupForView,
 

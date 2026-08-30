@@ -26,6 +26,7 @@ import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createS3 } from '../core/groups/SymmetricGroup'
 import { createDirectProduct } from '../core/groups/DirectProduct'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
+import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 
 const ID: GroupElement = { id: 'e', label: '0', value: [] }
 
@@ -473,8 +474,20 @@ describe('getAvailableShapesForView', () => {
     expect(getAvailableShapesForView(mk({ symbol: 'C_{12}', order: 12 }), 'cayley')).toEqual(['circular', 'spiral', 'coil', 'cone'])
     expect(getAvailableShapesForView(mk({ symbol: 'D_{4}', order: 8 }), 'cayley')).toEqual(['circular', 'dualRing', 'cone'])
 
+    // A₄ = V₄⋊C₃ 符号无 ':'/'⋊' 记号但代数半直积：默认仍 projection3D 球面投影，
+    // 但额外提供 rewiring（手动切换看 φ-不动点重布线形态）
+    expect(getAvailableShapesForView(createAlternatingGroup(4), 'cayley'))
+      .toEqual(['circular', 'projection3D', 'rewiring', 'cone'])
+    expect(getDefaultShape2D(createAlternatingGroup(4))).toBe('projection3D')
+
     const s3 = getAvailableShapesForView(mk({ symbol: 'S_{3}', order: 6 }), 'cayley')
-    expect(s3).toEqual(['circular']) // ≤7 阶只有圆形
+    expect(s3).toEqual(['circular', 'projection3D', 'cone']) // S₃ 是投影群，不再被阶≤7 一刀切
+
+    // 小群（≤7 阶）不再被"只有圆形"一刀切：按结构放行对应形状
+    expect(getAvailableShapesForView(mk({ symbol: 'D_{3}', order: 6 }), 'cayley')).toEqual(['circular', 'dualRing', 'cone'])
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{2} \\times C_{2}', order: 4 }), 'cayley')).toEqual(['circular', 'grid', 'cone'])
+    // 小循环群仍只有圆形（螺旋无意义）
+    expect(getAvailableShapesForView(mk({ symbol: 'C_{5}', order: 5 }), 'cayley')).toEqual(['circular'])
 
     const s4 = getAvailableShapesForView(mk({ symbol: 'S_{4}', order: 24 }), 'cayley')
     expect(s4).toContain('projection3D')

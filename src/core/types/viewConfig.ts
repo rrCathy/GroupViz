@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CAYLEY_SHAPES_2D, type CayleyShape2D, type MultiplyType } from './view'
+import { CAYLEY_SHAPES_2D, LAYOUTS_3D, type CayleyShape2D, type Layout3D, type MultiplyType } from './view'
 
 export interface ViewWindowConfig {
   /** 锁定窗口移动与缩放（标题栏拖拽 + 内容平移/缩放 + 窗口 resize 全部禁用） */
@@ -78,6 +78,39 @@ export const cayleyViewParamsSchema = z.object({
     .max(240)
     .optional(),
   nodeRadius: z.number().min(8).max(120).optional(),
+  showLabels: z.boolean().optional(),
+})
+
+export interface Cayley3DViewParams {
+  /** 3D 布局形状；缺省 getDefaultLayout3D(group)（按群自动） */
+  layout3D?: Layout3D
+  /** 边的乘法方向；缺省 'right'（右乘 a·c） */
+  multiplyType?: MultiplyType
+  /** 作用边元素集合；缺省 = 群生成元集合 */
+  actions?: CayleyActionParam[]
+  /** 节点球缩放 0.5–2.0；缺省 1（基础球半径 0.42、选中/hover 0.55 × scale） */
+  nodeScale?: number
+  /** 缺省 false；prop 优先，窗口内 ▶ 按钮本地态兜底 */
+  autoRotate?: boolean
+  /** 是否显示 hover/选中 Html 标签；缺省 true */
+  showLabels?: boolean
+}
+
+export const cayley3DViewParamsSchema = z.object({
+  layout3D: z.enum(LAYOUTS_3D).optional(),
+  multiplyType: z.enum(['right', 'left']).optional(),
+  actions: z
+    .array(
+      z.object({
+        elementId: z.string(),
+        enabled: z.boolean().optional(),
+        color: z.string().optional(),
+      }),
+    )
+    .max(240)
+    .optional(),
+  nodeScale: z.number().min(0.5).max(2).optional(),
+  autoRotate: z.boolean().optional(),
   showLabels: z.boolean().optional(),
 })
 

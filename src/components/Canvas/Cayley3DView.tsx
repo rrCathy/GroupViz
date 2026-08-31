@@ -3,15 +3,17 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useGroup } from '../../context/useGroup'
-import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useTheme } from '../../theme/useTheme'
-import type { GroupElement, Generator, CayleyEdgeData } from '../../core/types'
+import type { Group, GroupElement, Generator, MultiplyType, Layout3D } from '../../core/types'
+import { getDefaultLayout3D } from '../../core/types'
 import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
 import { compute3DPositions } from '../../core/algebra/layout3D'
 import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
 import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
+import { normalizeCayleyActions } from '../../context/cayleyActions'
+import type { CayleyActionParam } from '../../core/types/viewConfig'
 
 interface EdgeData {
   fromIdx: number
@@ -42,15 +44,19 @@ interface NodeSphereProps {
   isHovered: boolean
   subsetColor: string | null
   element: GroupElement
+  nodeScale: number
+  showLabel: boolean
   onSelectElement: (id: string, additive: boolean) => void
   onPointerEnter: (el: GroupElement) => void
   onPointerLeave: (el: GroupElement | null) => void
 }
 
-const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected, isHovered, subsetColor, element, onSelectElement, onPointerEnter, onPointerLeave }: NodeSphereProps) {
+const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected, isHovered, subsetColor, element, nodeScale, showLabel, onSelectElement, onPointerEnter, onPointerLeave }: NodeSphereProps) {
   const texLabel = useMemo(() => renderTex(texify(label)), [label])
   const { theme } = useTheme()
   const isDark = theme === 'dark'
+  const primary = isSelected || isHovered
+  const seg = primary ? 24 : 12
 
   return (
     <group position={position}>
@@ -62,28 +68,28 @@ const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected
         onPointerEnter={() => onPointerEnter(element)}
         onPointerLeave={() => onPointerLeave(null)}
       >
-        <sphereGeometry args={[isSelected || isHovered ? 0.55 : 0.42, isSelected || isHovered ? 24 : 12, isSelected || isHovered ? 24 : 12]} />
+        <sphereGeometry args={[primary ? 0.55 * nodeScale : 0.42 * nodeScale, seg, seg]} />
         <meshStandardMaterial
-          color={isSelected || isHovered ? color : subsetColor || color}
-          emissive={isSelected || isHovered ? color : subsetColor || color}
-          emissiveIntensity={isSelected || isHovered ? 0.6 : subsetColor ? 0.4 : 0.2}
+          color={primary ? color : subsetColor || color}
+          emissive={primary ? color : subsetColor || color}
+          emissiveIntensity={primary ? 0.6 : subsetColor ? 0.4 : 0.2}
           roughness={0.3}
           metalness={0.1}
         />
       </mesh>
       {subsetColor && !isSelected && (
         <mesh>
-          <sphereGeometry args={[0.55, 32, 32]} />
+          <sphereGeometry args={[0.55 * nodeScale, 32, 32]} />
           <meshBasicMaterial color={subsetColor} transparent opacity={0.25} />
         </mesh>
       )}
       {isSelected && (
         <mesh>
-          <sphereGeometry args={[0.62, 32, 32]} />
+          <sphereGeometry args={[0.62 * nodeScale, 32, 32]} />
           <meshBasicMaterial color="#ffd93d" transparent opacity={0.3} />
         </mesh>
       )}
-      {(isSelected || isHovered) && (
+      {showLabel && primary && (
         <Html distanceFactor={12} center style={{ pointerEvents: 'none', userSelect: 'none' }} wrapperClass="gv-html-overlay">
           <div
             style={{
@@ -120,10 +126,12 @@ const StraightEdge = memo(function StraightEdge({ start, end, color, isHighlight
   const thickness = isHighlighted ? 0.08 : 0.05
 
   useEffect(() => {
-    if (!meshRef.current) return
+    const mesh = meshRef.current
+    // 真实 R3F 下 mesh 是 THREE.Mesh（quaternion 必在）；测试 stub 的 DOM 元素无此属性，跳过
+    if (!mesh?.quaternion) return
     const quat = new THREE.Quaternion()
     quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone())
-    meshRef.current.quaternion.copy(quat)
+    mesh.quaternion.copy(quat)
   }, [dir])
 
   return (
@@ -188,15 +196,60 @@ const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSe
   )
 })
 
-function SceneContent() {
-  const {
-    currentGroup, selectedElements, selectElement,
-    cayleyActions, cayleyMultiplyType, cayleyShape3D, subsets
-  } = useGroup()
-  const { hoverElement, setHoverElement } = useHover()
+const NOOP_SELECT = () => {}
+
+export interface Cayley3DSceneProps {
+  /** 群；null → .view-empty 占位 */
+  group: Group | null
+  /** 选中元素集合（调用方自持会话态） */
+  selectedElements: Set<string>
+  /** 节点点击选中回调；缺省 no-op */
+  onSelectElement?: (id: string, additive: boolean) => void
+  /** 作用边元素集合；缺省 = 群生成元（normalizeCayleyActions 归一化） */
+  actions?: CayleyActionParam[]
+  /** 边的乘法方向；缺省 'right' */
+  multiplyType?: MultiplyType
+  /** 3D 布局形状；缺省 getDefaultLayout3D(group) */
+  layout3D?: Layout3D
+  /** 节点球缩放 0.5–2.0；缺省 1 */
+  nodeScale?: number
+  /** 自动旋转；缺省 false。prop 优先，未设置时内部 ▶ 按钮本地态兜底 */
+  autoRotate?: boolean
+  /** 是否显示 hover/选中 Html 标签；缺省 true */
+  showLabels?: boolean
+  /** 锁定相机交互（轨道拖拽/滚轮缩放/右键平移）；保留点击选中与双击复位 */
+  locked?: boolean
+  /** 子集高亮（元素 id → 颜色）；context subsets 的同构映射 */
+  subsetHighlights?: { elementIds: string[]; color: string }[]
+}
+
+function Cayley3DSceneBody({
+  group,
+  selectedElements,
+  onSelectElement,
+  actions: actionsProp,
+  multiplyType: multiplyTypeProp,
+  layout3D: layout3DProp,
+  nodeScale: nodeScaleProp,
+  autoRotate: autoRotateProp,
+  showLabels: showLabelsProp,
+  locked = false,
+  subsetHighlights = [],
+}: Cayley3DSceneProps & { group: Group }) {
   const { t } = useTranslation()
   const { gl, camera, scene } = useThree()
-  const [autoRotate, setAutoRotate] = useState(false)
+
+  const actions = useMemo(() => normalizeCayleyActions(group, actionsProp), [group, actionsProp])
+  const multiplyType = multiplyTypeProp ?? 'right'
+  const layout3D = layout3DProp ?? getDefaultLayout3D(group)
+  const nodeScale = nodeScaleProp ?? 1
+  const showLabels = showLabelsProp !== false
+  const selectElement = onSelectElement ?? NOOP_SELECT
+
+  const [autoRotateState, setAutoRotateState] = useState(false)
+  const autoRotate = autoRotateProp ?? autoRotateState
+  const [hoverElement, setHoverElement] = useState<GroupElement | null>(null)
+
   // 自定义轨道状态（替代 drei OrbitControls）：theta/phi 球坐标，phi 无界（可无限翻越上下极点，无 makeSafe 钳制）
   const orbit = useRef({
     theta: 0,
@@ -233,30 +286,27 @@ function SceneContent() {
     return (len >= 8 ? 0.35 + Math.min(0.65, len / 360) : 1) * 2 * Math.PI
   }, [])
 
-  const isLargeGroup = currentGroup ? currentGroup.order > 100 : false
+  const isLargeGroup = group.order > 100
   const visibleElementIds = useMemo(() => {
-    if (!currentGroup) return new Set<string>()
-    if (!isLargeGroup) return new Set(currentGroup.elements.map(e => e.id))
-    const ids = new Set<string>([currentGroup.identity.id])
-    for (const a of cayleyActions.filter(x => x.enabled).slice(0, 4)) ids.add(a.elementId)
+    if (!isLargeGroup) return new Set(group.elements.map(e => e.id))
+    const ids = new Set<string>([group.identity.id])
+    for (const a of actions.filter(x => x.enabled).slice(0, 4)) ids.add(a.elementId)
     for (const id of selectedElements) ids.add(id)
-    for (let i = 0; i < currentGroup.elements.length; i += Math.max(1, Math.ceil(currentGroup.order / 24))) {
-      ids.add(currentGroup.elements[i].id)
+    for (let i = 0; i < group.elements.length; i += Math.max(1, Math.ceil(group.order / 24))) {
+      ids.add(group.elements[i].id)
     }
     return ids
-  }, [currentGroup, cayleyActions, selectedElements, isLargeGroup])
+  }, [group, actions, selectedElements, isLargeGroup])
 
   const cayleyEdges = useMemo(() => {
-    if (!currentGroup) return [] as CayleyEdgeData[]
-    return computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType)
-  }, [currentGroup, cayleyActions, cayleyMultiplyType])
+    return computeCayleyActionEdges(group, actions, multiplyType)
+  }, [group, actions, multiplyType])
 
   const positions = useMemo(() => {
-    if (!currentGroup) return [] as THREE.Vector3[]
-    return compute3DPositions(currentGroup, cayleyShape3D).map(
+    return compute3DPositions(group, layout3D).map(
       p => new THREE.Vector3(p[0], p[1], p[2])
     )
-  }, [currentGroup, cayleyShape3D])
+  }, [group, layout3D])
 
   // 外接球：节点云质心为球心，最大距离为半径（含节点球/自环余量），复位与初始视角均基于它
   const bounds = useMemo(() => {
@@ -289,7 +339,7 @@ function SceneContent() {
   useEffect(() => {
     latestFit.current = fitOrbit
   })
-  const groupKey = currentGroup ? `${currentGroup.symbol}|${currentGroup.order}` : ''
+  const groupKey = `${group.symbol}|${group.order}`
 
   const resetCamera = useCallback(() => {
     const o = orbit.current
@@ -303,9 +353,10 @@ function SceneContent() {
   // 切换群或切换 3D 形状时自动回到默认适配视角
   useEffect(() => {
     resetCamera()
-  }, [groupKey, cayleyShape3D, resetCamera])
+  }, [groupKey, layout3D, resetCamera])
 
   useEffect(() => {
+    if (locked) return
     const el = gl.domElement
     const onDown = (e: PointerEvent) => {
       dragState.current = { active: true, lastX: e.clientX, lastY: e.clientY, x: 0, y: 0, button: e.button }
@@ -355,7 +406,7 @@ function SceneContent() {
       el.removeEventListener('pointercancel', onUp)
       el.removeEventListener('wheel', onWheel)
     }
-  }, [gl, camera, fitOrbit])
+  }, [gl, camera, fitOrbit, locked])
 
   // 按最后一次拖拽方向将角速度分解到 theta/phi 两个分量（与手动拖拽同约定：拖右 theta -=，拖下 phi -=），
   // 未拖拽过则默认绕竖轴（theta）旋转；拖拽含竖直分量时同步带动俯仰旋转——与 ▶ 自动旋转方向完全一致
@@ -390,7 +441,6 @@ function SceneContent() {
   // 每帧：手动拖拽的 theta/phi 已在 pointer 处理中直接更新；此处应用自动旋转增量并同步相机。
   // 球坐标 phi 无界（可无限翻越上下极点）；GIF 导出期间角度由 frameAt 精确驱动，此处仅同步相机
   useFrame((_, delta) => {
-    if (!currentGroup) return
     const o = orbit.current
     if (!o.initialized) {
       // 初始视角 = 复位适配视角（外接球居中、直径占视口高度 2/3、相机在球外）
@@ -418,7 +468,7 @@ function SceneContent() {
   useEffect(() => {
     if (!gl.domElement.closest('.canvas-viewport')) return
     const api: Cayley3DControlAPI = {
-      isReady: () => !!currentGroup,
+      isReady: () => true,
       snapshotOrbit: () => {
         const o = orbit.current
         return { theta: o.theta, phi: o.phi, radius: o.radius, target: o.target.clone() }
@@ -492,40 +542,36 @@ function SceneContent() {
     }
     registerCayley3DControls(api)
     return () => unregisterCayley3DControls(api)
-  }, [currentGroup, gl, scene, camera, displayAngVel])
+  }, [gl, scene, camera, displayAngVel])
 
   const elementLookup = useMemo(() => {
     const m = new Map<string, GroupElement>()
-    if (!currentGroup) return m
-    for (const el of currentGroup.elements) m.set(el.id, el)
+    for (const el of group.elements) m.set(el.id, el)
     return m
-  }, [currentGroup])
+  }, [group])
 
   const actionLabelMap = useMemo(() => {
     const m = new Map<string, string>()
-    if (!currentGroup) return m
-    for (const a of cayleyActions) {
+    for (const a of actions) {
       const el = elementLookup.get(a.elementId)
       if (el) m.set(a.elementId, el.label)
     }
     return m
-  }, [cayleyActions, currentGroup, elementLookup])
+  }, [actions, elementLookup])
 
   const subsetOf = useMemo(() => {
-    const m = new Map<string, (typeof subsets)[number]>()
-    if (!currentGroup) return m
-    for (const s of subsets) {
+    const m = new Map<string, { color: string }>()
+    for (const s of subsetHighlights) {
       for (const id of s.elementIds) {
         if (!m.has(id)) m.set(id, s)
       }
     }
     return m
-  }, [subsets, currentGroup])
+  }, [subsetHighlights])
 
   const edgeDataMap = useMemo(() => {
     const m = new Map<string, EdgeData>()
-    if (!currentGroup) return m
-    const edgeBudget = isLargeGroup ? Math.max(60, currentGroup.order * 2) : Number.POSITIVE_INFINITY
+    const edgeBudget = isLargeGroup ? Math.max(60, group.order * 2) : Number.POSITIVE_INFINITY
     for (const edge of cayleyEdges) {
       if (isLargeGroup && !visibleElementIds.has(edge.fromId) && !visibleElementIds.has(edge.toId)) continue
       const key = `${Math.min(edge.fromIdx, edge.toIdx)}|${Math.max(edge.fromIdx, edge.toIdx)}|${edge.actionElementId}`
@@ -541,7 +587,7 @@ function SceneContent() {
             name: edge.actionElementId,
             symbol: elementLookup.get(edge.actionElementId)?.label || '',
             color: edge.color,
-            apply: () => currentGroup.elements[0],
+            apply: () => group.elements[0],
             inverse: {} as Generator
           },
           isSelfLoop: edge.isSelfLoop,
@@ -551,9 +597,7 @@ function SceneContent() {
       if (m.size >= edgeBudget) break
     }
     return m
-  }, [cayleyEdges, positions, currentGroup, isLargeGroup, visibleElementIds, elementLookup])
-
-  if (!currentGroup) return null
+  }, [cayleyEdges, positions, group, isLargeGroup, visibleElementIds, elementLookup])
 
   return (
     <>
@@ -562,51 +606,49 @@ function SceneContent() {
       <directionalLight position={[-10, -5, -10]} intensity={0.3} color="#4488ff" />
       <pointLight position={[0, 0, 0]} intensity={0.3} color="#ffffff" />
 
-      {currentGroup && (
-        <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
+      <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
+        <div style={{
+          position: 'absolute', top: 10, right: 10,
+          display: 'flex', gap: 6, alignItems: 'center', pointerEvents: 'auto'
+        }}>
           <div style={{
-            position: 'absolute', top: 10, right: 10,
-            display: 'flex', gap: 6, alignItems: 'center', pointerEvents: 'auto'
+            background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
+            padding: '6px 12px', borderRadius: 8, fontSize: 13,
+            fontFamily: 'monospace', pointerEvents: 'none'
           }}>
-            <div style={{
-              background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
-              padding: '6px 12px', borderRadius: 8, fontSize: 13,
-              fontFamily: 'monospace', pointerEvents: 'none'
-            }}>
-              <span style={{ fontWeight: 'bold' }} dangerouslySetInnerHTML={{ __html: renderTex(texify(currentGroup.symbol)) }} />
-              <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>|G| = {currentGroup.order}</span>
-            </div>
-            <button
-              onClick={() => setAutoRotate(v => !v)}
-              title={t('cayley3d.autoRotate')}
-              aria-label={t('cayley3d.autoRotate')}
-              style={{
-                background: 'var(--bg-tooltip)',
-                color: autoRotate ? 'var(--accent-teal)' : 'var(--text-secondary)',
-                border: autoRotate ? '1px solid var(--accent-teal)' : '1px solid var(--border-primary)',
-                borderRadius: 8, padding: '6px 10px', fontSize: 13,
-                cursor: 'pointer', fontFamily: 'monospace'
-              }}
-            >
-              {autoRotate ? '❚❚' : '▶'}
-            </button>
-            <button
-              onClick={resetCamera}
-              title={t('cayley3d.resetView')}
-              aria-label={t('cayley3d.resetView')}
-              style={{
-                background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
-                border: '1px solid var(--border-primary)', borderRadius: 8, padding: '6px 10px',
-                fontSize: 13, cursor: 'pointer', fontFamily: 'monospace'
-              }}
-            >
-              ⟲
-            </button>
+            <span style={{ fontWeight: 'bold' }} dangerouslySetInnerHTML={{ __html: renderTex(texify(group.symbol)) }} />
+            <span style={{ marginLeft: 8, color: 'var(--text-muted)' }}>|G| = {group.order}</span>
           </div>
-        </Html>
-      )}
+          <button
+            onClick={() => setAutoRotateState(v => !v)}
+            title={t('cayley3d.autoRotate')}
+            aria-label={t('cayley3d.autoRotate')}
+            style={{
+              background: 'var(--bg-tooltip)',
+              color: autoRotate ? 'var(--accent-teal)' : 'var(--text-secondary)',
+              border: autoRotate ? '1px solid var(--accent-teal)' : '1px solid var(--border-primary)',
+              borderRadius: 8, padding: '6px 10px', fontSize: 13,
+              cursor: 'pointer', fontFamily: 'monospace'
+            }}
+          >
+            {autoRotate ? '❚❚' : '▶'}
+          </button>
+          <button
+            onClick={resetCamera}
+            title={t('cayley3d.resetView')}
+            aria-label={t('cayley3d.resetView')}
+            style={{
+              background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
+              border: '1px solid var(--border-primary)', borderRadius: 8, padding: '6px 10px',
+              fontSize: 13, cursor: 'pointer', fontFamily: 'monospace'
+            }}
+          >
+            ⟲
+          </button>
+        </div>
+      </Html>
 
-      {currentGroup && cayleyActions.length > 0 && (
+      {actions.length > 0 && (
         <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
           <div style={{
             position: 'absolute', top: 10, left: 10,
@@ -615,9 +657,9 @@ function SceneContent() {
             fontFamily: 'monospace', pointerEvents: 'none'
           }}>
             <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
-              {cayleyMultiplyType === 'right' ? t('cayley3d.multiplyRight') : t('cayley3d.multiplyLeft')}
+              {multiplyType === 'right' ? t('cayley3d.multiplyRight') : t('cayley3d.multiplyLeft')}
             </div>
-            {cayleyActions.filter(a => a.enabled).map(action => {
+            {actions.filter(a => a.enabled).map(action => {
               const label = actionLabelMap.get(action.elementId) || action.elementId
               return (
                 <div key={action.elementId} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
@@ -653,7 +695,7 @@ function SceneContent() {
       })}
 
       {positions.map((pos, i) => {
-        const el = currentGroup.elements[i]
+        const el = group.elements[i]
         if (isLargeGroup && !visibleElementIds.has(el.id)) return null
         const isSelected = selectedElements.has(el.id)
         const parentSubset = subsetOf.get(el.id)
@@ -662,11 +704,13 @@ function SceneContent() {
             key={el.id}
             position={pos}
             label={el.label}
-            color={getElementColor(i, currentGroup.order, currentGroup.isAbelian)}
+            color={getElementColor(i, group.order, group.isAbelian)}
             isSelected={isSelected}
             isHovered={hoverElement?.id === el.id}
             subsetColor={parentSubset ? parentSubset.color : null}
             element={el}
+            nodeScale={nodeScale}
+            showLabel={showLabels}
             onSelectElement={selectElement}
             onPointerEnter={setHoverElement}
             onPointerLeave={setHoverElement}
@@ -678,12 +722,13 @@ function SceneContent() {
   )
 }
 
-export function Cayley3DView() {
-  const { currentGroup } = useGroup()
+/** 受控 3D 凯莱图（props 驱动；ViewWindow 与测试用）。空群渲染占位，非空渲染 R3F 场景。 */
+export function Cayley3DScene(props: Cayley3DSceneProps) {
+  const { group } = props
   const { t } = useTranslation()
   const { theme } = useTheme()
 
-  if (!currentGroup) {
+  if (!group) {
     return (
       <div className="view-empty">
         <p>{t('canvas.noGroup')}</p>
@@ -701,8 +746,33 @@ export function Cayley3DView() {
         style={{ width: '100%', height: '100%' }}
       >
         <color attach="background" args={[bgColor]} />
-        <SceneContent />
+        <Cayley3DSceneBody {...props} group={group} />
       </Canvas>
     </div>
+  )
+}
+
+/** 主应用入口（context 组装壳）：从全局 Provider 组装 Cayley3DScene 所需 props（保留原行为） */
+export function Cayley3DView() {
+  const {
+    currentGroup, selectedElements, selectElement,
+    cayleyActions, cayleyMultiplyType, cayleyShape3D, subsets
+  } = useGroup()
+
+  const subsetHighlights = useMemo(
+    () => (subsets ?? []).map(({ elementIds, color }) => ({ elementIds, color })),
+    [subsets],
+  )
+
+  return (
+    <Cayley3DScene
+      group={currentGroup}
+      selectedElements={selectedElements}
+      onSelectElement={selectElement}
+      actions={cayleyActions}
+      multiplyType={cayleyMultiplyType}
+      layout3D={cayleyShape3D}
+      subsetHighlights={subsetHighlights}
+    />
   )
 }

@@ -76,7 +76,7 @@
 | core/descriptor.test.ts | 5 | FGVE 阶段 2 批次一：GroupDescriptor v1 序列化协议（serializeDescriptor/deserializeDescriptor/descriptorToSymbol 全群族 round-trip 幂等、symbol/order 恢复、schema 校验拒绝非法） |
 | core/viewConfig.test.ts | 8 | FGVE 阶段 2 批次一：ViewConfig JSON 化（ViewWindowConfig/SetViewParams/CayleyActionParam/CayleyViewParams/ViewWindowGeometry/ViewWindowPersistData 全 zod schema 解析、actions 上限 240 拒绝、缺省值回退、非法字段静默丢弃） |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，11 文件 / 84 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，13 文件 / 101 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -84,7 +84,9 @@
 | AccordionSection.component.test.tsx | 8 | 折叠面板：默认收起/defaultOpen/点击切换箭头 open 类/受控 open=false 覆盖点击/受控 true 常开/onToggle 回调/icon+badge 渲染/结构类名 |
 | TabBar.component.test.tsx | 8 | 标签栏：默认首个 active/只渲染 active 内容/点击切换/defaultTab 覆盖/compact 隐藏 label 留 icon+title/非 compact 完整渲染/结构类名/空 tabs 不崩 |
 | CayleyView.component.test.tsx | 13 | FGVE 阶段 2 批次一受控凯莱视图（CayleyView.tsx）：C₄ 默认 4 节点/4 有向边/1 marker、identity 作用自环裁剪、自逆元素无向边、S₃ 左/右乘边集不同、D₄ 双生成元（r 有向+s 无向）、nodeRadius/showLabels 参数（showLabels=false 不渲染 foreignObject）、选中金圈高亮、每实例唯一 marker id（cv{n} 前缀防多窗口冲突）、normalizeCayleyActions（bogus 过滤/默认色/enabled:false 无 marker）、actions=[] 无有向边、group=null 空态、**hoveredElementId 在该节点外圈绘制 #4ecdc4 青色高亮环（无 hoveredElementId 时无环）** |
+| Cayley3DView.component.test.tsx | 9 | FGVE 阶段 2 批次二受控 3D 凯莱视图（Cayley3DScene，R3F/drei/i18n/theme mock）：group=null .view-empty 占位、C₄ 默认 4 节点球/4 有向边（cylinder+cone）/0 自环、actions 归一化（bogus 过滤+enabled:false 无边、[] 显式空）、恒等元作用 4 自环（torusGeometry）、S₃ 左/右乘边长多重集不同（cylinderGeometry args[2] 边长 attribute，React19 happy-dom 对象 props 序列化 '[object Object]' 不可读）、nodeScale 球半径 0.42→0.84、autoRotate 受控（▶/❚❚ 工具条联动）、showLabels=false 无选中标签（gv-html-overlay 计数）、layout3D 缺省 getDefaultLayout3D + 覆盖不崩 |
 | CayleyWindowParams.component.test.tsx | 8 | 凯莱受控窗口（ViewWindow view=cayley）：C₄ 默认渲染、C₁₂ 形状下拉可选列表+默认 circular、参数面板受控回调（shape2D/multiplyType 累积）、edge-action 单元素 checkbox 翻 enabled/None→[]/All→全作用、versioned 持久化（gv-vw- 键 + __gvVersion 信封 + debounce）、坏 schema 回退默认不崩溃、默认持久化键含视图名、缩放滑块无双应用 transform（**面板无 Show labels/LOD 开关，复选框 7 个**） |
+| Cayley3DWindowParams.component.test.tsx | 8 | FGVE 阶段 2 批次二 3D 受控窗口（ViewWindow view=3d，R3F mock 同上）：C₄ 默认渲染（4 球/4 边）、面板控件清单（Layout select=cone/circular 默认 circular、滑杆 1 个=Node size、复选框 9 个=6 配置+AutoRotate+ShowLabels+1 作用边、All/None）、**3D 下窗口 zoom slider 隐藏（内容区无 range）**、受控回灌（layout3D/multiplyType/autoRotate/nodeScale 累积载荷）、edge-action checkbox/All（'3d' 视图路径）/None、versioned 持久化信封 viewParams.multiplyType、坏 schema 回退（layout3D:'bogus'/nodeScale:99 整体拒绝→默认 circular）、持久化键含 \|3d（与 cayley 不碰撞） |
 | ViewWindowParams.component.test.tsx | 9 | set 视图受控窗口（ViewWindow view=set）参数：nodeRadius/gap/columns/showLabels 同步、锁定（locked 禁拖/zoomLocked 禁缩放/resizable:false 隐藏手柄）、Reset to defaults 恢复、参数面板开关、**嵌入 chrome：showControls=false 隐藏全部标题栏按钮、showZoomSlider=false 隐藏滑杆（ctrl+wheel 仍可用）、hover HUD 就地气泡——悬停节点旁浮出"元素名 + 阶"+ 指向节点的小三角 + 节点青色高亮环，节点靠顶部时翻转到节点下方，离场消失** |
 | CycleTableWindowParams.component.test.tsx | 9 | cycle/table 受控窗口（ViewWindow view=cycle/table）：CycleView 参数面板（showMaximalCycles 勾选/nodeRadius 滑块；无 Show labels——窗口默认隐藏元素标签 foreignObject=0）受控回调、点击元素高亮所在极大循环（fill-opacity 0.18 + ⟨g⟩≅Z_n 标注）、TableView 参数面板（strategy 下拉=子群展示/随机展示/全量展示、cellSize、forceShowLargeGroup 勾选）受控回调、窗口最小尺寸（最小面积撑大）、defaultSize 应用、坏 schema 回退默认 |
 | CycleView.integration.test.tsx | 1 | 循环图视图集成（Workspace→循环图卡片）：S3 极大循环 = 花瓣——≥1 闭合多边形 + ≥3 条 2 阶叶柄线段（非圆形），视图切换回退后无花瓣 |

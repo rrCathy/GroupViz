@@ -2,7 +2,14 @@ export type ViewMode = 'set' | 'cayley' | 'cycle' | 'table' | 'heatmap' | '3d' |
 
 export type MultiplyType = 'right' | 'left'
 
-export type Layout3D = 'cone' | 'circular' | 'dihedral' | 'cylinder' | 'torus' | 'tetrahedron' | 'cube' | 'hexagon' | 'cuboctahedron' | 'lattice' | 'semidirectCylinder' | 'truncatedTetrahedron' | 'truncatedCube' | 'rhombicuboctahedron' | 'truncatedOctahedron2' | 'truncatedOctahedron3' | 'truncatedIcosahedron' | 'truncatedDodecahedron' | 'hypercube'
+export const LAYOUTS_3D = [
+  'cone', 'circular', 'dihedral', 'cylinder', 'torus', 'tetrahedron', 'cube', 'hexagon',
+  'cuboctahedron', 'lattice', 'semidirectCylinder', 'truncatedTetrahedron', 'truncatedCube',
+  'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3', 'truncatedIcosahedron',
+  'truncatedDodecahedron', 'hypercube',
+] as const
+
+export type Layout3D = typeof LAYOUTS_3D[number]
 
 export const CAYLEY_SHAPES_2D = [
   'cone', 'grid', 'circular', 'concentric', 'dualRing', 'archimedean', 'spiral', 'coil',

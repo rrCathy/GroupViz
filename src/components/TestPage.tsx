@@ -26,6 +26,7 @@ export default function TestPage() {
   const { viewWindowTheme, toggleViewWindowTheme } = useTheme();
   const [lockCfg, setLockCfg] = useState<{ locked?: boolean; zoomLocked?: boolean }>({ locked: true, zoomLocked: true });
   const [ctlParams, setCtlParams] = useState<ViewParams>({});
+  const [ctl3d, setCtl3d] = useState<ViewParams>({ autoRotate: true, multiplyType: 'left' });
 
   const handleResetAll = () => {
     setLockCfg({});
@@ -146,12 +147,36 @@ export default function TestPage() {
         defaultPosition={{ x: 820, y: 2580 }} defaultSize={{ width: 300, height: 300 }}
         viewParams={{ strategy: 'subgroup' }} />
 
-      <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 480 }}>
+      <div style={{ ...row, marginTop: 380 }}>
+        <div style={card}><div style={label}>C₄ 3D 默认</div>cone 布局 + 生成元边（轨道相机）</div>
+        <div style={card}><div style={label}>S₃ 3D 六边形</div>layout3D=hexagon，切形状相机回正</div>
+        <div style={card}><div style={label}>D₄ 3D 受控</div>autoRotate+左乘，viewParams 受控模式</div>
+        <div style={card}><div style={label}>C₄ 3D 锁定插图</div>locked 禁相机交互，无标签</div>
+      </div>
+
+      <ViewWindow view="3d" group={c4} title="C₄ · 3D 默认" storageKey="test-3d-c4-def"
+        defaultPosition={{ x: 20, y: 2960 }} defaultSize={{ width: 380, height: 320 }} />
+      <ViewWindow view="3d" group={s3} title="S₃ · 3D 六边形" storageKey="test-3d-s3-hex"
+        defaultPosition={{ x: 420, y: 2960 }} defaultSize={{ width: 380, height: 320 }}
+        viewParams={{ layout3D: 'hexagon' }} />
+      <ViewWindow view="3d" group={d4} title="D₄ · 3D 受控" storageKey="test-3d-d4-ctl"
+        defaultPosition={{ x: 820, y: 2960 }} defaultSize={{ width: 380, height: 320 }}
+        viewParams={ctl3d} onViewParamsChange={setCtl3d} />
+      <ViewWindow view="3d" group={c4} title="C₄ · 3D 锁定" storageKey="test-3d-c4-lock"
+        defaultPosition={{ x: 20, y: 3320 }} defaultSize={{ width: 380, height: 320 }}
+        config={{ locked: true, resizable: false, showInfo: true }}
+        viewParams={{ showLabels: false }} />
+
+      <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 720 }}>
         每个窗口独立持久化（key: gv-vw-test-*），位置/尺寸/参数刷新恢复。
         覆盖：nodeRadius 极值(10/60)、gap 极值(2/30)、columns 强制(1/3)、
         showLabels 关闭、locked/zoomLocked 锁定、showInfo 隐藏；
         凯莱窗口覆盖：形状切换（circular/dualRing/spiral）、左/右乘、
         作用边元素勾选（All/None）、节点拖拽、选中高亮、受控参数模式；
+        3D 窗口覆盖：Layout 形状切换（cone/hexagon，相机自动回正）、左/右乘、
+        Node size 滑杆、Auto rotate、Show labels、Edge actions 勾选（All/None）、
+        轨道相机（拖拽旋转/滚轮缩放/右键平移/双击复位）、locked 禁相机交互、
+        窗口 Ctrl+滚轮不产生 ct 缩放、受控参数模式、持久化 key 含 |3d；
         循环图窗口覆盖：showMaximalCycles 切换、节点半径、标签开关；
         乘法表窗口覆盖：strategy（subgroup/random/full）、单元格尺寸、全屏导出；
         热力图窗口覆盖：纯色块无文字、无最小尺寸（可缩到很小）、strategy 抽样。

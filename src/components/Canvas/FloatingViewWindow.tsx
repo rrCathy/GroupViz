@@ -22,13 +22,15 @@ import { PresentationTableView } from './PresentationTableView'
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
-import type { ViewWindowConfig, SetViewParams, CayleyViewParams, CycleViewParams, TableViewParams, TableStrategy } from '../../core/types/viewConfig'
-import { setViewParamsSchema, cayleyViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema } from '../../core/types/viewConfig'
+import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, CycleViewParams, TableViewParams, TableStrategy } from '../../core/types/viewConfig'
+import { setViewParamsSchema, cayleyViewParamsSchema, cayley3DViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema } from '../../core/types/viewConfig'
 import { getDefaultShape2D, getAvailableShapesForView } from '../../core/types'
+import { getDefaultLayout3D, getAvailableShapes3D } from '../../core/types'
 import { getViewBoxSize } from '../../core/viewBox'
-import type { CayleyShape2D } from '../../core/types'
+import type { CayleyShape2D, Layout3D } from '../../core/types'
 import { toggleCayleyActionReducer, addAllCayleyActionsHelper, normalizeCayleyActions } from '../../context/cayleyActions'
 import { CayleyView } from './CayleyView'
+import { Cayley3DScene } from './Cayley3DView'
 import { loadVersionedJson, saveVersionedJson, removeStoredKey } from '../../utils/persistence'
 import { VIEWWINDOW_RESET_EVENT } from '../../utils/resetViewWindows'
 import { z } from 'zod'
@@ -648,7 +650,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
 
 // ── Controlled ViewWindow (FGVE engine) ─────────────────────
 
-export type ViewParams = SetViewParams | CayleyViewParams | CycleViewParams | TableViewParams
+export type ViewParams = SetViewParams | CayleyViewParams | Cayley3DViewParams | CycleViewParams | TableViewParams
 
 interface ViewWindowProps {
   view: ViewMode
@@ -806,10 +808,11 @@ export function ViewWindow({
     if (persisted) {
       // 按视图用对应 schema 校验持久化参数：键残留他视图参数/手改坏值时回退默认
       const schema = view === 'cayley' ? cayleyViewParamsSchema
-        : view === 'set' ? setViewParamsSchema
-          : view === 'cycle' ? cycleViewParamsSchema
-            : (view === 'table' || view === 'heatmap') ? tableViewParamsSchema
-              : null
+        : view === '3d' ? cayley3DViewParamsSchema
+          : view === 'set' ? setViewParamsSchema
+            : view === 'cycle' ? cycleViewParamsSchema
+              : (view === 'table' || view === 'heatmap') ? tableViewParamsSchema
+                : null
       if (schema) {
         const parsed = schema.safeParse(persisted.viewParams)
         if (parsed.success) return parsed.data as ViewParams
@@ -862,7 +865,7 @@ export function ViewWindow({
     onConfigChange?.(next)
   }, [config, configProp, onConfigChange])
 
-  const updateViewParams = useCallback((p: Partial<SetViewParams> | Partial<CayleyViewParams> | Partial<CycleViewParams> | Partial<TableViewParams>) => {
+  const updateViewParams = useCallback((p: Partial<SetViewParams> | Partial<CayleyViewParams> | Partial<Cayley3DViewParams> | Partial<CycleViewParams> | Partial<TableViewParams>) => {
     // 参数对象按 view 判别（同一时刻只属于一种视图），跨类型合并不需要判别字段
     const next = { ...(viewParamsProp ?? viewParams), ...p } as ViewParams
     if (!viewParamsProp) setViewParams(next)
@@ -972,6 +975,7 @@ export function ViewWindow({
     const el = viewportRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
+      if (view === '3d') return
       if (!e.ctrlKey && !e.metaKey) return
       if (config.zoomLocked) return
       e.preventDefault()
@@ -989,13 +993,14 @@ export function ViewWindow({
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [ct, config.zoomLocked, contentW, contentH])
+  }, [ct, config.zoomLocked, contentW, contentH, view])
 
   const onCtMDown = useCallback((e: React.MouseEvent) => {
+    if (view === '3d') return
     if (config.locked || config.zoomLocked) return
     if ((e.target as HTMLElement).closest('circle') || (e.target as HTMLElement).closest('foreignObject')) return
     ctDragRef.current = { sx: e.clientX, sy: e.clientY, tx: ct.x, ty: ct.y, active: true }
-  }, [ct, config.locked, config.zoomLocked])
+  }, [ct, config.locked, config.zoomLocked, view])
 
   // 缩放围绕视图中心而非原点：避免凯莱图（默认居中）被"推"向左上并被裁剪
   const setZoomScale = useCallback((v: number) => {
@@ -1128,6 +1133,26 @@ export function ViewWindow({
       )
     }
 
+    if (view === '3d') {
+      // 3D 相机自管理（轨道/滚轮/平移），不吃窗口 ct；hover 反馈由 3D 场景内 Html 标签承担
+      const p3 = viewParams as Cayley3DViewParams
+      return (
+        <Cayley3DScene
+          key={`3d-${group.symbol}-${group.order}`}
+          group={group}
+          selectedElements={sel}
+          onSelectElement={handleSelect}
+          actions={p3.actions}
+          multiplyType={p3.multiplyType}
+          layout3D={p3.layout3D}
+          nodeScale={p3.nodeScale}
+          autoRotate={p3.autoRotate}
+          showLabels={p3.showLabels}
+          locked={config.locked}
+        />
+      )
+    }
+
     if (view === 'cycle') {
       const cyvp = viewParams as CycleViewParams
       return (
@@ -1235,6 +1260,29 @@ export function ViewWindow({
     [cayleyActionsList],
   )
 
+  // ── cayley3d 视图参数面板数据（与 Cayley3DScene 渲染层同一套缺省/归一化规则） ──
+  const shapes3d = useMemo<Layout3D[]>(
+    () => (view === '3d' && group ? getAvailableShapes3D(group) : []),
+    [view, group],
+  )
+  const p3d = viewParams as Cayley3DViewParams
+  const layout3dDefault = useMemo<Layout3D>(
+    () => (group ? getDefaultLayout3D(group) : 'cone'),
+    [group],
+  )
+  const layout3dValue: Layout3D =
+    view === '3d' && p3d.layout3D && shapes3d.includes(p3d.layout3D)
+      ? p3d.layout3D
+      : layout3dDefault
+  const cayley3dActionsList = useMemo(
+    () => (view === '3d' && group ? normalizeCayleyActions(group, p3d.actions) : []),
+    [view, group, p3d.actions],
+  )
+  const cayley3dEnabledCount = useMemo(
+    () => cayley3dActionsList.filter(a => a.enabled).length,
+    [cayley3dActionsList],
+  )
+
   // Params panel floats OUTSIDE the window frame as a sibling overlay (a child would be
   // clipped by the window's overflow:hidden): docked to the window's right edge, flipping
   // to its left side when that would overflow the viewport. Follows drag/resize because
@@ -1305,8 +1353,9 @@ export function ViewWindow({
                 直接渲染，不再包外层 <svg>（避免嵌套 svg 冗余 viewport） */}
             {renderContent()}
 
-            {/* zoom slider overlay (avoids wheel/page-scroll conflict) */}
-            {showZoomSlider && (
+            {/* zoom slider overlay (avoids wheel/page-scroll conflict)；
+                3D 相机自带滚轮缩放，窗口滑杆/ct 不参与 */}
+            {showZoomSlider && view !== '3d' && (
               <div style={{
                 position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
                 display: 'flex', alignItems: 'center', gap: 4,
@@ -1331,7 +1380,7 @@ export function ViewWindow({
                 data-testid="figure-hint"
                 style={{
                   position: 'absolute',
-                  bottom: showZoomSlider ? 48 : 12, left: '50%', transform: 'translateX(-50%)',
+                  bottom: showZoomSlider && view !== '3d' ? 48 : 12, left: '50%', transform: 'translateX(-50%)',
                   display: 'flex', alignItems: 'center', gap: 6,
                   background: 'rgba(15,23,42,0.75)', border: '1px solid rgba(78,205,196,0.4)',
                   borderRadius: 8, padding: '5px 14px', zIndex: 6, fontSize: 12,
@@ -1510,6 +1559,78 @@ export function ViewWindow({
                       <label key={a.elementId} title={a.elementId} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, cursor: 'pointer' }}>
                         <input type="checkbox" checked={a.enabled}
                           onChange={() => updateViewParams({ actions: toggleCayleyActionReducer(cayleyActionsList, a.elementId) })} />
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
+                        <span
+                          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          dangerouslySetInnerHTML={{ __html: renderTex(texify(el?.label ?? a.elementId)) }}
+                        />
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+
+          {view === '3d' && group && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Cayley 3D View</div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Layout</div>
+                <select
+                  value={layout3dValue}
+                  onChange={e => updateViewParams({ layout3D: e.target.value as Layout3D })}
+                  style={{
+                    width: '100%', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-primary)', borderRadius: 4, padding: '2px 4px',
+                  }}
+                >
+                  {shapes3d.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Multiply</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button title="Right multiply a·c" style={segBtn(p3d.multiplyType !== 'left')}
+                    onClick={() => updateViewParams({ multiplyType: 'right' })}>a·c</button>
+                  <button title="Left multiply c·a" style={segBtn(p3d.multiplyType === 'left')}
+                    onClick={() => updateViewParams({ multiplyType: 'left' })}>c·a</button>
+                </div>
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Node size</div>
+                <input type="range" min={0.5} max={2} step={0.1} value={p3d.nodeScale ?? 1}
+                  onChange={e => updateViewParams({ nodeScale: Number(e.target.value) })} style={{ width: '100%' }} />
+                <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>×{(p3d.nodeScale ?? 1).toFixed(1)}</span>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <input type="checkbox" checked={!!p3d.autoRotate}
+                  onChange={e => updateViewParams({ autoRotate: e.target.checked })} />
+                Auto rotate
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <input type="checkbox" checked={p3d.showLabels !== false}
+                  onChange={e => updateViewParams({ showLabels: e.target.checked })} />
+                Show labels
+              </label>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600 }}>Edge actions</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayley3dEnabledCount}/{cayley3dActionsList.length}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                  <button title="Add every element as an action" style={MINI_BTN}
+                    onClick={() => updateViewParams({ actions: addAllCayleyActionsHelper(group, '3d', layout3dValue, cayley3dActionsList) })}>All</button>
+                  <button title="Clear all actions (no edges)" style={MINI_BTN}
+                    onClick={() => updateViewParams({ actions: [] })}>None</button>
+                </div>
+                <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                  {cayley3dActionsList.map(a => {
+                    const el = group.elements.find(e => e.id === a.elementId)
+                    return (
+                      <label key={a.elementId} title={a.elementId} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={a.enabled}
+                          onChange={() => updateViewParams({ actions: toggleCayleyActionReducer(cayley3dActionsList, a.elementId) })} />
                         <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
                         <span
                           style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}

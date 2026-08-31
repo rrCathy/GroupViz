@@ -132,7 +132,7 @@ GVL 阶段消费 FGVE 已产出的 `@groupviz/core` + `@groupviz/react` 包（�
 | 阶段 | 验收标准 |
 |------|----------|
 | 近期 | 全部交付收官（含 GAP 大群计算引擎 v1.13.0，E1 已关闭）；lint/test/build 全绿；覆盖率 ≥ 85% |
-| 中期 | `GroupDescriptor v1` round-trip 可用（全群族幂等）；视图组件 props 化拆分完成四批（第一批 set/cayley/cycle/table）；`@groupviz/core`/`@groupviz/react` 双包可构建、`examples/host-minimal/` 最小宿主（JSON 载群→渲染→切形状→导出 SVG）CI 冒烟通过；特征标表视图上线 |
+| 中期 | `GroupDescriptor v1` round-trip 可用（全群族幂等）；视图组件 props 化拆分完成四批（批次一 set/cayley/cycle/table ✅ v1.17.0、批次二 3d ✅ v1.18.0，余 sublattice/cosetstrip/homomorphism/action/sylow/symmetry/tree/prestable）；`@groupviz/core`/`@groupviz/react` 双包可构建、`examples/host-minimal/` 最小宿主（JSON 载群→渲染→切形状→导出 SVG）CI 冒烟通过；特征标表视图上线 |
 | 远期 | 教育模式上线；≥ 1 套完整大学抽象代数课程；教师"制作场景 → 分享 → 学生作答"闭环可用 |
 
 ## 5. 决策记录

@@ -42,6 +42,8 @@ lighthouse/
 .serena/
 .mimosa/
 .zcode/
+.commandcode/
+.workbuddy/
 
 # Test-page matrix captures (browser verification dumps)
 test-page/

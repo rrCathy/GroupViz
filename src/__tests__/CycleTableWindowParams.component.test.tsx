@@ -25,6 +25,8 @@ describe('ViewWindow · cycle view', () => {
     // 4 个元素节点（带 node-shadow 滤镜），另有 2 个循环中心小圆点不计入
     const nodeCircles = [...win.querySelectorAll('circle')].filter(c => c.getAttribute('filter')?.includes('node-shadow'))
     expect(nodeCircles).toHaveLength(4)
+    // 循环图窗口类似凯莱图：默认不显示元素标签（无 foreignObject label）
+    expect(win.querySelectorAll('foreignObject')).toHaveLength(0)
   })
 
   it('params panel offers cycle controls (maximal/radius/labels/captions)', () => {
@@ -34,10 +36,9 @@ describe('ViewWindow · cycle view', () => {
     )
     const panel = openPanel()
     expect(screen.getByText('Cycle View')).toBeInTheDocument()
-    // 节点半径 1 个滑杆；4 窗口配置 + 3 循环配置复选框
+    // 节点半径 1 个滑杆；4 窗口配置 + 2 循环配置复选框（无 Show labels，窗口默认隐藏标签）
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(1)
     expect(screen.getByText('Maximal cycles only')).toBeInTheDocument()
-    expect(screen.getByText('Show labels')).toBeInTheDocument()
     expect(screen.getByText('Show ⟨g⟩ ≅ Zₙ captions')).toBeInTheDocument()
   })
 
@@ -52,6 +53,20 @@ describe('ViewWindow · cycle view', () => {
     const checkbox = screen.getByText('Maximal cycles only').closest('label')!.querySelector('input')!
     fireEvent.click(checkbox)
     expect(onChange.mock.lastCall?.[0]).toMatchObject({ showMaximalCycles: true })
+  })
+
+  it('clicking an element highlights the maximal cycle containing it', () => {
+    const { container } = render(
+      <ViewWindow view="cycle" group={c4} title="C₄ 循环" storageKey="cyc-hl"
+        defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }} />,
+    )
+    const win = container.firstElementChild as HTMLElement
+    // 点击第一个非单位元节点 → 所在极大循环被高亮（彩色填充 + 加粗 + ⟨g⟩≅Z_n 标注）
+    const nodeCircle = [...win.querySelectorAll('circle')].find(c => c.getAttribute('filter')?.includes('node-shadow'))
+    fireEvent.click(nodeCircle as Element)
+    const hlPath = win.querySelector('path[fill-opacity="0.18"]')
+    expect(hlPath).not.toBeNull()
+    expect(win.textContent).toContain('≅ Z4')
   })
 })
 

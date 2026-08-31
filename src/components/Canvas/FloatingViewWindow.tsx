@@ -1139,7 +1139,7 @@ export function ViewWindow({
           viewBoxSize={vbSize}
           showMaximalCycles={cyvp.showMaximalCycles}
           nodeRadius={cyvp.nodeRadius}
-          showLabels={cyvp.showLabels}
+          showLabels={false}
           showCycleLabels={cyvp.showCycleLabels}
           locked={config.locked}
           onSelect={handleSelect}
@@ -1537,11 +1537,6 @@ export function ViewWindow({
                   onChange={e => updateViewParams({ nodeRadius: Number(e.target.value) })} style={{ width: '100%' }} />
                 <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cycleVp.nodeRadius ?? 24}px</span>
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <input type="checkbox" checked={cycleVp.showLabels !== false}
-                  onChange={e => updateViewParams({ showLabels: e.target.checked })} />
-                Show labels
-              </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="checkbox" checked={cycleVp.showCycleLabels !== false}
                   onChange={e => updateViewParams({ showCycleLabels: e.target.checked })} />

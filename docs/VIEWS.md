@@ -19,6 +19,7 @@
 - 极大模式画风：细实线多边形、无填充、无虚线、无 `⟨g⟩ ≅ Z_n` 标注（对齐 Nathan Carter《群论彩图版》/ Group Explorer）
 - `showMaximalCycles` 默认 **true**（只画极大循环）；关掉后回退到「全部循环 + 彩色虚线标注」的诊断视图
 - 2 阶极大循环（V₄ 的三条线段）以 `<line>` 呈现，≥3 阶以闭合多边形呈现
+- 浮动窗口（ViewWindow view=cycle）类似凯莱图：默认不显示元素标签（showLabels=false）；点击元素→高亮显示它所在极大循环（CYCLE_COLORS 彩色填充 fillOpacity 0.18 + strokeWidth 4 + ⟨g⟩≅Z_n 标注）
 
 ## 4. 乘法表 (TableView.tsx)
 

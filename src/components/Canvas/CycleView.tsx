@@ -222,8 +222,13 @@ export function CycleView({
             i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
           ).join(' ') + ' Z'
 
+          const isHighlighted =
+            selectedElements.size > 0 && cycle.elements.some(el => selectedElements.has(el.id))
+          const cycleColor = CYCLE_COLORS[cycleIdx % CYCLE_COLORS.length]
+
           if (showMaximalCycles) {
             // GE 风格：细实线，无填充、无虚线、无 ⟨g⟩≅Z_n 标注；2 阶循环画成线段
+            // 高亮模式（窗口点击元素后显示它所在的循环）：彩色填充 + 加粗 + ⟨g⟩≅Z_n 标注
             if (positions.length === 2) {
               return (
                 <line
@@ -232,21 +237,37 @@ export function CycleView({
                   y1={positions[0].y}
                   x2={positions[1].x}
                   y2={positions[1].y}
-                  stroke="var(--text-muted)"
-                  strokeWidth={1.5}
+                  stroke={isHighlighted ? cycleColor : 'var(--text-muted)'}
+                  strokeWidth={isHighlighted ? 4 : 1.5}
                   strokeLinecap="round"
                 />
               )
             }
+            const midX = positions.reduce((s, p) => s + p.x, 0) / positions.length
+            const midY = positions.reduce((s, p) => s + p.y, 0) / positions.length
             return (
-              <path
-                key={cycleIdx}
-                d={pathD}
-                fill="none"
-                stroke="var(--text-muted)"
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-              />
+              <g key={cycleIdx}>
+                <path
+                  d={pathD}
+                  fill={isHighlighted ? cycleColor : 'none'}
+                  fillOpacity={isHighlighted ? 0.18 : undefined}
+                  stroke={isHighlighted ? cycleColor : 'var(--text-muted)'}
+                  strokeWidth={isHighlighted ? 4 : 1.5}
+                  strokeLinejoin="round"
+                />
+                {isHighlighted && showCycleLabels && (
+                  <text
+                    x={midX}
+                    y={midY - 12}
+                    textAnchor="middle"
+                    fill={cycleColor}
+                    fontSize={10}
+                    fontFamily="serif"
+                  >
+                    {'⟨'}{cycle.generatorLabel}{'⟩ ≅ Z'}{cycle.order}
+                  </text>
+                )}
+              </g>
             )
           }
 

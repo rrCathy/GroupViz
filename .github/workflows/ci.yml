@@ -8,7 +8,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend (lint / test / build)
+    name: Frontend (lint / test / pkg build / app build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +19,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run test
+      # 双包产物（主应用 build + host-minimal 消费依赖 dist-pkg/ 存在）
+      - run: npm run build:pkg
       - run: npm run build
       - name: Coverage report
         run: npm run test:coverage

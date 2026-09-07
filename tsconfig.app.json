@@ -22,7 +22,13 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* FGVE 双包消费（TestPage 懒加载区块）：产物 d.ts 路径映射 */
+    "paths": {
+      "@groupviz/core": ["./dist-pkg/@groupviz/core/index.d.ts"],
+      "@groupviz/react": ["./dist-pkg/@groupviz/react/package/react.d.ts"]
+    }
   },
   "include": ["src"]
 }

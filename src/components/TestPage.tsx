@@ -3,7 +3,7 @@
  * 测试所有可通过代码传入的参数组合（包括 UI 控件范围外的边界值）
  * 用法：src/main.tsx 临时改为挂载 <TestPage />
  */
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { ViewWindow } from './Canvas/FloatingViewWindow'
 import type { ViewParams } from './Canvas/FloatingViewWindow'
 import { resetAllViewWindows } from '../utils/resetViewWindows';
@@ -16,6 +16,9 @@ import { createKleinFour } from '../core/groups/SpecialGroup';
 import { useTheme } from '../theme/useTheme';
 import { naturalProjectionMapping, verifyHomomorphism, extendFromGenerators } from '../core/algebra/homomorphisms';
 import type { Homomorphism } from '../core/types';
+
+// FGVE 阶段3：懒加载「双包消费验证」区块（dist-pkg 产物，独立 chunk 不进主 bundle）
+const PkgConsume = lazy(() => import('./TestPagePkgConsume'));
 
 const row = { display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 12 };
 const card: React.CSSProperties = { background: '#1e293b', borderRadius: 8, padding: 8, fontSize: 12, color: '#94a3b8', flex: 1, minWidth: 140, maxWidth: 200 };
@@ -101,6 +104,10 @@ export default function TestPage() {
           >↺ 一键重置所有窗口</button>
         </div>
       </div>
+
+      <Suspense fallback={<div style={{ color: '#94a3b8', padding: 8 }}>加载双包消费验证区块…</div>}>
+        <PkgConsume />
+      </Suspense>
 
       <div style={row}>
         <div style={card}><div style={label}>C₄ 默认</div>无自定义参数，纯默认布局</div>

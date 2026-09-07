@@ -368,6 +368,31 @@ describe('createGroupFromSymbol with GAP-derived symbols', () => {
     expect(createGroupFromSymbol('D_{16}')).toBeNull()
     expect(createGroupFromSymbol('X_{7}')).toBeNull()
   })
+
+  it('SmallGroup(n,i) resolves every GAP record (order 1-31) exactly', () => {
+    // 回归：此前该记号只对 symbol 冲突改名群（16,13/20,3）生效，其余 91 个全 null。
+    for (const rec of SMALL_GROUP_DATA) {
+      const g = createGroupFromSymbol(`SmallGroup(${rec.n},${rec.i})`)
+      expect(g, `SmallGroup(${rec.n},${rec.i})`).not.toBeNull()
+      expect(g!.order, `SmallGroup(${rec.n},${rec.i}).order`).toBe(rec.n)
+    }
+    // GAP 精确语义抽样（不经 registry 手写序 → order 12 不再错位）：
+    expect(createGroupFromSymbol('SmallGroup(12,1)')!.symbol).toBe('C_{3}:C_{4}') // GAP(12,1)=C₃:C₄（registry index0 却是 C₁₂）
+    expect(createGroupFromSymbol('SmallGroup(12,2)')!.symbol).toBe('C_{12}')
+    expect(createGroupFromSymbol('SmallGroup(12,3)')!.symbol).toBe('A_{4}')
+    expect(createGroupFromSymbol('SmallGroup(16,2)')!.symbol).toBe('C_{4}\\times C_{4}')
+    expect(createGroupFromSymbol('SmallGroup(24,3)')!.symbol).toBe('SL(2,3)')
+    // 冲突改名群保持注册表语义（symbol = SmallGroup(n,i)，带 precomputed）：
+    expect(createGroupFromSymbol('SmallGroup(16,13)')!.symbol).toBe('SmallGroup(16,13)')
+    expect(createGroupFromSymbol('SmallGroup(20,3)')!.symbol).toBe('SmallGroup(20,3)')
+  })
+
+  it('SmallGroup(n,i) out-of-range returns null (no throw)', () => {
+    expect(createGroupFromSymbol('SmallGroup(16,15)')).toBeNull() // 16 阶只有 14 群
+    expect(createGroupFromSymbol('SmallGroup(32,1)')).toBeNull() // 数据只到 order 31
+    expect(createGroupFromSymbol('SmallGroup(0,1)')).toBeNull()
+    expect(createGroupFromSymbol('SmallGroup(9999,1)')).toBeNull()
+  })
 })
 
 describe('buildOrderGroupsMap (order-based creation panel)', () => {

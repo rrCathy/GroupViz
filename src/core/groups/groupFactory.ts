@@ -7,6 +7,8 @@ import { createKleinFour, createQuaternion } from './SpecialGroup'
 import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3, createZ6xZ2, getSmallGroupBySymbol } from './SmallGroups'
 import { createDirectProduct } from './DirectProduct'
 import { createGL2 } from './GeneralLinearGroup'
+import { createTableGroup } from './SmallGroups/tableGroup'
+import { SMALL_GROUP_DATA } from './smallGroupData'
 
 function parseTexSubscript(symbol: string, prefix: string): number | null {
   const re = new RegExp(`^${prefix}_\\{(\\d+)\\}$`, '')
@@ -142,12 +144,25 @@ export function createGroupFromSymbol(symbol: string): Group | null {
     if (n >= 3 && n <= 6) return createAlternatingGroup(n)
   }
 
-  // SmallGroup(n,i) identifier (GAP convention, i is 1-based)
+  // SmallGroup(n,i) identifier (GAP convention, i is 1-based).
+  // 走 getSmallGroupBySymbol 只能命中 symbol 冲突改名的少数群（registry map
+  // 只在冲突时才存 'SmallGroup(n,i)' 键 → 93 群里仅 16,13 / 20,3 两个）；
+  // 其余群 map 键是 TeX 结构符号，查不到。也不能改走 getSmallGroup(n,i-1)：
+  // registry 的 order≤15 手写条目序 ≠ GAP 序（order 12 尤甚——GAP(12,1)=C₃:C₄
+  // 而 registry index0 是 C₁₂）。GAP 数据表本身按 (n,i) 序存，故 miss 后直查
+  // SMALL_GROUP_DATA 并用 createTableGroup 重建，保证 SmallGroup(n,i) = GAP(n,i) 精确。
   const sgMatch = /^SmallGroup\((\d+),(\d+)\)$/.exec(symbol)
   if (sgMatch) {
     const n = parseInt(sgMatch[1], 10)
     const i = parseInt(sgMatch[2], 10)
-    return getSmallGroupBySymbol(`SmallGroup(${n},${i})`)?.group ?? null
+    // 冲突改名群（registry symbol 即 'SmallGroup(n,i)'）：优先返回注册表条目
+    // （保留改名 symbol + precomputed 子群数据）；其余群注册表查不到走数据表重建。
+    const renamed = getSmallGroupBySymbol(`SmallGroup(${n},${i})`)
+    if (renamed) return renamed.group
+    if (n >= 1 && i >= 1 && SMALL_GROUP_DATA.some(r => r.n === n && r.i === i)) {
+      return createTableGroup(n, i)
+    }
+    return null
   }
 
   // Fallback: look up the SmallGroups registry by symbol (orders 16-31, Dic3, ...)

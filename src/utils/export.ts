@@ -2,16 +2,9 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import type { ViewMode } from '../core/types'
 import { getCayley3DControls } from './cayley3dControls'
 
-export function triggerDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
-}
+// triggerDownload 已抽至零依赖模块 utils/download.ts（FGVE 入包隔离 gifenc），此处 re-export 保持既有 import 兼容。
+import { triggerDownload } from './download'
+export { triggerDownload }
 
 function collectStyleText(): string {
   let css = ''

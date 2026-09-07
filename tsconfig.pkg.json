@@ -11,6 +11,7 @@
     "types": []
   },
   "include": [
+    "src/types",
     "src/core",
     "src/package",
     "src/components/Canvas/SetView.tsx",

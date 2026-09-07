@@ -9,7 +9,7 @@ import {
 import { useTranslation } from '../../i18n/useTranslation'
 import { isTooLarge } from '../../core/viewBox'
 import { findAllSubgroups } from '../../core/algebra/subgroups'
-import { triggerDownload } from '../../utils/export'
+import { triggerDownload } from '../../utils/download'
 import type { CanvasTransform, Group, GroupElement, Subset } from '../../core/types'
 import type { CosetInfo } from '../../core/algebra/subgroups'
 import type { TableStrategy } from '../../core/types/viewConfig'

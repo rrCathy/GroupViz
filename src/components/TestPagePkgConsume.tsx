@@ -14,8 +14,16 @@
  * 注意：改动 src/core 或视图后需先 `npm run build:pkg` 再刷新本页。
  */
 import { useMemo, useState, type ReactNode } from 'react'
-import { createGroupFromSymbol, type Group } from '@groupviz/core'
-import { SetView, CycleView, CayleyView, CosetStripScene, I18nProvider } from '@groupviz/react'
+import {
+  createGroupFromSymbol,
+  buildActionComputation,
+  type Group,
+} from '@groupviz/core'
+import {
+  SetView, CycleView, CayleyView, CosetStripScene, TableView,
+  ActionScene, HomomorphismScene, SublatticeScene, Cayley3DScene, SymmetryViewScene,
+  I18nProvider,
+} from '@groupviz/react'
 
 const CANVAS_TRANSFORM = { x: 40, y: 40, scale: 1 }
 const VIEWBOX = { width: 860, height: 520 }
@@ -62,6 +70,30 @@ export default function TestPagePkgConsume() {
   const group: Group | null = useMemo(() => createGroupFromSymbol(symbol), [symbol])
   const coset = useS3CosetMap()
 
+  // ── 批次十固定 fixture（防 descriptor 生成元约定漂移，全用 multiply 构造） ──
+  const s3 = useMemo(() => createGroupFromSymbol('S_{3}')!, [])
+  // D₄ 对称性：dihedral 演示（variant=false 默认，showFigureTitle 关防双群名）
+  const symD4 = useMemo(() => createGroupFromSymbol('D_{4}')!, [])
+  // S₃ 共轭作用 computation（conjugation 直算，包内 Scene 展示轨道 + 固定点 ★）
+  const s3Conj = useMemo(
+    () => buildActionComputation(s3, { kind: 'conjugation' }).computation ?? null,
+    [s3],
+  )
+  // C₆ → C₂ 满同态（mod 2）：映射按生成元幂构造，不依赖元素 id 约定
+  const homo = useMemo(() => {
+    const c6 = createGroupFromSymbol('C_{6}')!
+    const c2 = createGroupFromSymbol('C_{2}')!
+    const g = c6.generators[0].apply(c6.identity)
+    const r = c2.generators[0].apply(c2.identity)
+    const map = new Map<string, string>()
+    let cur = c6.identity
+    for (let k = 0; k < c6.order; k++) {
+      map.set(cur.id, k % 2 === 0 ? c2.identity.id : r.id)
+      cur = c6.multiply(cur, g)
+    }
+    return { c6, c2, map }
+  }, [])
+
   return (
     // 包内 I18nProvider（语言包入包）：供包内 Scene 读文案；主应用外层 Provider 是另一实例
     <I18nProvider>
@@ -98,6 +130,42 @@ export default function TestPagePkgConsume() {
               cosetColors={coset.colors}
               showLabels
             />
+          </Block>
+        </div>
+        {/* ── 批次十：TableView / ActionScene / HomomorphismScene ── */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+          <Block title="TableView ← @groupviz/react" testid="pkg-table">
+            {group && <div style={{ height: 300, border: '1px solid #1e293b', borderRadius: 6, overflow: 'hidden' }}>
+              <TableView group={group} selectedElements={new Set<string>()} canvasTransform={CANVAS_TRANSFORM} viewBoxSize={VIEWBOX} />
+            </div>}
+          </Block>
+          <Block title="ActionScene ← @groupviz/react（S₃ 共轭 conjugation）" testid="pkg-action">
+            <div style={{ height: 300, border: '1px solid #1e293b', borderRadius: 6, overflow: 'hidden' }}>
+              <ActionScene group={s3} kind="conjugation" computation={s3Conj} canvasTransform={CANVAS_TRANSFORM} viewBoxSize={VIEWBOX} />
+            </div>
+          </Block>
+          <Block title="HomomorphismScene ← @groupviz/react（C₆→C₂ mod 2）" testid="pkg-homo">
+            <div style={{ height: 300, border: '1px solid #1e293b', borderRadius: 6, overflow: 'hidden' }}>
+              <HomomorphismScene source={homo.c6} target={homo.c2} mapping={homo.map} />
+            </div>
+          </Block>
+        </div>
+        {/* ── 批次十：SublatticeScene / Cayley3DScene / SymmetryViewScene（3D 与格，theme 显式 dark 与容器解耦） ── */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+          <Block title="SublatticeScene ← @groupviz/react" testid="pkg-sublattice">
+            {group && <div style={{ height: 300, border: '1px solid #1e293b', borderRadius: 6, overflow: 'hidden' }}>
+              <SublatticeScene group={group} canvasTransform={CANVAS_TRANSFORM} />
+            </div>}
+          </Block>
+          <Block title="Cayley3DScene ← @groupviz/react（theme=dark）" testid="pkg-cayley3d">
+            {group && <div style={{ height: 300, border: '1px solid #1e293b', borderRadius: 6, overflow: 'hidden' }}>
+              <Cayley3DScene group={group} selectedElements={new Set<string>()} theme="dark" />
+            </div>}
+          </Block>
+          <Block title="SymmetryViewScene ← @groupviz/react（D₄，dark）" testid="pkg-symmetry">
+            <div style={{ height: 300, border: '1px solid #1e293b', borderRadius: 6, overflow: 'hidden' }}>
+              <SymmetryViewScene group={symD4} dark showFigureTitle={false} />
+            </div>
           </Block>
         </div>
       </div>

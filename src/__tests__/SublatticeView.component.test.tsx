@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
-import { SublatticeScene } from '../components/Canvas/SubgroupLatticeView'
+import { SublatticeScene } from '../components/Canvas/SublatticeScene'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'

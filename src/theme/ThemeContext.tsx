@@ -2,7 +2,7 @@ import { createContext, useState, useCallback, useEffect, type ReactNode } from 
 
 export type Theme = 'dark' | 'light'
 
-interface ThemeContextValue {
+export interface ThemeContextValue {
   theme: Theme
   toggleTheme: () => void
   /** 视图窗口（浮动窗/ViewWindow）独立的深浅色主题，与主界面 theme 解耦 */

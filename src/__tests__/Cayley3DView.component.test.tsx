@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { render } from '@testing-library/react'
-import { Cayley3DScene } from '../components/Canvas/Cayley3DView'
+import { Cayley3DScene } from '../components/Canvas/Cayley3DScene'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import { getDefaultLayout3D } from '../core/types'

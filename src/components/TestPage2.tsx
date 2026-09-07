@@ -70,15 +70,27 @@ const closing: React.CSSProperties = {
 };
 
 /* ===== 锁定配置 ===== */
-// FIGURE：专注阅读的静态插图——锁定位移、隐藏窗口控件与缩放滑杆，
-//         凯莱图只显示节点和边（不显示节点标签），悬停节点亮起高亮环、就地浮出元素名与阶。
-// LOCKED：保留完整控件的交互式窗口（对照示例，供博客作者按需选择）。
+// FIG_SYM：对称性演示插图——锁定位移与相机、隐藏缩放滑杆；actionLocked 把演示元素「钉」在
+//           viewParams.actionElementId（⚙ 面板元素列表只读、无 Reset），读者只能点浮条 ⟳ Replay
+//           反复重看同一作用——教学插图语义：固定一个对称作用、反复观看，不提供切换。
 const FIGURE = { locked: true, resizable: false, showInfo: true, showControls: false, showZoomSlider: false };
 const LOCKED = { locked: true, resizable: false, showInfo: true };
+const FIG_SYM = { locked: true, resizable: false, showInfo: true, showZoomSlider: false, actionLocked: true };
 
 export default function TestPage2() {
   const a4 = useMemo(() => createAlternatingGroup(4), []);
   const { viewWindowTheme, toggleViewWindowTheme } = useTheme();
+
+  // 取一个 3-循环（阶 3 元素）作为四面体旋转演示：绕「顶点–对面心」轴转 ±120°
+  const a4ThreeCycleId = useMemo(() => {
+    for (const el of a4.elements) {
+      if (el.id === a4.identity.id) continue
+      let cur = el
+      for (let i = 1; i < 3; i++) cur = a4.multiply(cur, el)
+      if (cur.id === a4.identity.id) return el.id
+    }
+    return null
+  }, [a4])
 
   return (
     <div style={page}>
@@ -94,7 +106,7 @@ export default function TestPage2() {
         <h1 style={heroTitle}>群 A₄：正四面体的对称群</h1>
         <p style={heroSub}>
           交错群 A₄ 是 4 个对象上的全部<span style={strong}>偶置换</span>，一共 12 个元素。
-          它既是一类经典的有限群，也是<span style={strong}>正四面体的旋转对称群</span>——下面用五个可交互的可视化窗口，
+          它既是一类经典的有限群,也是<span style={strong}>正四面体的旋转对称群</span>——下面用六个可交互的可视化窗口,
           一步步把它看清楚。
         </p>
         <div style={statsRow}>
@@ -230,6 +242,71 @@ export default function TestPage2() {
               defaultPosition={{ x: 0, y: 0 }} defaultSize={{ width: 396, height: 368 }}
               config={FIGURE} />
             <figcaption style={caption}>图 5 12×12 热力图：颜色 = 结果元素，V₄ 块清晰可见</figcaption>
+          </figure>
+        </section>
+
+        {/* ============ 第 6 节：陪集分解（V₄ 的三条带） ============ */}
+        <section style={section}>
+          <div style={prose}>
+            <div style={sectionIndex}>06 · 陪集分解</div>
+            <h2 style={h2}>一个子群把群切成等大的「条」</h2>
+            <p style={lead}>
+              正规子群 V₄ 在 A₄ 里把 12 个元素均匀地分成 <span style={strong}>3 条陪集</span>，
+              每条恰好 4 个元素——这就是 Lagrange 定理说的 |A₄| = |V₄| · [A₄:V₄] = 4·3。
+            </p>
+            <ul style={ul}>
+              <li>第一条 <span style={mono}>H = V₄</span> 本身：恒等 e + 3 个双对换；</li>
+              <li>第二条 <span style={mono}>xH</span>：拿一个 3-循环 x 去乘 H 的每个元素，整条平移；</li>
+              <li>第三条 <span style={mono}>yH</span>：用另一个 3-循环 y，得到剩下的 4 个 3-循环。</li>
+            </ul>
+            <p style={{ marginBottom: 0 }}>
+              右侧陪集条带把每个陪集排成一列、用同色标出。左右相邻的列都是 V₄ 的
+              <span style={strong}>平移副本</span>——商群 A₄/V₄ ≅ C₃ 正是把这三条「粘回一个点」得到的。
+              H 可从 ⚙ 参数里换成别的子群（如单个 C₃），条带数随即变为 [A₄:C₃] = 4。
+            </p>
+          </div>
+          <figure style={figure}>
+            <ViewWindow view="cosetstrip" group={a4} title="图 6 · 陪集条带" storageKey="a4-blog-coset"
+              defaultPosition={{ x: 0, y: 0 }} defaultSize={{ width: 456, height: 436 }}
+              config={LOCKED} />
+            <figcaption style={caption}>图 6 A₄ 按 V₄ 分解成 3 条带（每条 4 元素）；⚙ 中可切换 H 观察 [G:H] 变化</figcaption>
+          </figure>
+        </section>
+
+        {/* ============ 第 7 节：A₄ = 正四面体的旋转群 ============ */}
+        <section style={section}>
+          <div style={prose}>
+            <div style={sectionIndex}>07 · 几何对称</div>
+            <h2 style={h2}>A₄ 就是正四面体的「旋转群」</h2>
+            <p style={lead}>
+              正四面体有 4 个顶点、4 个三角面、6 条棱——把它拿在手里转，一共有
+              <span style={strong}>12 种不同姿态</span>，恰好等于 |A₄|。
+            </p>
+            <ul style={ul}>
+              <li><span style={strong}>8 个 3-循环</span> = 绕「顶点–对面中心」轴旋转
+                <span style={em}>±120°</span>（4 条轴 × 2 个方向）；</li>
+              <li><span style={strong}>3 个双对换</span> = 绕相对棱中点的轴旋转
+                <span style={em}>180°</span>（3 条棱轴）；</li>
+              <li><span style={strong}>恒等 e</span> = 什么都不转。</li>
+            </ul>
+            <p>
+              这就是 A₄ 又叫<span style={strong}>四面体群</span>的原因：它的每个元素都可以看成
+              对正四面体的一个真实空间旋转，乘法 = 先转再转。
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              右侧窗口默认演示一个 3-循环的 120° 旋转：几何体绕轴转动、红色轴与穿过的
+              顶点/棱/面心被同时标出，窗口底部浮条说明当前演示。浮条自带
+              <b> ⟳ Replay</b>（同一旋转可反复重看，不必刷新页面）与 <b>✕ Reset</b>（回到恒等姿态）；
+              打开窗口 ⚙（View Config），在「Action element」列表中选择任意元素，
+              可逐个查看每个对称作用（再点已选行即重播该作用）。
+            </p>
+          </div>
+          <figure style={figure}>
+            <ViewWindow view="symmetry" group={a4} title="图 7 · A₄ 在正四面体上的作用" storageKey="a4-blog-symmetry"
+              defaultPosition={{ x: 0, y: 0 }} defaultSize={{ width: 456, height: 440 }}
+              config={FIG_SYM}
+              viewParams={{ showAction: true, actionElementId: a4ThreeCycleId }} />
+            <figcaption style={caption}>图 7 A₄ = 正四面体旋转群：⚙ 面板选元素，观察 120°/180° 对称旋转与旋转轴</figcaption>
           </figure>
         </section>
 

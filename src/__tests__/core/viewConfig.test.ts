@@ -3,6 +3,7 @@ import {
   viewWindowConfigSchema,
   setViewParamsSchema,
   cayleyViewParamsSchema,
+  sublatticeViewParamsSchema,
   viewWindowPersistDataSchema,
 } from '../../core/types/viewConfig'
 
@@ -60,5 +61,30 @@ describe('setViewParamsSchema / window schemas (regression)', () => {
       viewParams: { shape2D: 'torus', actions: [{ elementId: 'e1' }] },
     })
     expect(persist.success).toBe(true)
+  })
+})
+
+describe('sublatticeViewParamsSchema', () => {
+  it('accepts a full valid params object and an empty one (defaults live in the render layer)', () => {
+    expect(sublatticeViewParamsSchema.safeParse({
+      labelDetail: 'compact',
+      mergeConjugates: true,
+      nodeScale: 0.8,
+      showSeriesPanel: false,
+    }).success).toBe(true)
+    expect(sublatticeViewParamsSchema.safeParse({}).success).toBe(true)
+  })
+
+  it('accepts every LOD tier including auto', () => {
+    for (const labelDetail of ['auto', 'full', 'compact', 'dots']) {
+      expect(sublatticeViewParamsSchema.safeParse({ labelDetail }).success).toBe(true)
+    }
+  })
+
+  it('rejects an unknown tier and out-of-range card size', () => {
+    expect(sublatticeViewParamsSchema.safeParse({ labelDetail: 'huge' }).success).toBe(false)
+    expect(sublatticeViewParamsSchema.safeParse({ nodeScale: 0.5 }).success).toBe(false)
+    expect(sublatticeViewParamsSchema.safeParse({ nodeScale: 1.7 }).success).toBe(false)
+    expect(sublatticeViewParamsSchema.safeParse({ mergeConjugates: 'yes' }).success).toBe(false)
   })
 })

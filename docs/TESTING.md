@@ -15,7 +15,7 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`test.projects` 双项目——
-  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，50 文件）
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，56 文件）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
 - **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 88.91%，lines 91.90%，branches 78.22%、funcs 92.32%）
@@ -25,7 +25,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，50 文件 / 1426 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，56 文件 / 1488 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -63,6 +63,7 @@
 | actionDraftStorage.test.ts | 6 | 自定义群作用草稿持久化：round-trip（含 unbound 箭头）、无存储/损坏 JSON/结构非法返回 null、remove、覆盖保存 |
 | actionStorage.test.ts | 6 | 已完成群作用持久保存（groupviz-actions）：空返回 []、round-trip（含 unbound 箭头）、多群多条、损坏 JSON 返回 []、非法记录过滤（setSize 字符串）、覆盖保存 |
 | series.test.ts | 27 | 子群列（series.ts）：导列（S₃/S₄/A₄/S₅ 阶链与 reachesTrivial/可解性）、下中心列（D₈→{e} 幂零、D₁₂ 非幂零）、上中心列（D₁₂ Z∞=⟨r³⟩ 阶 4 非幂零、S₃ 平凡中心）、合成列（S₄/S₅/V₄/Q₈/D₈ 15 条/C₆/C₁₂ 2 条链、A₅ 单因子）、因子判定（Cₙ/V₄/Q₈/D₄/D₆/A₄/A₅ 标签、简单性）、**交换因子精确标签（秩≥3：C₂⁴ 四链 C₂×C₂×C₂×C₂（原错标 C₂×C₈）、C₄×C₂² 三链 C₂×C₂×C₄、循环商保持 Cₙ）**、isNormalSubgroupIn、SERIES_MAX_ORDER 守卫、computeChainFactors（备选链 S₅ 唯一链/D₈ V₄ 分支/A₄ 标签） |
+| s4toS3.test.ts | 1 | S₄→S₃ 满同态构造（划分作用）：φ(生成元 (12)↦(23)、(1234)↦(13)）extendFromGenerators 展开 24 元素 + verifyHomomorphism 同态性 + 核恰 = V₄（4 双对换）+ 非单射满射 Im=S₃——TestPage test-homo-4to3 演示窗同一构造，防猜测式同态回归 |
 | tableGroups.audit.test.ts | 279 | GAP 表群可视化惰性审计（66 群全扫）：默认形状可布局（circular 走 cayleyCircleLayout）、全部可用非圆形形状布局（位置有限 + 无重复）、环形布局 distinct+finite、生成元 Cayley 边端点合法、顶层 ':' 半直积 getSemidirectProductMeta 非 null——防布局静默回退回归（曾捕获 C₃×S₃/C₂×A₄/C₅×S₃/C₄×C₂×C₂ 等 10 群 cylinder/torus 失效） |
 | presentations.test.ts | 37 | 群展示：解析器（简化/指数/括号/零指数/非法字符/长符号 + Unicode 上标 a²/a⁻¹）、parsePresentation、parseRelationEquation（f1=f2 等式）、Todd–Coxeter（finite/infinite/overflow）、buildGroupFromPresentation（C₄/D₄/V₄/S₃/A₅ 构建 + multiply/inverse 一致性 + 无限/溢出 + f1=f2 归一化 → C₂×C₃/V₄）、presentationOf 全群族回代（C₆/D₄/S₃/S₄/S₅/A₃/A₄/A₅/V₄/Q₈/Aut(Z₃)/直积/商群/S₃×S₃ 因子组合/stored 原样）、**≥3 因子直积全对交换子**（C₂×C₃×C₅：a²/b³/c⁵ + [a,b]/[a,c]/[b,c] + TC round-trip 阶 30） |
 | cayleyTree.test.ts | 25 | 树视图核心（cayleyTree.ts）：computeCayleyTree BFS 生成树（生成树边/粘合边划分，粘合边不渲染仅计数）、computeFreeTree 自由模板树、computeFoldTree（幂折叠网格：a²,b³,ab=ba → C₂×C₃ 2×3 网格 0 交叉；genElsOverride 修复 S₄ Coxeter 3 生成元不崩溃；D∞ 0.7 路径状衰减、C₂*ℤ 0.5 稠密衰减 + 0 交叉、Sierpinski 0 交叉回归）、countEdgeCrossings 严格交叉计数、parseRelationEquation |
@@ -74,9 +75,12 @@
 | resultGuards.test.ts | 10 | P0 阶段 C 错误模型：Result/ok/err 语义（ok:true 值透传、ok:false error 透传）、guards.ts 11 守卫常量值断言、原定义点 re-export 与 guards 同一性（series/sylow/toddCoxeter/minimizer）、EngineError 类型化 throw（wordParser parseError kind='parse'、工厂 guardError kind='guard' 消息保留 toThrow 兼容） |
 | persistenceFuzz.test.ts | 11 | P0 阶段 D 输入加固：persistence.ts（vi.stubGlobal Map 版 localStorage）坏 JSON 返回 null/schema 不符 null/loadStoredArray 逐条容错丢坏保好/版本化信封 round-trip/未来版本无 migrate 拒绝/坏信封拒绝；HOSTILE_STRINGS 25 条 fuzz 四解析器（parseWord/parsePresentation/parseRelationEquation 不抛且 ok 或错误码合法、parseNotation 不抛且 input 回显）；storage loader 吞脏数据不抛 |
 | core/descriptor.test.ts | 5 | FGVE 阶段 2 批次一：GroupDescriptor v1 序列化协议（serializeDescriptor/deserializeDescriptor/descriptorToSymbol 全群族 round-trip 幂等、symbol/order 恢复、schema 校验拒绝非法） |
-| core/viewConfig.test.ts | 8 | FGVE 阶段 2 批次一：ViewConfig JSON 化（ViewWindowConfig/SetViewParams/CayleyActionParam/CayleyViewParams/ViewWindowGeometry/ViewWindowPersistData 全 zod schema 解析、actions 上限 240 拒绝、缺省值回退、非法字段静默丢弃） |
+| core/viewConfig.test.ts | 13 | FGVE 阶段 2 批次一：ViewConfig JSON 化（ViewWindowConfig/SetViewParams/CayleyActionParam/CayleyViewParams/ViewWindowGeometry/ViewWindowPersistData 全 zod schema 解析、actions 上限 240 拒绝、缺省值回退、非法字段静默丢弃）；批次三 +5：sublatticeViewParamsSchema（全 optional/`{}` 通过、四档 labelDetail 枚举、nodeScale 越界 0.5/5 拒绝、mergeConjugates 非布尔拒绝） |
+| core/actionViewConfig.test.ts | 10 | FGVE 阶段 2 批次六群作用窗口参数 + 箭头纯变换：actionViewParamsSchema（全 valid/`{}`/空 arrows 平凡作用通过、三来源 enum 接受 + sylow/coset 拒绝、setSize 0/21/3.5 拒绝、arrows 越界索引/缺 generatorId/201 条拒绝、JSON round-trip）；arrowListAdd（追加 + 同键更新 to + 未绑定按 from\\|to 键）/arrowListBind（未绑定转生成元箭头 + 无对应未绑定时原样返回）/arrowListRemove（未绑定精确/全删 + 生成元删）/arrowListReplaceGen（整体替换某生成元 + 清除被替换 from 的未绑定箭头） |
+| core/latticeLayout.test.ts | 15 | FGVE 阶段 2 批次三子群格布局纯函数：computeLatticeLayout（紧凑包围盒无 1000×600 下限、每层居中分槽、槽距 ≥ 卡宽不重叠、nodeScale 线性缩放、空/单节点退化无 NaN）；orderLevelsByBarycenter + countLatticeCrossings（构造 1 交叉例降为 0、单节点层不变序、跨层边不计交叉）；LOD 数学（latticeFitScale 钳 ≤1 + 未测得宿主回退 1、latticeSlotScreenSize、latticeLodTier 宽+高双指标四边界）；levelsByOrderRank（同阶同层/最大阶在 0 层/空数组）与 transitiveReduce（长路冗余边删除、菱形保持原样、平行边先去重不被双双删） |
+| core/subgroupOrbits.test.ts | 11 | FGVE 阶段 2 批次三共轭轨道：subgroupConjugacyOrbits（S₃ 三个 2 阶子群合成 size 3 轨道、划分恰好覆盖一次（S₄ 30 节点）、轨道-稳定子 size·\|N_G(H)\|=\|G\|（S₃/A₄/S₄）、**与「全部元素共轭」暴力 BFS 结果一致（证明生成元闭包充分）**、正规子群 ⇔ 单点轨道、A₄ 四个 3 阶子群轨道 size 4/normalizerOrder 3、阿贝尔群全单点）；mergeLatticeByConjugacy（S₃ 6→4 且轨道阶多重集 [1,1,1,3]、无自环无重复边、已传递归约（再归约幂等）、阿贝尔群恒等回退、S₄ 节点数下降 + 顶/底唯一 + 边方向与 level 一致 + 代表 elementIds 长度=阶、超 MERGE_MAX_NODES 返回 null） |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，13 文件 / 101 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，19 文件 / 152 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -89,6 +93,10 @@
 | Cayley3DWindowParams.component.test.tsx | 8 | FGVE 阶段 2 批次二 3D 受控窗口（ViewWindow view=3d，R3F mock 同上）：C₄ 默认渲染（4 球/4 边）、面板控件清单（Layout select=cone/circular 默认 circular、滑杆 1 个=Node size、复选框 9 个=6 配置+AutoRotate+ShowLabels+1 作用边、All/None）、**3D 下窗口 zoom slider 隐藏（内容区无 range）**、受控回灌（layout3D/multiplyType/autoRotate/nodeScale 累积载荷）、edge-action checkbox/All（'3d' 视图路径）/None、versioned 持久化信封 viewParams.multiplyType、坏 schema 回退（layout3D:'bogus'/nodeScale:99 整体拒绝→默认 circular）、持久化键含 \|3d（与 cayley 不碰撞） |
 | ViewWindowParams.component.test.tsx | 9 | set 视图受控窗口（ViewWindow view=set）参数：nodeRadius/gap/columns/showLabels 同步、锁定（locked 禁拖/zoomLocked 禁缩放/resizable:false 隐藏手柄）、Reset to defaults 恢复、参数面板开关、**嵌入 chrome：showControls=false 隐藏全部标题栏按钮、showZoomSlider=false 隐藏滑杆（ctrl+wheel 仍可用）、hover HUD 就地气泡——悬停节点旁浮出"元素名 + 阶"+ 指向节点的小三角 + 节点青色高亮环，节点靠顶部时翻转到节点下方，离场消失** |
 | CycleTableWindowParams.component.test.tsx | 9 | cycle/table 受控窗口（ViewWindow view=cycle/table）：CycleView 参数面板（showMaximalCycles 勾选/nodeRadius 滑块；无 Show labels——窗口默认隐藏元素标签 foreignObject=0）受控回调、点击元素高亮所在极大循环（fill-opacity 0.18 + ⟨g⟩≅Z_n 标注）、TableView 参数面板（strategy 下拉=子群展示/随机展示/全量展示、cellSize、forceShowLargeGroup 勾选）受控回调、窗口最小尺寸（最小面积撑大）、defaultSize 应用、坏 schema 回退默认 |
+| SublatticeView.component.test.tsx | 12 | FGVE 阶段 2 批次三受控子群格内核（SublatticeScene，i18n/theme mock）：宿主未测得 → fit=1 落 full 档（S₃ 6 节点 + `\|H\|=` 文本 + viewBox `0 0 680 608` 无 1000×600 下限）、transform 只应用一次（`svg > g` 唯一 + `translate(10, 20) scale(2)`）、dots 档 0 text/0 rect/12 circle（命中圆+实色圆）、compact 档每节点一行数字且无 `\|H\|=`、mergeConjugates（S₃ 6→4 节点 + `×3` 徽标；阿贝尔 C₄ 不变且无 `×`；D₄ 节点数下降且现 `×2`）、nodeScale 0.5 世界盒线性收紧、点击回调 (idx,node)→(null,null) 切换、caption（showCaption 才渲染 + hover 出现/离场回落 hint）、series 面板（有 series 才渲染 + showSeriesPanel=false 隐藏）、group=null 与 >60 阶无 lattice 的 .view-empty（后者含 `lattice.backendOnly`） |
+| SublatticeWindowParams.component.test.tsx | 7 | FGVE 阶段 2 批次三子群格受控窗口（ViewWindow view=sublattice）：窗口内渲染 6 节点 + tier=full + caption 存在、参数面板控件清单（Lattice View 标题、Label detail 下拉四值默认 auto、滑杆 1 个=Card size、复选框 8 个=6 配置+Merge conjugates+Series panel）、受控 payload 累积（labelDetail→mergeConjugates→nodeScale→showSeriesPanel 四步 toEqual 全量）、versioned 持久化信封（gv-vw-lat-persist + `__gvVersion:1` + viewParams.mergeConjugates）、坏 schema 回退（labelDetail:'huge'/nodeScale:99/mergeConjugates:'yes' → select 回 auto + 复选框未勾）、默认持久化键含 `\|sublattice`（与 set 不碰撞） |
+| HomomorphismWindowParams.component.test.tsx | 8 | FGVE 阶段 2 批次五同态受控窗口（ViewWindow view=homomorphism）：无 group 渲染双群映射（C₆→C₂ `data-homo-source-node`×6 + `data-homo-target-node`×2 + Ker=3/Im=2 核像标注 + notInjective/surjective chips）、窗口缺省无节点常驻标签（仅标题+域+陪域 3 个 foreignObject，开 Show labels 后 3→11）、悬停源节点就地气泡出现/离场消失、受控 showLabels 回传 `{showLabels:true}`、versioned 持久化信封 `viewParams.showLabels`、默认持久化键含 `\|homomorphism`（与 set 不碰撞）、无 homomorphism 占位 "No homomorphism"、S₃→S₃ 恒等同构（isomorphism/injective/surjective 全真） |
+| ActionWindowParams.component.test.tsx | 7 | FGVE 阶段 2 批次六群作用受控窗口（ViewWindow view=action，S₃）：conjugation 缺省（6 `action-node-*` 环节点 + 3 条轨道 glow 虚线圈 + conjugation banner + 0 foreignObject 缺省无标签无 chips）、参数面板切 Translation（regular 传递单轨道 + banner 切换）、custom 编辑流（kind=Custom → 编辑器 6 `action-edit-node-*` 数字节点 + editHint，Complete & verify 空 arrows 平凡作用 → 受控回传 `{actionKind:'custom',setSize:6,arrows:[]}` + 退出编辑 + 6 不动点 ★）、hover 共轭节点就地气泡出现/离场消失、持久化坏 actionKind（sylow）schema 拒绝回退 conjugation + 坏生成元 arrows → noAction 兜底、Show labels 开启 0→12 foreignObject（6 chips + 6 节点标签）、custom 已验证 arrows 版本化持久化（actionKind/setSize/arrows 信封） |
 | CycleView.integration.test.tsx | 1 | 循环图视图集成（Workspace→循环图卡片）：S3 极大循环 = 花瓣——≥1 闭合多边形 + ≥3 条 2 阶叶柄线段（非圆形），视图切换回退后无花瓣 |
 | BasicGroupPanel.integration.test.tsx | 5 | I18nProvider>GroupProvider 全链路：初始 none/二面体 slider n=4 → 创建 D_{4}/循环群 C_{12}/特殊群 Q_{8}/对称群创建后 badge 含 S（GroupProbe useContext 读 currentGroup.symbol） |
 | Workspace.integration.test.tsx | 7 | 三栏工作台集成：默认 S3 set 视图 svg circles≥6 + localStorage groupviz-session 信封 {__gvVersion,data:{symbol:'S_{3}',view:'set'}}/损坏 payload 回退 S3/键盘 ArrowRight·Left 选中环 circle[stroke="#ffd93d"]/左栏 accordion-section≥8 且默认仅 ViewPanel 展开/drawer 按钮 + Escape 关闭抽屉/9 张视图卡遍历 active 切换（含 restore 后重查 container） |

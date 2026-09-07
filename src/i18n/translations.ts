@@ -14,7 +14,7 @@ const zh: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': '群论可视化平台',
-  'welcome.version': 'v1.18.0',
+  'welcome.version': 'v1.23.0',
   'welcome.tagline': '探索抽象代数的对称之美 — 交互式群论可视化与学习工具',
   'welcome.enter': '进入应用',
   'welcome.section.done': '已实现',
@@ -106,6 +106,11 @@ const zh: TranslationMap = {
   'panel.showHeatmap': '热力图模式',
   'panel.showAction': '显示元素操作',
   'panel.speed': '速度',
+  'panel.solidShape': '几何体',
+  'panel.solidCube': '正方体',
+  'panel.solidOcta': '正八面体',
+  'panel.solidIcosa': '正二十面体',
+  'panel.solidDodeca': '正十二面体',
   'panel.multiplyType': '乘法类型',
   'panel.multiplyRight': '右乘 a·c',
   'panel.multiplyLeft': '左乘 c·a',
@@ -213,6 +218,19 @@ const zh: TranslationMap = {
   'lattice.trivial': '平凡群',
   'lattice.subgroup': '子群',
   'lattice.sylow': 'Sylow {p}-子群',
+  'lattice.labelDetail': '标签细节',
+  'lattice.label.auto': '自动',
+  'lattice.label.full': '完整名片',
+  'lattice.label.compact': '胶囊',
+  'lattice.label.dots': '圆点',
+  'lattice.mergeConjugates': '合并共轭子群',
+  'lattice.mergeHint': '同一共轭轨道的子群合成一个节点，角标 ×n = |G : N_G(H)|',
+  'lattice.nodeSize': '名片大小',
+  'lattice.showSeriesPanel': '子群列面板',
+  'lattice.orbitMembers': '{n} 个共轭子群',
+  'lattice.captionHint': '悬停或点击子群节点查看结构、指数与正规化子',
+  'lattice.mergeTooLarge': '子群数超过合并上限，已回退为未合并的子群格',
+  'lattice.backendOnly': '子群格需后端计算（超过 60 阶的群），请在主工作台中查看',
 
   /* Subgroup Series */
   'series.off': '关闭',
@@ -249,15 +267,15 @@ const zh: TranslationMap = {
   'symmetry.toIcosahedron': '→ 正二十面体',
   'symmetry.toDodecahedron': '→ 正十二面体',
 
-  /* Symmetry Geometry Descriptions */
+  /* Symmetry Geometry Descriptions (形状名，群符号已在场景标题行单独显示) */
   'symmetry.geo.cyclicText': '{n}阶旋转对称',
   'symmetry.geo.dihedralText': '正{n}边形',
-  'symmetry.geo.tetrahedron': 'A_{4} \\cdot 正四面体',
-  'symmetry.geo.cube': 'S_{4} \\cdot 正方体',
-  'symmetry.geo.octahedron': 'S_{4} \\cdot 正八面体',
-  'symmetry.geo.icosahedron': 'A_{5} \\cdot 正二十面体',
-  'symmetry.geo.dodecahedron': 'A_{5} \\cdot 正十二面体',
-  'symmetry.geo.rectangle': 'V_{4} \\cdot 长方形',
+  'symmetry.geo.tetrahedron': '正四面体',
+  'symmetry.geo.cube': '正方体',
+  'symmetry.geo.octahedron': '正八面体',
+  'symmetry.geo.icosahedron': '正二十面体',
+  'symmetry.geo.dodecahedron': '正十二面体',
+  'symmetry.geo.rectangle': '长方形',
 
   /* Canvas Common */
   'canvas.noGroup': '请先选择一个群',
@@ -681,7 +699,7 @@ const en: TranslationMap = {
 
   /* Welcome Page */
   'welcome.subtitle': 'Group Theory Visualization Platform',
-  'welcome.version': 'v1.18.0',
+  'welcome.version': 'v1.23.0',
   'welcome.tagline': 'Explore the beauty of symmetry in abstract algebra — Interactive group theory visualization & learning tool',
   'welcome.enter': 'Enter',
   'welcome.section.done': 'Implemented',
@@ -773,6 +791,11 @@ const en: TranslationMap = {
   'panel.showHeatmap': 'Heatmap mode',
   'panel.showAction': 'Show Element Action',
   'panel.speed': 'Speed',
+  'panel.solidShape': 'Solid shape',
+  'panel.solidCube': 'Cube',
+  'panel.solidOcta': 'Octahedron',
+  'panel.solidIcosa': 'Icosahedron',
+  'panel.solidDodeca': 'Dodecahedron',
   'panel.multiplyType': 'Multiply Type',
   'panel.multiplyRight': 'Right a·c',
   'panel.multiplyLeft': 'Left c·a',
@@ -880,6 +903,19 @@ const en: TranslationMap = {
   'lattice.trivial': 'Trivial',
   'lattice.subgroup': 'Subgroup',
   'lattice.sylow': 'Sylow {p}',
+  'lattice.labelDetail': 'Label detail',
+  'lattice.label.auto': 'Auto',
+  'lattice.label.full': 'Full cards',
+  'lattice.label.compact': 'Pills',
+  'lattice.label.dots': 'Dots',
+  'lattice.mergeConjugates': 'Merge conjugate subgroups',
+  'lattice.mergeHint': 'One node per conjugacy orbit; the ×n badge is |G : N_G(H)|',
+  'lattice.nodeSize': 'Card size',
+  'lattice.showSeriesPanel': 'Series panel',
+  'lattice.orbitMembers': '{n} conjugate subgroups',
+  'lattice.captionHint': 'Hover or click a node for structure, index and normalizer',
+  'lattice.mergeTooLarge': 'Too many subgroups to merge; showing the unmerged lattice',
+  'lattice.backendOnly': 'Subgroup lattices beyond order 60 need the backend; open this group in the main workspace',
 
   /* Subgroup Series */
   'series.off': 'Off',
@@ -920,15 +956,15 @@ const en: TranslationMap = {
   'symmetry.toIcosahedron': '→ Icosahedron',
   'symmetry.toDodecahedron': '→ Dodecahedron',
 
-  /* Symmetry Geometry Descriptions */
+  /* Symmetry Geometry Descriptions (shape names; group symbol is shown in the scene title line) */
   'symmetry.geo.cyclicText': '{n}-fold rotational symmetry',
   'symmetry.geo.dihedralText': 'Regular {n}-gon',
-  'symmetry.geo.tetrahedron': 'A_{4} \\cdot Regular Tetrahedron',
-  'symmetry.geo.cube': 'S_{4} \\cdot Cube',
-  'symmetry.geo.octahedron': 'S_{4} \\cdot Regular Octahedron',
-  'symmetry.geo.icosahedron': 'A_{5} \\cdot Regular Icosahedron',
-  'symmetry.geo.dodecahedron': 'A_{5} \\cdot Regular Dodecahedron',
-  'symmetry.geo.rectangle': 'V_{4} \\cdot Rectangle',
+  'symmetry.geo.tetrahedron': 'Regular Tetrahedron',
+  'symmetry.geo.cube': 'Cube',
+  'symmetry.geo.octahedron': 'Regular Octahedron',
+  'symmetry.geo.icosahedron': 'Regular Icosahedron',
+  'symmetry.geo.dodecahedron': 'Regular Dodecahedron',
+  'symmetry.geo.rectangle': 'Rectangle',
 
   /* Canvas Common */
   'canvas.noGroup': 'Please select a group first',

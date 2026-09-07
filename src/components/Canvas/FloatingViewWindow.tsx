@@ -6,7 +6,7 @@ import { useHover } from '../../context/core/HoverContext'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useTheme } from '../../theme/useTheme'
 import type { ViewMode, CanvasTransform } from '../../core/types'
-import type { Group, GroupElement } from '../../core/types'
+import type { Group, GroupElement, Homomorphism } from '../../core/types'
 import { SetView, type SetViewProps } from './SetView'
 import { SetViewFromContext } from './SetViewFromContext'
 import { CycleView } from './CycleView'
@@ -14,23 +14,32 @@ import { CycleViewFromContext } from './CycleViewFromContext'
 import { TableView, TABLE_PAD_W, TABLE_PAD_H } from './TableView'
 import { TableViewFromContext } from './TableViewFromContext'
 import { SubgroupLatticeView } from './SubgroupLatticeView'
-import { HomomorphismView } from './HomomorphismView'
-import { CosetStripView } from './CosetStripView'
+import { HomomorphismView, HomomorphismScene } from './HomomorphismView'
+import { CosetStripView, CosetStripScene } from './CosetStripView'
 import { ActionView } from './ActionView'
+import { ActionScene } from './ActionScene'
 import { SylowView } from './SylowView'
 import { PresentationTableView } from './PresentationTableView'
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
+import { verifyHomomorphism } from '../../core/algebra/homomorphisms'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
-import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, CycleViewParams, TableViewParams, TableStrategy } from '../../core/types/viewConfig'
-import { setViewParamsSchema, cayleyViewParamsSchema, cayley3DViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema } from '../../core/types/viewConfig'
+import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, CycleViewParams, TableViewParams, TableStrategy, SublatticeViewParams, CosetStripViewParams, SymmetryViewParams, HomomorphismViewParams, ActionViewParams } from '../../core/types/viewConfig'
+import { setViewParamsSchema, cayleyViewParamsSchema, cayley3DViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema, sublatticeViewParamsSchema, cosetStripViewParamsSchema, symmetryViewParamsSchema, homomorphismViewParamsSchema, actionViewParamsSchema } from '../../core/types/viewConfig'
 import { getDefaultShape2D, getAvailableShapesForView } from '../../core/types'
 import { getDefaultLayout3D, getAvailableShapes3D } from '../../core/types'
 import { getViewBoxSize } from '../../core/viewBox'
-import type { CayleyShape2D, Layout3D } from '../../core/types'
+import type { CayleyShape2D, Layout3D, LatticeLabelDetail } from '../../core/types'
 import { toggleCayleyActionReducer, addAllCayleyActionsHelper, normalizeCayleyActions } from '../../context/cayleyActions'
 import { CayleyView } from './CayleyView'
 import { Cayley3DScene } from './Cayley3DView'
+import { SymmetryView, SymmetryViewScene } from './SymmetryView'
+import { getSymmetryType } from '../../core/symmetryType'
+import { SublatticeScene } from './SubgroupLatticeView'
+import { listCosetStripSubgroups, cosetDataForSubgroup, type CosetStripSubgroupOption } from '../../core/algebra/cosetStrip'
+import { buildActionComputation, arrowListAdd, arrowListBind, arrowListRemove, arrowListReplaceGen, type CustomArrowError } from '../../core/algebra/actions'
+import type { GroupActionArrow, GroupActionComputation } from '../../core/types'
+import { computeCosetElementMap, computeCosetColors, computeCosetHighlightSet } from '../../context/cosetActions'
 import { loadVersionedJson, saveVersionedJson, removeStoredKey } from '../../utils/persistence'
 import { VIEWWINDOW_RESET_EVENT } from '../../utils/resetViewWindows'
 import { z } from 'zod'
@@ -412,6 +421,8 @@ function renderViewContent(view: ViewMode) {
       return <TableZoomable><TableViewFromContext /></TableZoomable>
     case '3d':
       return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><Cayley3DViewLazy /></Suspense>
+    case 'symmetry':
+      return <Suspense fallback={<div className="view-loading"><div className="loading-spinner" /></div>}><SymmetryView /></Suspense>
     case 'sublattice':
       return <SvgPanZoom><SubgroupLatticeView /></SvgPanZoom>
     case 'homomorphism':
@@ -429,6 +440,22 @@ function renderViewContent(view: ViewMode) {
     default:
       return <SvgPanZoom><SetViewFromContext /></SvgPanZoom>
   }
+}
+
+const COSETSTRIP_NO_LOCAL_SUBGROUPS = 'Local subgroup enumeration is limited to groups of order ≤ 60'
+
+/** TeX 结构符号 → unicode（供 <select> 选项纯文本展示）：C_{2}\\times C_{2} → C₂×C₂、D_{4} → D₄ */
+function csUnicodeStruct(sym: string): string {
+  return sym
+    .replace(/\\times /g, '×')
+    .replace(/([A-Z])_\{(\d+)\}/g, (_m, ch: string, digs: string) => ch + digs.split('').map(d => '₀₁₂₃₄₅₆₇₈₉'[+d]).join(''))
+}
+
+/** 子群候选 → <select> 选项文本：结构（或兜底 ⟨H⟩）· |H| · [G:H] 条带数 · ×轨道长 */
+function csOptionLabel(o: CosetStripSubgroupOption): string {
+  const struct = o.structure ? csUnicodeStruct(o.structure) : `⟨H⟩·${o.order}`
+  const orbit = o.orbitSize > 1 ? ` · ×${o.orbitSize}` : ''
+  return `${struct} |H|${o.order} · [G:H]${o.index}${orbit}`
 }
 
 let globalZCounter = 1000
@@ -650,11 +677,14 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
 
 // ── Controlled ViewWindow (FGVE engine) ─────────────────────
 
-export type ViewParams = SetViewParams | CayleyViewParams | Cayley3DViewParams | CycleViewParams | TableViewParams
+export type ViewParams = SetViewParams | CayleyViewParams | Cayley3DViewParams | CycleViewParams | TableViewParams | SublatticeViewParams | CosetStripViewParams | SymmetryViewParams | HomomorphismViewParams | ActionViewParams
 
 interface ViewWindowProps {
   view: ViewMode
-  group: Group | null
+  /** 展示群；同态视图（view==='homomorphism'）可省略，改由 homomorphism prop 提供双群 */
+  group?: Group | null
+  /** 同态视图双群输入（source+target+mapping 打包）。view==='homomorphism' 时优先于 group（group 可为 null） */
+  homomorphism?: Homomorphism | null
   title?: string
   storageKey?: string
   config?: ViewWindowConfig
@@ -677,6 +707,7 @@ const VW_PERSIST_SCHEMA = z.object({
     resizable: z.boolean().optional(),
     showControls: z.boolean().optional(),
     showZoomSlider: z.boolean().optional(),
+    actionLocked: z.boolean().optional(),
   }),
   viewParams: z.record(z.string(), z.unknown()),
 })
@@ -778,6 +809,7 @@ const MINI_BTN: React.CSSProperties = {
 export function ViewWindow({
   view,
   group,
+  homomorphism,
   title,
   storageKey,
   config: configProp,
@@ -793,7 +825,7 @@ export function ViewWindow({
   const { viewWindowTheme } = useTheme()
 
   // 默认持久化键含视图名：同群的 set/cayley 窗口各自独立持久化，互不覆盖
-  const persistKey = storageKey ?? (group ? `${group.symbol}|${group.order}|${view}` : null)
+  const persistKey = storageKey ?? (group ? `${group.symbol}|${group.order}|${view}` : (view === 'homomorphism' && homomorphism ? `${homomorphism.source.symbol}|${homomorphism.target.symbol}|homomorphism` : null))
   const persisted = useMemo(() => persistKey ? loadVwPersist(persistKey) : null, [persistKey])
 
   const [geometry, setGeometry] = useState<VwGeometry>(() => {
@@ -801,9 +833,9 @@ export function ViewWindow({
     return { position: defaultPosition, size: defaultSize }
   })
 
-  const [config, setConfig] = useState<ViewWindowConfig>(() =>
+  const [configState, setConfigState] = useState<ViewWindowConfig>(() =>
     configProp ?? persisted?.config ?? {})
-  const [viewParams, setViewParams] = useState<ViewParams>(() => {
+  const [viewParamsState, setViewParamsState] = useState<ViewParams>(() => {
     if (viewParamsProp) return viewParamsProp
     if (persisted) {
       // 按视图用对应 schema 校验持久化参数：键残留他视图参数/手改坏值时回退默认
@@ -812,7 +844,12 @@ export function ViewWindow({
           : view === 'set' ? setViewParamsSchema
             : view === 'cycle' ? cycleViewParamsSchema
               : (view === 'table' || view === 'heatmap') ? tableViewParamsSchema
-                : null
+                : view === 'sublattice' ? sublatticeViewParamsSchema
+                  : view === 'cosetstrip' ? cosetStripViewParamsSchema
+                    : view === 'symmetry' ? symmetryViewParamsSchema
+                      : view === 'homomorphism' ? homomorphismViewParamsSchema
+                        : view === 'action' ? actionViewParamsSchema
+                          : null
       if (schema) {
         const parsed = schema.safeParse(persisted.viewParams)
         if (parsed.success) return parsed.data as ViewParams
@@ -822,6 +859,12 @@ export function ViewWindow({
     }
     return {}
   })
+  // 受控判定：是否传入对应 onXxxChange。宿主「同时传 xx + onXxxChange」为严格受控
+  // （渲染读 prop、交互回传宿主）；「只传 xx」视为非受控的初始默认值（内部 state 接管
+  // 后续交互）——否则预设默认参数的窗口（如博客锁定插图）会因既无回调又不更新 state
+  // 而冻结，任何参数点击都无效。
+  const config = (configProp && onConfigChange) ? configProp : configState
+  const viewParams = (viewParamsProp && onViewParamsChange) ? viewParamsProp : viewParamsState
 
   const [z, setZ] = useState(() => ++_vwZ)
   const [dragging, setDragging] = useState(false)
@@ -829,6 +872,11 @@ export function ViewWindow({
   const [paramsOpen, setParamsOpen] = useState(false)
   // 乘法表实际渲染内容尺寸（TableView 经 onLayoutSize 上报），用于设定最小窗口尺寸
   const [tableLayoutSize, setTableLayoutSize] = useState<{ width: number; height: number } | null>(null)
+  // action 视图窗口本地态：金色箭头联动的悬停群元素 id / 选中集合元素索引（OST 交互）/
+  // custom 编辑态（不持久化——viewParams 只存已验证结果，编辑中断刷新回已验证态）
+  const [actionHoverId, setActionHoverId] = useState<string | null>(null)
+  const [actionSel, setActionSel] = useState<number | null>(null)
+  const [actionEdit, setActionEdit] = useState<{ setSize: number; arrows: GroupActionArrow[]; error: CustomArrowError | null } | null>(null)
   // resizable=false：宿主禁止用户调整窗口尺寸（隐藏 resize 手柄，移动不受影响）
   const resizable = config.resizable !== false
 
@@ -849,28 +897,25 @@ export function ViewWindow({
     if (!persistKey) return
     if (persistTimer.current) clearTimeout(persistTimer.current)
     persistTimer.current = setTimeout(() => {
-      // Persist the effective (controlled-aware) values so reset/refresh round-trips match the UI.
-      const effConfig = configProp ?? config
-      const effViewParams = viewParamsProp ?? viewParams
-      saveVwPersist(persistKey, { position: geometry.position, size: geometry.size, config: effConfig, viewParams: effViewParams as Record<string, unknown> })
+      saveVwPersist(persistKey, { position: geometry.position, size: geometry.size, config, viewParams: viewParams as Record<string, unknown> })
     }, 300)
     return () => { if (persistTimer.current) clearTimeout(persistTimer.current) }
-  }, [geometry, config, viewParams, configProp, viewParamsProp, persistKey])
+  }, [geometry, config, viewParams, persistKey])
 
   const updateConfig = useCallback((p: Partial<ViewWindowConfig>) => {
     // 与「有效值」合并（受控时 prop 优先）：受控模式下内部 state 不更新，
     // 若与陈旧的内部快照合并，连续调整多个开关时后续载荷会丢失之前的值
-    const next = { ...(configProp ?? config), ...p }
-    if (!configProp) setConfig(next)
-    onConfigChange?.(next)
-  }, [config, configProp, onConfigChange])
+    const next = { ...config, ...p }
+    if (onConfigChange) onConfigChange(next)
+    else setConfigState(next)
+  }, [config, onConfigChange])
 
-  const updateViewParams = useCallback((p: Partial<SetViewParams> | Partial<CayleyViewParams> | Partial<Cayley3DViewParams> | Partial<CycleViewParams> | Partial<TableViewParams>) => {
+  const updateViewParams = useCallback((p: Partial<SetViewParams> | Partial<CayleyViewParams> | Partial<Cayley3DViewParams> | Partial<CycleViewParams> | Partial<TableViewParams> | Partial<SublatticeViewParams> | Partial<CosetStripViewParams> | Partial<SymmetryViewParams> | Partial<HomomorphismViewParams> | Partial<ActionViewParams>) => {
     // 参数对象按 view 判别（同一时刻只属于一种视图），跨类型合并不需要判别字段
-    const next = { ...(viewParamsProp ?? viewParams), ...p } as ViewParams
-    if (!viewParamsProp) setViewParams(next)
-    onViewParamsChange?.(next)
-  }, [viewParams, viewParamsProp, onViewParamsChange])
+    const next = { ...viewParams, ...p } as ViewParams
+    if (onViewParamsChange) onViewParamsChange(next)
+    else setViewParamsState(next)
+  }, [viewParams, onViewParamsChange])
 
   // ── 乘法表窗口最小尺寸 ──────────────────────────────────────
   // 最小尺寸 = 完整表格内容（行数×cellSize + 表头/页脚）+ 标题栏，保证整张表可见。
@@ -975,7 +1020,9 @@ export function ViewWindow({
     const el = viewportRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
-      if (view === '3d') return
+      if (view === '3d' || view === 'symmetry') return
+      // action custom 编辑模式：滚轮缩放会缩走编辑器（主画布编辑态同样不吃 transform），禁用
+      if (view === 'action' && actionEdit) return
       if (!e.ctrlKey && !e.metaKey) return
       if (config.zoomLocked) return
       e.preventDefault()
@@ -993,14 +1040,16 @@ export function ViewWindow({
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [ct, config.zoomLocked, contentW, contentH, view])
+  }, [ct, config.zoomLocked, contentW, contentH, view, actionEdit])
 
   const onCtMDown = useCallback((e: React.MouseEvent) => {
-    if (view === '3d') return
+    if (view === '3d' || view === 'symmetry') return
+    // action custom 编辑模式：拖拽平移与画箭头手势冲突，禁用
+    if (view === 'action' && actionEdit) return
     if (config.locked || config.zoomLocked) return
     if ((e.target as HTMLElement).closest('circle') || (e.target as HTMLElement).closest('foreignObject')) return
     ctDragRef.current = { sx: e.clientX, sy: e.clientY, tx: ct.x, ty: ct.y, active: true }
-  }, [ct, config.locked, config.zoomLocked, view])
+  }, [ct, config.locked, config.zoomLocked, view, actionEdit])
 
   // 缩放围绕视图中心而非原点：避免凯莱图（默认居中）被"推"向左上并被裁剪
   const setZoomScale = useCallback((v: number) => {
@@ -1047,12 +1096,12 @@ export function ViewWindow({
       ? { width: Math.max(defaultSize.width, tableMinSize.width), height: Math.max(defaultSize.height, tableMinSize.height) }
       : defaultSize
     setGeometry({ position: defaultPosition, size: resetSize })
-    if (!configProp) setConfig({})
-    onConfigChange?.({})
-    if (!viewParamsProp) setViewParams({})
-    onViewParamsChange?.({})
+    if (onConfigChange) onConfigChange({})
+    else setConfigState({})
+    if (onViewParamsChange) onViewParamsChange({})
+    else setViewParamsState({})
     resetCt()
-  }, [persistKey, defaultPosition, defaultSize, tableMinSize, configProp, onConfigChange, viewParamsProp, onViewParamsChange, resetCt])
+  }, [persistKey, defaultPosition, defaultSize, tableMinSize, onConfigChange, onViewParamsChange, resetCt])
 
   // Global "reset all windows" broadcast: every ViewWindow resets itself.
   useEffect(() => {
@@ -1076,12 +1125,20 @@ export function ViewWindow({
   // 切换展示群/视图时清空悬停：渲染期状态调整（React 官方 pattern，避免 effect 内 setState）
   const [hoverEl, setHoverEl] = useState<GroupElement | null>(null)
   const [hoverAnchor, setHoverAnchor] = useState<{ x: number; y: number } | null>(null)
-  const displayKey = view + (group ? `|${group.symbol}|${group.order}` : '')
+  // 对称性视图演示状态浮条文本（scene onHint 上抛）
+  const [symHintText, setSymHintText] = useState<string | null>(null)
+  // 对称性视图重放信号：自增即让 SymmetryViewScene 对当前演示元素重播一次（同元素可反复观看）
+  const [symReplay, setSymReplay] = useState(0)
+  const displayKey = view + (group ? `|${group.symbol}|${group.order}` : (view === 'homomorphism' && homomorphism ? `|${homomorphism.source.symbol}|${homomorphism.target.symbol}` : ''))
   const [curDisplayKey, setCurDisplayKey] = useState(displayKey)
   if (curDisplayKey !== displayKey) {
     setCurDisplayKey(displayKey)
     setHoverEl(null)
     setHoverAnchor(null)
+    setSymHintText(null)
+    setActionHoverId(null)
+    setActionSel(null)
+    setActionEdit(null)
   }
   const handleHover = useCallback(
     (el: GroupElement | null, anchor?: { x: number; y: number } | null) => {
@@ -1091,23 +1148,132 @@ export function ViewWindow({
     [],
   )
   const hoverOrder = useMemo(() => {
-    if (!group || !hoverEl) return 0
+    if (!hoverEl) return 0
+    // homomorphism 窗口无 group：hover 元素可能属 source 或 target，按 id 归属判定其群
+    const g = group
+      ?? (homomorphism && homomorphism.source.elements.some(e => e.id === hoverEl.id) ? homomorphism.source : null)
+      ?? (homomorphism?.target ?? null)
+    if (!g) return 0
     let cur = hoverEl
-    for (let i = 1; i <= group.order; i++) {
-      if (cur.id === group.identity.id) return i
-      cur = group.multiply(cur, hoverEl)
+    for (let i = 1; i <= g.order; i++) {
+      if (cur.id === g.identity.id) return i
+      cur = g.multiply(cur, hoverEl)
     }
     return 0
-  }, [group, hoverEl])
+  }, [group, homomorphism, hoverEl])
   const showControls = config.showControls !== false
   const showZoomSlider = config.showZoomSlider !== false
 
+  // ── symmetry 窗口派生（unsupported 群 → SymmetryViewScene 内部提示 overlay，无演示/状态浮条） ──
+  const symVp = viewParams as SymmetryViewParams
+  const symType = view === 'symmetry' && group ? getSymmetryType(group) : null
+  const symSupported = !!symType && symType !== 'unsupported'
+  const symCanDual = symType === 'cube' || symType === 'icosahedron'
+  const symShowAction = !!symVp.showAction
+  const symActiveId = symVp.actionElementId ?? null
+
   const infoText = useMemo(() => {
-    if (!group || !config.showInfo) return ''
-    return `${group.symbol} · ${group.order} ord`
-  }, [group, config.showInfo])
+    if (!config.showInfo) return ''
+    if (group) return `${group.symbol} · ${group.order} ord`
+    if (view === 'homomorphism' && homomorphism) return `|G|=${homomorphism.source.order} → |H|=${homomorphism.target.order}`
+    return ''
+  }, [group, config.showInfo, view, homomorphism])
+
+  // ── cosetstrip 窗口数据派生（自包含，不依赖主应用 subsets 状态） ──────
+  // 候选子群 = listCosetStripSubgroups（共轭轨道合并、index 升序）；viewParams.subgroup
+  // 失效（换群/手改坏值/非真子群）→ 回退默认首候选。H 确定后经 cosetDataForSubgroup
+  // → elementMap/colors/highlight 喂给 CosetStripScene（与主画布同一渲染内核）。
+  const cosetStripVp = viewParams as CosetStripViewParams
+  const csOpts = useMemo<CosetStripSubgroupOption[]>(
+    () => (view === 'cosetstrip' && group ? listCosetStripSubgroups(group) : []),
+    [view, group],
+  )
+  const csSubgroup = useMemo<CosetStripSubgroupOption | null>(() => {
+    if (view !== 'cosetstrip' || !group || csOpts.length === 0) return null
+    const want = cosetStripVp.subgroup ? [...cosetStripVp.subgroup].sort().join(',') : null
+    const match = want ? csOpts.find(o => o.key === want) : undefined
+    return match ?? csOpts[0]
+  }, [view, group, csOpts, cosetStripVp.subgroup])
+  const csType = cosetStripVp.cosetType ?? 'left'
+  const csCosetData = useMemo(() => {
+    if (view !== 'cosetstrip' || !group || !csSubgroup) return null
+    return cosetDataForSubgroup(group, csSubgroup.elementIds)
+  }, [view, group, csSubgroup])
+  const csElementMap = useMemo(
+    () => (csCosetData ? computeCosetElementMap(csCosetData, csType) : null),
+    [csCosetData, csType],
+  )
+  const csColors = useMemo(
+    () => (csCosetData ? computeCosetColors(csCosetData, csType) : []),
+    [csCosetData, csType],
+  )
+  const csHighlight = useMemo(
+    () => (csCosetData && csElementMap
+      ? computeCosetHighlightSet(csCosetData, csType, false, sel, csElementMap)
+      : new Set<number>()),
+    [csCosetData, csType, sel, csElementMap],
+  )
+
+  // ── action 窗口数据派生（自包含，不依赖主应用 GroupActionContext） ──────
+  // conjugation/regular：buildActionComputation 直算；custom：viewParams 里的
+  // 已验证箭头自算（坏值/换群失效 → computation 为 null，渲染 noAction，
+  // 参数面板 Edit arrows 重新进入编辑）。编辑态（actionEdit 非空）时不算。
+  const actionVp = viewParams as ActionViewParams
+  const actionKind = actionVp.actionKind ?? 'conjugation'
+  const actionComputation = useMemo<GroupActionComputation | null>(() => {
+    if (view !== 'action' || !group || actionEdit) return null
+    if (actionKind === 'custom') {
+      // 空 arrows = 平凡作用（全部不动点），同样合法可显示
+      if (!actionVp.setSize || !actionVp.arrows) return null
+      const r = buildActionComputation(group, { kind: 'custom', setSize: actionVp.setSize }, actionVp.arrows)
+      return r.computation && r.computation.isHomomorphism ? r.computation : null
+    }
+    if (actionKind !== 'conjugation' && actionKind !== 'regular') return null
+    return buildActionComputation(group, { kind: actionKind }).computation ?? null
+  }, [view, group, actionKind, actionVp.setSize, actionVp.arrows, actionEdit])
+  // custom 编辑流：进入编辑（从已验证态/缺省继承）、箭头操作（纯变换直接改编辑态）、
+  // 完成并验证（通过才写回 viewParams 持久化）、取消（丢弃编辑态）
+  const startOrEditCustom = useCallback(() => {
+    if (!group) return
+    setActionEdit({ setSize: actionVp.setSize ?? 6, arrows: actionVp.arrows ?? [], error: null })
+    updateViewParams({ actionKind: 'custom' })
+  }, [group, actionVp.setSize, actionVp.arrows, updateViewParams])
+  const verifyAndSaveCustom = useCallback(() => {
+    if (!group || !actionEdit) return
+    const r = buildActionComputation(group, { kind: 'custom', setSize: actionEdit.setSize }, actionEdit.arrows)
+    if (r.error) { setActionEdit({ ...actionEdit, error: r.error }); return }
+    if (r.computation && !r.computation.isHomomorphism && r.computation.violation) {
+      const v = r.computation.violation
+      setActionEdit({ ...actionEdit, error: { generatorId: v.a, from: v.x, to: -1, g: v.g, type: 'homomorphism' } })
+      return
+    }
+    updateViewParams({ actionKind: 'custom', setSize: actionEdit.setSize, arrows: actionEdit.arrows })
+    setActionEdit(null)
+    setActionSel(null)
+  }, [group, actionEdit, updateViewParams])
 
   const renderContent = () => {
+    if (view === 'homomorphism') {
+      if (!homomorphism) {
+        return <div style={{ color: 'var(--text-dim)', padding: 24, textAlign: 'center' }}>No homomorphism</div>
+      }
+      const homoVp = viewParams as HomomorphismViewParams
+      const homoResult = homomorphism.mapping.size === 0
+        ? null
+        : (homomorphism.result ?? verifyHomomorphism(homomorphism.source, homomorphism.target, homomorphism.mapping))
+      return (
+        <HomomorphismScene
+          key={`homomorphism-${homomorphism.source.symbol}-${homomorphism.target.symbol}`}
+          source={homomorphism.source}
+          target={homomorphism.target}
+          mapping={homomorphism.mapping}
+          result={homoResult}
+          name={homomorphism.name}
+          showLabels={homoVp.showLabels ?? false}
+          onHover={handleHover}
+        />
+      )
+    }
     if (!group) return <div style={{ color: 'var(--text-dim)', padding: 24, textAlign: 'center' }}>No group</div>
 
     if (view === 'cayley') {
@@ -1212,6 +1378,97 @@ export function ViewWindow({
       )
     }
 
+    if (view === 'sublattice') {
+      // 子群格：内核自测绘图区像素并据此自动降级 LOD，故不传 viewBoxSize
+      const slp = viewParams as SublatticeViewParams
+      return (
+        <SublatticeScene
+          key={`sublattice-${group.symbol}-${group.order}`}
+          group={group}
+          canvasTransform={ct}
+          labelDetail={slp.labelDetail}
+          mergeConjugates={slp.mergeConjugates}
+          nodeScale={slp.nodeScale}
+          showSeriesPanel={slp.showSeriesPanel}
+        />
+      )
+    }
+
+    if (view === 'cosetstrip') {
+      // 窗口缺省：节点常驻标签关闭（读元素靠悬停就地气泡）、顶部 H-Cayley 小圈关闭
+      // （省空间给条带区）；两开关都在参数面板可开回主画布观感。
+      return (
+        <CosetStripScene
+          key={`cosetstrip-${group.symbol}-${group.order}-${csSubgroup?.key ?? 'none'}`}
+          group={group}
+          selectedElements={sel}
+          canvasTransform={ct}
+          viewBoxSize={vbSize}
+          cosetElementMap={csElementMap}
+          cosetColors={csColors}
+          cosetHighlightSet={csHighlight}
+          showLabels={cosetStripVp.showLabels ?? false}
+          showSubgroupCayley={cosetStripVp.showSubgroupCayley ?? false}
+          noCosetsText={csOpts.length === 0 ? COSETSTRIP_NO_LOCAL_SUBGROUPS : undefined}
+          onSelect={handleSelect}
+          onHover={handleHover}
+        />
+      )
+    }
+
+    if (view === 'action') {
+      // 窗口缺省：节点常驻标签 + 顶部轨道 chips 区关闭（读元素靠悬停就地气泡，
+      // 与 homo/cosetstrip 窗口一致），参数面板 Show labels 可开回主画布观感。
+      // 编辑态渲染编辑器（不吃窗口 ct）；conjugation/regular 显示态吃窗口 ct。
+      const effKind = actionEdit ? 'custom' : actionKind
+      return (
+        <ActionScene
+          key={`action-${group.symbol}-${group.order}-${effKind}`}
+          group={group}
+          kind={effKind}
+          computation={actionComputation}
+          editing={!!actionEdit}
+          setSize={actionEdit ? actionEdit.setSize : (actionVp.setSize ?? null)}
+          arrows={actionEdit ? actionEdit.arrows : (actionVp.arrows ?? [])}
+          error={actionEdit ? actionEdit.error : null}
+          onAddArrow={(from, to, genId) => setActionEdit(prev => prev ? { ...prev, arrows: arrowListAdd(prev.arrows, from, to, genId ?? null), error: null } : prev)}
+          onBindArrow={(from, to, genId) => setActionEdit(prev => prev ? { ...prev, arrows: arrowListBind(prev.arrows, from, to, genId), error: null } : prev)}
+          onRemoveArrow={(from, genId, to) => setActionEdit(prev => prev ? { ...prev, arrows: arrowListRemove(prev.arrows, from, genId ?? null, to) } : prev)}
+          onReplaceGenArrows={(genId, pairs) => setActionEdit(prev => prev ? { ...prev, arrows: arrowListReplaceGen(prev.arrows, genId, pairs), error: null } : prev)}
+          selectedElement={actionSel}
+          onSelectedElementChange={setActionSel}
+          hoveredElement={actionHoverId}
+          onHoverElementChange={setActionHoverId}
+          showLabels={actionVp.showLabels ?? false}
+          onHover={handleHover}
+          canvasTransform={ct}
+          viewBoxSize={vbSize}
+        />
+      )
+    }
+
+    if (view === 'symmetry') {
+      // 对称性视图：3D 相机自管理（不吃窗口 ct/zoom）；unsupported 群由 SymmetryViewScene 内部渲染提示 overlay
+      const symVp = viewParams as SymmetryViewParams
+      return (
+        <SymmetryViewScene
+          key={`symmetry-${group.symbol}-${group.order}`}
+          group={group}
+          dark={viewWindowTheme === 'dark'}
+          variant={symVp.variant}
+          showAction={symVp.showAction}
+          actionElementId={symVp.actionElementId ?? null}
+          rotateSpeed={symVp.rotateSpeed}
+          // 窗口标题栏已显示群名，场景内图注默认关闭（避免「标题一个群名、场景又一个群名+几何」重复）
+          showFigureTitle={symVp.showFigureTitle ?? false}
+          locked={config.locked}
+          hintOnIdle={false}
+          replaySignal={symReplay}
+          onHint={msg => setSymHintText(msg)}
+        />
+      )
+    }
+
     if (view !== 'set') return <div style={{ color: 'var(--text-dim)', padding: 24, textAlign: 'center' }}>View "{view}" coming soon</div>
 
     const svp = viewParams as SetViewParams
@@ -1235,6 +1492,9 @@ export function ViewWindow({
     )
   }
 
+  // ── sublattice 视图参数面板数据 ──
+  const sublatticeParams = viewParams as SublatticeViewParams
+
   // ── cayley 视图参数面板数据（与 CayleyView 渲染层同一套缺省/归一化规则） ──
   const cayleyShapes = useMemo<CayleyShape2D[]>(
     () => (view === 'cayley' && group ? getAvailableShapesForView(group, 'cayley') : []),
@@ -1243,6 +1503,7 @@ export function ViewWindow({
   const cayleyVp = viewParams as CayleyViewParams
   const setVp = viewParams as SetViewParams
   const cycleVp = viewParams as CycleViewParams
+  const homoVp = viewParams as HomomorphismViewParams
   const cayleyDefaultShape = useMemo<CayleyShape2D>(
     () => (group ? getDefaultShape2D(group) : 'circular'),
     [group],
@@ -1310,7 +1571,7 @@ export function ViewWindow({
         {/* titlebar */}
         <div style={TBAR_STYLE} onMouseDown={onDragStart}>
           <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {title ?? (group ? group.symbol : 'View')}
+            {title ?? (group ? group.symbol : (view === 'homomorphism' && homomorphism ? (homomorphism.name || `${homomorphism.source.symbol} → ${homomorphism.target.symbol}`) : 'View'))}
             {infoText && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-dim)', marginLeft: 8 }}>{infoText}</span>}
           </span>
           {/* 博客插图等专注阅读场景可 config.showControls=false 整组隐藏 */}
@@ -1355,7 +1616,7 @@ export function ViewWindow({
 
             {/* zoom slider overlay (avoids wheel/page-scroll conflict)；
                 3D 相机自带滚轮缩放，窗口滑杆/ct 不参与 */}
-            {showZoomSlider && view !== '3d' && (
+            {showZoomSlider && view !== '3d' && view !== 'symmetry' && view !== 'homomorphism' && !(view === 'action' && actionEdit) && (
               <div style={{
                 position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
                 display: 'flex', alignItems: 'center', gap: 4,
@@ -1374,8 +1635,9 @@ export function ViewWindow({
               </div>
             )}
 
-            {/* 概览引导：未悬停时显示底部居中提示，让"悬停可读元素"主动被发现（标签隐藏态下唯一的信息取回方式） */}
-            {!hoverEl && (
+            {/* 概览引导：未悬停时显示底部居中提示，让"悬停可读元素"主动被发现（标签隐藏态下唯一的信息取回方式）。
+                对称性视图无节点可悬停，不显示（其演示说明只走底部状态浮条） */}
+            {!hoverEl && view !== 'symmetry' && !(view === 'action' && actionEdit) && (
               <div
                 data-testid="figure-hint"
                 style={{
@@ -1430,10 +1692,56 @@ export function ViewWindow({
                 </div>
               </div>
             )}
+            {/* 对称性视图：演示状态浮条 —— 演示说明的唯一展示位置（场景内不再浮动状态行）。
+                仅当选定元素且确有几何旋转（真实状态）时显示；元素选择与引导文案在 ⚙ 面板内。
+                浮条自带 ⟳ 重放（同元素可反复观看）与 ✕ 复位（回恒等姿态），是窗口内的演示操作区 */}
+            {view === 'symmetry' && group && symSupported && symActiveId && symHintText && (
+              <div
+                data-testid="sym-demo-hint"
+                style={{
+                  position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+                  display: 'flex', alignItems: 'center', gap: 6, maxWidth: '94%',
+                  background: 'rgba(15,23,42,0.85)', border: '1px solid rgba(78,205,196,0.45)',
+                  borderRadius: 8, padding: '4px 6px 4px 12px', zIndex: 6, fontSize: 12,
+                  color: '#cbd5e1', pointerEvents: 'auto', backdropFilter: 'blur(4px)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <span style={{ color: '#4ecdc4', flexShrink: 0 }}>⟳</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
+                  dangerouslySetInnerHTML={{ __html: symHintText }} />
+                <span style={{ flexShrink: 0, display: 'flex', gap: 4 }}>
+                  <button
+                    title="Replay this action"
+                    data-testid="sym-demo-replay"
+                    onClick={() => setSymReplay(n => n + 1)}
+                    style={{
+                      background: 'rgba(78,205,196,0.15)', border: '1px solid rgba(78,205,196,0.5)',
+                      color: '#4ecdc4', borderRadius: 4, padding: '2px 8px', fontSize: 11,
+                      cursor: 'pointer', lineHeight: 1.5, userSelect: 'none',
+                    }}
+                  >
+                    ⟳ Replay
+                  </button>
+                  {!config.actionLocked && (
+                    <button
+                      title="Reset pose (identity)"
+                      data-testid="sym-demo-reset"
+                      onClick={() => updateViewParams({ actionElementId: null })}
+                      style={{
+                        background: 'rgba(148,163,184,0.12)', border: '1px solid rgba(148,163,184,0.4)',
+                        color: '#cbd5e1', borderRadius: 4, padding: '2px 8px', fontSize: 11,
+                        cursor: 'pointer', lineHeight: 1.5, userSelect: 'none',
+                      }}
+                    >
+                      ✕ Reset
+                    </button>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* resize handles */}
         {resizable && RESIZE_DIRS.map(dir => (
           <div key={dir} style={resizeHandleStyle(dir)}
             onMouseDown={onResizeStart(dir)}
@@ -1504,6 +1812,72 @@ export function ViewWindow({
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="checkbox" checked={setVp.showLabels !== false}
+                  onChange={e => updateViewParams({ showLabels: e.target.checked })} />
+                Show labels
+              </label>
+            </>
+          )}
+
+          {view === 'homomorphism' && homomorphism && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Homomorphism View</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={homoVp.showLabels === true}
+                  onChange={e => updateViewParams({ showLabels: e.target.checked })} />
+                Show labels
+              </label>
+            </>
+          )}
+
+          {view === 'action' && group && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Action View</div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Action kind</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button data-testid="action-kind-conjugation" style={segBtn(actionKind === 'conjugation')}
+                    onClick={() => { setActionEdit(null); updateViewParams({ actionKind: 'conjugation' }) }}>Conjugation</button>
+                  <button data-testid="action-kind-regular" style={segBtn(actionKind === 'regular')}
+                    onClick={() => { setActionEdit(null); updateViewParams({ actionKind: 'regular' }) }}>Translation</button>
+                  <button data-testid="action-kind-custom" style={segBtn(actionKind === 'custom')}
+                    onClick={startOrEditCustom}>Custom</button>
+                </div>
+              </div>
+              {actionKind === 'custom' && (
+                <>
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ marginBottom: 2 }}>|X| (1–20)</div>
+                    <input data-testid="action-set-size" type="number" min={1} max={20}
+                      value={actionEdit ? actionEdit.setSize : (actionVp.setSize ?? 6)}
+                      onChange={e => {
+                        const v = Math.max(1, Math.min(20, Math.round(Number(e.target.value)) || 1))
+                        if (actionEdit) setActionEdit({ ...actionEdit, setSize: v })
+                        else updateViewParams({ setSize: v, arrows: undefined })
+                      }}
+                      style={{
+                        width: '100%', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+                        border: '1px solid var(--border-primary)', borderRadius: 4, padding: '2px 4px',
+                      }} />
+                  </div>
+                  {actionEdit ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                      <button data-testid="action-edit-complete" style={MINI_BTN}
+                        onClick={verifyAndSaveCustom}>Complete &amp; verify</button>
+                      <button style={MINI_BTN}
+                        onClick={() => setActionEdit(p => p ? { ...p, arrows: [], error: null } : p)}>Clear arrows</button>
+                      <button data-testid="action-edit-cancel" style={MINI_BTN}
+                        onClick={() => setActionEdit(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div style={{ marginBottom: 6 }}>
+                      <button data-testid="action-edit-start" style={MINI_BTN}
+                        onClick={startOrEditCustom}>Edit arrows</button>
+                    </div>
+                  )}
+                </>
+              )}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={actionVp.showLabels === true}
                   onChange={e => updateViewParams({ showLabels: e.target.checked })} />
                 Show labels
               </label>
@@ -1691,6 +2065,234 @@ export function ViewWindow({
                     onChange={e => updateViewParams({ cellSize: Number(e.target.value) })} style={{ width: '100%' }} />
                   <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{tableVp.cellSize ?? 50}px</span>
                 </div>
+              )}
+            </>
+          )}
+
+          {view === 'sublattice' && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Lattice View</div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Label detail</div>
+                <select
+                  value={sublatticeParams.labelDetail ?? 'auto'}
+                  onChange={e => updateViewParams({ labelDetail: e.target.value as LatticeLabelDetail })}
+                  style={{
+                    width: '100%', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-primary)', borderRadius: 4, padding: '2px 4px',
+                  }}
+                >
+                  <option value="auto">auto</option>
+                  <option value="full">full cards</option>
+                  <option value="compact">pills</option>
+                  <option value="dots">dots</option>
+                </select>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <input
+                  type="checkbox"
+                  checked={sublatticeParams.mergeConjugates ?? false}
+                  onChange={e => updateViewParams({ mergeConjugates: e.target.checked })}
+                />
+                Merge conjugates
+              </label>
+              <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 6 }}>
+                One node per conjugacy orbit; ×n badge is |G : N<sub>G</sub>(H)|
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 2 }}>Card size</div>
+                <input type="range" min={0.6} max={1.6} step={0.1} value={sublatticeParams.nodeScale ?? 1}
+                  onChange={e => updateViewParams({ nodeScale: Number(e.target.value) })} style={{ width: '100%' }} />
+                <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>×{(sublatticeParams.nodeScale ?? 1).toFixed(1)}</span>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={sublatticeParams.showSeriesPanel ?? false}
+                  onChange={e => updateViewParams({ showSeriesPanel: e.target.checked })}
+                />
+                Series panel
+              </label>
+            </>
+          )}
+
+          {view === 'cosetstrip' && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Coset Strip View</div>
+              {csOpts.length === 0 ? (
+                <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6, lineHeight: 1.5 }}>
+                  No non-trivial subgroup available here. {COSETSTRIP_NO_LOCAL_SUBGROUPS}.
+                </div>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ marginBottom: 2 }}>Subgroup H</div>
+                    <select
+                      value={csSubgroup?.key ?? ''}
+                      onChange={e => {
+                        const opt = csOpts.find(o => o.key === e.target.value)
+                        if (opt) updateViewParams({ subgroup: opt.elementIds })
+                      }}
+                      title={csSubgroup ? `${csSubgroup.key} · orbit ${csSubgroup.orbitSize}` : undefined}
+                      style={{
+                        width: '100%', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+                        border: '1px solid var(--border-primary)', borderRadius: 4, padding: '2px 4px',
+                        fontSize: 11,
+                      }}
+                    >
+                      {csOpts.map(o => (
+                        <option key={o.key} value={o.key}>{csOptionLabel(o)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ marginBottom: 2 }}>Coset type</div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button title="Left cosets gH (row element · H)" style={segBtn(csType !== 'right')}
+                        onClick={() => updateViewParams({ cosetType: 'left' })}>gH</button>
+                      <button title="Right cosets Hg (H · row element)" style={segBtn(csType === 'right')}
+                        onClick={() => updateViewParams({ cosetType: 'right' })}>Hg</button>
+                    </div>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <input type="checkbox" checked={cosetStripVp.showLabels ?? false}
+                      onChange={e => updateViewParams({ showLabels: e.target.checked })} />
+                    Show node labels
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <input type="checkbox" checked={cosetStripVp.showSubgroupCayley ?? false}
+                      onChange={e => updateViewParams({ showSubgroupCayley: e.target.checked })} />
+                    Subgroup Cayley ring
+                  </label>
+                </>
+              )}
+            </>
+          )}
+
+          {view === 'symmetry' && group && (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Symmetry View</div>
+              {symType === 'unsupported' ? (
+                <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6, lineHeight: 1.5 }}>
+                  This group type does not support the symmetry view (supported: cyclic Cₙ · dihedral Dₙ · A₄ · S₄ · A₅ · V₄).
+                </div>
+              ) : (
+                <>
+                  {symCanDual && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ marginBottom: 2, fontSize: 11, color: 'var(--text-secondary)' }}>Solid shape</div>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button title="Primary solid" style={segBtn(!symVp.variant)}
+                          onClick={() => updateViewParams({ variant: false })}>
+                          {symType === 'cube' ? 'Cube' : 'Icosahedron'}
+                        </button>
+                        <button title="Dual solid" style={segBtn(!!symVp.variant)}
+                          onClick={() => updateViewParams({ variant: true })}>
+                          {symType === 'cube' ? 'Octahedron' : 'Dodecahedron'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <input type="checkbox" checked={symShowAction}
+                      onChange={e => updateViewParams({ showAction: e.target.checked, actionElementId: e.target.checked ? symActiveId : null })} />
+                    Show element actions
+                  </label>
+                  {symShowAction && (
+                    <>
+                      <div style={{ marginBottom: 6 }}>
+                        <div style={{ marginBottom: 2 }}>Speed</div>
+                        <input type="range" min={0.2} max={5} step={0.1} value={symVp.rotateSpeed ?? 1}
+                          onChange={e => updateViewParams({ rotateSpeed: Number(e.target.value) })} style={{ width: '100%' }} />
+                        <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>×{(symVp.rotateSpeed ?? 1).toFixed(1)}</span>
+                      </div>
+                      <div style={{ marginBottom: 3, fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>Action element</span>
+                        {!config.actionLocked && symActiveId && (
+                          <button
+                            title="Reset pose (identity)"
+                            data-testid="sym-panel-reset"
+                            onClick={() => updateViewParams({ actionElementId: null })}
+                            style={{
+                              background: 'transparent', border: '1px solid var(--border-primary)',
+                              color: 'var(--text-dim)', borderRadius: 4, padding: '1px 6px',
+                              fontSize: 10, cursor: 'pointer',
+                            }}
+                          >
+                            ✕ Reset pose
+                          </button>
+                        )}
+                      </div>
+                      {config.actionLocked ? (
+                        /* 固定模式（actionLocked）：演示元素由宿主动作参数决定且不可切换 ——
+                           Action element 列表与 Reset 隐藏，只读显示当前固定元素；
+                           反复重看走窗口底部浮条 ⟳ Replay（重放不改变演示元素） */
+                        <div
+                          data-testid="sym-action-fixed"
+                          style={{
+                            border: '1px solid var(--border-primary)', borderRadius: 6, marginBottom: 6,
+                            padding: '5px 8px', background: 'var(--bg-interactive)',
+                          }}
+                        >
+                          {(() => {
+                            const fixed = group.elements.find(el => el.id === symActiveId)
+                            if (!fixed) return (
+                              <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                                No fixed element — set viewParams.actionElementId
+                              </span>
+                            )
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                                  dangerouslySetInnerHTML={{ __html: renderTex(texify(fixed.label)) }} />
+                                <span style={{ fontSize: 10, color: 'var(--text-dim)', marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                                  fixed · ⟳ replay only
+                                </span>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      ) : (
+                        <div
+                          data-testid="sym-action-list"
+                          style={{
+                            maxHeight: 150, overflowY: 'auto',
+                            border: '1px solid var(--border-primary)', borderRadius: 6, marginBottom: 6,
+                          }}
+                        >
+                          {group.elements.map(el => {
+                            const active = el.id === symActiveId
+                            return (
+                              <button
+                                key={el.id}
+                                data-testid="sym-action-row"
+                                title={active ? 'Replay this action' : el.id}
+                                onClick={() => { if (active) setSymReplay(n => n + 1); else updateViewParams({ actionElementId: el.id }) }}
+                                style={{
+                                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                  width: '100%', gap: 8, padding: '3px 8px',
+                                  border: 'none', borderBottom: '1px solid var(--border-primary)',
+                                  background: active ? 'var(--accent-teal)' : 'transparent',
+                                  color: active ? '#04222a' : 'var(--text-secondary)',
+                                  fontSize: 12, cursor: 'pointer', textAlign: 'left',
+                                }}
+                              >
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                  dangerouslySetInnerHTML={{ __html: renderTex(texify(el.label)) }} />
+                                {active && <span style={{ fontSize: 10, fontWeight: 700 }}>▶</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <input type="checkbox" checked={symVp.showFigureTitle === true}
+                      onChange={e => updateViewParams({ showFigureTitle: e.target.checked })} />
+                    Figure caption (group name + geometry, in-scene)
+                  </label>
+                </>
               )}
             </>
           )}

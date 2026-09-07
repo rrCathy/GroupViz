@@ -5,6 +5,10 @@
  * Set VITE_API_BASE to override (e.g. for production).
  */
 
+import type { ApiImportGroup } from '../core/types/import'
+
+export type { ApiImportGroup }
+
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 /** Typed backend error: HTTP status + FastAPI detail string. */
@@ -157,16 +161,6 @@ export interface ApiSeries {
   terms: ApiSeriesTerm[]
   factors: ApiSeriesFactor[]
   source: string
-  elapsed_ms?: number
-}
-
-export interface ApiImportGroup {
-  gap_expr: string
-  order: number
-  table: number[][]
-  gens: number[]
-  idents: string[]
-  structure: string
   elapsed_ms?: number
 }
 

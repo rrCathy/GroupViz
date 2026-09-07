@@ -1,4 +1,4 @@
-import { createGroupFromSymbol } from '../../utils/groupFactory'
+import { createGroupFromSymbol } from '../groups/groupFactory'
 import { normalizeSuperscripts } from '../algebra/presentations'
 
 /**

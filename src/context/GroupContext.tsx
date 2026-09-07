@@ -3,6 +3,7 @@ import type { Group, GroupElement, ViewMode, CanvasTransform, SubgroupCheckResul
 import { isGroupDirectProduct, type CayleyShape2D } from '../core/types'
 import { getViewBoxSize, type ViewBoxSize } from '../core/viewBox'
 import { type CosetInfo } from '../core/algebra/subgroups'
+import type { CustomArrowError } from '../core/algebra/actions'
 import { forceLayout, forceLayoutAsync, cycleGraphLayout, computeCycleSubgroups } from '../core/algebra/forceLayout'
 import { computeShape2DPositions } from '../core/algebra/shapeLayouts'
 import { useTranslation } from '../i18n/useTranslation'
@@ -54,6 +55,7 @@ interface GroupContextState {
   floatingViews: FloatingView[]
   symmetryShowAction: boolean
   symmetryRotateSpeed: number
+  symmetryVariant: boolean
   symmetryActionElementId: string | null
   selfInverseElementId: string | null
   cosetSubsetId: string | null
@@ -102,7 +104,7 @@ interface GroupContextState {
   actionArrows: GroupActionArrow[]
   actionEditing: boolean
   actionComputation: GroupActionComputation | null
-  actionError: { generatorId: string | null; from: number; to: number; g?: string; type: string } | null
+  actionError: CustomArrowError | null
   actionSelectedElement: number | null
   actionHoverElement: string | null
   seriesType: SeriesType | null
@@ -162,6 +164,7 @@ interface GroupContextActions {
   closeFloatingView: (id: string) => void
   setSymmetryShowAction: (show: boolean) => void
   setSymmetryRotateSpeed: (speed: number) => void
+  setSymmetryVariant: (variant: boolean) => void
   setSymmetryActionElementId: (id: string | null) => void
   setSelfInverseElementId: (id: string | null) => void
   showCosetsForSubset: (subsetId: string) => void
@@ -564,6 +567,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
 
     symmetryShowAction: symmetry.symmetryShowAction,
     symmetryRotateSpeed: symmetry.symmetryRotateSpeed,
+    symmetryVariant: symmetry.symmetryVariant,
     symmetryActionElementId: symmetry.symmetryActionElementId,
     selfInverseElementId: symmetry.selfInverseElementId,
 
@@ -683,6 +687,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
 
     setSymmetryShowAction: symmetry.setSymmetryShowAction,
     setSymmetryRotateSpeed: symmetry.setSymmetryRotateSpeed,
+    setSymmetryVariant: symmetry.setSymmetryVariant,
     setSymmetryActionElementId: symmetry.setSymmetryActionElementId,
     setSelfInverseElementId: symmetry.setSelfInverseElementId,
 

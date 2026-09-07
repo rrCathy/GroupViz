@@ -3,7 +3,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import { useTranslation } from '../../i18n/useTranslation'
 import { useGroupCore } from '../core/GroupCoreContext'
 import type { Group, GroupActionArrow, GroupActionComputation, GroupActionKind, GroupElement } from '../../core/types'
-import { buildActionComputation, type CustomArrowError } from '../../core/algebra/actions'
+import { buildActionComputation, arrowListAdd, arrowListBind, arrowListRemove, arrowListReplaceGen, type CustomArrowError } from '../../core/algebra/actions'
 import { loadCustomActionDraft, removeCustomActionDraft, saveCustomActionDraft } from './actionDraftStorage'
 import { loadGroupActionsFromStorage, saveGroupActionsToStorage, type StoredGroupAction } from './actionStorage'
 import { createGroupFromSymbol } from '../../utils/groupFactory'
@@ -225,40 +225,17 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   }, [setHintMessage, t])
 
   const addArrow = useCallback((from: number, to: number, generatorId: string | null = null) => {
-    setActionArrows(prev => {
-      const key = generatorId === null ? `u|${from}|${to}` : `${generatorId}|${from}`
-      const existingIdx = prev.findIndex(a =>
-        (a.generatorId === null ? `u|${a.from}|${a.to}` : `${a.generatorId}|${a.from}`) === key)
-      if (existingIdx !== -1) {
-        const next = prev.slice()
-        next[existingIdx] = { ...next[existingIdx], to, generatorId }
-        return next
-      }
-      return [...prev, { generatorId, from, to }]
-    })
+    setActionArrows(prev => arrowListAdd(prev, from, to, generatorId))
     setActionError(null)
   }, [])
 
   const bindArrow = useCallback((from: number, to: number, generatorId: string) => {
-    setActionArrows(prev => {
-      const unbound = prev.find(a => a.generatorId === null && a.from === from && a.to === to)
-      if (!unbound) return prev
-      const next = prev.filter(a =>
-        !(a.generatorId === null && a.from === from && a.to === to) &&
-        !(a.generatorId === generatorId && a.from === from))
-      next.push({ generatorId, from, to })
-      return next
-    })
+    setActionArrows(prev => arrowListBind(prev, from, to, generatorId))
     setActionError(null)
   }, [])
 
   const removeArrow = useCallback((from: number, generatorId: string | null = null, to?: number) => {
-    setActionArrows(prev => prev.filter(a => {
-      if (generatorId === null) {
-        return !(a.from === from && a.generatorId === null && (to === undefined || a.to === to))
-      }
-      return !(a.from === from && a.generatorId === generatorId)
-    }))
+    setActionArrows(prev => arrowListRemove(prev, from, generatorId, to))
   }, [])
 
   const removeArrowAll = useCallback((from: number) => {
@@ -266,11 +243,7 @@ export function GroupActionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const replaceGenArrows = useCallback((generatorId: string | null, pairs: [number, number][]) => {
-    const pairFroms = new Set(pairs.map(([from]) => from))
-    setActionArrows(prev => [
-      ...prev.filter(a => a.generatorId !== generatorId && !(pairFroms.has(a.from) && a.generatorId === null)),
-      ...pairs.map(([from, to]) => ({ generatorId, from, to })),
-    ])
+    setActionArrows(prev => arrowListReplaceGen(prev, generatorId, pairs))
     setActionError(null)
   }, [])
 

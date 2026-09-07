@@ -1,5 +1,13 @@
 import { z } from 'zod'
-import { CAYLEY_SHAPES_2D, LAYOUTS_3D, type CayleyShape2D, type Layout3D, type MultiplyType } from './view'
+import {
+  CAYLEY_SHAPES_2D,
+  LATTICE_LABEL_DETAILS,
+  LAYOUTS_3D,
+  type CayleyShape2D,
+  type LatticeLabelDetail,
+  type Layout3D,
+  type MultiplyType,
+} from './view'
 
 export interface ViewWindowConfig {
   /** 锁定窗口移动与缩放（标题栏拖拽 + 内容平移/缩放 + 窗口 resize 全部禁用） */
@@ -16,6 +24,9 @@ export interface ViewWindowConfig {
   showControls?: boolean
   /** 是否显示底部缩放滑杆浮层。缺省 true；false 时 Ctrl+滚轮缩放仍可用 */
   showZoomSlider?: boolean
+  /** 固定 symmetry 视图的演示元素（true 时 ⚙ 面板 Action element 列表变只读、隐藏 Reset，
+   *  演示元素由 viewParams.actionElementId 决定且不可切换；⟳ Replay 仍可用）。缺省 false */
+  actionLocked?: boolean
 }
 
 export const viewWindowConfigSchema = z.object({
@@ -145,6 +156,107 @@ export interface TableViewParams {
 export const tableViewParamsSchema = z.object({
   strategy: z.enum(['subgroup', 'random', 'full']).optional(),
   cellSize: z.number().min(20).max(120).optional(),
+})
+
+export interface SublatticeViewParams {
+  /** 名片细节档；缺省 'auto'（按窗口尺寸与缩放在三档间自动降级） */
+  labelDetail?: LatticeLabelDetail
+  /** 共轭子群合并为轨道节点（×n 角标，n = |G : N_G(H)|）；缺省 false */
+  mergeConjugates?: boolean
+  /** 名片与层距的世界单位乘子；缺省 1 */
+  nodeScale?: number
+  /** 底部子群列面板；缺省 false（小窗里细节改由 caption 行承载） */
+  showSeriesPanel?: boolean
+}
+
+export const sublatticeViewParamsSchema = z.object({
+  labelDetail: z.enum(LATTICE_LABEL_DETAILS).optional(),
+  mergeConjugates: z.boolean().optional(),
+  nodeScale: z.number().min(0.6).max(1.6).optional(),
+  showSeriesPanel: z.boolean().optional(),
+})
+
+export interface CosetStripViewParams {
+  /** 子群 H 的元素 id（升序）；缺省 = listCosetStripSubgroups 首候选（index 最小者）。
+   *  换群后失效（不再是 G 的真子群）由渲染层校验并回退默认候选 */
+  subgroup?: string[]
+  /** 展示左/右陪集族；缺省 'left'（与主应用 cosetType 默认一致） */
+  cosetType?: 'left' | 'right'
+  /** 是否显示节点常驻标签；缺省 false（嵌入窗口读元素靠悬停就地气泡，与 set/cayley 窗口一致） */
+  showLabels?: boolean
+  /** 是否在 H 条带上方画 H 自身的 Cayley 小圈；缺省 false（主画布大视口才默认显示，窗口内省空间） */
+  showSubgroupCayley?: boolean
+}
+
+export const cosetStripViewParamsSchema = z.object({
+  subgroup: z.array(z.string()).min(1).max(240).optional(),
+  cosetType: z.enum(['left', 'right']).optional(),
+  showLabels: z.boolean().optional(),
+  showSubgroupCayley: z.boolean().optional(),
+})
+
+export interface SymmetryViewParams {
+  /** 对偶多面体（cube↔octahedron / icosahedron↔dodecahedron）；缺省 false（与主画布 toggle 一致）。
+   *  prop 优先，未设置时场景内 toggle 按钮本地态兜底 */
+  variant?: boolean
+  /** 元素作用演示开关（对齐主画布 ViewPanel「显示元素操作」）；缺省 false */
+  showAction?: boolean
+  /** 动画倍速 0.2–5；缺省 1 */
+  rotateSpeed?: number
+  /** 演示元素 id（toggle 语义：点活跃元素回到恒等姿态）。换群后失效（非本群元素）由渲染层忽略。
+   *  博客插图等静态场景注入该值，mount 即播放一次旋转并静止展示 */
+  actionElementId?: string | null
+  /** 顶部群名 + 几何描述标注；缺省 true（小窗可关） */
+  showFigureTitle?: boolean
+}
+
+export const symmetryViewParamsSchema = z.object({
+  variant: z.boolean().optional(),
+  showAction: z.boolean().optional(),
+  rotateSpeed: z.number().min(0.2).max(5).optional(),
+  actionElementId: z.string().min(1).nullable().optional(),
+  showFigureTitle: z.boolean().optional(),
+})
+
+export interface HomomorphismViewParams {
+  /** 是否显示节点常驻标签；缺省 false（嵌入窗口读元素靠悬停就地气泡，与 set/cayley 窗口一致） */
+  showLabels?: boolean
+}
+
+export const homomorphismViewParamsSchema = z.object({
+  showLabels: z.boolean().optional(),
+})
+
+/** action 视图窗口参数（批次六 props 化）。窗口范围：conjugation / regular / custom 三来源；
+ *  sylow / coset 不在窗口支持列表（renderContent 无分支） */
+export interface ActionViewParams {
+  /** 作用来源；缺省 'conjugation' */
+  actionKind?: 'conjugation' | 'regular' | 'custom'
+  /** custom 专用：|X|（1..20）；缺省 6 */
+  setSize?: number
+  /** custom 专用：已验证的箭头绑定列表（JSON 可序列化，随 viewParams 持久化）。
+   *  换群后 generatorId 失效（非新群生成元）由渲染层回退编辑态 */
+  arrows?: { generatorId: string | null; from: number; to: number }[]
+  /** 是否显示节点常驻标签与顶部轨道 chips 区；缺省 false（嵌入窗口节点空圈 + 悬停就地气泡，
+   *  与 homo/cosetstrip 窗口一致）。主画布壳始终 true */
+  showLabels?: boolean
+}
+
+export const actionViewParamsSchema = z.object({
+  actionKind: z.enum(['conjugation', 'regular', 'custom']).optional(),
+  setSize: z.number().int().min(1).max(20).optional(),
+  // 上限：|X|≤20 × 生成元（≤8）+ 未绑定箭头，200 足够宽松
+  arrows: z
+    .array(
+      z.object({
+        generatorId: z.string().nullable(),
+        from: z.number().int().min(0).max(19),
+        to: z.number().int().min(0).max(19),
+      }),
+    )
+    .max(200)
+    .optional(),
+  showLabels: z.boolean().optional(),
 })
 
 export interface ViewWindowGeometry {

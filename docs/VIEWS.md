@@ -70,6 +70,8 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 
 **导出 GIF**：`exportSymmetryAsGif()`——清除选中 → 重设元素触发新动画 → 20fps 录制 2 秒（gifenc）。
 
+**受控内核（v1.23.0，FGVE 阶段 2 批次七）**：`SymmetryView.tsx` 拆 `SymmetryViewScene`（纯 props：group/symmetryType?/dark（场景配色随主题解耦）/variant（dual-solid：cube↔octahedron、icosahedron↔dodecahedron）/showAction/actionElementId/rotateSpeed/showFigureTitle/locked/onHint/hintOnIdle/replaySignal）+ context 壳 `SymmetryView()`（签名不变）。场景内悬浮变体切换按钮移除——主画布改由 ViewPanel 的 Shape 选项喂 `variant`（`GroupSymmetryContext` 新增 `symmetryVariant`，换群复位）。ViewWindow 接入：渲染分支直渲 Scene（dark=窗口主题、`showFigureTitle` 缺省 false——标题栏已显群名避免重复、locked=config.locked、onHint→内容区底部 ⟳ Replay / ✕ Reset 浮条）+ 参数面板 Symmetry View 段（unsupported 群提示 / dual solid 切换（仅 cube|icosahedron 类群）/ Show element actions + Speed slider / Action element 列表点行触发、点已选行重播、✕ Reset pose / `config.actionLocked` 固定演示模式——列表与 Reset 隐藏只读 fixed 元素、只能 ⟳ Replay）；`replaySignal` 显式重放修复「动画播完无入口重看」缺口；视作自管理布局禁用窗口 ct 平移缩放（同 3d）。
+
 ## 7. 子群格视图 (SubgroupLatticeView.tsx)
 
 - Hasse 图：节点按层级排列，边表示包含关系
@@ -82,12 +84,32 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
   - 合成列多链切换：小群枚举全部合成列（≤20 条守卫），面板出现链选择器（`i / n`）+ 链数文案；截断时黄色警示
   - 大群守卫：`SERIES_MAX_ORDER = 240`，超限显示提示文案（后端二期）
 
+### 7.1 受控内核与小窗口可读性（v1.19.0，FGVE 阶段 2 批次三）
+
+`SubgroupLatticeView.tsx` 拆为三块：**`SublatticeScene`**（受控内核，全 props 可选、缺省在渲染层 `??` 解析）、**`SeriesPanel`**（纯呈现）、尾部同名组装壳 `SubgroupLatticeView()`（吃 `useGroup()`，GroupCanvas 与旧浮动窗零改动）。内核可只给 `group` 自算格（order ≤ 60），或由宿主传 `lattice`（大群后端通路）。
+
+小窗口里"名片糊成一团"靠四层解决（布局/LOD 纯函数在 `src/core/algebra/latticeLayout.ts`）：
+
+| 层 | 做法 | 关键点 |
+|----|------|--------|
+| fit | 世界坐标紧贴内容（旧实现有 1000×600 下限，连 6 节点的 S₃ 格塞进 520px 窗口都只剩 7px 文字）；每层按 slotW 均分槽位并整体居中 | `computeLatticeLayout`；同层顺序走 `orderLevelsByBarycenter`（交替自上/下扫描降交叉，`countLatticeCrossings` 可诊断） |
+| LOD 三档 | 按**槽位屏幕宽+高双指标**自动定档：`full`（≥150×66，完整名片）→ `compact`（≥56×26，胶囊只留一行，顶层群符号走 KaTeX）→ `dots`（圆点 + 类别色编码） | 双指标必需：合并后的轨道格窄高，单看宽度会误降；compact/dots 几何按 `1/eff` 反算并以槽位封顶 → 屏幕恒定大小且永不重叠；`labelDetail` 参数可手动定档 |
+| 共轭合并 | `mergeConjugates`：gHg⁻¹ 同一轨道的子群合成一个节点 + `×n` 角标（n = 轨道长 = `\|G : N_G(H)\|`），S₃ 6→4、A₄ 10→5 | `subgroupConjugacyOrbits` 闭包**只用生成元**（⟨S⟩=G ⇒ 与全元素共轭同果，代价 O(Σ\|orbit\|·\|S\|·\|H\|)，S₆ 也可用）；边 = Hasse 边的像 → 去重 → `transitiveReduce` → `levelsByOrderRank`；`MERGE_MAX_NODES = 2000` 守卫超限回退并提示 |
+| 信息外置 | 底部 `lattice-caption` 一行按 hover ?? 选中给出完整名片：`\|H\|=3 ≅ C₃ · [G:H]=4 · 4 个共轭子群 · \|N_G(H)\|=3 · ⟨(234)⟩ · N₁·导列` | 结构符号 = `subgroupStructureSymbol`（在母群上就地算子集阶分布 + 交换性，O(\|H\|²) 只在悬停节点跑）；series 面板在窗口里默认收起（`showSeriesPanel=false`）以免吃掉 1/4~1/3 绘图区 |
+
+**ViewWindow 接入**（`view === 'sublattice'`）：参数面板四控件 = Label detail 下拉（auto/full/compact/dots）、Merge conjugates 复选、Card size 滑杆（0.6–1.6）、Series panel 复选；持久化键 `gv-vw-{symbol}|{order}|sublattice`（`__gvVersion` 信封 + `sublatticeViewParamsSchema` 校验回退）。
+
+**两个坑**：① svg 必须**绝对定位**在 `flex:1 / minHeight:0` 宿主内——否则其 viewBox 宽高比会以 min-content 高度撑破定高窗口（Chrome 行为）；② 内核用 ResizeObserver 自测绘图区像素（`getBoundingClientRect`），不吃宿主 `viewBoxSize`——因为 ViewWindow 传的是**像素**而 GroupCanvas 传的是**世界 viewBox**，语义冲突；测得 0（首帧/happy-dom）→ fit=1 落 full 档。
+
+**主画布行为**：窗口增高时槽位屏幕宽度上升，档位自动从 compact 升回 full（实测 S₃ 在 1500×1250 视口下恢复完整名片，Sylow/正规/Z(G) 角标齐全）；`fit ≤ 1` 保证名片不会被放大到失真。
+
 ## 8. 同态视图 (HomomorphismView.tsx)
 
 - 源/目标群两个圆形 Cayley 图 + 弯曲彩色映射边
 - 悬停/固定源元素 → 高亮像；悬停目标 → 高亮原像
 - 核（红）/像（青）着色 + 单射/满射/同构 chips
 - `theoremMode` 时全屏渲染 `FirstIsomorphismAnimation`（4 阶段动画证明 G/ker ≅ im：核 → 商群纤维簇 → 同构），步进按钮 + 方向键
+- **受控内核（v1.21.0，FGVE 阶段 2 批次五）**：`HomomorphismScene`（纯 props：source/target/mapping/result/name/theoremMode/onTheoremModeChange/theoremAnimation/showLabels/onHover，`result` 缺省内部 `verifyHomomorphism` 推导）+ context 壳 `HomomorphismView()`；`FirstIsomorphismAnimationScene`（纯 props + `onPhaseChange` 回写替代 `setTheoremPhase`）+ context 壳。ViewWindow 经 `homomorphism?: Homomorphism` 单 prop 打包双群接入（view==='homomorphism' 时 group 可为 null）；`HomomorphismViewParams{showLabels?}` 窗口缺省隐藏节点标签靠悬停就地气泡（源/目标节点 `<g data-homo-source-node>/<g data-homo-target-node>` 钩子）；视作自管理布局禁用窗口 ct 平移缩放（同 3d/symmetry）。
 
 ## 9. 陪集条带视图 (CosetStripView.tsx)
 

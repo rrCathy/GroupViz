@@ -8,26 +8,8 @@ import { useTheme } from '../../theme/useTheme'
 import { texify, renderTex } from '../../utils/texify'
 import { computeElementRotation } from '../../core/elementRotation'
 import type { Group, GroupElement } from '../../core/types'
-
-type SymmetryType = 'cyclic' | 'dihedral' | 'tetrahedron' | 'cube' | 'icosahedron' | 'rectangle' | 'unsupported'
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function getSymmetryType(group: Group): SymmetryType {
-  const sym = group.symbol
-  // Direct products / powers are not full symmetry groups of a single 3D figure.
-  // These must be checked before the C/D prefix classes (whose symbols they share).
-  if (sym === 'C_{2}^{2}' || sym === 'C_{2}\\times C_{2}') return 'rectangle'
-  if (sym.includes('\\times') || sym.includes('^{')) return 'unsupported'
-  if (sym.startsWith('C')) return 'cyclic'
-  if (sym.startsWith('D')) return 'dihedral'
-  if (sym === 'S_{3}') return 'dihedral'
-  if (sym === 'A_{4}') return 'tetrahedron'
-  if (sym === 'S_{4}') return 'cube'
-  if (sym === 'A_{5}') return 'icosahedron'
-  if (sym === 'V_{4}') return 'rectangle'
-  if (sym.startsWith('S') || sym.startsWith('A')) return 'unsupported'
-  return 'unsupported'
-}
+import { getSymmetryType } from '../../core/symmetryType'
+import type { SymmetryType } from '../../core/symmetryType'
 
 interface SymmetryData {
   vertices: THREE.Vector3[]
@@ -365,12 +347,55 @@ function computeGeometricRotation(group: Group, element: GroupElement, data: Sym
   }
 }
 
-function SymmetryViewInner({ group, symmetryType }: { group: Group; symmetryType: SymmetryType }) {
-  const [variant, setVariant] = useState(false)
-  const { symmetryShowAction, symmetryRotateSpeed, symmetryActionElementId } = useGroup()
-  const { theme } = useTheme()
-  const bgColor = theme === 'dark' ? '#0a0a1a' : '#f4f4f7'
+export interface SymmetryViewSceneProps {
+  /** 展示群（null 由调用方自行占位，本组件要求非空） */
+  group: Group
+  /** 对称类型；缺省按 getSymmetryType(group) 推导（unsupported 群渲染提示 overlay） */
+  symmetryType?: SymmetryType
+  /** 深色场景配色（背景 + 顶部标注文字）；主画布传主主题，ViewWindow 传窗口主题（解耦） */
+  dark?: boolean
+  /** 对偶多面体（cube↔octahedron / icosahedron↔dodecahedron）：受控形态（false=主形 / true=对偶形）。
+   *  切换入口由宿主提供（ViewWindow ⚙ 面板 / 主画布 ViewPanel 的 Shape 选项），场景内不再悬浮切换按钮 */
+  variant?: boolean
+  /** 元素作用演示开关；缺省 false */
+  showAction?: boolean
+  /** 演示元素 id（受控，toggle 语义：点活跃元素回到恒等姿态）；缺省 null */
+  actionElementId?: string | null
+  /** 动画倍速 0.2–5；缺省 1 */
+  rotateSpeed?: number
+  /** 顶部群名 + 几何描述标注；缺省 true（小窗可关） */
+  showFigureTitle?: boolean
+  /** 锁定相机交互（拖拽旋转/平移/缩放）；演示动画期间本就禁用 */
+  locked?: boolean
+  /** 演示状态提示回调（主画布接 hint bar，ViewWindow 显示为内容区底部唯一浮条）；缺省无 */
+  onHint?: (msg: string) => void
+  /** 演示开启但当前元素无可旋转作用（恒等/未选）时，是否上抛 clickHint 引导；
+   *  主画布缺省 true（提示去其它视图点元素）；ViewWindow 传 false（引导文案写在参数面板，浮条只显示真实状态） */
+  hintOnIdle?: boolean
+  /** 重放信号：宿主自增该值即对当前演示元素重播一次动画（姿态不改变目标，
+   *  解决同元素动画播完一次后无入口重看的缺口）；缺省 0 */
+  replaySignal?: number
+}
 
+/** 对称性视图纯渲染核（props 化、主题解耦）：Canvas + 场景 + 顶部标注 + 演示动画。
+ *  主画布经 SymmetryView 适配器接入全局 context；ViewWindow（FGVE 引擎）受控直接使用。 */
+export function SymmetryViewScene({
+  group,
+  symmetryType: symmetryTypeProp,
+  dark = false,
+  variant = false,
+  showAction = false,
+  actionElementId = null,
+  rotateSpeed = 1,
+  showFigureTitle = true,
+  locked = false,
+  onHint,
+  hintOnIdle = true,
+  replaySignal = 0,
+}: SymmetryViewSceneProps) {
+  const symmetryType = symmetryTypeProp ?? getSymmetryType(group)
+
+  // hooks 前置（不随 unsupported 分支提前返回，保证切换群时 hooks 顺序稳定）
   const data = useMemo((): SymmetryData => {
     const radius = 4
     switch (symmetryType) {
@@ -384,6 +409,10 @@ function SymmetryViewInner({ group, symmetryType }: { group: Group; symmetryType
     }
   }, [group, symmetryType, variant])
 
+  if (symmetryType === 'unsupported') return <UnsupportedOverlay group={group} />
+
+  const bgColor = dark ? '#0a0a1a' : '#f4f4f7'
+
   return (
     <div style={{ width: '100%', height: '100%', background: bgColor }}>
       <Canvas camera={{ position: [0, 3, 10], fov: 50, near: 0.1, far: 100 }} gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}>
@@ -393,29 +422,45 @@ function SymmetryViewInner({ group, symmetryType }: { group: Group; symmetryType
           symmetryType={symmetryType}
           data={data}
           variant={variant}
-          onToggleVariant={() => setVariant(v => !v)}
-          showAction={symmetryShowAction}
-          actionElementId={symmetryActionElementId}
-          rotateSpeed={symmetryRotateSpeed}
+          showAction={showAction}
+          actionElementId={actionElementId}
+          rotateSpeed={rotateSpeed}
+          showFigureTitle={showFigureTitle}
+          dark={dark}
+          locked={locked}
+          onHint={onHint}
+          hintOnIdle={hintOnIdle}
+          replaySignal={replaySignal}
         />
       </Canvas>
     </div>
   )
 }
 
+/** 主画布适配器：从全局 Provider 组装 SymmetryViewScene 所需 props（保留原行为不变）。 */
 export function SymmetryView() {
-  const { currentGroup } = useGroup()
+  const { currentGroup, symmetryShowAction, symmetryRotateSpeed, symmetryVariant, symmetryActionElementId, setHintMessage } = useGroup()
   const { t } = useTranslation()
+  const { theme } = useTheme()
   if (!currentGroup) return <div className="view-empty"><p>{t('canvas.noGroupCreate')}</p></div>
-  const symmetryType = getSymmetryType(currentGroup)
-  if (symmetryType === 'unsupported') return <UnsupportedOverlay group={currentGroup} />
-  return <SymmetryViewInner group={currentGroup} symmetryType={symmetryType} />
+  return (
+    <SymmetryViewScene
+      group={currentGroup}
+      dark={theme === 'dark'}
+      variant={symmetryVariant}
+      showAction={symmetryShowAction}
+      actionElementId={symmetryActionElementId}
+      rotateSpeed={symmetryRotateSpeed}
+      onHint={setHintMessage}
+    />
+  )
 }
 
 function useAnimatedRotation(
   targetQuat: THREE.Quaternion | null,
   speed: number,
   onPhaseChange: (phase: 'rest' | 'reset' | 'rotating') => void,
+  replaySignal?: number,
 ) {
   const stateRef = useRef({
     target: null as THREE.Quaternion | null,
@@ -444,6 +489,18 @@ function useAnimatedRotation(
       onPhaseChange('rest')
     }
   }, [targetQuat, onPhaseChange])
+
+  // 显式重放：replaySignal 递增即对当前姿态再播一次（不改变目标），
+  // 解决"动画只在元素切换时播一次、同元素无法重看"的交互缺口。
+  useEffect(() => {
+    const st = stateRef.current
+    if (!replaySignal || !st.target) return
+    st.t = 0
+    st.phase = 'reset'
+    st.settled = false
+    onPhaseChange('reset')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replaySignal])
 
   useFrame((_, dt) => {
     const st = stateRef.current
@@ -568,21 +625,25 @@ function AxisMarker({ from, to, intersections }: {
 }
 
 function SymmetryScene({
-  group, symmetryType, data, variant, onToggleVariant,
+  group, symmetryType, data, variant,
   showAction, actionElementId, rotateSpeed,
+  showFigureTitle, dark, locked, onHint, hintOnIdle, replaySignal,
 }: {
   group: Group
   symmetryType: SymmetryType
   data: SymmetryData | null
   variant: boolean
-  onToggleVariant: () => void
   showAction: boolean
   actionElementId: string | null
   rotateSpeed: number
+  showFigureTitle: boolean
+  dark: boolean
+  locked: boolean
+  onHint?: (msg: string) => void
+  hintOnIdle: boolean
+  replaySignal: number
 }) {
-  const { setHintMessage } = useGroup()
   const { t } = useTranslation()
-  const { theme } = useTheme()
   const [animPhase, setAnimPhase] = useState<'rest' | 'reset' | 'rotating'>('rest')
 
   const animInfo = useMemo(() => {
@@ -601,23 +662,34 @@ function SymmetryScene({
     return q
   }, [animInfo])
 
-  const animRef = useAnimatedRotation(targetQuat, rotateSpeed, setAnimPhase)
+  const animRef = useAnimatedRotation(targetQuat, rotateSpeed, setAnimPhase, replaySignal)
+
+  // 演示状态反馈：统一经 onHint 上抛（主画布 hint bar / ViewWindow 底部浮条），宿主各自决定单处展示位置
+  const activeEl = useMemo(
+    () => (showAction && actionElementId ? group.elements.find(e => e.id === actionElementId) ?? null : null),
+    [showAction, actionElementId, group],
+  )
+  const statusText = useMemo(() => {
+    if (!activeEl || !animInfo) return null
+    const phaseSuffix = animPhase === 'reset' ? ` — ${t('symmetry.reset')}`
+      : animPhase === 'rotating' ? ` — ${t('symmetry.rotating')}`
+        : ''
+    return { label: activeEl.label, action: animInfo.label, suffix: phaseSuffix }
+  }, [activeEl, animInfo, animPhase, t])
 
   useEffect(() => {
     if (!showAction) return
-    if (!animInfo) {
-      setHintMessage(t('symmetry.clickHint'))
+    if (!statusText) {
+      // 演示开启但当前元素无可演示的几何旋转（未选 / 恒等）→ 仅主画布需要 clickHint 引导；
+      // ViewWindow 的引导文案写在 ⚙ 面板元素列表旁（hintOnIdle=false），浮条只显示真实演示状态
+      if (hintOnIdle) onHint?.(t('symmetry.clickHint'))
       return
     }
-    const elLabel = group.elements.find(e => actionElementId && e.id === actionElementId)?.label || ''
-    if (animPhase === 'reset') setHintMessage(`<span class="hint-highlight">${elLabel}</span>: ${animInfo.label} — ${t('symmetry.reset')}`)
-    else if (animPhase === 'rotating') setHintMessage(`<span class="hint-highlight">${elLabel}</span>: ${animInfo.label} — ${t('symmetry.rotating')}`)
-    else setHintMessage(`<span class="hint-highlight">${elLabel}</span>: ${animInfo.label}`)
-  }, [showAction, animInfo, animPhase, actionElementId, group, setHintMessage, t])
+    onHint?.(`<span class="hint-highlight">${statusText.label}</span>: ${statusText.action}${statusText.suffix}`)
+  }, [showAction, statusText, onHint, hintOnIdle, t])
 
   const hasData = !!data
   const isDirected = data?.directed === true
-  const canToggle = symmetryType === 'cube' || symmetryType === 'icosahedron'
   const topY = useMemo(() => data ? data.vertices.reduce((max, v) => Math.max(max, v.y), -Infinity) : 0, [data])
   const dataRadius = useMemo(() => data ? data.vertices[0].length() : 4, [data])
 
@@ -687,29 +759,24 @@ function SymmetryScene({
       <directionalLight position={[-5, -2, -3]} intensity={0.6} />
       <pointLight position={[0, 5, 0]} intensity={0.5} />
 
-      <Html position={[0, topY + 1.5, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
-        <div style={{ color: theme === 'dark' ? '#fff' : '#1a1a2e', fontSize: '20px', fontWeight: 'bold', textShadow: theme === 'dark' ? '0 0 10px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
-          dangerouslySetInnerHTML={{ __html: renderTex(texify(group.name)) }} />
-      </Html>
+      {showFigureTitle && (
+        <Html position={[0, topY + 1.5, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
+          <div style={{ color: dark ? '#fff' : '#1a1a2e', fontSize: '20px', fontWeight: 'bold', textShadow: dark ? '0 0 10px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
+            dangerouslySetInnerHTML={{ __html: renderTex(texify(group.name)) }} />
+        </Html>
+      )}
 
-      <Html position={[0, topY + 2.2, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
-        <div style={{ color: theme === 'dark' ? '#aaa' : '#555566', fontSize: '13px', textShadow: theme === 'dark' ? '0 0 8px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
-          dangerouslySetInnerHTML={{ __html: renderTex(
-            symmetryType === 'cyclic' ? `C_{{${group.order}}} \\cdot ` + t('symmetry.geo.cyclicText', { n: group.order }) :
-            symmetryType === 'dihedral' ? `D_{{${group.order/2}}} \\cdot ` + t('symmetry.geo.dihedralText', { n: group.order/2 }) :
-            symmetryType === 'cube' ? (variant ? t('symmetry.geo.octahedron') : t('symmetry.geo.cube')) :
-            symmetryType === 'icosahedron' ? (variant ? t('symmetry.geo.dodecahedron') : t('symmetry.geo.icosahedron')) :
-            t('symmetry.geo.' + symmetryType)
-          ) }} />
-      </Html>
-
-      {canToggle && (
-        <Html position={[0, topY + 3.0, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
-          <button onClick={(e) => { e.stopPropagation(); onToggleVariant() }}
-            style={{ background: 'var(--bg-element-chip)', border: '1px solid var(--border-primary)', color: 'var(--text-secondary)', padding: '3px 10px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer', userSelect: 'none' }}>
-            {symmetryType === 'cube' ? (variant ? t('symmetry.toCube') : t('symmetry.toOctahedron')) : ''}
-            {symmetryType === 'icosahedron' ? (variant ? t('symmetry.toIcosahedron') : t('symmetry.toDodecahedron')) : ''}
-          </button>
+      {showFigureTitle && (
+        <Html position={[0, topY + 2.2, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
+          <div style={{ color: dark ? '#aaa' : '#555566', fontSize: '13px', textShadow: dark ? '0 0 8px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
+            dangerouslySetInnerHTML={{ __html: renderTex(
+              // 副标题只描述几何形态（群名已在上方标题行，不再重复符号前缀）
+              symmetryType === 'cyclic' ? t('symmetry.geo.cyclicText', { n: group.order }) :
+              symmetryType === 'dihedral' ? t('symmetry.geo.dihedralText', { n: group.order / 2 }) :
+              symmetryType === 'cube' ? (variant ? t('symmetry.geo.octahedron') : t('symmetry.geo.cube')) :
+              symmetryType === 'icosahedron' ? (variant ? t('symmetry.geo.dodecahedron') : t('symmetry.geo.icosahedron')) :
+              t('symmetry.geo.' + symmetryType)
+            ) }} />
         </Html>
       )}
 
@@ -741,8 +808,9 @@ function SymmetryScene({
         enableDamping={false}
         minDistance={2}
         maxDistance={20}
-        enableRotate={!showAction}
-        enablePan={!showAction}
+        enableRotate={!showAction && !locked}
+        enablePan={!showAction && !locked}
+        enableZoom={!locked}
       />
     </>
   )

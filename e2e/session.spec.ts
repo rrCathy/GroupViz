@@ -21,7 +21,8 @@ test.describe('session persistence', () => {
   test('theme toggle persists across reloads', async ({ page }) => {
     await enterWorkspace(page)
     const before = await page.evaluate(() => document.documentElement.getAttribute('data-theme') ?? '')
-    await page.locator('button.theme-toggle').click()
+    // 头部有两个 .theme-toggle（应用主题 + 视图窗口主题，v1.18.0 起），按 title 精确取应用主题
+    await page.locator('button.theme-toggle[title^="Switch"]').click()
     const stored = await page.evaluate(() => localStorage.getItem('groupviz-theme'))
     expect(stored).not.toBeNull()
     await page.reload()

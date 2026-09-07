@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getSymmetryType } from '../components/Canvas/SymmetryView'
+import { getSymmetryType } from '../core/symmetryType'
 import type { Group } from '../core/types'
 
 function groupWithSymbol(symbol: string): Group {

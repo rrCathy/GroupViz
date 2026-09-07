@@ -45,6 +45,16 @@ describe('engine boundary: src/core purity', () => {
     expect(violations).toEqual([])
   })
 
+  it('core 源码不引用 core 之外的 utils/components（含 import type）', () => {
+    const forbidden = /from\s+['"](?:\.\.?\/)*(?:utils|components)(?:\/|['"])/
+    const violations: string[] = []
+    for (const [path, raw] of coreSourceFiles()) {
+      const src = stripComments(raw)
+      if (forbidden.test(src)) violations.push(path)
+    }
+    expect(violations).toEqual([])
+  })
+
   it('门面导出数量充足（协议面完整）', () => {
     const count = Object.keys(Core).length
     expect(count).toBeGreaterThan(180)
@@ -65,6 +75,7 @@ describe('engine facade: 公共 API 存在性', () => {
     'createDirectProduct',
     'createSemidirectProduct',
     'createGroupFromImport',
+    'createGroupFromSymbol',
     'getAllSmallGroups',
     'getSmallGroupBySymbol',
     'getPrecomputed',
@@ -95,8 +106,9 @@ describe('engine facade: 公共 API 存在性', () => {
     'computeStabilizers',
     'verifyOrbitStabilizer',
     'buildActionComputation',
-    // sylow / series / properties
+    // sylow / series / properties / combinatorics
     'factorizeOrder',
+    'binomialMod',
     'findSylowSubgroups',
     'computeSylowAnalysis',
     'computeSubgroupSeries',
@@ -117,6 +129,10 @@ describe('engine facade: 公共 API 存在性', () => {
     // structure
     'findSemidirectDecompositions',
     'detectStructureType',
+    // descriptor v1 协议
+    'serializeDescriptor',
+    'deserializeDescriptor',
+    'descriptorToSymbol',
     // ring order
     'ringOrder',
     'powerRingOrder',
@@ -173,6 +189,12 @@ describe('engine facade: 公共 API 存在性', () => {
   const constNames = ['COLOR_PALETTE', 'SUBSET_COLORS', 'COSET_COLORS']
   it.each(constNames)('Core.%s 常量已导出', (name) => {
     expect(Array.isArray((CoreTypes as Record<string, unknown>)[name])).toBe(true)
+  })
+
+  it('GroupDescriptorSchemaV1 已从门面导出（zod 协议对象）', () => {
+    const schema = (Core as Record<string, unknown>).GroupDescriptorSchemaV1
+    expect(schema).toBeTruthy()
+    expect(typeof (schema as { parse?: unknown }).parse).toBe('function')
   })
 
   it('automorphisms 内部版 isAutomorphismGroup 不经门面二次导出（公共版在 groupProps）', () => {

@@ -425,3 +425,48 @@ export function buildActionComputation(group: Group, def: GroupActionDef, arrows
     computation: { n, perms, orbits, orbitOf, stabilizers, isHomomorphism: ok, violation, setLabels },
   }
 }
+
+// ── 自定义作用箭头列表纯变换（GroupActionContext 与受控 ViewWindow 共用的单一事实源） ──
+
+/** 添加（或更新）箭头：同 key（生成元+from，未绑定按 from+to）已存在则更新 to，否则追加 */
+export function arrowListAdd(arrows: GroupActionArrow[], from: number, to: number, generatorId: string | null = null): GroupActionArrow[] {
+  const key = generatorId === null ? `u|${from}|${to}` : `${generatorId}|${from}`
+  const idx = arrows.findIndex(a =>
+    (a.generatorId === null ? `u|${a.from}|${a.to}` : `${a.generatorId}|${a.from}`) === key)
+  if (idx !== -1) {
+    const next = arrows.slice()
+    next[idx] = { ...next[idx], to, generatorId }
+    return next
+  }
+  return [...arrows, { generatorId, from, to }]
+}
+
+/** 绑定生成元：把 (from,to) 的未绑定箭头转为生成元箭头，并移除同生成元同 from 的旧箭头 */
+export function arrowListBind(arrows: GroupActionArrow[], from: number, to: number, generatorId: string): GroupActionArrow[] {
+  const unbound = arrows.find(a => a.generatorId === null && a.from === from && a.to === to)
+  if (!unbound) return arrows
+  const next = arrows.filter(a =>
+    !(a.generatorId === null && a.from === from && a.to === to) &&
+    !(a.generatorId === generatorId && a.from === from))
+  next.push({ generatorId, from, to })
+  return next
+}
+
+/** 移除箭头：generatorId=null 时删该 from 的未绑定箭头（to 指定则精确匹配），否则删该生成元该 from 的箭头 */
+export function arrowListRemove(arrows: GroupActionArrow[], from: number, generatorId: string | null = null, to?: number): GroupActionArrow[] {
+  return arrows.filter(a => {
+    if (generatorId === null) {
+      return !(a.from === from && a.generatorId === null && (to === undefined || a.to === to))
+    }
+    return !(a.from === from && a.generatorId === generatorId)
+  })
+}
+
+/** 整体替换某生成元的全部箭头（cycle 候选应用）；清除被替换 from 上的未绑定箭头 */
+export function arrowListReplaceGen(arrows: GroupActionArrow[], generatorId: string | null, pairs: [number, number][]): GroupActionArrow[] {
+  const pairFroms = new Set(pairs.map(([from]) => from))
+  return [
+    ...arrows.filter(a => a.generatorId !== generatorId && !(pairFroms.has(a.from) && a.generatorId === null)),
+    ...pairs.map(([from, to]) => ({ generatorId, from, to })),
+  ]
+}

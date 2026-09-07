@@ -1,6 +1,6 @@
 import type { Group, GroupElement, Generator } from '../types'
 import { COLOR_PALETTE } from '../types'
-import type { ApiImportGroup } from '../../utils/api'
+import type { ApiImportGroup } from '../types/import'
 import { assignWordLabels, applyDihedralNormalForm } from './SmallGroups'
 
 /**

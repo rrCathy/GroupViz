@@ -81,7 +81,9 @@ findSylowSubgroups / sylowConjugationPerms（src/core/algebra/sylow.ts，Sylow �
 
 **状态**（`src/context/actions/GroupActionContext.tsx`）：actionKind/actionSetSize/actionArrows/actionEditing/actionComputation/actionError/actionSelectedElement/actionHoverElement/actionPrime；动作 createConjugationAction/startCustomAction/addArrow/bindArrow/removeArrow/replaceGenArrows/clearArrows/completeCustomAction/setActionSelectedElement/setActionHoverElement/createSylowAction/clearAction。群切换时 prevGroupRef 重置（queueMicrotask）。
 
-## 6. 视图（轨道视图，`src/components/Canvas/ActionView.tsx`）
+## 6. 视图（轨道视图，`src/components/Canvas/ActionView.tsx` + `ActionScene.tsx`）
+
+> **批次六 props 化（v1.22.0，FGVE）**：`ActionScene.tsx` 为纯 props 内核（`ActionSceneProps`：group/kind/computation/editing/setSize/arrows/error/箭头四回调/selectedElement/hoveredElement/回调/showLabels/onHover/canvasTransform/viewBoxSize/prime），banner + DisplayMode + CustomActionEditor + Stab box 全场景进 Scene；`ActionView.tsx` 为 useGroup context 壳（签名不变零回归）。受控 ViewWindow（conjugation/regular/custom 三来源）直接渲染 ActionScene：数据自算（`buildActionComputation` 直算或 viewParams 已验证 arrows 自算，坏值回退 noAction），custom 编辑态为窗口本地 state（不持久化，viewParams 只存已验证结果），编辑模式禁 ct 拖拽/滚轮/zoom slider，`showLabels=false`（窗口缺省）节点空圈 + chips 区隐藏 + 悬停就地气泡。箭头列表纯变换 `arrowListAdd/Bind/Remove/ReplaceGen` 在 `core/algebra/actions.ts`（context 与窗口共享）。窗口参数 `ActionViewParams{actionKind?/setSize?/arrows?/showLabels?}` + `actionViewParamsSchema`（viewConfig.ts）。sylow/coset 不在窗口支持列表。
 
 - 轨道簇布局：按大小升序左→右（固定点 ★ 簇最左，呼应书中「稳定元在左」）；簇内环形排列，半径 max(52, size·14)，节点半径 28
 - 只画**生成元**有向边（书中作用图约定），自环隐藏；边色 = 生成元色（COLOR_PALETTE）

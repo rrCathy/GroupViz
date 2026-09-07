@@ -7,6 +7,7 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
 import type { SeriesType } from '../../core/algebra/series'
+import { getSymmetryType } from '../../core/symmetryType'
 
 export function ViewPanel() {
   const {
@@ -22,8 +23,10 @@ export function ViewPanel() {
     setShowHeatmap,
     symmetryShowAction,
     symmetryRotateSpeed,
+    symmetryVariant,
     setSymmetryShowAction,
     setSymmetryRotateSpeed,
+    setSymmetryVariant,
     cayleyMultiplyType,
     cayleyShape3D,
     cayleyAvailableShapes3D,
@@ -53,6 +56,12 @@ export function ViewPanel() {
     { value: 'lowerCentral', labelKey: 'series.lowerCentral' },
     { value: 'composition', labelKey: 'series.composition' },
   ]
+
+  // 对称性几何体形态：S₄/A₅ 一类群有主形与对偶形两个几何体，按形状选项切换（不悬浮在场景上）
+  const symType = currentGroup ? getSymmetryType(currentGroup) : null
+  const symHasDual = symType === 'cube' || symType === 'icosahedron'
+  const symPrimaryKey = symType === 'cube' ? 'panel.solidCube' : symType === 'icosahedron' ? 'panel.solidIcosa' : null
+  const symDualKey = symType === 'cube' ? 'panel.solidOcta' : symType === 'icosahedron' ? 'panel.solidDodeca' : null
 
   const canonical3DEdgeIds = ((): string[] => {
     if (!currentGroup || currentView !== '3d') return []
@@ -251,6 +260,29 @@ export function ViewPanel() {
 
       {currentView === 'symmetry' && (
         <div className="symmetry-settings" style={{ marginTop: '6px' }}>
+          {symHasDual && symPrimaryKey && symDualKey && (
+            <div className="symmetry-shape" style={{ marginBottom: '8px' }}>
+              <div className="param-row">
+                <span className="settings-label">{t('panel.solidShape')}</span>
+              </div>
+              <div className="toggle-group" style={{ flexWrap: 'nowrap' }}>
+                <button
+                  className={`toggle-btn ${!symmetryVariant ? 'active' : ''}`}
+                  onClick={() => setSymmetryVariant(false)}
+                  disabled={!currentGroup}
+                >
+                  {t(symPrimaryKey)}
+                </button>
+                <button
+                  className={`toggle-btn ${symmetryVariant ? 'active' : ''}`}
+                  onClick={() => setSymmetryVariant(true)}
+                  disabled={!currentGroup}
+                >
+                  {t(symDualKey)}
+                </button>
+              </div>
+            </div>
+          )}
           <label className="panel-checkbox">
             <input type="checkbox" checked={symmetryShowAction} onChange={(e) => setSymmetryShowAction(e.target.checked)} disabled={!currentGroup} />
             <span>{t('panel.showAction')}</span>

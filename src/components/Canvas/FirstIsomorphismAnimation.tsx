@@ -6,7 +6,7 @@ import { verifyHomomorphism } from '../../core/algebra/homomorphisms'
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
 import { cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { COLOR_PALETTE } from '../../core/types'
-import type { GroupElement } from '../../core/types'
+import type { Group, GroupElement, HomomorphismResult } from '../../core/types'
 
 const KERNEL_RED = '#ff6b6b'
 const IMAGE_CYAN = '#4ecdc4'
@@ -79,29 +79,41 @@ function computeEdgeEndpoints(
   }
 }
 
-export function FirstIsomorphismAnimation() {
+// ─── First Isomorphism Theorem props-化内核 ──────────────────────────────
+// 主画布经 context 壳 FirstIsomorphismAnimation 接入；phase 回写经 onPhaseChange
+// 上抛（主画布接 setTheoremPhase 驱动 RightPanel 进度）。
+
+export interface FirstIsomorphismAnimationSceneProps {
+  source: Group | null
+  target: Group | null
+  mapping: Map<string, string>
+  /** 预计算结果（null=源/目标缺失或 mapping 为空）。缺省（undefined）由 Scene 内部 verifyHomomorphism 推导 */
+  result?: HomomorphismResult | null
+  /** 定理阶段回写（主画布接 setTheoremPhase）；缺省无 */
+  onPhaseChange?: (phase: number) => void
+}
+
+export function FirstIsomorphismAnimationScene({
+  source,
+  target,
+  mapping,
+  result,
+  onPhaseChange,
+}: FirstIsomorphismAnimationSceneProps) {
   const { t } = useTranslation()
-  const {
-    editingSource: source,
-    editingTarget: target,
-    editingMapping: mapping,
-    activeHomomorphismId,
-    homomorphisms,
-    setTheoremPhase,
-  } = useGroup()
 
   const [phase, setPhase] = useState<Phase>(0)
-  const activeHomo = homomorphisms.find(h => h.id === activeHomomorphismId)
 
-  useEffect(() => { setTheoremPhase(phase) }, [phase, setTheoremPhase])
+  useEffect(() => { onPhaseChange?.(phase) }, [phase, onPhaseChange])
 
-  const result = useMemo(() => {
+  const resolvedResult = useMemo(() => {
+    if (result !== undefined) return result
     if (!source || !target || mapping.size === 0) return null
-    return activeHomo?.result || verifyHomomorphism(source, target, mapping)
-  }, [source, target, mapping, activeHomo])
+    return verifyHomomorphism(source, target, mapping)
+  }, [source, target, mapping, result])
 
   const fibers = useMemo(() => {
-    if (!source || !target || !result?.isHomomorphism) return []
+    if (!source || !target || !resolvedResult?.isHomomorphism) return []
     const fibMap = new Map<string, { targetId: string; sourceIds: string[] }>()
     mapping.forEach((tgtId, srcId) => {
       if (!fibMap.has(tgtId)) fibMap.set(tgtId, { targetId: tgtId, sourceIds: [] })
@@ -114,10 +126,10 @@ export function FirstIsomorphismAnimation() {
       if (!aIsKer && bIsKer) return 1
       return b.sourceIds.length - a.sourceIds.length
     })
-  }, [source, target, mapping, result])
+  }, [source, target, mapping, resolvedResult])
 
-  const kernelIds = useMemo(() => new Set(result?.kernel || []), [result])
-  const imageIds = useMemo(() => new Set(result?.image || []), [result])
+  const kernelIds = useMemo(() => new Set(resolvedResult?.kernel || []), [resolvedResult])
+  const imageIds = useMemo(() => new Set(resolvedResult?.image || []), [resolvedResult])
 
   const targetColorIndex = useMemo(() => {
     if (!target) return new Map<string, number>()
@@ -283,7 +295,7 @@ export function FirstIsomorphismAnimation() {
       </svg>
     )
   }
-  if (!result?.isHomomorphism || fibers.length === 0) {
+  if (!resolvedResult?.isHomomorphism || fibers.length === 0) {
     return (
       <svg viewBox="0 0 960 620" style={{ width: '100%', height: '100%' }}>
         <text x="480" y="300" textAnchor="middle" fill="var(--text-muted)" fontSize="16">
@@ -619,5 +631,34 @@ export function FirstIsomorphismAnimation() {
         ))}
       </g>
     </svg>
+  )
+}
+
+/** 主画布适配器：从全局 Provider 组装 FirstIsomorphismAnimationScene 所需 props（保留原行为不变）。 */
+export function FirstIsomorphismAnimation() {
+  const {
+    editingSource: source,
+    editingTarget: target,
+    editingMapping: mapping,
+    activeHomomorphismId,
+    homomorphisms,
+    setTheoremPhase,
+  } = useGroup()
+
+  const activeHomo = homomorphisms.find(h => h.id === activeHomomorphismId)
+
+  const result = useMemo(() => {
+    if (!source || !target || mapping.size === 0) return null
+    return activeHomo?.result || verifyHomomorphism(source, target, mapping)
+  }, [source, target, mapping, activeHomo])
+
+  return (
+    <FirstIsomorphismAnimationScene
+      source={source}
+      target={target}
+      mapping={mapping}
+      result={result}
+      onPhaseChange={setTheoremPhase}
+    />
   )
 }

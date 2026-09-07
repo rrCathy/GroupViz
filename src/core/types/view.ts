@@ -18,6 +18,21 @@ export const CAYLEY_SHAPES_2D = [
 
 export type CayleyShape2D = typeof CAYLEY_SHAPES_2D[number]
 
+/**
+ * 子群格名片的细节档（LOD = level of detail）。三档由"名片的屏幕宽度"自动判定
+ * （latticeLodTier），参数里可显式指定；'auto' 表示跟随窗口尺寸与缩放。
+ *  - full：完整名片（|H|=n + 正规/平凡副行 + Z(G)/Sylow/系列角标）
+ *  - compact：胶囊，只留结构符号或阶
+ *  - dots：圆点，仅颜色编码类别
+ */
+export const LATTICE_LOD_TIERS = ['full', 'compact', 'dots'] as const
+
+export type LatticeLodTier = typeof LATTICE_LOD_TIERS[number]
+
+export const LATTICE_LABEL_DETAILS = ['auto', ...LATTICE_LOD_TIERS] as const
+
+export type LatticeLabelDetail = typeof LATTICE_LABEL_DETAILS[number]
+
 export interface InternalEdgeData {
   fromInnerIdx: number
   toInnerIdx: number

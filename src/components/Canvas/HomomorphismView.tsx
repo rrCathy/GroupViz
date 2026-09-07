@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useRef, type ReactNode } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { renderTex, texify } from '../../utils/texify'
@@ -6,7 +6,7 @@ import { verifyHomomorphism, getHomomorphismProperties } from '../../core/algebr
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
 import { cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { COLOR_PALETTE } from '../../core/types'
-import type { GroupElement } from '../../core/types'
+import type { Group, GroupElement, HomomorphismResult } from '../../core/types'
 import { FirstIsomorphismAnimation } from './FirstIsomorphismAnimation'
 
 const HOMO_COLORS = [
@@ -37,38 +37,60 @@ function findGeneratorElements(group: { elements: GroupElement[]; generators: { 
   return result
 }
 
-export function HomomorphismView() {
+// ─── Homomorphism props-化内核 ──────────────────────────────────────────
+// 受控 ViewWindow (FGVE) 与主画布（经 context 壳 HomomorphismView）共用。
+// source/target/mapping 之外全部可选：主画布壳由全局 Provider 组装
+// （含 theoremMode 定理动画注入）；窗口引擎自包含时只传双群 + mapping。
+
+export interface HomomorphismSceneProps {
+  source: Group | null
+  target: Group | null
+  mapping: Map<string, string>
+  /** 预计算结果（null=源/目标缺失或 mapping 为空）。缺省（undefined）由 Scene 内部 verifyHomomorphism 推导 */
+  result?: HomomorphismResult | null
+  /** 映射显示名（TeX 或纯文本）；缺省 `${source.symbol} → ${target.symbol}` */
+  name?: string
+  /** 定理模式（第一同构定理动画）；缺省 false。动画内容由 theoremAnimation 注入 */
+  theoremMode?: boolean
+  onTheoremModeChange?: (v: boolean) => void
+  /** 定理动画内容（主画布壳注入 <FirstIsomorphismAnimation>）；窗口不传 */
+  theoremAnimation?: ReactNode
+  /** 节点常驻标签；缺省 true（主画布行为）；嵌入窗口默认关，读元素靠悬停就地气泡 */
+  showLabels?: boolean
+  /** 悬停节点（源/目标元素 + 视口内屏幕锚点）；主画布壳不传（内部高亮即可），窗口接就地气泡 */
+  onHover?: (el: GroupElement | null, anchor?: { x: number; y: number } | null) => void
+}
+
+export function HomomorphismScene({
+  source,
+  target,
+  mapping,
+  result,
+  name,
+  theoremMode = false,
+  onTheoremModeChange,
+  theoremAnimation,
+  showLabels = true,
+  onHover,
+}: HomomorphismSceneProps) {
   const { t } = useTranslation()
-  const {
-    editingSource,
-    editingTarget,
-    editingMapping,
-    activeHomomorphismId,
-    homomorphisms,
-    theoremMode,
-    setTheoremMode,
-  } = useGroup()
+  const svgRef = useRef<SVGSVGElement>(null)
 
   const [hoverSource, setHoverSource] = useState<string | null>(null)
   const [hoverTarget, setHoverTarget] = useState<string | null>(null)
   const [pinnedSource, setPinnedSource] = useState<string | null>(null)
 
-  const activeHomo = homomorphisms.find(h => h.id === activeHomomorphismId)
-
-  const source = editingSource || activeHomo?.source || null
-  const target = editingTarget || activeHomo?.target || null
-  const mapping = activeHomo?.mapping || editingMapping
-
-  const result = useMemo(() => {
+  const resolvedResult = useMemo(() => {
+    if (result !== undefined) return result
     if (!source || !target || mapping.size === 0) return null
-    return activeHomo?.result || verifyHomomorphism(source, target, mapping)
-  }, [source, target, mapping, activeHomo])
+    return verifyHomomorphism(source, target, mapping)
+  }, [source, target, mapping, result])
 
-  const kernelIds = result?.kernel || []
-  const imageIds = result?.image || []
+  const kernelIds = resolvedResult?.kernel || []
+  const imageIds = resolvedResult?.image || []
 
-  const properties = result?.isHomomorphism
-    ? getHomomorphismProperties(source!, target!, result)
+  const properties = resolvedResult?.isHomomorphism
+    ? getHomomorphismProperties(source!, target!, resolvedResult)
     : null
 
   const kernelSet = new Set(kernelIds)
@@ -129,13 +151,13 @@ export function HomomorphismView() {
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '4px 8px' }}>
           <button className="panel-btn"
-            onClick={() => setTheoremMode(false)}
+            onClick={() => onTheoremModeChange?.(false)}
             style={{ fontSize: '10px', padding: '3px 8px' }}>
             ← {t('homo.title')}
           </button>
         </div>
         <div style={{ flex: 1 }}>
-          <FirstIsomorphismAnimation key={`${source?.symbol}-${target?.symbol}`} />
+          {theoremAnimation}
         </div>
       </div>
     )
@@ -232,7 +254,7 @@ export function HomomorphismView() {
   })
 
   return (
-    <svg viewBox={`0 0 ${vw} ${vh}`} style={{ width: '100%', height: '100%' }}>
+    <svg ref={svgRef} viewBox={`0 0 ${vw} ${vh}`} style={{ width: '100%', height: '100%' }}>
       {/* Background separator line */}
       <line x1={vw / 2} y1={40} x2={vw / 2} y2={vh - 10}
         stroke="var(--border-color)" strokeWidth={0.5} strokeDasharray="4,6" opacity={0.5} />
@@ -240,7 +262,7 @@ export function HomomorphismView() {
       {/* Title */}
       <foreignObject x={vw / 2 - 140} y={4} width={280} height={28}>
         <div style={{ fontSize: '16px', fontWeight: 'bold', textAlign: 'center', color: 'var(--text-primary)', lineHeight: '28px' }}
-          dangerouslySetInnerHTML={{ __html: renderTex(texify(activeHomo?.name || `${source.symbol} → ${target.symbol}`)) }} />
+          dangerouslySetInnerHTML={{ __html: renderTex(texify(name || `${source.symbol} → ${target.symbol}`)) }} />
       </foreignObject>
 
       {/* Domain Label */}
@@ -318,9 +340,13 @@ export function HomomorphismView() {
         }
 
         return (
-          <g key={`s-${el.id}`}
-            onMouseEnter={() => setHoverSource(el.id)}
-            onMouseLeave={() => setHoverSource(null)}
+          <g key={`s-${el.id}`} data-homo-source-node
+            onMouseEnter={(e) => {
+              setHoverSource(el.id)
+              const rect = svgRef.current?.getBoundingClientRect()
+              if (rect && onHover) onHover(el, { x: e.clientX - rect.left, y: e.clientY - rect.top })
+            }}
+            onMouseLeave={() => { setHoverSource(null); onHover?.(null, null) }}
             onClick={() => handleSourceClick(el.id)}
             style={{ cursor: 'pointer' }}
           >
@@ -342,19 +368,21 @@ export function HomomorphismView() {
                 fill="none" stroke="var(--accent-teal)" strokeWidth={2}
                 opacity={0.8} />
             )}
-            <foreignObject
-              x={pos.x - 24} y={pos.y + 6}
-              width={48} height={18}
-              style={{ overflow: 'visible' }}
-            >
-              <div style={{
-                fontSize: '8px',
-                textAlign: 'center',
-                color: inKernel ? KERNEL_RED : dimmed ? 'var(--text-muted)' : 'var(--text-primary)',
-                fontWeight: inKernel || isHL ? 700 : 400,
-                pointerEvents: 'none',
-              }} dangerouslySetInnerHTML={{ __html: renderTex(el.label) }} />
-            </foreignObject>
+            {showLabels && (
+              <foreignObject
+                x={pos.x - 24} y={pos.y + 6}
+                width={48} height={18}
+                style={{ overflow: 'visible' }}
+              >
+                <div style={{
+                  fontSize: '8px',
+                  textAlign: 'center',
+                  color: inKernel ? KERNEL_RED : dimmed ? 'var(--text-muted)' : 'var(--text-primary)',
+                  fontWeight: inKernel || isHL ? 700 : 400,
+                  pointerEvents: 'none',
+                }} dangerouslySetInnerHTML={{ __html: renderTex(el.label) }} />
+              </foreignObject>
+            )}
           </g>
         )
       })}
@@ -368,9 +396,13 @@ export function HomomorphismView() {
         const dimmed = highlightedTargetId && !isHL
 
         return (
-          <g key={`t-${el.id}`}
-            onMouseEnter={() => setHoverTarget(el.id)}
-            onMouseLeave={() => setHoverTarget(null)}
+          <g key={`t-${el.id}`} data-homo-target-node
+            onMouseEnter={(e) => {
+              setHoverTarget(el.id)
+              const rect = svgRef.current?.getBoundingClientRect()
+              if (rect && onHover) onHover(el, { x: e.clientX - rect.left, y: e.clientY - rect.top })
+            }}
+            onMouseLeave={() => { setHoverTarget(null); onHover?.(null, null) }}
             style={{ cursor: 'pointer' }}
           >
             {isHL && (
@@ -391,26 +423,28 @@ export function HomomorphismView() {
                 ← {highlightPreimageIds.size}
               </text>
             )}
-            <foreignObject
-              x={pos.x - 24} y={pos.y + 6}
-              width={48} height={18}
-              style={{ overflow: 'visible' }}
-            >
-              <div style={{
-                fontSize: '8px',
-                textAlign: 'center',
-                color: inImage ? IMAGE_CYAN : dimmed ? 'var(--text-muted)' : 'var(--text-primary)',
-                fontWeight: inImage || isHL ? 700 : 400,
-                pointerEvents: 'none',
-              }} dangerouslySetInnerHTML={{ __html: renderTex(el.label) }} />
-            </foreignObject>
+            {showLabels && (
+              <foreignObject
+                x={pos.x - 24} y={pos.y + 6}
+                width={48} height={18}
+                style={{ overflow: 'visible' }}
+              >
+                <div style={{
+                  fontSize: '8px',
+                  textAlign: 'center',
+                  color: inImage ? IMAGE_CYAN : dimmed ? 'var(--text-muted)' : 'var(--text-primary)',
+                  fontWeight: inImage || isHL ? 700 : 400,
+                  pointerEvents: 'none',
+                }} dangerouslySetInnerHTML={{ __html: renderTex(el.label) }} />
+              </foreignObject>
+            )}
           </g>
         )
       })}
 
       {/* Legend / status line at bottom */}
       <g transform={`translate(0, ${vh - 16})`}>
-        {result?.isHomomorphism && properties && (
+        {resolvedResult?.isHomomorphism && properties && (
           <>
             <rect x={leftCx - 50} y={-12} width={100} height={16} rx={3}
               fill={properties.isInjective ? 'rgba(78,205,196,0.15)' : 'rgba(255,107,107,0.1)'} />
@@ -443,7 +477,7 @@ export function HomomorphismView() {
             )}
           </>
         )}
-        {result && !result.isHomomorphism && (
+        {resolvedResult && !resolvedResult.isHomomorphism && (
           <text x={vw / 2} y={0} textAnchor="middle" fontSize="10" fill={KERNEL_RED} fontWeight="bold">
             ✗ {t('homo.invalid')}
           </text>
@@ -454,5 +488,42 @@ export function HomomorphismView() {
         </text>
       </g>
     </svg>
+  )
+}
+
+/** 主画布适配器：从全局 Provider 组装 HomomorphismScene 所需 props（保留原行为不变）。 */
+export function HomomorphismView() {
+  const {
+    editingSource,
+    editingTarget,
+    editingMapping,
+    activeHomomorphismId,
+    homomorphisms,
+    theoremMode,
+    setTheoremMode,
+  } = useGroup()
+
+  const activeHomo = homomorphisms.find(h => h.id === activeHomomorphismId)
+
+  const source = editingSource || activeHomo?.source || null
+  const target = editingTarget || activeHomo?.target || null
+  const mapping = activeHomo?.mapping || editingMapping
+
+  const result = useMemo(() => {
+    if (!source || !target || mapping.size === 0) return null
+    return activeHomo?.result || verifyHomomorphism(source, target, mapping)
+  }, [source, target, mapping, activeHomo])
+
+  return (
+    <HomomorphismScene
+      source={source}
+      target={target}
+      mapping={mapping}
+      result={result}
+      name={activeHomo?.name}
+      theoremMode={theoremMode}
+      onTheoremModeChange={setTheoremMode}
+      theoremAnimation={<FirstIsomorphismAnimation key={`${source?.symbol}-${target?.symbol}`} />}
+    />
   )
 }

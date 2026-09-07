@@ -8,7 +8,7 @@ import {
   isQuotientGroup,
 } from '../../types'
 import { computeElementOrderInGroup } from '../subgroups'
-import { createGroupFromSymbol } from '../../../utils/groupFactory'
+import { createGroupFromSymbol } from '../../groups/groupFactory'
 import { runToddCoxeter } from './toddCoxeter'
 import { discoverPresentationCached } from './minimizer'
 import { parseWord, wordToCanonicalString } from './wordParser'

@@ -6,6 +6,9 @@ import { useGroupCore } from '../core/GroupCoreContext'
 interface GroupSymmetryState {
   symmetryShowAction: boolean
   symmetryRotateSpeed: number
+  /** 对偶多面体形态：false=主形（cube/icosahedron），true=对偶形（octahedron/dodecahedron）；
+   *  由主画布 ViewPanel 的 Shape 选项切换（对称性视图专用） */
+  symmetryVariant: boolean
   symmetryActionElementId: string | null
   selfInverseElementId: string | null
 }
@@ -13,6 +16,7 @@ interface GroupSymmetryState {
 interface GroupSymmetryActions {
   setSymmetryShowAction: (show: boolean) => void
   setSymmetryRotateSpeed: (speed: number) => void
+  setSymmetryVariant: (variant: boolean) => void
   setSymmetryActionElementId: (id: string | null) => void
   setSelfInverseElementId: (id: string | null) => void
 }
@@ -27,6 +31,7 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
 
   const [symmetryShowAction, setSymmetryShowActionState] = useState(false)
   const [symmetryRotateSpeed, setSymmetryRotateSpeedState] = useState(1)
+  const [symmetryVariant, setSymmetryVariantState] = useState(false)
   const [symmetryActionElementId, setSymmetryActionElementIdState] = useState<string | null>(null)
   const [selfInverseElementId, setSelfInverseElementIdState] = useState<string | null>(null)
   const prevGroupRef = useRef<string | null>(null)
@@ -41,6 +46,7 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
       setSelfInverseElementIdState(null)
       setSymmetryActionElementIdState(null)
       setSymmetryShowActionState(false)
+      setSymmetryVariantState(false)
     })
   }, [currentGroup])
 
@@ -58,6 +64,10 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
     setSymmetryRotateSpeedState(speed)
   }, [])
 
+  const setSymmetryVariant = useCallback((variant: boolean) => {
+    setSymmetryVariantState(variant)
+  }, [])
+
   const setSymmetryActionElementId = useCallback((id: string | null) => {
     setSymmetryActionElementIdState(id)
   }, [])
@@ -67,8 +77,8 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value: GroupSymmetryContextType = {
-    symmetryShowAction, symmetryRotateSpeed, symmetryActionElementId, selfInverseElementId,
-    setSymmetryShowAction, setSymmetryRotateSpeed, setSymmetryActionElementId, setSelfInverseElementId,
+    symmetryShowAction, symmetryRotateSpeed, symmetryVariant, symmetryActionElementId, selfInverseElementId,
+    setSymmetryShowAction, setSymmetryRotateSpeed, setSymmetryVariant, setSymmetryActionElementId, setSelfInverseElementId,
   }
 
   return (

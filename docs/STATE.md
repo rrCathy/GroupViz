@@ -51,7 +51,7 @@ interface GroupContextState {
   cayleyShape2D: CayleyShape2D / cayleyAvailableShapes2D
   subsets: Subset[]               // 子集分析（含子群/正规子群检测）
   multiViewMode / floatingViews
-  symmetryShowAction / symmetryRotateSpeed / symmetryActionElementId
+  symmetryShowAction / symmetryRotateSpeed / symmetryVariant（dual-solid：cube↔octahedron、icosahedron↔dodecahedron）/ symmetryActionElementId
   selfInverseElementId           // 自逆元素高亮（2.5s 自动清除）
   cosetSubsetId / cosetSubgroupElementIds / cosetType / showAllCosets
   cosetData / cosetElementMap / cosetHighlightSet / cosetColors
@@ -121,6 +121,14 @@ interface GroupContextState {
 - **GIF 导出（3D 凯莱图）**：`beginRotation` 建独立离屏渲染器 + 记录基准轨道 → `frameAt(i, frameDelayMs)` 按帧序号精确求角渲染到离屏 canvas → quantize + applyPalette → gifenc 编码；结束后仅释放离屏渲染器，实时画面无需恢复（见 docs/CAYLEY.md）
 
 **批量导出**（CLI 取代原 BatchExportPanel）：`scripts/batch-export.mjs`（`npm run export`）经 `window.__groupVizExport__` 桥（`src/utils/exportApi.ts`）渲染 9 预设群 × 7 视图，存 `exports/batch-<timestamp>/`。
+
+## 10.1 受控视图窗口（ViewWindow）持久化
+
+- key：`gv-vw-{group.symbol}|{group.order}|{view}`（或显式 `storageKey`），值经 `saveVersionedJson` 写 `{__gvVersion:1, data}` 信封；`data = {position, size, config, viewParams}`，300ms 防抖
+- `viewParams` 按视图用对应 zod schema 二次校验（set/cayley/3d/cycle/table/**sublattice**），坏 payload 整体回退默认（不抛）
+- 受控/非受控双模式：`config`/`viewParams` 一律取「有效值」= `prop ?? state`（受控时 state 不更新，直读 state 会让窗口停在初始参数）
+- 全局重置：`resetAllViewWindows()`（`utils/resetViewWindows.ts`）清 `gv-vw-*` 并广播 `gv-vw-reset-all`，每个 ViewWindow 自行 `resetAll()`
+- 各视图参数面见 `src/core/types/viewConfig.ts`；子群格档（v1.19.0）= `labelDetail`(auto/full/compact/dots) + `mergeConjugates` + `nodeScale`(0.6–1.6) + `showSeriesPanel`，详见 docs/VIEWS.md §7.1
 
 ## 11. 国际化 / 主题
 

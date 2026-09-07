@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "outDir": "./dist-pkg/.dts",
+    "rootDir": "./src",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.pkg.tsbuildinfo",
+    "types": []
+  },
+  "include": [
+    "src/core",
+    "src/package",
+    "src/components/Canvas/SetView.tsx",
+    "src/components/Canvas/CycleView.tsx",
+    "src/utils/texify.ts"
+  ],
+  "exclude": ["src/**/__tests__", "src/**/*.test.ts", "src/**/*.test.tsx", "src/test", "src/components/TestPage.tsx", "src/components/TestPage2.tsx"]
+}

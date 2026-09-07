@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",
+        "build:pkg": "vite build --config vite.pkg.core.config.ts && vite build --config vite.pkg.react.config.ts && tsc -p tsconfig.pkg.json && node scripts/pkg/finalize-pkg.mjs",
         "lint": "eslint .",
         "preview": "vite preview",
         "test": "vitest run",

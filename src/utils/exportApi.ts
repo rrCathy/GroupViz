@@ -1,11 +1,25 @@
 import type { Group, ViewMode } from '../core/types'
 import { createGroupFromSymbol } from './groupFactory'
 import { getAvailableShapesForView, getAvailableShapes3D } from '../core/types'
+import { getSymmetryType, type SymmetryType } from '../core/symmetryType'
 import { exportSymmetryAsGifBlob } from './export'
 
 interface SymmetryInfo {
   type: string
   shapes: string[]
+}
+
+const SYMMETRY_SHAPES: Record<Exclude<SymmetryType, 'unsupported'>, string[]> = {
+  cyclic: ['regular n-gon'],
+  dihedral: ['regular n-gon'],
+  tetrahedron: ['tetrahedron'],
+  cube: ['cube', 'octahedron'],
+  icosahedron: ['icosahedron', 'dodecahedron'],
+  rectangle: ['rectangle'],
+}
+
+function symmetryShapesForType(type: SymmetryType): string[] {
+  return type === 'unsupported' ? [] : SYMMETRY_SHAPES[type]
 }
 
 interface ExportBridge {
@@ -95,14 +109,12 @@ const bridge: ExportBridge = {
   getSymmetryInfo(): SymmetryInfo | null {
     const group = bridge._getGroup?.() ?? null
     if (!group) return null
-    const sym = group.symbol
-    if (sym.startsWith('C')) return { type: 'cyclic', shapes: ['regular n-gon'] }
-    if (sym.startsWith('D')) return { type: 'dihedral', shapes: ['regular n-gon'] }
-    if (sym === 'A_{4}') return { type: 'tetrahedron', shapes: ['tetrahedron'] }
-    if (sym === 'S_{4}') return { type: 'cube', shapes: ['cube', 'octahedron'] }
-    if (sym === 'A_{5}') return { type: 'icosahedron', shapes: ['icosahedron', 'dodecahedron'] }
-    if (sym === 'V_{4}') return { type: 'rectangle', shapes: ['rectangle'] }
-    return null
+    // 复用 core 权威判定（getSymmetryType），与 UI 面板 / ViewWindow 一致：
+    // 直积/幂符号（如 C_{2}^{2}）在 exportApi 旧实现会被 startsWith('C')
+    // 误判为 cyclic，此处统一走 getSymmetryType 排除
+    const type = getSymmetryType(group)
+    if (type === 'unsupported') return null
+    return { type, shapes: symmetryShapesForType(type) }
   },
 
   getAvailableViewsForExport(): string[] {

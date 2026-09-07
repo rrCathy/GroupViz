@@ -107,6 +107,10 @@ function WorkspaceContent() {
 
   // Auto-save session whenever group or view changes
   useEffect(() => {
+    // Restore in progress: currentGroup is already restored but currentView is
+    // still the default until the view-restore effect below runs. Saving now
+    // would overwrite the persisted view with 'set'. Skip until restore finishes.
+    if (restoreViewRef.current) return
     if (!currentGroup) return
     const sym = currentGroup.symbol
     if (sym.includes('/N')) {

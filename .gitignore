@@ -10,6 +10,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+# Library-mode package build output (@groupviz/core + @groupviz/react)
+dist-pkg
 *.local
 coverage
 

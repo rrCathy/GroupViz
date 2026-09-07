@@ -139,6 +139,11 @@ writeFileSync(
   ) + '\n'
 )
 
-// 清理临时 dts
-rmSync(DTS_ROOT, { recursive: true, force: true })
+// 清理临时 dts。注意：本地沙箱可能拦截大批量删除（rmSync 递归删除 >50 文件 fail-closed），
+// 这里容错处理——产物已生成完毕，.dts 残留不影响 dist-pkg/@groupviz/* 消费；无沙箱环境照常删净。
+try {
+  rmSync(DTS_ROOT, { recursive: true, force: true })
+} catch (e) {
+  console.warn(`[finalize-pkg] 清理 .dts 临时目录失败（可忽略，产物已就绪）: ${e instanceof Error ? e.message : String(e)}`)
+}
 console.log(`[finalize-pkg] @groupviz/core + @groupviz/react v${VERSION} 产物已生成`)

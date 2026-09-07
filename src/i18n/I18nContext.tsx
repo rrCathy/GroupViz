@@ -1,7 +1,7 @@
 import { createContext, useState, useCallback, type ReactNode } from 'react'
 import { translations, getDefaultLang, type Lang } from './translations'
 
-interface I18nContextValue {
+export interface I18nContextValue {
   lang: Lang
   setLang: (lang: Lang) => void
   t: (key: string, params?: Record<string, string | number>) => string

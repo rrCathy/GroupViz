@@ -32,6 +32,9 @@ export type { Cayley3DSceneProps } from '../components/Canvas/Cayley3DScene'
 export { SublatticeScene } from '../components/Canvas/SublatticeScene'
 export type { SublatticeSceneProps } from '../components/Canvas/SublatticeScene'
 
+export { SceneWindow } from '../components/Canvas/SceneWindow'
+export type { SceneWindowProps, SceneWindowConfig, SceneWindowCaps, SceneWindowTheme } from '../components/Canvas/SceneWindow'
+
 export { I18nProvider } from '../i18n/I18nContext'
 
 export type { Group, GroupElement } from '../core/types'

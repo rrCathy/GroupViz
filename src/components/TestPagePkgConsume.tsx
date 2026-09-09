@@ -18,7 +18,7 @@
  * 改动 src/core / Scene / src/package 后需先 `npm run build:pkg` 再刷新本页。
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { createGroupFromSymbol, buildActionComputation, type Group } from '@groupviz/core'
+import { createGroupFromSymbol, buildActionComputation, type Group, type GroupElement } from '@groupviz/core'
 import {
   SetView, CycleView, CayleyView, CosetStripScene, TableView,
   ActionScene, HomomorphismScene, SublatticeScene, Cayley3DScene, SymmetryViewScene,
@@ -223,14 +223,14 @@ function CosetCard() {
   const { map, cosetCount } = useMemo(() => {
     const e = s3.identity
     // 首个非单位自逆元素 → 2 阶反射 s；⟨s⟩ 非正规 → 左右陪集分区不同
-    const h = s3.elements.find(x => x.id !== e.id && s3.multiply(x, x).id === e.id)!
+    const h = s3.elements.find((x: GroupElement) => x.id !== e.id && s3.multiply(x, x).id === e.id)!
     const H = [e, h]
-    const keyOf = (g: Group['elements'][number]) =>
-      H.map(x => (side === 'right' ? s3.multiply(x, g) : s3.multiply(g, x)))
+    const keyOf = (g: GroupElement) =>
+      H.map((x: GroupElement) => (side === 'right' ? s3.multiply(x, g) : s3.multiply(g, x)))
         .map(el => el.id).sort().join(',')
     const byKey = new Map<string, number>()
     const m = new Map<string, number>()
-    s3.elements.forEach(g => {
+    s3.elements.forEach((g: GroupElement) => {
       const k = keyOf(g)
       let ci = byKey.get(k)
       if (ci === undefined) { ci = byKey.size; byKey.set(k, ci) }
@@ -286,7 +286,7 @@ function HomoCard() {
       cur = c6.multiply(cur, g)
     }
     const s3 = createGroupFromSymbol('S_{3}')!
-    const idMap = new Map(s3.elements.map(el => [el.id, el.id]))
+    const idMap = new Map(s3.elements.map((el: GroupElement) => [el.id, el.id]))
     return {
       proj: { source: c6, target: c2, map: proj, tag: 'C₆→C₂ 自然投影 mod 2' },
       id: { source: s3, target: s3, map: idMap, tag: 'S₃→S₃ 恒等' },
@@ -364,9 +364,9 @@ function SymmetryCard({ group }: { group: Group | null }) {
   // 演示元素候选 = 非恒等元素；群切换后旧 actionId 失效 → 受控回退到首个候选
   const demoEls = useMemo(() => {
     if (!group) return []
-    return group.elements.filter(el => el.id !== group.identity.id)
+    return group.elements.filter((el: GroupElement) => el.id !== group.identity.id)
   }, [group])
-  const effActionId = demoEls.some(el => el.id === actionId) ? actionId : (demoEls[0]?.id ?? null)
+  const effActionId = demoEls.some((el: GroupElement) => el.id === actionId) ? actionId : (demoEls[0]?.id ?? null)
   return (
     <Card testid="pkg-symmetry" title="SymmetryViewScene ← @groupviz/react"
       tag={`${dark ? 'dark' : 'light'} · variant=${variant} · 演示${showAction ? ' on' : ' off'}${locked ? ' · 锁相机' : ''}`}
@@ -377,7 +377,7 @@ function SymmetryCard({ group }: { group: Group | null }) {
         <Chk checked={locked} onChange={setLocked}>锁定相机</Chk>
         <Ctl label="演示元素">
           <Sel value={effActionId ?? ''} onChange={(v) => setActionId(v || null)} testid="pkg-sym-element"
-            options={demoEls.map(el => ({ value: el.id, label: el.label }))} />
+            options={demoEls.map((el: GroupElement) => ({ value: el.id, label: el.label }))} />
         </Ctl>
       </>}>
       {group

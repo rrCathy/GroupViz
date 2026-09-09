@@ -19,5 +19,6 @@ export default defineConfig({
     },
     sourcemap: true,
     emptyOutDir: true,
+    copyPublicDir: false, // lib 构建不消费 public（favicon 等）——防混入包产物
   },
 })

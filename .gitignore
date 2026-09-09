@@ -56,6 +56,10 @@ sweep-*.png
 3d-fit-*.png
 state-*.png
 snap-*.txt
+homo-*.png
+hostminimal-*.png
+hostminimal-*.svg
+testpage-pkgconsume.png
 
 gl23-*.png
 

@@ -26,6 +26,13 @@ const rootPkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')
 // 缺省回落主版本（历史行为）。react peer 锁 @groupviz/core ^<pkgVersion>，两包必须成对同版发布。
 const VERSION = rootPkg.pkgVersion ?? rootPkg.version
 const REPO_URL = 'https://github.com/rrCathy/GroupViz'
+// npm 页面把包 README 里的**相对链接**按仓库根（blob/HEAD/<path>）解析 —— 但文档都在 docs/ 下，
+// 相对写法（如 `./API.md`）会指向不存在的 https://github.com/<repo>/blob/HEAD/API.md。
+// 故包 README 内的仓库文档一律用绝对 URL 生成；blob = 文件，tree = 目录。
+const REPO_BLOB = `${REPO_URL}/blob/main`
+const REPO_TREE = `${REPO_URL}/tree/main`
+const doc = (p, label = p) => `[${label}](${REPO_BLOB}/${p})`
+const dir = (p, label = p) => `[${label}](${REPO_TREE}/${p})`
 const dep = (n) => rootPkg.dependencies?.[n] ?? rootPkg.devDependencies?.[n]
 // peerDependencies 独立范围表（不跟主应用 deps）：以「消费端 registry 可达 + 主应用验证窗口」为准。
 // 注意 ^ 对 0.x 语义锁 <0.(x+1) —— three/katex 的 0.x 生态需显式给区间。
@@ -126,6 +133,8 @@ writeFileSync(
       description: 'GroupViz 群论可视化引擎 —— 纯算法层（群构造 / 布局 / 序列化），零 React/DOM 依赖',
       license: 'MIT',
       repository: { type: 'git', url: `git+${REPO_URL}.git` },
+      homepage: REPO_URL,
+      bugs: { url: `${REPO_URL}/issues` },
       keywords: CORE_KEYWORDS,
       type: 'module',
       main: './index.js',
@@ -149,6 +158,8 @@ writeFileSync(
       description: 'GroupViz 群论可视化 React 视图组件',
       license: 'MIT',
       repository: { type: 'git', url: `git+${REPO_URL}.git` },
+      homepage: REPO_URL,
+      bugs: { url: `${REPO_URL}/issues` },
       keywords: REACT_KEYWORDS,
       type: 'module',
       main: './index.js',
@@ -214,15 +225,15 @@ const data = buildCosetViewData(g, ['e0', 'e3'])
 console.log(data?.cosetElementMap, data?.cosetColors, data?.cosetHighlightSet)
 \`\`\`
 
-**完整 props / API 表**：见包内 [API.md](./API.md)。
+**完整 props / API 表**：见 ${doc('docs/API.md')}（该文件亦随包分发，落地为包内 \`API.md\`）。
 
 **配套**：React 视图组件见 [@groupviz/react](https://www.npmjs.com/package/@groupviz/react)。
 
 **稳定性**：当前公开 API 为 2.x——破坏性变更才会升 major，非破坏性演进在 minor/patch 内进行；
-变更记录见 [GroupViz CHANGELOG](https://github.com/rrCathy/GroupViz/blob/main/docs/CHANGELOG.md)。
+变更记录见 ${doc('docs/CHANGELOG.md', 'GroupViz CHANGELOG')}。
 
 **来源**：本包由 GroupViz 主仓库 \`src/core/\` 构建发布（单仓库内子目录产出，非 monorepo），
-API 与设计文档：[GroupViz 主仓库](https://github.com/rrCathy/GroupViz)（docs/GROUPS.md · docs/CAYLEY.md · docs/VIEWS.md）。
+API 与设计文档：[GroupViz 主仓库](${REPO_URL})（${doc('docs/GROUPS.md')} · ${doc('docs/CAYLEY.md')} · ${doc('docs/VIEWS.md')}）。
 MIT License。
 `
 )
@@ -298,14 +309,14 @@ import '@groupviz/react/theme.css' // 主题样式（模块化工程可 import �
 **交互约定**：Scene 是纯受控内核——标签显隐 / hover 气泡 / 选中高亮等由宿主通过 props
 （\`showLabels\` / \`onHover\` / \`onSelect\`）注入。
 
-**完整 props 全表**：见包内 [API.md](./API.md)（10 个 Scene 逐项 + 便利层 + core 新增导出）；
-更多组合示例见仓库 \`examples/host-minimal/\`。
+**完整 props 全表**：见 ${doc('docs/API.md')}（10 个 Scene 逐项 + 便利层 + core 新增导出；该文件亦随包分发）；
+更多组合示例见 ${dir('examples/host-minimal', 'examples/host-minimal/')}。
 
 **稳定性**：当前公开 API 为 2.x——破坏性变更才会升 major（core 与 react 成对同版发布，react peer 锁 core \`^2.x\`），
-非破坏性演进在 minor/patch 内进行；变更记录见 [GroupViz CHANGELOG](https://github.com/rrCathy/GroupViz/blob/main/docs/CHANGELOG.md)。
+非破坏性演进在 minor/patch 内进行；变更记录见 ${doc('docs/CHANGELOG.md', 'GroupViz CHANGELOG')}。
 
 **来源**：本包由 GroupViz 主仓库 \`src/package/\` 门面构建发布（单仓库内子目录产出，非 monorepo），
-完整组件 / 交互文档：[GroupViz 主仓库](https://github.com/rrCathy/GroupViz)（docs/VIEWS.md · docs/PRESENTATION.md）。
+完整组件 / 交互文档：[GroupViz 主仓库](${REPO_URL})（${doc('docs/VIEWS.md')} · ${doc('docs/PRESENTATION.md')}）。
 MIT License。
 `
 )

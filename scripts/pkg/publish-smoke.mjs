@@ -17,7 +17,7 @@
  * 用法：npm run publish:smoke（先 npm run build:pkg 保证产物最新）
  */
 import { execSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -82,6 +82,30 @@ try {
       fail(`@groupviz/react 引用了 core 未导出的符号：${[...missing].join(', ')} —— 在 src/core/index.ts 补 export`)
     }
     console.log(`[publish-smoke] · react→core 具名导出一致（core 共 ${coreExports.size} 个导出）`)
+  }
+
+  // ---- 0.6 包 README 链接完整性 ----
+  // 为什么：npm 页面把包 README 里的**相对链接**按仓库根解析为 blob/HEAD/<path>，
+  // 而文档都在 docs/ 下 —— 相对写法（如 `./API.md`）会生成
+  // https://github.com/<repo>/blob/HEAD/API.md（404）。此处 fail-closed：
+  //   a. README 内不得出现非绝对链接（http/https 之外一律拒绝）；
+  //   b. 指向本仓库 blob/tree 的链接，其仓内路径必须真实存在（防错路径）。
+  {
+    const linkRe = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+    for (const [name, dir] of [['@groupviz/core', CORE_OUT], ['@groupviz/react', REACT_OUT]]) {
+      const readme = readFileSync(path.join(dir, 'README.md'), 'utf8')
+      for (const m of readme.matchAll(linkRe)) {
+        const url = m[1]
+        if (!/^https?:\/\//.test(url)) {
+          fail(`${name} README 含非绝对链接 "${url}" —— npm 会按仓库根 blob/HEAD/ 解析成 404；请改用绝对 URL（见 finalize-pkg.mjs 的 doc()/dir()）`)
+        }
+        const repo = url.match(/^https:\/\/github\.com\/rrCathy\/GroupViz\/(?:blob|tree)\/main\/([^?#]+)/)
+        if (repo && !existsSync(path.join(ROOT, repo[1]))) {
+          fail(`${name} README 链接指向仓库内不存在的路径：${url}（仓内缺 ${repo[1]}）`)
+        }
+      }
+    }
+    console.log('[publish-smoke] · 包 README 链接完整（无相对链接，blob/tree 目标均存在）')
   }
 
   // ---- 1. pack ----

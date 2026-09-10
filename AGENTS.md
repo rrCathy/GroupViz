@@ -36,6 +36,7 @@
 | [docs/API.md](docs/API.md) | **引擎消费 API（FGVE 双包随包分发）**：Scene props 全表、core 门面导出、元素引用解析（id/label/value）、`useSceneState`、`theme` 约定、阈值 props、内嵌 `I18nProvider` |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图（**只列未做事项/边界决策**）：FGVE 引擎化进行中——阶段 2 余 tree/prestable props 化与 action 窗口 sylow/coset、阶段 3 余 CI 消费冒烟接入 / exports 子路径 / descriptor round-trip 载群（双包 @groupviz/core+react **v2.0.0 已发布 npm**，**v2.1.0 消费端卡点优化** = 元素引用/`useSceneState`/`theme`/阈值/`API.md`，2026-09-10）；中期特征标表 / GAP 后端完善；远期 GVL 教学实验室 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 变更记录（已完成历史唯一权威）：已完成里程碑 + 逐次开发记录（2026-08-15 起；AGENTS 批次记录与 ROADMAP 旧进度均以本表为准） |
+| [feedback/README.md](feedback/README.md) | **引擎缺陷反馈收件箱（本地、不入库）**：宿主项目用引擎踩 bug 时，由其 Agent 按 `PROTOCOL.md` 协议（自包含）产出反馈文件放入 `feedback/`；含 `_TEMPLATE.md` 模板、`INDEX.md` 台账、消费端 SOP |
 
 ## 3. 技术栈
 
@@ -176,6 +177,7 @@ uvicorn main:app --reload --port 8000
 
 ### 阶段 1：扫（Scan）— 找 bug 与体验问题
 
+0. **反馈收件箱**：`ls feedback/` 并 grep 状态行，把非「已修复」的文件列为**本轮优先清单**，逐项按 `feedback/README.md` 的消费 SOP 处理——按反馈里的「复现步骤」验证 → 属实则修、不属实/无法复现则标状态并写理由 → 修完在文件顶部回写状态块 → 更新 `feedback/INDEX.md` 台账。**不改动反馈原文。**
 1. **静态基线**：`npm run lint` + `npm run test` + `npm run build` 必须全绿，作为出发点。
 2. **动态扫描**：dev server + Playwright 实测核心路径——11 视图切换、操作面板 4 tab、直积/半直积/同态创建流程、会话恢复、导出（SVG/PNG/GIF）、多视图浮动窗口；全程观察 console error/warning（快照含属性计数，如 `[marker-end]` 计数无向边会误判为 0）。
 3. **专项扫描**（本项目反复踩坑的检查项）：
@@ -197,7 +199,7 @@ uvicorn main:app --reload --port 8000
 
 ### 阶段 4：推（Push）— 提交与发布
 
-- `git status` 检查未跟踪文件；工具产物（`.playwright-mcp/`、`.serena/`、`sweep-*.png`）必须忽略不提交。
+- `git status` 检查未跟踪文件；工具产物（`.playwright-mcp/`、`.serena/`、`sweep-*.png`）必须忽略不提交。`feedback/` 是本地收件箱，已在 `.gitignore` 中排除，**不要 `git add -f` 提交反馈内容**。
 - `git add -A` → 提交信息按仓库风格：`vN.N: <主题>` + 分条 bullet 列出修复/新增/验证结果。
 - **版本号规则**：开发新功能/重构 → minor +0.1（如 1.14.0 → 1.15.0）；优化/处理 bug（含嵌入修复、布局调整）→ patch +0.0.1（如 1.14.0 → 1.14.1）。重新审视各历史版本提交以保持口径一致。
 - 提交前确认 lint/test/build 全绿；`git push origin main` 触发 Pages 部署（git stderr 被 PowerShell 报为 NativeCommandError 是误报，以远程分支更新为准）。

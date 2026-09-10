@@ -66,3 +66,6 @@ gl23-*.png
 # Playwright artifacts
 test-results/
 playwright-report/
+
+# 引擎缺陷反馈收件箱（本地，不入库）—— 机制见 feedback/README.md
+feedback/

@@ -200,7 +200,7 @@ uvicorn main:app --reload --port 8000
 ### 阶段 4：推（Push）— 提交与发布
 
 - `git status` 检查未跟踪文件；工具产物（`.playwright-mcp/`、`.serena/`、`sweep-*.png`）必须忽略不提交。`feedback/` 是本地收件箱，已在 `.gitignore` 中排除，**不要 `git add -f` 提交反馈内容**。
-- `git add -A` → 提交信息按仓库风格：`vN.N: <主题>` + 分条 bullet 列出修复/新增/验证结果。
+- `git add -A` → 提交信息按仓库实际的 **Conventional Commits** 风格：`<type>(<scope>): <主题>`。type 取 `feat` / `fix` / `chore` / `docs` / `test`；scope 常用 `core` / `canvas` / `pkg` / `feedback` / `docs`（跨全局时可省略）。主题里带上版本号（如 `fix(canvas): v2.1.4 …`），正文用分条 bullet 列出修复/新增/验证结果。
 - **版本号规则**：开发新功能/重构 → minor +0.1（如 1.14.0 → 1.15.0）；优化/处理 bug（含嵌入修复、布局调整）→ patch +0.0.1（如 1.14.0 → 1.14.1）。重新审视各历史版本提交以保持口径一致。
 - 提交前确认 lint/test/build 全绿；`git push origin main` 触发 Pages 部署（git stderr 被 PowerShell 报为 NativeCommandError 是误报，以远程分支更新为准）。
 
@@ -236,5 +236,5 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-*文档版本: 2.1.0*
+*文档版本: 2.1.4*
 *最后更新: 2026-09-10*

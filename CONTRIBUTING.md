@@ -86,7 +86,7 @@ npm run export
 4. **Self-test** — every change: `npm run lint` + `npm run test` (+ `npm run build` for type errors). Write or update tests for the code you touched.
 5. **Browser-verify** UI paths with Playwright: switch the affected views, exercise the new interaction, and watch `console` for warnings/errors (snapshots can be saved under the Playwright output directory).
 6. **Sync docs** — documentation is a first-class artifact in this repo. Any fact change (test counts, group families, view modes, new features) must be reflected in `docs/*.md` + README + AGENTS.md (grep the whole repo for the number, e.g. `1205` → `1206`). Add a row to `docs/CHANGELOG.md` for the session.
-7. **Commit** — style is `vN.N: <topic>` with bullet points for fixes/additions/verification results (see git log). One logical change per commit.
+7. **Commit** — use Conventional Commits: `<type>(<scope>): <topic>` (type: `feat` / `fix` / `chore` / `docs` / `test`; scope: `core` / `canvas` / `pkg` / `feedback` / `docs`, optional when repo-wide), with bullet points for fixes/additions/verification results. One logical change per commit.
 8. **Push & PR** — fill the PR template; CI runs lint/test/build + coverage thresholds + backend pytest automatically.
 
 ## Code conventions
@@ -133,7 +133,7 @@ Issue templates, the PR template, and this protocol all point back at the same r
 1. **Scan** — static baseline (`lint` + `test` + `build` green), then Playwright over core paths (view switching, construction panels, session restore, exports) watching console errors; spot-check BOM, hardcoded versions, i18n key parity, doc-count grep.
 2. **Fix** — repair with regression tests; red-line changes pause for human review.
 3. **Sync** — update AGENTS.md / README / docs to match code facts.
-4. **Push** — commit `vN.N: <topic>` and push; `main` deploys Pages, tags `v*` publish a release.
+4. **Push** — commit with a Conventional Commits message and push; `main` deploys Pages, tags `v*` publish a release.
 
 ## Pull request checklist
 

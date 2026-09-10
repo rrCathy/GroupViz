@@ -164,3 +164,17 @@ computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
 ## 16. 大群视图守卫
 
 `forceShowLargeGroupViews`：order > 60 的群对计算密集视图（cycle/sublattice/symmetry/homomorphism/cosetstrip）提供守卫与后端降级。
+
+**阈值可覆盖（v2.1.0，FGVE 消费端优化）**：`core/viewBox.ts` 新增 `sizeLimitFor(view)`（可读默认值表）并给 `isTooLarge(order, view, limitOverride?)` 增加第三参；各 Scene 对应 prop——`largeGroupThreshold`（Set/Cycle/Cayley，默认 60）、`maxTableOrder`/`maxHeatmapOrder`（Table）、`maxEnumerateOrder`（Sublattice，默认 60）。宿主可据此放宽/收紧守卫，`tree` 阈值 = `Infinity`（树视图不设限）。
+
+## 17. 嵌入式消费约定（FGVE 双包，v2.1.0）
+
+外部宿主把 Scene 嵌入自有页面（如博客）时的统一约定，详见包内 `docs/API.md`：
+
+- **元素引用类 props 一律接受 label / id / value**（`actionElementId`、`actions[].elementId`、`CosetStripScene.subgroup`、`SymmetryViewScene.actionElementId`…），内部经 `core/algebra/elementRef.ts` 的 `resolveElement` 按 **id → label → value** 归一化解析；未命中 `console.warn` 一次并忽略（不抛错）——不再要求宿主先查机器 id。
+- **主题统一 `theme?: 'dark' | 'light'`**：7 个 2D Scene + SymmetryViewScene 均支持，经 `SceneThemeRoot` 注入 `data-theme` 作用域（复用 `theme.css` 变量块）；**未传时零额外 DOM、行为与旧版完全一致**。`SymmetryViewScene.dark` 保留为别名，`theme` 优先。
+- **相机门控**：`SymmetryViewScene.lockCameraOnAction` 默认 **false**——演示动画播放时相机保持可旋转（旧行为恒锁死，是实测卡点）。
+- **受控状态便利层**：`useSceneState(group?, options?)` 一次给出 `viewBoxSize`/`canvasTransform`/选中/hover 气泡/节点位置与可 spread 的 `sceneProps`、`hostProps`（内含回调 ref + 内置平移、光标锚定缩放、ResizeObserver），免去宿主手写 ~80 行胶水；新 `SceneHoverBubble` 提供默认悬停气泡。注意 `hostProps` 要一次 spread 到容器上，别再自己写 `ref`（会顶掉内建 ref）；需要 DOM 节点用 `getHostElement()`。
+- **i18n 免 Provider**：`useTranslation().t` 默认按 `zh → en → key` 三级兜底，不包 `I18nProvider` 也不会回落成裸 key（仍建议包 Provider 以支持 `lang` 切换）。
+- **陪集一键数据**：`buildCosetViewData(group, subgroupRefs, { side, highlightAll, selected })` 直接产出 `cosetElementMap`/`cosetColors`/`cosetHighlightSet`，或直接用 `CosetStripScene` 的 `subgroup?: string[]` 便捷入口。
+

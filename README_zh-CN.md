@@ -119,6 +119,19 @@ uvicorn main:app --reload --port 8000
 | 测试 | Vitest（node+dom 双项目）+ Playwright E2E |
 | 导出 | SVG · PNG · GIF · 批量导出 CLI（`npm run export`） |
 
+## 📦 npm 包
+
+可视化引擎以两个 npm 包发布 —— **均由本单仓库构建产出**(`src/core/` 与 `src/package/`,非 monorepo):
+
+| 包 | 说明 |
+|----|------|
+| [@groupviz/core](https://www.npmjs.com/package/@groupviz/core) | 纯算法层:群构造、子群/子群格/陪集、凯莱图与循环图布局、`GroupDescriptor v1` 序列化。零 React/DOM 依赖。 |
+| [@groupviz/react](https://www.npmjs.com/package/@groupviz/react) | 10 个受控视图 Scene(应用 13 视图的可窗口化子集)、`SceneWindow` 窗口壳、`I18nProvider`(中/英)、`theme.css`。 |
+
+```bash
+npm i @groupviz/core @groupviz/react
+```
+
 ## 🤝 社区与贡献
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** —— 新手引导、代码规范与开发流程

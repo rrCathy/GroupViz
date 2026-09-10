@@ -1,6 +1,7 @@
 import type { Group, ViewMode, CayleyAction, Layout3D } from '../core/types'
 import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, isQuotientGroup, type CayleyShape2D } from '../core/types'
 import type { CayleyActionParam } from '../core/types/viewConfig'
+import { resolveElementWarn } from '../utils/elementRef'
 
 export function getInitialCayleyActions(group: Group): CayleyAction[] {
   return group.generators.map((gen, i) => {
@@ -14,20 +15,28 @@ export function getInitialCayleyActions(group: Group): CayleyAction[] {
 }
 
 /**
- * 归一化凯莱视图作用边参数：过滤群中不存在的 elementId，补全 enabled（默认 true）与
+ * 归一化凯莱视图作用边参数：解析并过滤群中不存在的元素引用，补全 enabled（默认 true）与
  * color（默认 COLOR_PALETTE 按序）。actions 未提供时返回群生成元集合。
  * ViewWindow 参数面板与 CayleyView 渲染共用，保证两边对「当前边集合」的判定一致。
+ *
+ * `elementId` **接受元素引用**（`id` / `label` / `value` 串，见 `core.resolveElement`）：
+ * 传人类记号 `(234)` 不再被静默丢弃；确实解析不到时告警一次再忽略（不再无声无息）。
  */
 export function normalizeCayleyActions(group: Group, actions?: CayleyActionParam[]): CayleyAction[] {
   if (!actions) return getInitialCayleyActions(group)
-  const known = new Set(group.elements.map(e => e.id))
-  return actions
-    .filter(a => known.has(a.elementId))
-    .map((a, i) => ({
-      elementId: a.elementId,
+  const out: CayleyAction[] = []
+  const seen = new Set<string>()
+  for (const a of actions) {
+    const el = resolveElementWarn(group, a.elementId, 'CayleyView.actions[].elementId')
+    if (!el || seen.has(el.id)) continue
+    seen.add(el.id)
+    out.push({
+      elementId: el.id,
       enabled: a.enabled !== false,
-      color: a.color ?? COLOR_PALETTE[i % COLOR_PALETTE.length],
-    }))
+      color: a.color ?? COLOR_PALETTE[out.length % COLOR_PALETTE.length],
+    })
+  }
+  return out
 }
 
 export interface CayleyShapeConfig {

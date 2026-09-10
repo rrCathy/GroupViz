@@ -119,6 +119,19 @@ New to the app? The [tutorial](docs/TUTORIAL.md) walks you through the workspace
 | Testing | Vitest (node + dom dual projects) + Playwright E2E |
 | Export | SVG · PNG · GIF · batch CLI (`npm run export`) |
 
+## 📦 npm Packages
+
+The visualization engine ships on npm as two packages — **built from this single repository** (`src/core/` and `src/package/`, not a monorepo):
+
+| Package | Description |
+|---------|-------------|
+| [@groupviz/core](https://www.npmjs.com/package/@groupviz/core) | Pure algorithm layer: group construction, subgroups / lattices / cosets, Cayley & cycle layouts, `GroupDescriptor v1` serialization. Zero React/DOM dependencies. |
+| [@groupviz/react](https://www.npmjs.com/package/@groupviz/react) | 10 controllable view Scenes (a windowable subset of the app's 13 views), `SceneWindow` shell, `I18nProvider` (中文/English), `theme.css`. |
+
+```bash
+npm i @groupviz/core @groupviz/react
+```
+
 ## 🤝 Community & Contributing
 
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — newcomer guide, conventions, and the dev workflow

@@ -23,10 +23,12 @@ import { ActionScene } from './ActionScene'
 import { SylowView } from './SylowView'
 import { PresentationTableView } from './PresentationTableView'
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
+import { compute3DPositions } from '../../core/algebra/layout3D'
+import { listFaceSubgroups, buildUndirectedEdgeKeys, FACE_COLOR_PALETTE, type FaceSubgroupResult } from '../../core/algebra/faces3D'
 import { verifyHomomorphism } from '../../core/algebra/homomorphisms'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
-import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, CycleViewParams, TableViewParams, TableStrategy, SublatticeViewParams, CosetStripViewParams, SymmetryViewParams, HomomorphismViewParams, ActionViewParams } from '../../core/types/viewConfig'
+import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, Cayley3DFaceFillParams, CycleViewParams, TableViewParams, TableStrategy, SublatticeViewParams, CosetStripViewParams, SymmetryViewParams, HomomorphismViewParams, ActionViewParams } from '../../core/types/viewConfig'
 import { setViewParamsSchema, cayleyViewParamsSchema, cayley3DViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema, sublatticeViewParamsSchema, cosetStripViewParamsSchema, symmetryViewParamsSchema, homomorphismViewParamsSchema, actionViewParamsSchema } from '../../core/types/viewConfig'
 import { getDefaultShape2D, getAvailableShapesForView } from '../../core/types'
 import { getDefaultLayout3D, getAvailableShapes3D } from '../../core/types'
@@ -1318,6 +1320,7 @@ export function ViewWindow({
           autoRotate={p3.autoRotate}
           showLabels={p3.showLabels}
           locked={config.locked}
+          faceFill={p3.faceFill}
         />
       )
     }
@@ -1545,6 +1548,36 @@ export function ViewWindow({
   const cayley3dEnabledCount = useMemo(
     () => cayley3dActionsList.filter(a => a.enabled).length,
     [cayley3dActionsList],
+  )
+
+  // ── 3D 面填充：几何上有陪集面可用的子群候选（作者在此选择 H） ──
+  const faceSubgroupCands = useMemo<FaceSubgroupResult[]>(() => {
+    if (view !== '3d' || !group) return []
+    const actions = cayley3dActionsList.filter(a => a.enabled)
+    const positions = compute3DPositions(group, layout3dValue)
+    const edges = computeCayleyActionEdges(group, actions, p3d.multiplyType ?? 'right')
+    const edgeKeys = buildUndirectedEdgeKeys(edges.map(e => [e.fromIdx, e.toIdx] as [number, number]))
+    return (
+      listFaceSubgroups(
+        group,
+        positions.map(v => [v[0], v[1], v[2]] as [number, number, number]),
+        edgeKeys,
+      ) ?? []
+    )
+  }, [view, group, cayley3dActionsList, layout3dValue, p3d.multiplyType])
+  // 当前选中的 H（与候选匹配 → 其分面渲染在面板上）；换群/换布局后失效则回到未选
+  const faceSelSubgroup = useMemo<FaceSubgroupResult | null>(() => {
+    const ff = p3d.faceFill
+    if (!ff?.subgroup || ff.subgroup.length === 0) return null
+    const key = ff.subgroup.join(',')
+    return faceSubgroupCands.find(c => c.elementIds.join(',') === key) ?? null
+  }, [faceSubgroupCands, p3d.faceFill])
+  const faceOn = p3d.faceFill?.enabled !== false && !!faceSelSubgroup
+  const patchFaceFill = useCallback(
+    (patch: Partial<Cayley3DFaceFillParams>) => {
+      updateViewParams({ faceFill: { ...(p3d.faceFill ?? {}), ...patch } } as Partial<Cayley3DViewParams>)
+    },
+    [updateViewParams, p3d.faceFill],
   )
 
   // Params panel floats OUTSIDE the window frame as a sibling overlay (a child would be
@@ -1990,6 +2023,70 @@ export function ViewWindow({
                   onChange={e => updateViewParams({ showLabels: e.target.checked })} />
                 Show labels
               </label>
+              <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <input type="checkbox" checked={p3d.faceFill?.enabled !== false}
+                    onChange={e => patchFaceFill({ enabled: e.target.checked })} />
+                  Face fills (subgroup cosets)
+                </label>
+                <select
+                  value={faceSelSubgroup ? faceSelSubgroup.elementIds.join(',') : ''}
+                  onChange={e => {
+                    const cand = faceSubgroupCands.find(c => c.elementIds.join(',') === e.target.value)
+                    patchFaceFill({ enabled: true, subgroup: cand ? cand.elementIds : undefined })
+                  }}
+                  disabled={faceSubgroupCands.length === 0}
+                  style={{
+                    width: '100%', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+                    border: '1px solid var(--border-primary)', borderRadius: 4, padding: '2px 4px',
+                  }}
+                >
+                  <option value="">
+                    {faceSubgroupCands.length === 0
+                      ? 'No selectable subgroup (order ≤ 60, coset faces must match geometry)'
+                      : '— select subgroup —'}
+                  </option>
+                  {faceSubgroupCands.map(c => (
+                    <option key={c.elementIds.join(',')} value={c.elementIds.join(',')} title={c.elementIds.join(',')}>
+                      {c.structure ?? `order ${c.order}`} ⟨{c.genLabel}⟩ · {c.faces.length} face{c.faces.length > 1 ? 's' : ''}
+                    </option>
+                  ))}
+                </select>
+                {faceOn && faceSelSubgroup && (
+                  <>
+                    <div style={{ marginTop: 4 }}>
+                      <div style={{ marginBottom: 2 }}>Opacity</div>
+                      <input type="range" min={0.15} max={0.9} step={0.05} value={p3d.faceFill?.opacity ?? 0.45}
+                        onChange={e => patchFaceFill({ opacity: Number(e.target.value) })}
+                        style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', margin: '4px 0 2px' }}>
+                      {faceSelSubgroup.faces.length} coset face{faceSelSubgroup.faces.length > 1 ? 's' : ''} — colour each:
+                    </div>
+                    <div style={{ maxHeight: 140, overflowY: 'auto' }}>
+                      {faceSelSubgroup.faces.map((f, i) => (
+                        <label key={f.key} title={f.hullElementIds.join(' · ')}
+                          style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, cursor: 'pointer' }}>
+                          <input type="color"
+                            value={p3d.faceFill?.faceColors?.[f.key] ?? FACE_COLOR_PALETTE[i % FACE_COLOR_PALETTE.length]}
+                            onChange={e => patchFaceFill({ faceColors: { ...(p3d.faceFill?.faceColors ?? {}), [f.key]: e.target.value } })}
+                            style={{ width: 26, height: 18, border: 'none', background: 'none', padding: 0 }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            dangerouslySetInnerHTML={{
+                              __html: renderTex(texify(
+                                faceSelSubgroup.faces[i].hullElementIds[0]
+                                  ? group.elements.find(el => el.id === faceSelSubgroup.faces[i].hullElementIds[0])?.label ?? ''
+                                  : '',
+                              )),
+                            }}
+                          />
+                          <span style={{ fontSize: 10, color: 'var(--text-dim)', marginLeft: 'auto' }}>{f.size}·H</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
               <div style={{ marginBottom: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600 }}>Edge actions</span>

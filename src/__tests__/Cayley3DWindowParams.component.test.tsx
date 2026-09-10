@@ -5,6 +5,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { ViewWindow } from '../components/Canvas/FloatingViewWindow'
 import type { ViewParams } from '../components/Canvas/FloatingViewWindow'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
+import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import type { Cayley3DViewParams } from '../core/types/viewConfig'
 
 // 与 Cayley3DView.component.test.tsx 同一套 R3F/i18n/theme stub（happy-dom 无 WebGL）
@@ -65,14 +66,37 @@ describe('ViewWindow · cayley3d view', () => {
     // C₄ 循环群可用 3D 形状：cone + circular，默认 circular（getDefaultLayout3D）
     expect(Array.from(select.options).map(o => o.value)).toEqual(['cone', 'circular'])
     expect(select.value).toBe('circular')
-    // 仅 1 个滑杆（Node size）；复选框 = 6 窗口配置 + Auto rotate + Show labels + 1 条作用边
+    // 仅 1 个滑杆（Node size；透明度滑杆仅在选中面子群后出现）；复选框 = 6 窗口配置 + Auto rotate
+    // + Show labels + Face fills + 1 条作用边
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(1)
-    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(9)
+    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(10)
     expect(screen.getByText('Auto rotate')).toBeInTheDocument()
     expect(screen.getByText('Show labels')).toBeInTheDocument()
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
+  })
+
+  it('A₄: picking the C₃ subgroup lists its 4 coset faces with per-face colour + opacity', () => {
+    const a4 = createAlternatingGroup(4)
+    render(
+      <ViewWindow view="3d" group={a4} title="A₄ 3D" storageKey="d3-faces"
+        defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 420, height: 320 }} />,
+    )
+    const panel = openPanel()
+    const selects = panel.querySelectorAll('select')
+    // 3D 面板：Layout select + Face subgroup select（A₄ 有 1 个可用候选：C₃）
+    const faceSelect = selects[selects.length - 1] as HTMLSelectElement
+    expect(Array.from(faceSelect.options).map(o => o.value)).toEqual(['', expect.stringContaining(',')] as never)
+    const c3Value = faceSelect.options[1].value
+    fireEvent.change(faceSelect, { target: { value: c3Value } })
+    // 4 个陪集三角面 → 4 个颜色行 + 透明度滑杆
+    expect(panel.querySelectorAll('input[type="color"]')).toHaveLength(4)
+    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(2) // Node size + Opacity
+    // 改色写回参数并同步回颜色行（选中色随 faceFill.faceColors 持久化）
+    const colors = panel.querySelectorAll('input[type="color"]')
+    fireEvent.change(colors[1], { target: { value: '#123456' } })
+    expect(panel.querySelectorAll('input[type="color"]')[1].getAttribute('value')).toBe('#123456')
   })
 
   it('hides the window zoom slider and its own range for 3d (camera owns zoom)', () => {

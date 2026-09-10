@@ -1,160 +1,119 @@
 # 路线图 (Roadmap)
 
 > 所属文档集：GroupViz 开发文档。入口见 [AGENTS.md](../AGENTS.md)。
-> 制定日期：2026-08-04（三阶段规划讨论结论）。本文件为规划性文档，随开发推进持续更新。
-> **本文档只列未做事项**：已完成的里程碑与逐次开发记录已移至 [docs/CHANGELOG.md](CHANGELOG.md)。
+> 制定日期：2026-08-04（三阶段规划讨论结论）。
+> **本文档只列"未做 / 规划中 / 边界决策"**：已完成的里程碑与逐次开发记录全部在 [docs/CHANGELOG.md](CHANGELOG.md)，此处不重复。
 
 ## 0. 规划总览
 
 GroupViz 的演进分三个阶段，逐级沉淀：
 
-| 阶段 | 时间窗 | 名称 | 目标 |
+| 阶段 | 时间窗 | 名称 | 状态（截至 2026-09-10，v2.1.0） |
 |------|--------|------|------|
-| 近期 | 2026-08 → 2026-10 | 功能夯实期 | 群作用/Sylow/数学缺口/GAP 大群引擎全部交付（见 CHANGELOG），近期收官 |
-| 中期 | 2026-10 → 2027-04 | FGVE 引擎化 | 沉淀独立于 UI 的有限群可视化引擎 |
-| 远期 | 2027-04 → 2027-12 | GVL 教学实验室 | 面向大学抽象代数课程的教学产品形态 |
+| 近期 | 2026-08 → 2026-10 | 功能夯实期 | ✅ 2026-08-23 收官 |
+| 中期 | 2026-10 → 2027-04 | FGVE 引擎化 | 🔄 进行中（阶段 2 视图 props 化 10/13 + 阶段 3 双包已发布，余项见 §2） |
+| 远期 | 2027-04 → 2027-12 | GVL 教学实验室 | ⏳ 未开始 |
 
-核心决策（详见 §5）：近期已全部交付——群作用/Sylow + 数学缺口 M1–M4/M8；原 **E1「gappy 后端集成」经 2026-08-16 换道（弃 gappy 库，直连本机 GAP 4.16）后以 GAP 大群计算引擎 v1.13.0 交付，2026-08-23 正式关闭**；M5 移除、M6–M8/E2/P1–P3 按 2026-08-10 筛选标准不做（非可视化任务）；**FGVE 阶段目标升级为「UI 与算法解耦 + 产出可导出 npm 包」**（2026-08-25 定案，见 §2.8）：保持单仓库、不拆分 monorepo，以「仓库内子目录 + vite library mode 多入口」产出 **`@groupviz/core`**（纯算法，零 UI 依赖）+ **`@groupviz/react`**（视图组件，react/three/katex 作 peerDeps）双包；GVL 定位 **大学抽象代数课程配套**（Fraleigh / Dummit & Foote 风格）。
+核心演进（详见 §5 决策记录）：近期全部交付（群作用 / Sylow / 数学缺口 / 直连 GAP 的大群引擎）；**FGVE 目标 = UI 与算法解耦 + 产出可消费 npm 包**（2026-08-25 定案，保持单仓库，`src/package/` 门面 + vite library mode）——`@groupviz/core`（纯算法）+ `@groupviz/react`（视图组件）双包已于 **2026-09-09 以 v2.0.0 发布 npm**，**2026-09-10 以 v2.1.0 交付「消费端卡点优化」批次**（元素引用按 label 解析 / `useSceneState` 便利层 / `theme` 统一 / 阈值可覆盖 / `docs/API.md` 入包，全附加式 minor）；GVL 定位大学抽象代数课程配套（Fraleigh / Dummit & Foote 风格）。
 
-## 1. 近期：功能夯实期（2026-08 → 2026-10）
+## 1. 近期：功能夯实期 —— ✅ 已收官
 
-> ✅ 已交付（详见 [CHANGELOG.md](CHANGELOG.md)）：群作用系统（v1.8）、Sylow 定理可视化（1.9.0）、群展示系统（1.10.0）、数学缺口 M1–M4 与 M8（2026-08-10）、群结构分析升级/群族扩充/质量支撑项（2026-08-09/10）、2D/3D 布局系列优化与乘法表/导出等（2026-08-11~15，逐次记录见 CHANGELOG §2）。
+全部交付（群作用 v1.8 / Sylow 1.9.0 / 群展示 1.10.0 / 数学缺口 M1–M4、M8 / GAP 大群引擎 v1.13.0 / 2D·3D 布局系列优化），逐次记录见 [CHANGELOG.md](CHANGELOG.md)。原 E1「gappy 后端集成」2026-08-16 换道为**直连本机 GAP 4.16**（弃 gappy 库）。
 
-### 1.1 剩余待办
+### 边界（仍有效，规划留存）
 
-无——近期功能夯实期已于 2026-08-23 收官。原 E1「gappy 后端集成」换道为直连 GAP 4.16 的大群计算引擎（v1.13.0：六端点 >120 阶自动切 GAP + `/series` + `/import-group`、进程缓存 + 15s 超时守卫、S₆ 全链路实测），IdGroup 已砍除；后续后端增强项（缓存/超时强化、特征标表端点、大群前端全链路验收）并入中期 §2.5。
+- **不做**（2026-08-10 筛选标准：只做可视化或可视化优化，见 §5）：M5 同构定理数值验证、M6/M7/E2/P1–P3、群论计算器 / 多对象工作台（作为独立新引擎另行规划——Galculator）。
+- **暂缓**：自由群（Cayley 树 / 商群视角）→ 中期候选；DLC 空间群/点群 → GVL；教育模式 → GVL；乘法表导入（群展示 Todd–Coxeter 已覆盖）；一维特征标 → 并入特征标表（其特例）。
 
-### 1.2 明确不做（2026-08-10 筛选标准，见 §5）
+## 2. 中期：FGVE 引擎化 —— 🔄 进行中
 
-- M5 第二/第三同构定理验证（纯数值验证、无可视化价值，随开发已移除）
-- M6 阿贝尔化、M7 类方程验证行、M8 剩余部分（gappy IdGroup 已砍除）、E2 细节收尾、P1–P3 FGVE 预铺路——非可视化任务一律不做
-- 群论计算器 / 多对象工作台方向搁置，作为独立新引擎另行规划
+**FGVE**（Finite Group Visualization Engine）：数学内核 + 布局内核，独立于 UI、稳定 API、可打包消费。
 
-### 1.3 本期明确暂缓（先不做，规划留存）
+### 2.1 FGVE 收官待办（阶段 2/3 挂账，见 CHANGELOG 09-07~10 批次）
 
-- 自由群（Cayley 树 / 商群视角）→ 中期候选
-- DLC 空间群/点群 → GVL 阶段
-- 教育模式 → GVL 核心，不在近期做
-- 乘法表导入 → 已否决（群展示系统 Todd–Coxeter 已覆盖自定义群创建）
-- 一维特征标 → 暂缓，并入中期特征标表视图（其特例）
+- **CI Playwright 消费冒烟接入**：host-minimal / TestPage1 包消费矩阵均已人工实证，未固化进 CI（`build:pkg` 之后跑消费冒烟）。`publish:smoke` 已强化为「真实 npm 安装 + SSR + 双 resolution 类型 + react→core 具名导出一致性」门禁（v2.1.0），CI 接线仍待做。
+- **`exports` 字段子路径**：双包目前只有根入口 `.` + `./theme.css`；子路径（如 `@groupviz/react/components/...`）待规划。
+- **descriptor 真 round-trip 载群**：`serializeDescriptor`/`deserializeDescriptor` 幂等已有单测与 smoke（发布门禁内置），但 host-minimal 的消费路径（JSON 载群 → 渲染）仍待正式化（见 §2.4 数据互操作）。
+- **消费端 API 深化（v2.1.0 已交付部分，余项续排）**：已交付元素引用解析（label/id/value）、`useSceneState`、`theme` 统一、阈值 props 化、`docs/API.md`；未做——`ViewModel`/`ViewHost` 级整窗受控方案、事件回调覆盖面（目前仅 `onAnimationEnd`）、`exports` 子路径下的按需类型。
 
-## 2. 中期：FGVE 引擎化（2026-10 → 2027-04）
+### 2.2 延后项（定案暂缓，规划留存）
 
-**FGVE**（Finite Group Visualization Engine）：数学内核 + 布局内核，独立于 UI、稳定 API、纯计算无 React/DOM 依赖。
+- **tree / prestable 视图 props 化**：阶段 2 剩余 2 个视图（13 视图已完成 10 个窗口化；此二者入口在左侧「群展示」面板）。
+- **action 窗口内 sylow/coset actionKind**：`ActionViewParams` 目前仅 conjugation/regular/custom 三来源。
 
-### 2.1 结构演进
+### 2.3 中期正式交付项（未开始）
 
-- `src/core/` 即仓库内引擎层（**保持现名**，不另立 `src/engine/` 目录）：纯 TypeScript、零 UI 依赖、独立测试（coreBoundary.test 守护纯净性）。
-- 新增 `src/package/` 双包门面（`@groupviz/core` / `@groupviz/react`，见 §2.8）作为对外稳定入口；渲染层、状态层（Provider 分层）仅通过引擎公共 API 访问数学能力；UI 内部细节不再渗透进引擎。
+**特征标表（character table）**：群论研究者核心工具。数据链路：GAP `CharacterTable(G)` + `Irr` + `ConjugacyClasses` → 后端端点 → 缓存 → 前端渲染（本地仅缓存后端结果，无 GAP 环境不可用）。
+- 矩阵表：行 = 不可约表示（记号、维数 dᵢ = χᵢ(e)），列 = 共轭类（代表元 TeX、阶、类大小）；单元格数值 + 悬停 KaTeX 显示 χᵢ(g)。
+- 热力着色：按实部 / 复相位切换。
+- 验证行：Σ dᵢ² = |G|；Σ dᵢ·χᵢ(g) = 0（g ≠ e）；正交关系 Σ χᵢ(g)·χ̄ᵢ(h) = δ_{gh}·|C_G(g)|（点选两列验证）。
+- 联动：点击列 → 共轭类/主视图高亮；点击行 → 维数徽标。复用表格渲染 + 多视图窗口 + 导出；一维特征标（元素 → 单位根圆周）作子场景一并交付。
 
-### 2.2 稳定协议
+**GAP 后端完善**：缓存/超时守卫强化；按需扩充端点（特征标表、更多性质）；大群（S₆ 及以上）前端全链路验收。
 
-- `GroupDescriptor`：元素、乘法、阶、名称、性质缓存（子群/正规/可解/幂零等）、构造参数（便于序列化与再构建）。
-- `ViewConfig`：布局算法（force / ring / shape / 3D / rewiring）、颜色、边类型等视图配置协议。
-- `GroupAction`：作用定义 + 轨道/稳定子查询接口（v1.8 已落地：`GroupActionDef`/`GroupActionComputation` + `core/algebra/actions.ts` 纯函数，见 [ACTIONS.md](ACTIONS.md)）。
+**引擎 API 文档**：双包消费示例升格后以 host-minimal 为正式示例（已交付浏览器实证版）。✅ **2026-09-10 v2.1.0 部分交付**——`docs/API.md`（Scene props 全表 + core 新导出 + 元素引用/主题约定）已随 `build:pkg` 写入两包分发；余项：核心算法函数的 JSDoc 补全、站点化文档页。
 
-### 2.3 数据互操作
+### 2.4 结构 / 协议（已完成部分的状态）
 
-- **群 JSON 导出 + round-trip**：标准化 schema（元素、乘法表、描述符、性质），支持还原与跨应用交换；JSON → 群 → 导出幂等；schema v1 本阶段正式化。
-- ~~自定义群表导入~~：已否决（群展示系统已覆盖自定义群创建）。
+- `src/core/` 即仓库内引擎层：纯 TS、零 UI 依赖、`coreBoundary.test` 守护；`src/package/` 为双包门面。✅
+- `GroupDescriptor v1`（descriptor.ts：元素/乘法表/性质缓存/构造参数/source 溯源 + zod 校验 + 幂等测试）。✅
+- `GroupAction`（`GroupActionDef`/`GroupActionComputation` + `core/algebra/actions.ts`，见 [ACTIONS.md](ACTIONS.md)）。✅
+- `ViewConfig` 视图配置协议（布局 / 颜色 / 边类型）——已随各视图 props 化落地；独立 JSON schema 固化待办。
+- **群 JSON 导出 + round-trip**：schema v1 已固化（§2.1 待办项即其消费侧收尾）。自定义群表导入已否决（群展示已覆盖）。
 
-### 2.4 特征标表（character table，正式交付）
+### 2.5 非目标（边界保留）
 
-群论研究者核心工具。数据链路：GAP `CharacterTable(G)` + `Irr` + `ConjugacyClasses` → 后端端点 → 缓存 → 前端渲染（本地仅缓存后端结果，无 GAP 环境时特征标表不可用）。
-
-- **矩阵表**：行 = 不可约表示（记号、维数 dᵢ = χᵢ(e)），列 = 共轭类（代表元 TeX、阶、类大小）；单元格数值 + 悬停 KaTeX 显示 χᵢ(g)。
-- **热力着色**：按实部 / 复相位可切换着色。
-- **验证行**：Σ dᵢ² = |G|；Σ dᵢ·χᵢ(g) = 0（g ≠ e）；正交关系 Σ χᵢ(g)·χ̄ᵢ(h) = δ_{gh}·|C_G(g)|（点选两列验证）。
-- **联动**：点击列 → 共轭类视图 / 主视图高亮该类元素；点击行 → 维数徽标。
-- 复用表格视图渲染 + 多视图浮动窗口 + 导出（SVG/PNG/GIF）；一维特征标（元素 → 单位根圆周图）作为其子场景一并交付。
-
-### 2.5 GAP 后端完善
-
-- 缓存策略与超时守卫强化；按需扩充端点（特征标表、更多性质）；大群（S₆ 及以上）前端全链路可用性验收。
-
-### 2.6 可选高价值项
-
-- 引擎 API 文档（最小宿主示例已升格为阶段 3 正式验收项，见 §2.8）。
-
-### 2.7 非目标
-
-- **monorepo 拆分（pnpm workspaces / packages/*）**：仍推迟（单仓库内子目录构建已覆盖打包需求，迁移收益不足）。
-- 包内嵌入 GAP 计算引擎：`@groupviz/core` 仅提供 `createBackendAdapter({ baseUrl, fetchImpl })` 适配接口，宿主自接后端。
-
-### 2.8 双包解耦与打包（2026-08-25 定案，FGVE 新增核心子任务）
-
-将「UI 与算法解耦」落地为**可消费的 npm 包**（原计划推迟到 GVL，用户 2026-08-25 拍板提前到 FGVE）：
-
-- **包形态**：`@groupviz/core`（纯算法层：GroupDescriptor 序列化 / 群构造 / 布局算法 / 视图配置，零 React/DOM 依赖）+ `@groupviz/react`（视图组件 + 内置语言包/I18nProvider + adapter + renderTex + 主题，peerDeps: react/three/@react-three/fiber/drei/katex）。均从现有 `src/core`、`src/components` 导出，不引入 monorepo。
-- **阶段 1 —— 序列化协议固化**：`GroupDescriptor v1`（`src/core/descriptor.ts`：元素/乘法表行序隐式索引/属性缓存/构造参数/source 溯源）+ zod 校验 + 全群族 round-trip 幂等测试；`ViewConfig` JSON 化（shape2D/3D、边类型、颜色）。
-- **阶段 2 —— 视图 props 化（行为零变化重构）**：视图组件由 `useGroup()` 读全局 Provider 改为受控 props 注入；`GroupCanvas` 拆 `<GroupCanvas {...props}/>` + `<GroupCanvasFromContext/>` adapter 壳。**分四批推进**：第一批 set/cayley/cycle/table → 第二批 3d/sublattice/cosetstrip → 第三批 homomorphism/action/sylow/symmetry → 第四批 tree/prestable。每批独立 commit，测试全绿。
-  - 进度：批次一 ✅ v1.17.0（含 GroupDescriptor v1 + ViewConfig JSON 化 + 受控 ViewWindow）；批次二 ✅ v1.18.0（3D 凯莱图）；批次三 ✅ v1.19.0（子群格，附带小窗口可读性专项：LOD 三档 + 共轭轨道合并 + caption 信息外见 docs/VIEWS.md §7.1）；**批次四 ✅ v1.20.0（陪集条带）**：核心问题——主画布走 subsets 状态自包含，受控窗口须自包含（数据由 group 自算），故选 H 子组候选列表=共轭轨道合并（index 升序、默认首候选）、`CosetStripScene` props 化（主画布壳不变，GroupCanvas/老浮动窗零改动；coset 数据=computeCosetData → elementMap/Colors/Highlight 喂 Scene；持久化按 schema 校验、换群失效回退默认 H；锚点 hover 换算世界→视口与 CycleView 同约定）；ViewWindow 四点接入（schema 选择器/renderContent cosetstrip 分支/参数面板 Subgroup H select+Coset type gH/Hg 分段+Show labels+Subgroup Cayley ring）；窗口缺省**隐藏节点标签/隐藏顶部 H 凯莱圈**（与 cayley/cycle 窗口一致读元素靠悬停气泡；用户在面板开关可开回主画布观感）；TestPage 补 4 窗矩阵（S₃ 默认 / Q₈ cosetType:right / C₄ 全开对照 / A₄ 受控），TestPage2 A₄ 博客加第 6 节「V₄ ⋊ C₃ 的陪集分解」配图窗口；e2e 选择器冲突已修（`button.theme-toggle[title^="Switch"]`）；测试新增 node `core/cosetStrip.test.ts`(9) + dom `CosetStripWindowParams.component.test.tsx`(7) → **69 文件 1590 tests 全绿** + lint/typecheck/build（`<600ms`）+ **E2E 13 passed** + 浏览器实测（深/浅色窗口、cosetType/C₂ 切换 2→3 条带、零 console 错误）。余 action/sylow/symmetry/tree/prestable。
-  - **批次五 ✅ v1.21.0（同态视图）**：`HomomorphismView`/`FirstIsomorphismAnimation` 拆 `HomomorphismScene`/`FirstIsomorphismAnimationScene`（纯 props：source/target/mapping/result/name/theoremMode/onTheoremModeChange/theoremAnimation/showLabels/onHover；`setTheoremPhase` 回写改 `onPhaseChange`；主画布壳签名不变零改动）；ViewWindow 五点接入——`homomorphism?: Homomorphism` 单 prop 打包双群（group 可为 null）+ `HomomorphismViewParams{showLabels?}` schema + ViewParams union + schema 选择器 + renderContent homomorphism 分支 + 参数面板 Homomorphism View 段 + title/infoText/hoverOrder/persistKey/displayKey 派生 homomorphism 优先 + 视作自管理布局禁用 ct 平移缩放（同 3d/symmetry）；窗口缺省隐藏节点标签靠悬停就地气泡（source/target 节点 data-homo-source-node/-target-node 测试钩子）；TestPage 补 2 窗（C₆→C₂ 自然投影 / S₃→S₃ 恒等）。
-  - **批次六 ✅ v1.22.0（群作用视图：conjugation / regular / custom 三来源）**：`ActionView`（1028 行）拆 `ActionScene.tsx` 纯 props 内核（banner + DisplayMode + CustomActionEditor + Stab box 全场景；ClusterNode hover 联动仅窗口模式挂载，主画布壳零行为变化）+ `ActionView.tsx` 降级 context 壳；`actions.ts` 新增 arrowListAdd/Bind/Remove/ReplaceGen 箭头纯变换（context 与窗口共享单一事实源）；`ActionViewParams{actionKind?/setSize?/arrows?/showLabels?}`（enum 仅三来源，sylow/coset 留待后续）；窗口数据自算（buildActionComputation 直算/已验证 arrows 自算，坏值回退 noAction）；**custom 编辑态窗口本地承载不持久化**（viewParams 只存已验证结果，博客可注入预验证 arrows）；编辑模式禁 ct 拖拽/滚轮/zoom slider；showLabels=false 节点空圈 + chips 区隐藏 + 悬停气泡。
-  - **批次七 ✅ v1.23.0（对称性视图 symmetry，2026-09-07）**：`SymmetryView` 拆 `SymmetryViewScene` 纯 props 内核（dark 主题解耦 / dual-solid variant / showAction / rotateSpeed / locked / replaySignal 显式重放 / 图注可关）+ context 壳（签名不变）；场景内悬浮变体切换按钮移除改宿主入口（主画布 ViewPanel Shape 选项 / 窗口 ⚙ 面板），`GroupSymmetryContext` 增 `symmetryVariant`；`SymmetryViewParams` 五参 + schema 入 ViewParams；ViewWindow 接入——unsupported 群提示、dual solid 切换（cube/icosahedron 类群）、Action element 列表点播/再点重播/Reset、config.actionLocked 固定演示只读、底部 ⟳ Replay 浮条、showFigureTitle 缺省关（标题栏已显群名）；TestPage 补 10 窗矩阵、TestPage2 加 A₄ 四面体作用图。详记见 CHANGELOG。余 tree/prestable + sylow/coset（action 窗口内 actionKind，延后）。
-- **阶段 3 —— 打包与消费验收**：vite library mode 多入口 + `exports` 字段；`examples/host-minimal/` 最小宿主（JSON 载群 → 渲染视图 → 切形状 → 导出 SVG）；CI 跑包构建 + Playwright 消费冒烟测试。
-  - 进度：**批次八 ✅ v1.24.0（2026-09-07，最小闭环）**：core/react 双独立 config（`vite.pkg.core.config.ts` / `vite.pkg.react.config.ts`）出 `dist-pkg/@groupviz/{core,react}`——core 566KB 仅依赖 zod、react 19.6KB 不内嵌 core（**rolldown/vite8 不 consult 相对导入的 resolveId，改 `scripts/pkg/config-common.ts` coreToPackage transform 钩子**把 121 源文件相对 `../../core` 导入改写为 `@groupviz/core` external）；`scripts/pkg/finalize-pkg.mjs`（d.ts 树分发 + 相对 core 引用→包名重写 + 双包 package.json + **theme.css 从 index.css 自动提取**）；`tsconfig.pkg.json` + npm `build:pkg`；react 门面 `src/package/react.ts`（首批 SetView + CycleView + Provider + renderTex）；host-minimal（examples/）真实 npm 消费冒烟（alias 正则匹配防前缀吞子路径 + fs.allow 放行根目录 KaTeX 字体）——playwright 实证 S₄ Set 网格/Cycle/切 C₆/导出 SVG 21.5KB/零 console error。待办：CI 冒烟接入、视图全量入包（8 个带 i18n/context Scene 按「语言包入包」策略——批次九起，见下行）、`exports` 字段、descriptor 真 round-trip 载群。**批次九 ✅ v1.25.0（2026-09-07，首批带 i18n Scene 入包）**：策略换道「**语言包入包**」（用户拍板，覆盖批次八「文案 props 化」计划——Scene 保留 useTranslation，react 包内置 translations.ts + 导出 I18nProvider，消费端须用包内 Provider 包裹，不包则 t() 回落原始 key）；CayleyView（零 context 直入）+ CosetStripScene（CosetStripView 拆壳：新 CosetStripScene.tsx 纯 render 内核 + 原文件降级 context 壳）双 Scene 入 react 门面；react 产物 19.6KB→103KB（语言包体积）；I18nContextValue export 修 d.ts TS4058；TestPagePkgConsume 包内 Provider 包裹 + CayleyView/CosetStripScene 消费块 Playwright 实证（3 条带/中文图注「子群凯莱图 ⟨H⟩」/console 零 error）。**批次十 ✅ v1.26.0（2026-09-07，余 6 Scene 全量入包收官视图入包阶段）**：TableView（直入，零依赖 props 内核；唯一改造——`triggerDownload` 由 `utils/export.ts` 抽零依赖模块 `utils/download.ts` 切断 gifenc 链路，包产物零 GIF 库污染，export.ts re-export 保主应用兼容；`tsconfig.pkg.json` include 补 `src/types` 治本 gifenc 声明）+ ActionScene（独立文件、零 context 直入）+ HomomorphismScene（拆文件：Scene + HOMO_COLORS/KERNEL_RED/IMAGE_CYAN/bezierPath/findGeneratorElements 整体迁出 HomomorphismScene.tsx，壳 HomomorphismView 留 useGroup 装配 + FirstIsomorphismAnimation 注入 theoremAnimation；无主题依赖）+ SymmetryViewScene（拆文件：Scene + 全部几何 helpers + SymmetryScene/AnimatedGeo/AxisMarker/UnsupportedOverlay/useAnimatedRotation 全渲染链 800 行迁出 SymmetryViewScene.tsx，壳留 useGroup/useTheme 喂 dark={theme==='dark'}；原本就纯 props 仅 dark prop 决定场景配色）+ Cayley3DScene（拆文件 + theme props 化：NodeSphere 原 useTheme 改新 `isDark: boolean` prop，Scene 背景色与 NodeSphere 阴影走同源 effTheme = themeProp ?? useTheme().theme；Cayley3DSceneProps 加 `theme?: 'dark'\|'light'`，缺省回落 ThemeContext 行为零回归）+ SublatticeScene（拆文件 + theme props 化：Scene 主体 buildPalette(theme) 与 SeriesPanel chips 配色同源 effTheme；SeriesPanel 加可选 `theme?` prop 保持无外部消费者的内部组件签名兼容）。**core 索引补 `export * from './symmetryType'`**——SymmetryViewScene 引入 getSymmetryType 经 coreToPackage 改写后主应用 build 触发 MISSING_EXPORT（react 包 index.js 引用 core 未导出符号），补 export + 重打 core 包；**d.ts 修复**——ThemeContext.tsx `interface ThemeContextValue` 改 `export interface ThemeContextValue`（Cayley3D/Sublattice 首次拉 useTheme 进 react pkg program，TS4058 与批次九 I18nContextValue 同解法）。**react 门面**（src/package/react.ts）+ 6 Scene（HomomorphismScene + SymmetryViewScene + Cayley3DScene + SublatticeScene + TableView + ActionScene，原 4 → 10）。**消费者 import 同步**——FloatingViewWindow 4 处 import 拆分（Cayley3D/Homomorphism/Symmetry/Sublattice 各 Scene 与 View 分离）+ 测试文件 import 路径同步。**TestPagePkgConsume 扩展**——6 新消费块（Table/Action/Homo/Sublattice/Cayley3D/Symmetry；C₆→C₂ mod2 映射纯 multiply 构造不依赖 descriptor 生成元约定漂移；Cayley3D theme="dark" 显式与容器解耦印证 theme prop 化必要）。**Playwright 实证**（vite preview localhost:4174）——10 区块 present / 4 SVG + 2 R3F canvas / 6 个 homo source 节点 / console 零 error / 视觉 S₃ conjugation 环 + ★ + C₆→C₂ 满同态紫绿映射 + D₄ dihedral 长方体三轨道。**门禁**——typecheck/lint/vitest 75 文件 1642/build:pkg（react 103→231KB gzip 48→63KB，gifenc 0 出现）/主应用 build 全绿。**FGVE 阶段 3 视图入包阶段收官**：10/13 视图入包（set/cayley/cycle/table/3d/sublattice/homomorphism/cosetstrip/action/symmetry）。延后项 = tree/prestable props 化（v1.17.0 起持续延后）+ action 窗口内 sylow/coset actionKind（ActionViewParams enum 拒收，v1.22.0 起持续延后）。阶段 3 余待办：CI Playwright 冒烟接入 + `exports` 字段子路径 + descriptor 真 round-trip 载群。
-- **数学渲染**：算法层输出 **TeX 字符串**（零依赖），KaTeX 渲染归宿主/`@groupviz/react`（peerDep），core 不直接 renderTex。
+- monorepo 拆分（pnpm workspaces / packages/*）：单仓库子目录构建已覆盖，仍推迟。
+- 包内嵌 GAP 计算引擎：`@groupviz/core` 仅提供 adapter 接口，宿主自接后端。
 
 ## 3. 远期：GVL 教学实验室（2027-04 → 2027-12）
 
-**GVL**（Group Visualization Lab）：面向大学抽象代数课程（配套 Fraleigh《抽象代数》、Dummit & Foote）的教学产品形态。
+**GVL**（Group Visualization Lab）：面向大学抽象代数课程的教学产品形态，消费 FGVE 双包（§3.8）。
 
 ### 3.1 教育模式
-
-引导式欢迎页 + 教学视图（分步动画、提示、检查点），与现有硬核模式并存，按模式切换入口与样式（AGENTS.md §1 已有设计约定）。
+引导式欢迎页 + 教学视图（分步动画、提示、检查点），与硬核模式并存，按模式切换入口与样式。
 
 ### 3.2 课程系统
-
-课程链：群的定义 → 子群 → 陪集 → Lagrange 定理 → 正规子群 → 商群 → 同态 → 群作用 → 轨道-稳定子 → Sylow 定理 → 同构定理。每课 = 场景 + 讲解 + 交互练习。
+课程链：群定义 → 子群 → 陪集 → Lagrange → 正规子群 → 商群 → 同态 → 群作用 → 轨道-稳定子 → Sylow → 同构定理。每课 = 场景 + 讲解 + 交互练习。
 
 ### 3.3 教师工具
-
 场景保存/分享（JSON/链接）、自定义教程制作、讲义导出（SVG/PDF）。
 
 ### 3.4 学生端
-
 练习自检（判断子群 / 找生成元 / 验证同态 / 求作用轨道）、本地进度跟踪。
 
 ### 3.5 证明动画库
-
-补齐：第二/第三同构定理、轨道-稳定子、Cayley 定理。已有资产：Lagrange（陪集条带）、第一同构定理（四阶段动画）。
+补齐第二/第三同构定理、轨道-稳定子、Cayley 定理。已有资产：Lagrange（陪集条带）、第一同构定理（四阶段动画）。
 
 ### 3.6 表示论可视化：矩阵表示动画
-
-群元素 → 真实矩阵（复 2×2 / 实 3×3）变换动画：点击元素播放基向量 / 多面体被矩阵变换的动画；本质是 SymmetryView 的全矩阵化版本（SymmetryView 即其特殊情形：正交表示），教育价值最高。
+群元素 → 真实矩阵（复 2×2 / 实 3×3）变换动画（点击元素播放基向量/多面体变换）；本质是 SymmetryView 的全矩阵化版本（SymmetryView = 正交表示特例）。
 
 ### 3.7 DLC（空间群 / 点群）
-
 晶体学方向（欢迎页已预告）：点群对称可视化、空间群平移对称。
 
 ### 3.8 工程形态
+GVL 阶段消费 FGVE 双包（宿主即 GVL 自身 / 学校课程页面）；若出现 monorepo 拆分需求届时再评估。
 
-GVL 阶段消费 FGVE 已产出的 `@groupviz/core` + `@groupviz/react` 包（宿主即 GVL 自身/学校课程页面）；如出现 monorepo 拆分（packages/core|react|app）需求，届时再评估。
+## 4. 阶段验收对照
 
-## 4. 阶段成功标准
-
-| 阶段 | 验收标准 |
-|------|----------|
-| 近期 | 全部交付收官（含 GAP 大群计算引擎 v1.13.0，E1 已关闭）；lint/test/build 全绿；覆盖率 ≥ 85% |
-| 中期 | `GroupDescriptor v1` round-trip 可用（全群族幂等）；视图组件 props 化拆分完成四批（批次一 set/cayley/cycle/table ✅ v1.17.0、批次二 3d ✅ v1.18.0、批次三 sublattice ✅ v1.19.0（含小窗口 LOD 三档 + 共轭轨道合并）、批次四 cosetstrip ✅ v1.20.0（含窗口自包含子群候选 + 共轭轨道合并 + 默认首候选 + 缺省隐藏标签/Cayley 圈）、批次五 homomorphism ✅ v1.21.0（双群映射 Scene props 化 + homomorphism 单 prop 打包 source/target/mapping + 窗口缺省隐藏标签靠悬停气泡）、批次六 action ✅ v1.22.0（conjugation/regular/custom 三来源 Scene 化 + custom 编辑态窗口本地承载 + 箭头纯变换入 core）、批次七 symmetry ✅ v1.23.0（Scene 化 + dark 主题解耦 + dual-solid variant + replaySignal 重放 + actionLocked 固定演示）），余 tree/prestable（action 窗口内余 sylow/coset 来源，延后）；`@groupviz/core`/`@groupviz/react` 双包可构建（**✅ v1.24.0 批次八最小闭环**：双 config 出包、coreToPackage transform 外部化、host-minimal 消费冒烟）、`examples/host-minimal/` 最小宿主（载群→渲染→切形状→导出 SVG）**✅ 浏览器实证**，余 CI 冒烟接入与视图全量入包（**✅ v1.25.0 批次九**：首批带 i18n Scene 按「语言包入包」策略入 react 包——CayleyView + CosetStripScene；**✅ v1.26.0 批次十**：余 6 Scene 全量入包收官视图入包阶段——TableView 直入 + triggerDownload 抽 utils/download.ts 切断 gifenc 链路 + ActionScene 直入 + HomomorphismScene 拆文件 + SymmetryViewScene 拆文件（含全部几何 helpers + 渲染链 800 行迁移）+ Cayley3DScene 拆文件 + theme props 化 + SublatticeScene 拆文件 + theme props 化；core/index 补 export symmetryType；ThemeContextValue 改 export 修 d.ts TS4058；TestPagePkgConsume 加 6 消费块 Playwright 实证 10 区块零 error）；特征标表视图上线 |
-| 远期 | 教育模式上线；≥ 1 套完整大学抽象代数课程；教师"制作场景 → 分享 → 学生作答"闭环可用 |
+| 阶段 | 验收标准 | 状态 |
+|------|----------|------|
+| 近期 | 全部交付收官 + lint/test/build 全绿 + 覆盖率 ≥ 85% | ✅ 已达成（2026-08-23） |
+| 中期 | FGVE 双包可消费（✅ v2.0.0 发布 npm，registry 安装冒烟通过；✅ v2.1.0 消费端卡点优化 = 元素引用/`useSceneState`/`theme`/阈值/`API.md`）；视图 props 化 10/13（✅ set/cayley/cycle/table/3d/sublattice/cosetstrip/homomorphism/action/symmetry；余 tree/prestable，见 §2.2）；descriptor round-trip 可用（✅ 幂等测试 + 发布门禁）；host-minimal 消费实证（✅ 浏览器实证，CI 化见 §2.1）；**特征标表上线（§2.3，未开始）** | 🔄 |
+| 远期 | 教育模式上线；≥1 套完整大学抽象代数课程；教师"制作→分享→学生作答"闭环 | ⏳ |
 
 ## 5. 决策记录
 
-> 仅保留仍具规划指导意义的决策；完整工作记录（含逐次提交明细、测试计数、浏览器验证）见 [docs/CHANGELOG.md](CHANGELOG.md)。
+> 仅保留**仍具规划指导意义**的决策；完整工作记录（含逐次提交、测试计数、浏览器验证）见 [CHANGELOG.md](CHANGELOG.md)。
 
 | 日期 | 决策 |
 |------|------|
-| 2026-08-04 | 确定三阶段命名与范围；近期优先级 = 群作用系统 + Sylow 定理可视化（其余列 P1/暂缓）；FGVE 先做仓库内独立引擎层（npm 包化推迟到 GVL 阶段）；GVL 定位大学抽象代数课程配套 |
-| 2026-08-09 | 规划定稿（覆盖此前"仅口头确认、不更新 ROADMAP"的决定）：近期 = 数学缺口补全 M1–M8 + 工程质量 E1（gappy 后端集成）/E2（细节收尾）+ FGVE 预铺路 P1（群 JSON 导出+round-trip，乘法表导入否决）/P2（引擎化审计）/P3（benchmark）；推进顺序 M1→M8→E1→E2→P1→P3（E2/P1–P3 后因筛选标准取消，见下行） |
-| 2026-08-09 | 表示论可视化定稿：特征标表 = 中期正式交付（经典矩阵表 + 热力着色 + 正交性验证 + 共轭类联动，数据源 gappy CharacterTable/Irr/ConjugacyClasses，见 §2.4）；矩阵表示动画 → GVL（§3.6）；一维特征标并入特征标表（近期暂缓） |
-| 2026-08-10 | 任务筛选标准 = 新建可视化或可视化优化，非可视化任务一律不做：M5（第二/第三同构定理验证）移除，M6/M7/M8/E2/P1/P2/P3 取消；gappy IdGroup 砍除（E1 其余端点照常规划，见 §1.1）；群论计算器/多对象工作台方向搁置，作为独立新引擎另行规划 |
-| 2026-08-23 | **E1 正式关闭**：gappy 方案不采用——2026-08-16 已换道直连本机 GAP 4.16 并以 v1.13.0 交付核心能力（六端点 + series + import-group、缓存、超时守卫、S₆ 实测）；剩余收尾项（缓存/超时强化、特征标表端点、大群前端全链路验收）并入中期 §2.4/§2.5 |
-| 2026-08-24 | **FGVE 前置工程准备收官，转入中期开发**：P0 引擎化预处理（v1.15.1，类型拆分+门面/大文件拆分/错误模型双轨/输入加固）+ 测试体系建设（v1.16.0，53 文件 1442 tests + E2E 13）全部落地；终验四绿实测通过（lint / test / build / test:e2e），版本与测试计数跨文档一致核对无误；近期阶段无遗留事项，中期 §2 FGVE 引擎化自此正式启动 |
-| 2026-08-25 | **FGVE 包化范围定案（用户拍板，覆盖 §2.7 原"不拆包"决定）**：目标 = 将「UI 与算法解耦」落地为可消费 npm 包——`GroupDescriptor v1` 序列化协议 + 视图组件 props 化（从 `useGroup()` 全局 Provider 改为受控 props 注入）+ 双包产出。**包形态**：`@groupviz/core`（纯算法、零 React/DOM 依赖）+ `@groupviz/react`（视图组件 + 渲染适配，react/three/@react-three/fiber/drei/katex 作 peerDeps）。**仓库结构**：保持单仓库不转 monorepo（`src/core`、`src/package/` 子目录 + vite library mode 多入口），避免早期工程开销。**数学渲染**：算法层只输出 TeX 字符串（零依赖），KaTeX 渲染归宿主 / @groupviz/react（peer）。**视图解耦分四批推进**：第一批 set/cayley/cycle/table → 第二批 3d/sublattice/cosetstrip → 第三批 homomorphism/action/sylow/symmetry → 第四批 tree/prestable，每批行为零变化重构 + 独立 commit + 测试全绿。**验收**：`examples/host-minimal/` 最小宿主（JSON 载群→渲染→切形状→导出 SVG）CI 冒烟。详见 §2.8 |
-| 2026-09-07 | **FGVE 批次七收尾定案**：对称性视图（symmetry）props 化 + 受控 ViewWindow 交付为 v1.23.0（批次七 ✅，10 窗矩阵 + TestPage2 博客图）；阶段 2 已完成 10/13 视图。**剩余 3 个视图（sylow / tree / prestable）用户决定延后**（先不做，保留在 §4 验收未完成项），本轮收尾 = 补 symmetry 的 CHANGELOG/AGENTS 记录 + 版本 bump 1.22.0→1.23.0 + 提交 v1.19→v1.23 整波未提交工作（留干净基线后再做剩余视图与阶段 3 打包） |
-| 2026-09-07 | **FGVE 阶段 3 批次八最小闭环定案（用户拍板走最小闭环先通后全）**：按「先打通最小闭环」节奏交付打包首版 = 双包可构建 + host-minimal 最小宿主消费冒烟（v1.24.0）。**i18n 策略**：Scene 文案 props 化（后续带 t() 的 Scene 逐个去 context，react 包不内置语言包）。**主题 CSS**：包内导出 theme.css（finalize 脚本从 src/index.css 自动提取变量块，防双源漂移）。**core 引用外部化机制**：不改 121 个源文件，构建期 coreToPackage transform 钩子把相对 ../../core 导入改写为 @groupviz/core external（rolldown/vite8 相对路径不走 resolveId 的实测坑）。dist-pkg 产物不入库（.gitignore，CI 生成）。待办：CI 冒烟、视图全量入包（先重构 8 个带 i18n/context 的 Scene）、exports 字段、descriptor 真 round-trip 载群 |
-| 2026-09-07 | **FGVE 阶段 3 批次九入包定案（用户拍板「语言包入包」，覆盖批次八 i18n 策略）**：首批带 i18n Scene 入包只做 2 个（CayleyView 零依赖直入 + CosetStripScene 拆壳）先跑通再全量。**i18n 策略换道**：不做「文案 props 化」逐个去 t()，改由 react 包**内置语言包**——Scene 保留 useTranslation，包 bundled translations.ts（zh+en，1385 行）并导出 I18nProvider；消费端必须用包内 Provider 包裹 Scene（模块重复致包内/主应用 Provider 各自独立实例，不包则 t() 回落原始 key）。**CosetStripScene 拆壳**为纯 render 内核 + context 壳，CayleyView 直入。交付 v1.25.0（react 产物 19.6KB→103KB = 语言包体积）。余 6 Scene（table/3d/sublattice/homomorphism/action/symmetry）按同策略后续入包 |
-| 2026-09-07 | **FGVE 阶段 3 批次十入包定案（用户拍板「全量收尾视图入包」覆盖批次九「每批 2 个」节奏）**：批次九收尾后 v1.25.0 用户拍板本批一次性把余 6 Scene 全量入包收官视图入包阶段。**入场三档**——🟢 直入（TableView/ActionScene，零 context 依赖）、🟡 拆文件（HomomorphismScene/SymmetryViewScene，Scene + 同文件依赖整体迁出）、🔴 拆文件 + theme props 化（Cayley3DScene/SublatticeScene，新增 `theme?: 'dark'\|'light'` prop，缺省回落到 useTheme().theme 行为零回归；NodeSphere/SeriesPanel 子组件同步增 `isDark`/`theme` prop 配合透传）。**关键工程坑**——① TableView 引入 triggerDownload → utils/export.ts 顶层 import gifenc 整个 GIF 库被保守内嵌进 react 产物 24KB；将 triggerDownload 抽零依赖模块 `src/utils/download.ts`，export.ts re-export 保主应用兼容，包产物零 GIF 库污染；`tsconfig.pkg.json` include 补 `src/types` 让 gifenc.d.ts 入 program 治本。② core/index.ts 漏 `export * from './symmetryType'`，SymmetryViewScene 引入 getSymmetryType 经 coreToPackage 改写为 `@groupviz/core` 后主应用 build MISSING_EXPORT；补 export + 重打 core 包。③ Cayley3D/Sublattice 首次把 useTheme 拉入 react pkg program，`src/theme/useTheme.ts` 返回类型引用未 export 的 ThemeContextValue 接口，tsc d.ts emit TS4058；`interface ThemeContextValue` 改 `export interface ThemeContextValue` 与批次九 I18nContextValue 同解法。**TestPagePkgConsume 扩展 6 消费块**（Table/Action/Homo C₆→C₂ mod2/Sublattice/Cayley3D theme="dark"/Symmetry D₄ dark）——证明包消费端 Scene 零 t() 回落（包内 I18nProvider 继承）+ theme 与容器解耦可行（包内无 Provider 时回退默认 dark）。**Playwright 实证**（localhost:4174）10 区块 present / 4 SVG + 2 R3F canvas / 6 个 homo source 节点 / console 零 error。**阶段 3 视图入包阶段收官** 10/13 视图入包；延后项 tree/prestable + action 窗口内 sylow/coset actionKind；阶段 3 余待办 CI Playwright 冒烟接入 + exports 字段子路径 + descriptor 真 round-trip 载群 |
-
+| 2026-08-04 | 三阶段定名与范围（近期/中期 FGVE/远期 GVL）；GVL 定位大学抽象代数课程配套 |
+| 2026-08-09 | 特征标表 = 中期正式交付（数据源 GAP CharacterTable/Irr/ConjugacyClasses）；矩阵表示动画 → GVL；一维特征标并入特征标表 |
+| 2026-08-10 | **任务筛选标准** = 只做可视化或可视化优化，非可视化一律不做：M5/M6/M7/M8/E2/P1–P3 取消，gappy IdGroup 砍除；群论计算器方向搁置为独立新引擎（→ Galculator） |
+| 2026-08-16/23 | E1 换道：弃 gappy，直连本机 GAP 4.16 交付大群引擎（v1.13.0），2026-08-23 正式关闭 E1 |
+| 2026-08-25 | **FGVE 包化定案**：目标升级为可消费 npm 包（`@groupviz/core` + `@groupviz/react`）；保持单仓库（`src/core` + `src/package/` + vite library mode）；视图 props 化分批推进（行为零变化重构）；验收 = host-minimal 最小宿主 CI 冒烟 |
+| 2026-09-07 | 阶段 2 收尾定案：剩余 sylow/tree/prestable 三视图延后（先做阶段 3 打包），批次七 symmetry 收官 v1.23.0 |
+| 2026-09-07 | 阶段 3 推进节奏定案：批次八最小闭环（v1.24.0）→ i18n「语言包入包」策略（v1.25.0，react 包内置语言包并导出 I18nProvider）→ 余 6 Scene 全量入包收官（v1.26.0） |
+| 2026-09-09 | 双包发布治理定案：`pkgVersion` 独立于主应用迭代版本；两包成对同版（v2.0.0，react peer 锁 core ^2.0.0）；发布门禁 `publish:smoke`（真实 npm 安装 + SSR + 双 resolution 类型冒烟）。同日主应用版本对齐 2.0.0 |
+| 2026-09-10 | **消费端 API 加固定案（v2.1.0）**：以外部博客嵌入实测卡点为输入，确立「**元素引用类 props 一律接受 label/id/value 并在内部解析**」（未命中 warn 一次 + 忽略，不抛错）、「**主题统一为 `theme?: 'dark' \| 'light'`**（经 `SceneThemeRoot` 注入 `data-theme`，未传=零变化）」、「相机门控改 `lockCameraOnAction` 默认 **false**（默认不再锁死）」三条约定；全部改动**附加式**（未传=旧行为）故走 2.x minor；发布门禁强化为 react→core 具名导出一致性 + 消费端钉死宿主已解析 react/three 版本 |

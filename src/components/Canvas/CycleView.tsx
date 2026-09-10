@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { cycleGraphLayout } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CanvasTransform, Group, GroupElement, NodePosition } from '../../core/types'
@@ -31,6 +32,19 @@ export interface CycleViewProps {
   onSelect?: (elId: string, additive: boolean) => void
   onHover?: (el: GroupElement | null, anchor?: { x: number; y: number } | null) => void
   noGroupText?: string
+  /** 节点标签自适应阈值：`group.order > 该值` 时仅选中节点显示常驻标签；缺省 60（主画布规则） */
+  largeGroupThreshold?: number
+  /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
+   *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
+  theme?: SceneTheme
+}
+
+export function CycleView(props: CycleViewProps) {
+  return (
+    <SceneThemeRoot theme={props.theme}>
+      <CycleViewBody {...props} />
+    </SceneThemeRoot>
+  )
 }
 
 interface CycleEntry {
@@ -45,7 +59,7 @@ let _cycleViewInst = 0
 
 const CYCLE_COLORS = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#6bcb77', '#9b59b6', '#3498db', '#e67e22']
 
-export function CycleView({
+function CycleViewBody({
   group,
   selectedElements,
   canvasTransform,
@@ -65,6 +79,7 @@ export function CycleView({
   onSelect,
   onHover,
   noGroupText,
+  largeGroupThreshold = 60,
 }: CycleViewProps) {
   // 惰性初始化的每实例唯一前缀（useState 初始化器每实例只执行一次）
   const [filterPrefix] = useState(() => `cyv${++_cycleViewInst}`)
@@ -171,7 +186,7 @@ export function CycleView({
     )
   }
 
-  const isLarge = group.order > 60
+  const isLarge = group.order > largeGroupThreshold
   const isNodeOnScreen = (px: number, py: number) => {
     if (!isLarge) return true
     const sx = px * canvasTransform.scale + canvasTransform.x

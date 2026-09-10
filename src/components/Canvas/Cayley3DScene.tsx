@@ -12,7 +12,8 @@ import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
 import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
 import { normalizeCayleyActions } from '../../context/cayleyActions'
-import type { CayleyActionParam } from '../../core/types/viewConfig'
+import type { CayleyActionParam, Cayley3DFaceFillParams } from '../../core/types/viewConfig'
+import { subgroupFaces, buildUndirectedEdgeKeys, FACE_COLOR_PALETTE } from '../../core/algebra/faces3D'
 
 interface EdgeData {
   fromIdx: number
@@ -223,6 +224,9 @@ export interface Cayley3DSceneProps {
   /** 渲染主题（canvas 背景 / label 阴影）。缺省回落到 ThemeContext（无 Provider 时 'dark'）；
    *  主应用壳不传即保持现状（读全局主题），包消费端显式传以与容器主题解耦 */
   theme?: 'dark' | 'light'
+  /** 子群陪集面填充（面 = 某真子群单个陪集在布局中占满的平面凸多边形）。
+   *  作者在 ⚙ 面板选择子群 H 后，几何上成面的陪集以半透明多边形显示，可逐面指定颜色 */
+  faceFill?: Cayley3DFaceFillParams
 }
 
 function Cayley3DSceneBody({
@@ -238,6 +242,7 @@ function Cayley3DSceneBody({
   locked = false,
   subsetHighlights = [],
   theme = 'dark',
+  faceFill,
 }: Cayley3DSceneProps & { group: Group }) {
   const { t } = useTranslation()
   const { gl, camera, scene } = useThree()
@@ -553,6 +558,45 @@ function Cayley3DSceneBody({
     return m
   }, [group])
 
+  const faceOpacity = faceFill?.enabled === false ? 0 : (faceFill?.opacity ?? 0.45)
+  // 子群陪集面：几何上成面的陪集 → 半透明凸多边形 mesh（fan 三角化，双面渲染）
+  const faceMeshes = useMemo(() => {
+    const subgroup = faceFill?.subgroup
+    if (faceOpacity <= 0 || !subgroup || subgroup.length === 0) return []
+    const edgeKeys = buildUndirectedEdgeKeys(cayleyEdges.map(e => [e.fromIdx, e.toIdx] as [number, number]))
+    const faces = subgroupFaces(
+      group,
+      subgroup,
+      positions.map(v => [v.x, v.y, v.z] as [number, number, number]),
+      edgeKeys,
+    )
+    if (!faces || faces.length === 0) return []
+    const idxOf = new Map(group.elements.map((e, i) => [e.id, i]))
+    return faces.map((f, i) => {
+      const pts = f.hullElementIds.map(id => positions[idxOf.get(id)!])
+      const c = new THREE.Vector3(0, 0, 0)
+      for (const p of pts) c.add(p)
+      c.divideScalar(pts.length)
+      const arr: number[] = []
+      for (let k = 0; k < pts.length; k++) {
+        const p0 = pts[k]
+        const p1 = pts[(k + 1) % pts.length]
+        arr.push(c.x, c.y, c.z, p0.x, p0.y, p0.z, p1.x, p1.y, p1.z)
+      }
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(arr, 3))
+      geo.computeVertexNormals()
+      const color = faceFill?.faceColors?.[f.key] ?? FACE_COLOR_PALETTE[i % FACE_COLOR_PALETTE.length]
+      return { key: f.key, geometry: geo, color }
+    })
+  }, [group, faceFill, cayleyEdges, positions, faceOpacity])
+
+  useEffect(() => {
+    return () => {
+      for (const fm of faceMeshes) fm.geometry.dispose()
+    }
+  }, [faceMeshes])
+
   const actionLabelMap = useMemo(() => {
     const m = new Map<string, string>()
     for (const a of actions) {
@@ -674,6 +718,12 @@ function Cayley3DSceneBody({
           </div>
         </Html>
       )}
+
+      {faceMeshes.map(fm => (
+        <mesh key={fm.key} geometry={fm.geometry} renderOrder={-2}>
+          <meshBasicMaterial color={fm.color} transparent opacity={faceOpacity} side={THREE.DoubleSide} depthWrite={false} />
+        </mesh>
+      ))}
 
       {Array.from(edgeDataMap.values()).map((edge) => {
         const fromEl = elementLookup.get(edge.fromId)

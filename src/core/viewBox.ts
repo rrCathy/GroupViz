@@ -42,25 +42,38 @@ export function getViewBoxSize(order: number, view: ViewMode, force = false): Vi
   return { width: 3000, height: 3000 }
 }
 
-export function isTooLarge(order: number, view: ViewMode): boolean {
+/**
+ * 各视图「过大」判定的**默认**阶阈值。
+ *
+ * 这些数字原本写死在 `isTooLarge` 里，嵌入方无法覆盖（如博客插图想强行展开一张
+ * 120 阶的文字乘法表）。现在既可从外围读取，也可经 `isTooLarge` 的第三参逐次覆盖。
+ */
+export function sizeLimitFor(view: ViewMode): number {
   if (view === 'table' || view === 'prestable') {
-    return order > 100
+    return 100
   }
-  if (view === 'heatmap') {
+  if (view === 'heatmap' || view === 'sylow') {
     // 热力图聚合缩略图，超大群也能展示宏观结构，阈值放宽到 240（与 sylow 一致）
-    return order > 240
+    return 240
   }
   if (view === 'symmetry' || view === 'sublattice' || view === 'action') {
-    return order > 120
-  }
-  if (view === 'sylow') {
-    return order > 240
+    return 120
   }
   if (view === 'tree') {
-    return false
+    return Number.POSITIVE_INFINITY
   }
   if (view === '3d') {
-    return order > 100
+    return 100
   }
-  return order > 100
+  return 100
+}
+
+/**
+ * 视图是否「过大」而需先出占位 / 告警。
+ *
+ * @param limitOverride 覆盖该视图的默认阈值（`sizeLimitFor(view)`）——
+ *                      供包消费端放开/收紧限制（如嵌入时允许更大群直接渲染）
+ */
+export function isTooLarge(order: number, view: ViewMode, limitOverride?: number): boolean {
+  return order > (limitOverride ?? sizeLimitFor(view))
 }

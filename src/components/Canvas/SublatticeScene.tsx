@@ -94,6 +94,9 @@ export interface SublatticeSceneProps {
   /** 渲染主题（格取色 palette）。缺省回落到 ThemeContext（无 Provider 时 'dark'）；
    *  主应用壳不传即保持现状（读全局主题），包消费端显式传以与容器主题解耦 */
   theme?: 'dark' | 'light'
+  /** 本地枚举子群格的群阶上限（`order > 该值` 且未显式传 `lattice` 时不枚举、渲染空态）；
+   *  缺省 60（与 `findAllSubgroups` 内建守卫一致）。放开需自行确认性能与后端通路 */
+  maxEnumerateOrder?: number
 }
 
 function buildPalette(theme: string) {
@@ -310,6 +313,7 @@ export function SublatticeScene({
   onActivateNode,
   noGroupText,
   theme: themeProp,
+  maxEnumerateOrder = 60,
 }: SublatticeSceneProps) {
   const { t } = useTranslation()
   const { theme: ctxTheme } = useTheme()
@@ -341,9 +345,9 @@ export function SublatticeScene({
 
   const baseLattice = useMemo<LatticeData | null>(() => {
     if (lattice !== undefined) return lattice
-    if (!group || group.order > 60) return null
+    if (!group || group.order > maxEnumerateOrder) return null
     return computeSubgroupLattice(group)
-  }, [group, lattice])
+  }, [group, lattice, maxEnumerateOrder])
 
   // 共轭轨道合并：mergedOf[原下标] = 轨道格下标（未合并时 null）
   const { viewNodes, viewEdges, mergedOf, mergeUnavailable } = useMemo(() => {
@@ -404,9 +408,9 @@ export function SublatticeScene({
 
   const centerSet = useMemo(() => {
     if (centerIds) return new Set(centerIds)
-    if (!group || group.order > 60) return null
+    if (!group || group.order > maxEnumerateOrder) return null
     return new Set(getGroupCenter(group).map(e => e.id))
-  }, [group, centerIds])
+  }, [group, centerIds, maxEnumerateOrder])
 
   const centerIdx = useMemo(() => {
     if (!centerSet || centerSet.size === 0) return -1

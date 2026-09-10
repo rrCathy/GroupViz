@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getViewBoxSize, isTooLarge } from '../core/viewBox'
+import { getViewBoxSize, isTooLarge, sizeLimitFor } from '../core/viewBox'
 
 describe('getViewBoxSize', () => {
   it('table view clamps cell grid and pads', () => {
@@ -53,5 +53,46 @@ describe('isTooLarge', () => {
     expect(isTooLarge(101, 'cayley')).toBe(true)
     expect(isTooLarge(120, 'sublattice')).toBe(false)
     expect(isTooLarge(121, 'sublattice')).toBe(true)
+  })
+
+  it('tree 视图永不判过大；heatmap / sylow 放宽到 240', () => {
+    expect(isTooLarge(10000, 'tree')).toBe(false)
+    expect(isTooLarge(240, 'heatmap')).toBe(false)
+    expect(isTooLarge(241, 'heatmap')).toBe(true)
+    expect(isTooLarge(240, 'sylow')).toBe(false)
+    expect(isTooLarge(241, 'sylow')).toBe(true)
+  })
+
+  it('第三参可覆盖阈值（嵌入方放开 / 收紧限制）', () => {
+    expect(isTooLarge(150, 'table')).toBe(true)
+    expect(isTooLarge(150, 'table', 200)).toBe(false)
+    expect(isTooLarge(150, 'table', 100)).toBe(true)
+    // 阈值取严格大于：等于阈值不算过大
+    expect(isTooLarge(200, 'table', 200)).toBe(false)
+    // 显式 Infinity = 彻底放开
+    expect(isTooLarge(9999, 'table', Number.POSITIVE_INFINITY)).toBe(false)
+  })
+})
+
+describe('sizeLimitFor', () => {
+  it('暴露各视图默认阈值（供宿主读取 / 二次判断）', () => {
+    expect(sizeLimitFor('table')).toBe(100)
+    expect(sizeLimitFor('prestable')).toBe(100)
+    expect(sizeLimitFor('heatmap')).toBe(240)
+    expect(sizeLimitFor('sylow')).toBe(240)
+    expect(sizeLimitFor('symmetry')).toBe(120)
+    expect(sizeLimitFor('sublattice')).toBe(120)
+    expect(sizeLimitFor('action')).toBe(120)
+    expect(sizeLimitFor('3d')).toBe(100)
+    expect(sizeLimitFor('cayley')).toBe(100)
+    expect(sizeLimitFor('tree')).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('与 isTooLarge 缺省行为一致', () => {
+    for (const view of ['table', 'heatmap', 'symmetry', 'sylow', '3d', 'cayley', 'action', 'sublattice'] as const) {
+      const limit = sizeLimitFor(view)
+      expect(isTooLarge(limit, view)).toBe(false)
+      expect(isTooLarge(limit + 1, view)).toBe(true)
+    }
   })
 })

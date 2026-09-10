@@ -1,8 +1,23 @@
 import { useId, useMemo } from 'react'
+import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { useTranslation } from '../../i18n/useTranslation'
 import { cosetStripLayout, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
 import { findMinimalGenerators } from '../../core/algebra/sylow'
+import { buildCosetViewData } from '../../core/algebra/cosetView'
+import { resolveElementIdsWarn } from '../../utils/elementRef'
+
+// 「H 不是子群」告警去重（同一群 + 同一集合只提示一次）
+const _notSubgroupWarned = new Set<string>()
+function warnNotSubgroup(group: Group, ids: string[]) {
+  const key = `${group.symbol}|${[...ids].sort().join(',')}`
+  if (_notSubgroupWarned.has(key)) return
+  _notSubgroupWarned.add(key)
+  console.warn(
+    `[groupviz] CosetStripScene.subgroup: 元素集合 [${key.split('|')[1]}] 在群 ${group.symbol} 中` +
+    `不构成子群（不含单位元或乘法不封闭），陪集视图显示空态。`
+  )
+}
 import { renderTex, texify } from '../../utils/texify'
 import type { CosetStripInfo } from '../../core/algebra/forceLayout'
 import { COLOR_PALETTE } from '../../core/types'
@@ -41,16 +56,35 @@ export interface CosetStripSceneProps {
   /** 有群但无陪集数据时的文案（缺省 i18n canvas.cosetStripNoCosets，主应用语境）；
    *  窗口引擎可传自定义提示（如本地枚举上限） */
   noCosetsText?: string
+  /** **便捷入口**：给定子群 H（元素引用数组，`id` 或 `label` 皆可），内部经
+   *  `@groupviz/core` 的 `buildCosetViewData` 自动派生 `cosetElementMap` /
+   *  `cosetColors` / `cosetHighlightSet`。与显式传三件套二选一——显式传入者优先。 */
+  subgroup?: string[] | null
+  /** 便捷入口配套：左 / 右陪集族；缺省 `'left'` */
+  cosetType?: 'left' | 'right'
+  /** 便捷入口配套：是否高亮全部陪集；缺省 `false`（仅高亮含选中元素的陪集） */
+  highlightAllCosets?: boolean
+  /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
+   *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
+  theme?: SceneTheme
 }
 
-export function CosetStripScene({
+export function CosetStripScene(props: CosetStripSceneProps) {
+  return (
+    <SceneThemeRoot theme={props.theme}>
+      <CosetStripSceneBody {...props} />
+    </SceneThemeRoot>
+  )
+}
+
+function CosetStripSceneBody({
   group,
   selectedElements,
   canvasTransform,
   viewBoxSize,
-  cosetElementMap,
-  cosetColors,
-  cosetHighlightSet,
+  cosetElementMap: cosetElementMapProp,
+  cosetColors: cosetColorsProp,
+  cosetHighlightSet: cosetHighlightSetProp,
   subsets,
   showLabels = true,
   showSubgroupCayley = true,
@@ -58,12 +92,33 @@ export function CosetStripScene({
   onHover,
   noGroupText,
   noCosetsText,
+  subgroup,
+  cosetType = 'left',
+  highlightAllCosets = false,
 }: CosetStripSceneProps) {
   const { t } = useTranslation()
   // 多实例（主画布 + 多窗口）并存时避免 marker/filter id 冲突
   const uid = useId()
   const shadowId = `${uid}-cs-node-shadow`
   const arrowId = (i: number) => `${uid}-cs-cayley-arrow-${i}`
+
+  // 便捷入口：显式三件套优先；未传时由 H 元素引用经 core.buildCosetViewData 一键派生
+  const derived = useMemo(() => {
+    if (cosetElementMapProp || !group || !subgroup || subgroup.length === 0) return null
+    const ids = resolveElementIdsWarn(group, subgroup, 'CosetStripScene.subgroup')
+    if (ids.length === 0) return null
+    const data = buildCosetViewData(group, ids, {
+      side: cosetType,
+      highlightAll: highlightAllCosets,
+      selected: selectedElements ?? [],
+    })
+    if (!data) warnNotSubgroup(group, ids)
+    return data
+  }, [cosetElementMapProp, group, subgroup, cosetType, highlightAllCosets, selectedElements])
+
+  const cosetElementMap = cosetElementMapProp ?? derived?.cosetElementMap
+  const cosetColors = cosetColorsProp ?? derived?.cosetColors
+  const cosetHighlightSet = cosetHighlightSetProp ?? derived?.cosetHighlightSet
 
   const subsetDetailMap = useMemo(() => {
     const m = new Map<string, { color: string }>()

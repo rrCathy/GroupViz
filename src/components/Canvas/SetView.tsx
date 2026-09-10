@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { texify, renderTex } from '../../utils/texify'
 import type { Group } from '../../core/types'
 import type { InternalEdgeData } from '../../core/types'
@@ -20,6 +21,19 @@ export interface SetViewProps {
   gap?: number
   columns?: number
   showLabels?: boolean
+  /** 节点标签自适应阈值：`group.order > 该值` 时仅选中节点显示常驻标签；缺省 60（主画布规则） */
+  largeGroupThreshold?: number
+  /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
+   *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
+  theme?: SceneTheme
+}
+
+export function SetView(props: SetViewProps) {
+  return (
+    <SceneThemeRoot theme={props.theme}>
+      <SetViewBody {...props} />
+    </SceneThemeRoot>
+  )
 }
 
 const INNER_NODE_COLORS = [
@@ -183,7 +197,7 @@ function renderCompoundNode(
   )
 }
 
-export function SetView({
+function SetViewBody({
   group,
   selectedElements,
   canvasTransform,
@@ -200,6 +214,7 @@ export function SetView({
   gap: gapOverride,
   columns: columnsOverride,
   showLabels: showLabelsOverride,
+  largeGroupThreshold = 60,
 }: SetViewProps) {
   type SubsetView = { elementIds: string[]; color: string }
   const subsetDetailMap = useMemo(() => {
@@ -225,7 +240,7 @@ export function SetView({
     )
   }
 
-  const isLarge = group.order > 60
+  const isLarge = group.order > largeGroupThreshold
   const hasCompoundNodes = group.elements.some(el => el.cosetMemberLabels && el.cosetMemberLabels.length > 0)
   const nodeRadius = nodeRadiusOverride ?? (hasCompoundNodes ? 72 : 26)
   const gap = gapOverride ?? (hasCompoundNodes ? 12 : 8)

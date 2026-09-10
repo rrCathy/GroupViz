@@ -7,6 +7,7 @@ import {
   type PointerEvent as RPointerEvent,
 } from 'react'
 import { useTranslation } from '../../i18n/useTranslation'
+import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { isTooLarge } from '../../core/viewBox'
 import { findAllSubgroups } from '../../core/algebra/subgroups'
 import { triggerDownload } from '../../utils/download'
@@ -59,6 +60,21 @@ export interface TableViewProps {
   onSelect?: (elId: string, additive: boolean) => void
   onHover?: (el: GroupElement | null) => void
   noGroupText?: string
+  /** 文字乘法表「过大」阈值覆盖（群阶 > 该值时先出告警占位）；缺省 100（core.sizeLimitFor('table')） */
+  maxTableOrder?: number
+  /** 热力图「过大」阈值覆盖；缺省 240（core.sizeLimitFor('heatmap')，聚合缩略图可承载更大群） */
+  maxHeatmapOrder?: number
+  /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
+   *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
+  theme?: SceneTheme
+}
+
+export function TableView(props: TableViewProps) {
+  return (
+    <SceneThemeRoot theme={props.theme}>
+      <TableViewBody {...props} />
+    </SceneThemeRoot>
+  )
 }
 
 interface SubgroupPick {
@@ -157,7 +173,7 @@ function pickSubgroup(group: Group, idToIdx: Map<string, number>, subsets: Subse
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-export function TableView({
+function TableViewBody({
   group,
   selectedElements,
   viewBoxSize,
@@ -178,6 +194,8 @@ export function TableView({
   onSelect,
   onHover,
   noGroupText,
+  maxTableOrder,
+  maxHeatmapOrder,
 }: TableViewProps) {
   const { t } = useTranslation()
   const subsets = subsetsProp ?? EMPTY_SUBSETS
@@ -430,7 +448,7 @@ export function TableView({
   const fitCell = Math.max(4, Math.floor((Math.min(viewBoxSize.width, viewBoxSize.height) - 60) / Math.max(1, heatmapRenderDim)))
   const renderCell = heatmapAutoFit ? Math.min(cellSize, fitCell) : cellSize
   // 热力图（纯色块 + 聚合缩略图）可展示更大群，阈值放宽到 240；普通乘法表（文字）保持 100
-  const tableBlocked = group ? isTooLarge(group.order, showHeatmap ? 'heatmap' : 'table') && !forceShow : false
+  const tableBlocked = group ? isTooLarge(group.order, showHeatmap ? 'heatmap' : 'table', showHeatmap ? maxHeatmapOrder : maxTableOrder) && !forceShow : false
   // 热力图模式下的 full 策略不占位：纯色 cell 直接渲染整表，无需进入全屏
   const tablePlaceholder = !showHeatmap && isLargeTable && strategy === 'full' && !!group && group.order > 30 && !fullscreenOpen
   useEffect(() => {
@@ -583,7 +601,7 @@ export function TableView({
     )
   }
 
-  if (isTooLarge(group.order, 'table') && !forceShow) {
+  if (isTooLarge(group.order, 'table', maxTableOrder) && !forceShow) {
     return (
       <div className="large-group-warning">
         <p>{t('canvas.orderTooLarge', { n: group.order })}</p>

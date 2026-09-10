@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useRef, type ReactNode } from 'react'
+import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { useTranslation } from '../../i18n/useTranslation'
 import { renderTex, texify } from '../../utils/texify'
 import { verifyHomomorphism, getHomomorphismProperties } from '../../core/algebra/homomorphisms'
@@ -57,9 +58,20 @@ export interface HomomorphismSceneProps {
   showLabels?: boolean
   /** 悬停节点（源/目标元素 + 视口内屏幕锚点）；主画布壳不传（内部高亮即可），窗口接就地气泡 */
   onHover?: (el: GroupElement | null, anchor?: { x: number; y: number } | null) => void
+  /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
+   *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
+  theme?: SceneTheme
 }
 
-export function HomomorphismScene({
+export function HomomorphismScene(props: HomomorphismSceneProps) {
+  return (
+    <SceneThemeRoot theme={props.theme}>
+      <HomomorphismSceneBody {...props} />
+    </SceneThemeRoot>
+  )
+}
+
+function HomomorphismSceneBody({
   source,
   target,
   mapping,

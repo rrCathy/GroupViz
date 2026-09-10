@@ -1,6 +1,22 @@
-import type { Group, GroupElement, Subset } from '../core/types'
-import { SUBSET_COLORS, COSET_COLORS } from '../core/types'
-import { computeCosets, type Subgroup, type CosetInfo } from '../core/algebra/subgroups'
+import type { Group, Subset } from '../core/types'
+import { SUBSET_COLORS } from '../core/types'
+import type { CosetInfo } from '../core/algebra/subgroups'
+import { computeCosets } from '../core/algebra/subgroups'
+import { subgroupFromElementIds } from '../core/algebra/cosetView'
+
+/**
+ * 主应用陪集装配层。
+ *
+ * 注意：三件套（`computeCosetElementMap` / `computeCosetColors` /
+ * `computeCosetHighlightSet`）的**实现已下沉到 `@groupviz/core`**
+ * （`core/algebra/cosetView.ts`），此处仅转发以保持主应用既有 import 路径稳定；
+ * 包消费端应直接从 `@groupviz/core` 取用，或更省事地用 `buildCosetViewData` 一键装配。
+ */
+export {
+  computeCosetElementMap,
+  computeCosetColors,
+  computeCosetHighlightSet,
+} from '../core/algebra/cosetView'
 
 export function computeCosetData(
   currentGroup: Group | null,
@@ -24,61 +40,15 @@ export function computeCosetData(
 
   if (!elementIds || elementIds.length === 0) return null
 
-  const subgroupElements = elementIds
-    .map(id => currentGroup.elements.find(e => e.id === id))
-    .filter((el): el is GroupElement => el !== undefined)
-  if (subgroupElements.length === 0) return null
-  const subgroup: Subgroup = {
-    elements: subgroupElements,
-    order: subgroupElements.length,
-    index: currentGroup.order / subgroupElements.length,
-    generators: [],
+  // validate:false + computeGenerators:false —— 与历史行为逐位对齐（此处不重复做闭包校验，
+  // 子群合法性由调用方（subset 判定 / findCosetStripSubgroup）保证），避免热路径额外开销。
+  const subgroup = subgroupFromElementIds(currentGroup, elementIds, {
     isNormal,
-  }
-  return computeCosets(currentGroup, subgroup)
-}
-
-export function computeCosetElementMap(
-  cosetData: CosetInfo | null,
-  cosetType: 'left' | 'right'
-): Map<string, number> {
-  const map = new Map<string, number>()
-  if (!cosetData) return map
-  const cosets = cosetType === 'left' ? cosetData.leftCosets : cosetData.rightCosets
-  cosets.forEach((coset, idx) => {
-    coset.forEach(el => map.set(el.id, idx))
+    validate: false,
+    computeGenerators: false,
   })
-  return map
-}
-
-export function computeCosetColors(
-  cosetData: CosetInfo | null,
-  cosetType: 'left' | 'right'
-): string[] {
-  if (!cosetData) return []
-  const count = cosetType === 'left' ? cosetData.leftCosets.length : cosetData.rightCosets.length
-  return Array.from({ length: count }, (_, i) => COSET_COLORS[i % COSET_COLORS.length])
-}
-
-export function computeCosetHighlightSet(
-  cosetData: CosetInfo | null,
-  cosetType: 'left' | 'right',
-  showAllCosets: boolean,
-  selectedElements: Set<string>,
-  cosetElementMap: Map<string, number>
-): Set<number> {
-  const set = new Set<number>()
-  if (!cosetData) return set
-  if (showAllCosets) {
-    const count = cosetType === 'left' ? cosetData.leftCosets.length : cosetData.rightCosets.length
-    for (let i = 0; i < count; i++) set.add(i)
-  } else {
-    for (const id of selectedElements) {
-      const idx = cosetElementMap.get(id)
-      if (idx !== undefined) set.add(idx)
-    }
-  }
-  return set
+  if (!subgroup) return null
+  return computeCosets(currentGroup, subgroup)
 }
 
 let _subsetNextId = 1

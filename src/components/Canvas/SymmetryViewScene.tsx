@@ -4,6 +4,8 @@ import { OrbitControls, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
+import { resolveElementWarn } from '../../utils/elementRef'
+import type { SceneTheme } from './SceneThemeRoot'
 import { computeElementRotation } from '../../core/elementRotation'
 import type { Group, GroupElement } from '../../core/types'
 import { getSymmetryType } from '../../core/symmetryType'
@@ -373,6 +375,15 @@ export interface SymmetryViewSceneProps {
   /** 重放信号：宿主自增该值即对当前演示元素重播一次动画（姿态不改变目标，
    *  解决同元素动画播完一次后无入口重看的缺口）；缺省 0 */
   replaySignal?: number
+  /** 显式主题（`'dark' | 'light'`）；与 `dark` 二选一，本项优先。
+   *  推荐新代码用 `theme` —— 与其余 Scene 命名统一（`dark` 作为兼容别名保留） */
+  theme?: SceneTheme
+  /** 演示动画期间是否禁用相机旋转 / 平移；缺省 `false`。
+   *  **注意行为变更**：旧实现恒等于 `true`（`enableRotate = !showAction && !locked`），
+   *  导致"演示元素未命中 / 恒等元素时动画不跑，视角却已被锁死"。需要旧行为的宿主显式传 `true`。 */
+  lockCameraOnAction?: boolean
+  /** 演示动画播放结束（姿态落定）回调；用于宿主编排「看完自动切下一个」等自定义流程 */
+  onAnimationEnd?: () => void
 }
 
 /** 对称性视图纯渲染核（props 化、主题解耦）：Canvas + 场景 + 顶部标注 + 演示动画。
@@ -390,8 +401,12 @@ export function SymmetryViewScene({
   onHint,
   hintOnIdle = true,
   replaySignal = 0,
+  theme,
+  lockCameraOnAction = false,
+  onAnimationEnd,
 }: SymmetryViewSceneProps) {
   const symmetryType = symmetryTypeProp ?? getSymmetryType(group)
+  const isDark = theme ? theme === 'dark' : dark
 
   // hooks 前置（不随 unsupported 分支提前返回，保证切换群时 hooks 顺序稳定）
   const data = useMemo((): SymmetryData => {
@@ -409,7 +424,7 @@ export function SymmetryViewScene({
 
   if (symmetryType === 'unsupported') return <UnsupportedOverlay group={group} />
 
-  const bgColor = dark ? '#0a0a1a' : '#f4f4f7'
+  const bgColor = isDark ? '#0a0a1a' : '#f4f4f7'
 
   return (
     <div style={{ width: '100%', height: '100%', background: bgColor }}>
@@ -424,11 +439,13 @@ export function SymmetryViewScene({
           actionElementId={actionElementId}
           rotateSpeed={rotateSpeed}
           showFigureTitle={showFigureTitle}
-          dark={dark}
+          dark={isDark}
           locked={locked}
           onHint={onHint}
           hintOnIdle={hintOnIdle}
           replaySignal={replaySignal}
+          lockCameraOnAction={lockCameraOnAction}
+          onAnimationEnd={onAnimationEnd}
         />
       </Canvas>
     </div>
@@ -441,6 +458,7 @@ function useAnimatedRotation(
   speed: number,
   onPhaseChange: (phase: 'rest' | 'reset' | 'rotating') => void,
   replaySignal?: number,
+  onAnimationEnd?: () => void,
 ) {
   const stateRef = useRef({
     target: null as THREE.Quaternion | null,
@@ -450,6 +468,11 @@ function useAnimatedRotation(
     settled: false,
     currentQuat: new THREE.Quaternion(),
   })
+
+  // 结束回调放 ref：避免宿主每帧传新闭包导致 useFrame 里读到过期函数。
+  // 用 effect 同步而非渲染期赋值 —— 渲染期写 ref 会触发 react-hooks/refs。
+  const endRef = useRef(onAnimationEnd)
+  useEffect(() => { endRef.current = onAnimationEnd }, [onAnimationEnd])
 
   useEffect(() => { stateRef.current.speed = speed }, [speed])
 
@@ -493,6 +516,8 @@ function useAnimatedRotation(
     if (st.t >= 1) {
       st.t = 2; st.settled = true; st.phase = 'rest'; onPhaseChange('rest')
       st.currentQuat.copy(st.target)
+      // 姿态落定 → 通知宿主「这次演示播完了」（重放会再次触发）
+      endRef.current?.()
     } else {
       st.currentQuat.slerpQuaternions(new THREE.Quaternion(), st.target, (st.t - 0.5) / 0.5)
     }
@@ -608,6 +633,7 @@ function SymmetryScene({
   group, symmetryType, data, variant,
   showAction, actionElementId, rotateSpeed,
   showFigureTitle, dark, locked, onHint, hintOnIdle, replaySignal,
+  lockCameraOnAction, onAnimationEnd,
 }: {
   group: Group
   symmetryType: SymmetryType
@@ -622,13 +648,16 @@ function SymmetryScene({
   onHint?: (msg: string) => void
   hintOnIdle: boolean
   replaySignal: number
+  lockCameraOnAction: boolean
+  onAnimationEnd?: () => void
 }) {
   const { t } = useTranslation()
   const [animPhase, setAnimPhase] = useState<'rest' | 'reset' | 'rotating'>('rest')
 
   const animInfo = useMemo(() => {
     if (!showAction || !actionElementId || !data) return null
-    const el = group.elements.find(e => e.id === actionElementId)
+    // 引用解析接受 id / label / value —— 传 label 不再是静默失败（未命中会 warn 一次）
+    const el = resolveElementWarn(group, actionElementId, 'SymmetryViewScene.actionElementId')
     if (!el) return null
     const result = computeGeometricRotation(group, el, data, symmetryType)
     if (!result || result.angleRad === 0) return null
@@ -642,11 +671,13 @@ function SymmetryScene({
     return q
   }, [animInfo])
 
-  const animRef = useAnimatedRotation(targetQuat, rotateSpeed, setAnimPhase, replaySignal)
+  const animRef = useAnimatedRotation(targetQuat, rotateSpeed, setAnimPhase, replaySignal, onAnimationEnd)
 
   // 演示状态反馈：统一经 onHint 上抛（主画布 hint bar / ViewWindow 底部浮条），宿主各自决定单处展示位置
   const activeEl = useMemo(
-    () => (showAction && actionElementId ? group.elements.find(e => e.id === actionElementId) ?? null : null),
+    () => (showAction && actionElementId
+      ? resolveElementWarn(group, actionElementId, 'SymmetryViewScene.actionElementId')
+      : null),
     [showAction, actionElementId, group],
   )
   const statusText = useMemo(() => {
@@ -788,8 +819,8 @@ function SymmetryScene({
         enableDamping={false}
         minDistance={2}
         maxDistance={20}
-        enableRotate={!showAction && !locked}
-        enablePan={!showAction && !locked}
+        enableRotate={!locked && !(showAction && lockCameraOnAction)}
+        enablePan={!locked && !(showAction && lockCameraOnAction)}
         enableZoom={!locked}
       />
     </>

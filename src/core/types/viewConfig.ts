@@ -92,6 +92,17 @@ export const cayleyViewParamsSchema = z.object({
   showLabels: z.boolean().optional(),
 })
 
+export interface Cayley3DFaceFillParams {
+  /** 面填充总开关（保留 subgroup 选择但临时不显示）；缺省 true */
+  enabled?: boolean
+  /** 选中的子群 H（元素 id 升序）；空/缺失 = 不显示面 */
+  subgroup?: string[]
+  /** 逐面颜色覆盖：key = 陪集元素 id 升序 join(',') → hex 颜色 */
+  faceColors?: Record<string, string>
+  /** 面透明度 0.15–0.9；缺省 0.45 */
+  opacity?: number
+}
+
 export interface Cayley3DViewParams {
   /** 3D 布局形状；缺省 getDefaultLayout3D(group)（按群自动） */
   layout3D?: Layout3D
@@ -105,6 +116,8 @@ export interface Cayley3DViewParams {
   autoRotate?: boolean
   /** 是否显示 hover/选中 Html 标签；缺省 true */
   showLabels?: boolean
+  /** 子群陪集面填充（面 = 某真子群单个陪集在布局中占满的平面凸多边形） */
+  faceFill?: Cayley3DFaceFillParams
 }
 
 export const cayley3DViewParamsSchema = z.object({
@@ -123,6 +136,14 @@ export const cayley3DViewParamsSchema = z.object({
   nodeScale: z.number().min(0.5).max(2).optional(),
   autoRotate: z.boolean().optional(),
   showLabels: z.boolean().optional(),
+  faceFill: z
+    .object({
+      enabled: z.boolean().optional(),
+      subgroup: z.array(z.string()).min(1).max(240).optional(),
+      faceColors: z.record(z.string(), z.string()).optional(),
+      opacity: z.number().min(0.15).max(0.9).optional(),
+    })
+    .optional(),
 })
 
 export interface CycleViewParams {

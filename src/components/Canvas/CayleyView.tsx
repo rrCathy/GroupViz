@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
 import { getSemidirectProductMeta, semidirectFactorMap, semidirectFixedPoints } from '../../core/algebra/semidirectDecompositions'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
@@ -35,6 +36,19 @@ export interface CayleyViewProps {
   /** 当前悬停元素 id；用于在该节点外圈绘制高亮环（让"悬停→信息"在视觉上立得住） */
   hoveredElementId?: string | null
   noGroupText?: string
+  /** 节点标签自适应阈值：`group.order > 该值` 时仅选中节点显示常驻标签；缺省 60（主画布规则） */
+  largeGroupThreshold?: number
+  /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
+   *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
+  theme?: SceneTheme
+}
+
+export function CayleyView(props: CayleyViewProps) {
+  return (
+    <SceneThemeRoot theme={props.theme}>
+      <CayleyViewBody {...props} />
+    </SceneThemeRoot>
+  )
 }
 
 /**
@@ -105,7 +119,7 @@ function renderEdgePath(
   )
 }
 
-export function CayleyView({
+function CayleyViewBody({
   group,
   selectedElements,
   canvasTransform,
@@ -120,6 +134,7 @@ export function CayleyView({
   onHover,
   hoveredElementId,
   noGroupText,
+  largeGroupThreshold = 60,
 }: CayleyViewProps) {
   // 惰性初始化的每实例唯一前缀（useState 初始化器每实例只执行一次）
   const [markerPrefix] = useState(() => `cv${++_cayleyViewInst}`)
@@ -128,7 +143,7 @@ export function CayleyView({
   const shape: CayleyShape2D = group ? (shapeProp ?? getDefaultShape2D(group)) : 'circular'
   const multiplyType: MultiplyType = multiplyProp ?? 'right'
   const nodeRadius = nodeRadiusProp ?? 28
-  const isLargeGraph = n > 60
+  const isLargeGraph = n > largeGroupThreshold
 
   const effectiveActions = useMemo(
     () => (group ? normalizeCayleyActions(group, actionsProp) : []),

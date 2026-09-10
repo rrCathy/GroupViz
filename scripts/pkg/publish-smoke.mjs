@@ -20,11 +20,23 @@ import { execSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const CORE_OUT = path.join(ROOT, 'dist-pkg', '@groupviz', 'core')
 const REACT_OUT = path.join(ROOT, 'dist-pkg', '@groupviz', 'react')
+
+// 消费端必须复用宿主“已解析”的 react/three 版本：冒烟目录无 lockfile，若只给范围
+// （如 "react": "^19.2.5"）npm 会浮动到更高版本 —— react@19.3 与 @react-three/fiber@9.7
+// 收紧后的 peer（">=19 <19.3"）冲突 → ERESOLVE 假失败。钉死精确版本 = 复现宿主真实配置。
+const HOST_RESOLVED_PEERS = ['react', 'react-dom', 'three']
+const PINNED_PEERS = HOST_RESOLVED_PEERS.reduce((acc, name) => {
+  try {
+    const v = JSON.parse(readFileSync(path.join(ROOT, 'node_modules', name, 'package.json'), 'utf8')).version
+    acc[name] = v // 精确版本，不加 ^ / ~
+  } catch { /* 宿主没装则交给 npm 自动解析 */ }
+  return acc
+}, {})
 
 const run = (cmd, opts = {}) =>
   execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', ...opts })
@@ -42,11 +54,34 @@ try {
   // ---- 0. 产物在位检查 ----
   for (const [name, dir] of [['@groupviz/core', CORE_OUT], ['@groupviz/react', REACT_OUT]]) {
     const pkg = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'))
-    for (const f of ['index.js', 'package.json', 'README.md', 'LICENSE']) {
+    for (const f of ['index.js', 'package.json', 'README.md', 'LICENSE', 'API.md']) {
       const p = path.join(dir, f)
       try { readFileSync(p) } catch { fail(`${name} 缺产物文件 ${f} —— 先跑 npm run build:pkg`) }
     }
     console.log(`[publish-smoke] · ${name} v${pkg.version} 产物在位`)
+  }
+
+  // ---- 0.5 接口一致性：react 产物 import 的每个 core 符号，core 必须真实导出 ----
+  // 为什么：vite pkg 构建把 core 设为 external，rollup 无法校验 @groupviz/core 的具名导出，
+  // 漏导出（如历史上 faces3D 的 FACE_COLOR_PALETTE）会静默打进 react 产物，
+  // 直到消费端 import 时才抛 "does not provide an export named"，纯运行期才暴露。
+  {
+    const coreExports = new Set(
+      Object.keys(await import(pathToFileURL(path.join(CORE_OUT, 'index.js')).href))
+    )
+    const reactSrc = readFileSync(path.join(REACT_OUT, 'index.js'), 'utf8')
+    const coreImportRe = /import\s*\{([^}]*)\}\s*from\s*["']@groupviz\/core["']/g
+    const missing = new Set()
+    for (const m of reactSrc.matchAll(coreImportRe)) {
+      for (const raw of m[1].split(',')) {
+        const name = raw.trim().split(/\s+as\s+/)[0].trim() // 取原始导出名（忽略 as 别名）
+        if (name && !coreExports.has(name)) missing.add(name)
+      }
+    }
+    if (missing.size) {
+      fail(`@groupviz/react 引用了 core 未导出的符号：${[...missing].join(', ')} —— 在 src/core/index.ts 补 export`)
+    }
+    console.log(`[publish-smoke] · react→core 具名导出一致（core 共 ${coreExports.size} 个导出）`)
   }
 
   // ---- 1. pack ----
@@ -72,8 +107,10 @@ try {
           '@groupviz/core': `file:./${coreTgz}`,
           '@groupviz/react': `file:./${reactTgz}`,
         },
-        // peers（react/three/r3f/drei/katex）由 npm 自动安装；typescript 供类型冒烟
+        // peers 由 npm 自动安装；但 react/react-dom/three 必须按宿主范围钉死，
+        // 否则会拉到更新版本触发 r3f peer 冲突（见 PINNED_PEERS 注释）。typescript 供类型冒烟
         devDependencies: {
+          ...PINNED_PEERS,
           typescript: 'latest',
           '@types/react': 'latest',
           '@types/react-dom': 'latest',
@@ -87,7 +124,9 @@ try {
   // core 冒烟：node 直跑（纯算法，无 DOM）
   writeFileSync(
     path.join(tmp, 'smoke-core.mjs'),
-    `import { createGroupFromSymbol, serializeDescriptor, deserializeDescriptor } from '@groupviz/core'
+    `import { createGroupFromSymbol, serializeDescriptor, deserializeDescriptor,
+  resolveElement, findElement, elementOrder, buildCosetViewData, isTooLarge, sizeLimitFor,
+  listCosetStripSubgroups, cosetDataForSubgroup } from '@groupviz/core'
 const cases = ['C_{4}', 'S_{3}', 'D_{4}', 'A_{4}', 'Q_{8}', 'GL(2,3)']
 for (const sym of cases) {
   const g = createGroupFromSymbol(sym)
@@ -98,6 +137,30 @@ for (const sym of cases) {
     throw new Error('round-trip 不一致: ' + sym + ' (' + g.order + ')')
   console.log('  core ok  ' + sym + '  order=' + g.order + '  round-trip=' + json.elements.length + ' elems')
 }
+
+// 元素引用解析：id 与 label 必须都能命中同一元素（本批次核心修复）
+const s4 = createGroupFromSymbol('S_{4}')
+const probe = s4.elements.find(e => e.label !== 'e')
+if (!probe) throw new Error('S_4 找不到非恒等元素')
+if (resolveElement(s4, probe.id)?.id !== probe.id) throw new Error('resolveElement 按 id 失败')
+if (resolveElement(s4, probe.label)?.id !== probe.id) throw new Error('resolveElement 按 label 失败: ' + probe.label)
+if (findElement(s4, probe.value.join(','))?.id !== probe.id) throw new Error('findElement 按 value 失败')
+if (resolveElement(s4, '(nope)') !== null) throw new Error('未命中应返回 null')
+if (elementOrder(s4, probe) < 1) throw new Error('elementOrder 异常')
+console.log('  core ok  元素引用解析 id/label/value 三档 + elementOrder')
+
+// 陪集一键装配 + 阈值覆盖
+const c6 = createGroupFromSymbol('C_{6}')
+const h = c6.elements.filter(e => e.label === '0' || e.label === '3').map(e => e.id)
+const coset = buildCosetViewData(c6, h, { side: 'left' })
+if (!coset || coset.cosetElementMap.size !== 6 || coset.cosetColors.length !== 3)
+  throw new Error('buildCosetViewData 结果异常')
+if (listCosetStripSubgroups(c6).length === 0) throw new Error('listCosetStripSubgroups 为空')
+if (!cosetDataForSubgroup(c6, h)) throw new Error('cosetDataForSubgroup 为空')
+if (isTooLarge(150, 'table') !== true) throw new Error('isTooLarge 默认阈值异常')
+if (isTooLarge(150, 'table', 200) !== false) throw new Error('isTooLarge 阈值覆盖无效')
+if (sizeLimitFor('heatmap') !== 240) throw new Error('sizeLimitFor 异常')
+console.log('  core ok  buildCosetViewData + listCosetStripSubgroups + isTooLarge 覆盖')
 console.log('CORE SMOKE PASS')
 `
   )
@@ -107,21 +170,40 @@ console.log('CORE SMOKE PASS')
     path.join(tmp, 'smoke-react.mjs'),
     `import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { I18nProvider, SetView } from '@groupviz/react'
+import { I18nProvider, SetView, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
 import { createGroupFromSymbol } from '@groupviz/core'
 
 const group = createGroupFromSymbol('S_{3}')
 const el = React.createElement(I18nProvider, null,
-  React.createElement(SetView, {
-    group,
-    selectedElements: new Set(),
-    canvasTransform: { x: 0, y: 0, scale: 1 },
-    viewBoxSize: { width: 480, height: 360 },
-  })
+  React.createElement(SceneThemeRoot, { theme: 'light' },
+    React.createElement(SetView, {
+      group,
+      selectedElements: new Set(),
+      canvasTransform: { x: 0, y: 0, scale: 1 },
+      viewBoxSize: { width: 480, height: 360 },
+      theme: 'light',
+    })
+  )
 )
 const html = renderToStaticMarkup(el)
 if (!html.includes('<svg')) throw new Error('SSR 输出未含 <svg>，实际前缀: ' + html.slice(0, 120))
-console.log('  react ok  SetView SSR → ' + html.length + ' bytes, svg=' + (html.match(/<svg/g) || []).length)
+if (!html.includes('data-theme="light"')) throw new Error('theme 作用域未注入，实际前缀: ' + html.slice(0, 200))
+console.log('  react ok  SetView+theme SSR → ' + html.length + ' bytes, svg=' + (html.match(/<svg/g) || []).length)
+
+// 便利层可被 import / 是函数（SSR 不挂载，仅验证产物导出面完整）
+for (const [name, fn] of [['useSceneState', useSceneState], ['SceneWindow', SceneWindow], ['SceneHoverBubble', SceneHoverBubble]]) {
+  if (typeof fn !== 'function') throw new Error(name + ' 未从产物导出为函数')
+}
+
+// 无 I18nProvider 时文案必须是真实中文（不再回落 key）
+const bare = renderToStaticMarkup(React.createElement(SetView, {
+  group: null,
+  selectedElements: new Set(),
+  canvasTransform: { x: 0, y: 0, scale: 1 },
+  viewBoxSize: { width: 100, height: 100 },
+  noGroupText: '请先选择一个群',
+}))
+if (!bare.includes('请先选择一个群')) throw new Error('noGroupText 未渲染')
 console.log('REACT SMOKE PASS')
 `
   )
@@ -129,24 +211,64 @@ console.log('REACT SMOKE PASS')
   // 类型冒烟：消费端 tsc 必须能从 exports types 解析并构造 SetViewProps（JSX → 必须 .tsx）
   writeFileSync(
     path.join(tmp, 'smoke-ts.tsx'),
-    `import { createGroupFromSymbol } from '@groupviz/core'
-import { I18nProvider, SetView } from '@groupviz/react'
-import type { SetViewProps } from '@groupviz/react'
+    `import { createGroupFromSymbol, resolveElement, buildCosetViewData } from '@groupviz/core'
+import { I18nProvider, SetView, CayleyView, CosetStripScene, SymmetryViewScene,
+  SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
+import type {
+  SetViewProps, CayleyViewProps, CosetStripSceneProps, SymmetryViewSceneProps,
+  SceneStateOptions, SceneState, SceneTheme, SceneWindowConfig,
+} from '@groupviz/react'
 
-const group = createGroupFromSymbol('C_{6}')
+const group = createGroupFromSymbol('C_{6}')! // 冒烟常量群，非空断言
 
 const props: SetViewProps = {
   group,
   selectedElements: new Set<string>(),
   canvasTransform: { x: 0, y: 0, scale: 1 },
   viewBoxSize: { width: 480, height: 360 },
+  theme: 'light',
+  largeGroupThreshold: 80,
 }
 
-export const Smoke = () => (
-  <I18nProvider>
-    <SetView {...props} />
-  </I18nProvider>
-)
+const cayley: CayleyViewProps = {
+  group,
+  selectedElements: new Set<string>(),
+  canvasTransform: { x: 0, y: 0, scale: 1 },
+  viewBoxSize: { width: 480, height: 360 },
+  // label 记号（新能力）：类型上仍是 string
+  actions: [{ elementId: group.elements[1].label, color: '#fff' }],
+  theme: 'dark',
+}
+
+const coset: CosetStripSceneProps = { group, viewBoxSize: { width: 480, height: 360 }, subgroup: ['0', '3'], cosetType: 'left' }
+const sym: SymmetryViewSceneProps = { group, theme: 'light', actionElementId: group.elements[1].label, lockCameraOnAction: false, onAnimationEnd: () => {} }
+
+const opts: SceneStateOptions = { theme: 'dark', selectedElements: new Set<string>() }
+const theme: SceneTheme = 'light'
+const win: SceneWindowConfig = { locked: true }
+const cosetData = buildCosetViewData(group, ['e0'], { side: 'right' })
+const el0 = resolveElement(group, 'e1')
+
+export const Smoke = () => {
+  const s: SceneState = useSceneState(group, opts)
+  return (
+    <I18nProvider>
+      <SceneWindow theme={theme} config={win} shell="none">
+        <SceneThemeRoot theme={theme}>
+          <SetView {...props} />
+        </SceneThemeRoot>
+      </SceneWindow>
+      <div {...s.hostProps}>
+        <CayleyView {...cayley} {...s.sceneProps} />
+        {s.hoverBubble}
+      </div>
+      <SceneHoverBubble element={el0} anchor={{ x: 1, y: 1 }} theme={theme} />
+      <CosetStripScene {...coset} {...s.sceneProps} />
+      <SymmetryViewScene {...sym} />
+      <span>{String(cosetData?.cosetColors.length ?? 0)}</span>
+    </I18nProvider>
+  )
+}
 `
   )
   const tsconfigBase = {

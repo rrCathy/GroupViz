@@ -35,6 +35,21 @@ export type { SublatticeSceneProps } from '../components/Canvas/SublatticeScene'
 export { SceneWindow } from '../components/Canvas/SceneWindow'
 export type { SceneWindowProps, SceneWindowConfig, SceneWindowCaps, SceneWindowTheme } from '../components/Canvas/SceneWindow'
 
+// ── 便利层（FGVE 外部嵌入反馈批次） ───────────────────────────────────────────
+// useSceneState：把「selectedElements + canvasTransform + viewBoxSize + hover」
+// 四件套 + ResizeObserver + 滚轮缩放/拖拽平移 + 就地气泡包成一行，Scene 仍是纯受控内核。
+export { useSceneState } from '../hooks/useSceneState'
+export type { SceneState, SceneStateOptions, SceneStateProps } from '../hooks/useSceneState'
+// 主题统一：2D Scene 的 `theme` prop 由它落地（缺省不注入、跟随外层）。
+export { SceneThemeRoot } from '../components/Canvas/SceneThemeRoot'
+export type { SceneTheme, SceneThemeRootProps } from '../components/Canvas/SceneThemeRoot'
+// 悬停就地气泡默认实现（也可用 useSceneState().renderHoverBubble 自绘）。
+export { SceneHoverBubble } from '../components/Canvas/SceneHoverBubble'
+export type { SceneHoverBubbleProps } from '../components/Canvas/SceneHoverBubble'
+// 宿主自建 chrome 时复用同一套文案（无 Provider 也返回真实中文）。
+export { useTranslation } from '../i18n/useTranslation'
+
 export { I18nProvider } from '../i18n/I18nContext'
+export type { I18nProviderProps, I18nContextValue } from '../i18n/I18nContext'
 
 export type { Group, GroupElement } from '../core/types'

@@ -15,17 +15,17 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`test.projects` 双项目——
-  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，56 文件）
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，60 文件）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
-- **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 88.91%，lines 91.90%，branches 78.22%、funcs 92.32%）
+- **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 89.79% stmts，lines 92.59%，branches 79.58%、funcs 93.19%；v2.1.0 实测）
 - **playwright.config.ts**：testDir `./e2e`、fullyParallel:false + workers:1（会话/localStorage 隔离靠串行）、viewport 1440×900、locale zh-CN、chromium 单浏览器、retries CI?2:0、trace on-first-retry、webServer `npm run dev -- --strictPort`（reuseExistingServer 本地复用）、`toHaveScreenshot { maxDiffPixelRatio: 0.02, animations: 'disabled' }`
 - TypeScript 测试源码（.ts/.tsx），import 项目内部模块直接使用（ESM；不要用 `require()`）；tsx 文件走 tsconfig jsx react-jsx
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`/`test-results`/`playwright-report`）
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，56 文件 / 1488 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，60 文件 / 1540 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -54,7 +54,7 @@
 | cycleLayouts.test.ts | 23 | computeCycleSubgroups、computeMaximalCycles、forceLayout（自环/initialPositions/cycleSubgroups）、planarCycleLayout、**cycleGraphLayout**（GE 忠实复刻：C4 中心+dist>0、S3 三角叶+3 叶柄、C4×C2 蝴蝶、V4 3 叶柄、3 C3 循环共享 1 元素仍全放、C6×C2/GL(2,3) 全部 ≥4 多边形无自交、**风车式**：S3 型只共享 e 群 360° 均匀绕一圈、共享判定排除 e 防恒并） |
 | cycleGraphCrossings.test.ts | 5 | 循环图交叉度检测（self/cross/overlap 三探测器）：38 群目录硬不变式（C2..C16、D3..D8、S3..S5、A4/A5、V4、Q8、C4×C2、C6×C2、C3×C3、C2³、C4×C4、C8×C2、C3×C6、GL(2,3)、SL(2,3)）self=0 且 overlap=0，唯一异常 C5×S3 self==1（GE 固有）；软基线：S3/D3 cross≤6、C4×C4≤12、SL(2,3) 7 循环共点 −I 交叉≤8 |
 | ringOrder.test.ts | 33 | S2 排列/Z₂ 位向量/整数/eN 排序、parseProductFactors、matrixGridLayout、nestedFactorLayout2D、factorPipeGroups/parseCompactFactors、factorPipeGroupsGrouped（相邻同底循环归组：C₂²×S₃→2 组、C₂×C₂×C₃→[C₂²,C₃]、段数不符 null）、powerRingOrder（C₆ 幂序、V₄ bit 向量方形环序、C₄×C₂ pipe 特判（外圈 t0 升序 + 内圈 t1 降序）、直积 4 覆盖、S₃ 置换序、无生成元回退字典序）、tableGroupGridFactors（注册表群 C₄×C₄ 4×4、C₄×C₂×C₂ 4×4、C₂⁴ 4×4、C₂×D₄ 2×8、D₈ null）、clusterFactorGroups/tableGroupFactorSplit/clusterIsCyclic（Z₂×D₄ 聚类 2+8、D₈ null） |
-| viewBox.test.ts | 8 | getViewBoxSize（table clamp、sublattice、force 放大）、isTooLarge 各视图阈值 |
+| viewBox.test.ts | 12 | getViewBoxSize（table clamp、sublattice、force 放大）、isTooLarge 各视图阈值、**`sizeLimitFor(view)` 默认阈值表 + `isTooLarge(order, view, limitOverride?)` 第三参覆盖（v2.1.0）** |
 | semidirectProduct.test.ts | 16 | createSemidirectProduct：C2⋊C2→D2、平凡φ→直接积、幂等回退、非同态φ抛错、exponent=lcm、生成元提升；getSemidirectProductMeta（pipe 元数据直返、注册表 (16,2) findSemidirectDecompositions 恢复 N/H/φ 且 normal.order·acting.order=16、S₃/C5 null、**QD16 命名半直积恢复 C₈⋊C₂ 且 φ(b)(a)=a³**）、semidirectFactorMap（pipe id 拆分、注册表 n=g·h⁻¹ 代数分解）、semidirectFixedPoints（identity φ 空 map、inversion φ 仅单位元固定） |
 | semidirectDecompositions.test.ts | 29 | 半直积分解（semidirectDecompositions.ts）：findAutoByMap（命中/不命中/空）、verifyPhiHomomorphism（C4⋊C2 反转≅D4、C2⋊C2 平凡 φ、错阶 auto 拒绝、缺失回退 identity）、buildPhiFromGroup（round-trip/非半直积 null）、minimalGenerators（V4⊂A4 2 生成元、{e}→[]、全群）、buildSubgroupGroup（S3 换位 order2、C6 偶数子群 order3）、findSemidirectDecompositions（S3 3 候选全 verified、D4 8 候选、A4 4 候选 Frobenius、S4 ≥9 双型、C6 2 候选、Q8 []、D12 19 候选全 verified、S5 守卫 []、C7 []） |
 | properties.test.ts | 13 | 群性质：S₃/A₄/S₄ 导出列可解非幂零、A₅ 完美不可解、D₈ 幂零/D₁₂ 非幂零、Q₈、Cₙ/V₄、S₃×C₂、>60 cutoff 返回 null、导出列均为子群 |
@@ -79,8 +79,12 @@
 | core/actionViewConfig.test.ts | 10 | FGVE 阶段 2 批次六群作用窗口参数 + 箭头纯变换：actionViewParamsSchema（全 valid/`{}`/空 arrows 平凡作用通过、三来源 enum 接受 + sylow/coset 拒绝、setSize 0/21/3.5 拒绝、arrows 越界索引/缺 generatorId/201 条拒绝、JSON round-trip）；arrowListAdd（追加 + 同键更新 to + 未绑定按 from\\|to 键）/arrowListBind（未绑定转生成元箭头 + 无对应未绑定时原样返回）/arrowListRemove（未绑定精确/全删 + 生成元删）/arrowListReplaceGen（整体替换某生成元 + 清除被替换 from 的未绑定箭头） |
 | core/latticeLayout.test.ts | 15 | FGVE 阶段 2 批次三子群格布局纯函数：computeLatticeLayout（紧凑包围盒无 1000×600 下限、每层居中分槽、槽距 ≥ 卡宽不重叠、nodeScale 线性缩放、空/单节点退化无 NaN）；orderLevelsByBarycenter + countLatticeCrossings（构造 1 交叉例降为 0、单节点层不变序、跨层边不计交叉）；LOD 数学（latticeFitScale 钳 ≤1 + 未测得宿主回退 1、latticeSlotScreenSize、latticeLodTier 宽+高双指标四边界）；levelsByOrderRank（同阶同层/最大阶在 0 层/空数组）与 transitiveReduce（长路冗余边删除、菱形保持原样、平行边先去重不被双双删） |
 | core/subgroupOrbits.test.ts | 11 | FGVE 阶段 2 批次三共轭轨道：subgroupConjugacyOrbits（S₃ 三个 2 阶子群合成 size 3 轨道、划分恰好覆盖一次（S₄ 30 节点）、轨道-稳定子 size·\|N_G(H)\|=\|G\|（S₃/A₄/S₄）、**与「全部元素共轭」暴力 BFS 结果一致（证明生成元闭包充分）**、正规子群 ⇔ 单点轨道、A₄ 四个 3 阶子群轨道 size 4/normalizerOrder 3、阿贝尔群全单点）；mergeLatticeByConjugacy（S₃ 6→4 且轨道阶多重集 [1,1,1,3]、无自环无重复边、已传递归约（再归约幂等）、阿贝尔群恒等回退、S₄ 节点数下降 + 顶/底唯一 + 边方向与 level 一致 + 代表 elementIds 长度=阶、超 MERGE_MAX_NODES 返回 null） |
+| elementRef.test.ts | 15 | v2.1.0 元素引用解析（core/algebra/elementRef.ts）：normalizeElementRef 去空白、resolveElement 按 **id → label → value** 三档命中同一元素（S₄/C₆/D₄ 抽样）、未命中返回 null（空串/null/undefined/野引用）、id 优先于 label 同名冲突、value 数组与逗号串两种写法、findElement 别名等价、resolveElementRefs 返回 elements/ids/unresolved 三件套（部分命中）、resolveElementIds 只回 id、elementRefId 取 id、group 为 null 安全返回 |
+| cosetView.test.ts | 20 | v2.1.0 陪集一键数据（core/algebra/cosetView.ts）：subgroupFromElementIds 由元素引用建真子群（validate 关时不做闭包重校验）、非子群集合返回 null、isSubgroupElementSet 判定、**引用可为 label**；buildCosetViewData（S₃/C₆/A₄ 左/右陪集划分完整且不重不漏、cosetElementMap 覆盖全群、cosetColors 数与陪集数一致、side='right' 与 'left' 结果差异、highlightAll 全高亮、selected 只高亮所在陪集、isNormal 标记透传、非子群/null group 返回 null）；复用函数 re-export 同一性（computeCosetElementMap/Colors/HighlightSet） |
+| elementRefWarn.test.ts | 7 | v2.1.0 未命中告警（utils/elementRef.ts）：resolveElementWarn 命中不告警、未命中 `console.warn` 一次且返回 null、**同 context+symbol+ref 去重只告警一次**、不同 ref/不同 context 各告各的、group 为 null / 空串 / null ref 静默不告警、resolveElementIdsWarn 过滤未命中项 + clearElementRefWarnCache 后重新告警 |
+| faces3D.test.ts | 4 | 3D 子群陪集面填色（core/algebra/faces3D.ts）：A₄ 截角四面体选 C₃=⟨(234)⟩ → 4 个截角三角面（每个恰一个陪集占满共面 + 边界由作用边闭合）、D₅ 棱柱双环选 C₅=⟨r⟩ → 顶/底 2 五边形、C₂³ 立方体选 V₄ → 相对 2 方块、listFaceSubgroups 候选过滤（跨多陪集的侧面天然不可选、order>60 返回 null） |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，19 文件 / 152 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，21 文件 / 184 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -90,7 +94,7 @@
 | CayleyView.component.test.tsx | 13 | FGVE 阶段 2 批次一受控凯莱视图（CayleyView.tsx）：C₄ 默认 4 节点/4 有向边/1 marker、identity 作用自环裁剪、自逆元素无向边、S₃ 左/右乘边集不同、D₄ 双生成元（r 有向+s 无向）、nodeRadius/showLabels 参数（showLabels=false 不渲染 foreignObject）、选中金圈高亮、每实例唯一 marker id（cv{n} 前缀防多窗口冲突）、normalizeCayleyActions（bogus 过滤/默认色/enabled:false 无 marker）、actions=[] 无有向边、group=null 空态、**hoveredElementId 在该节点外圈绘制 #4ecdc4 青色高亮环（无 hoveredElementId 时无环）** |
 | Cayley3DView.component.test.tsx | 9 | FGVE 阶段 2 批次二受控 3D 凯莱视图（Cayley3DScene，R3F/drei/i18n/theme mock）：group=null .view-empty 占位、C₄ 默认 4 节点球/4 有向边（cylinder+cone）/0 自环、actions 归一化（bogus 过滤+enabled:false 无边、[] 显式空）、恒等元作用 4 自环（torusGeometry）、S₃ 左/右乘边长多重集不同（cylinderGeometry args[2] 边长 attribute，React19 happy-dom 对象 props 序列化 '[object Object]' 不可读）、nodeScale 球半径 0.42→0.84、autoRotate 受控（▶/❚❚ 工具条联动）、showLabels=false 无选中标签（gv-html-overlay 计数）、layout3D 缺省 getDefaultLayout3D + 覆盖不崩 |
 | CayleyWindowParams.component.test.tsx | 8 | 凯莱受控窗口（ViewWindow view=cayley）：C₄ 默认渲染、C₁₂ 形状下拉可选列表+默认 circular、参数面板受控回调（shape2D/multiplyType 累积）、edge-action 单元素 checkbox 翻 enabled/None→[]/All→全作用、versioned 持久化（gv-vw- 键 + __gvVersion 信封 + debounce）、坏 schema 回退默认不崩溃、默认持久化键含视图名、缩放滑块无双应用 transform（**面板无 Show labels/LOD 开关，复选框 7 个**） |
-| Cayley3DWindowParams.component.test.tsx | 8 | FGVE 阶段 2 批次二 3D 受控窗口（ViewWindow view=3d，R3F mock 同上）：C₄ 默认渲染（4 球/4 边）、面板控件清单（Layout select=cone/circular 默认 circular、滑杆 1 个=Node size、复选框 9 个=6 配置+AutoRotate+ShowLabels+1 作用边、All/None）、**3D 下窗口 zoom slider 隐藏（内容区无 range）**、受控回灌（layout3D/multiplyType/autoRotate/nodeScale 累积载荷）、edge-action checkbox/All（'3d' 视图路径）/None、versioned 持久化信封 viewParams.multiplyType、坏 schema 回退（layout3D:'bogus'/nodeScale:99 整体拒绝→默认 circular）、持久化键含 \|3d（与 cayley 不碰撞） |
+| Cayley3DWindowParams.component.test.tsx | 9 | FGVE 阶段 2 批次二 3D 受控窗口（ViewWindow view=3d，R3F mock 同上）：C₄ 默认渲染（4 球/4 边）、面板控件清单（Layout select=cone/circular 默认 circular、滑杆 1 个=Node size、复选框 9 个=6 配置+AutoRotate+ShowLabels+1 作用边、All/None）、**3D 下窗口 zoom slider 隐藏（内容区无 range）**、受控回灌（layout3D/multiplyType/autoRotate/nodeScale 累积载荷）、edge-action checkbox/All（'3d' 视图路径）/None、versioned 持久化信封 viewParams.multiplyType、坏 schema 回退（layout3D:'bogus'/nodeScale:99 整体拒绝→默认 circular）、持久化键含 \|3d（与 cayley 不碰撞）、**`theme` prop 控制场景 isDark 着色分支（v2.1.0）** |
 | ViewWindowParams.component.test.tsx | 9 | set 视图受控窗口（ViewWindow view=set）参数：nodeRadius/gap/columns/showLabels 同步、锁定（locked 禁拖/zoomLocked 禁缩放/resizable:false 隐藏手柄）、Reset to defaults 恢复、参数面板开关、**嵌入 chrome：showControls=false 隐藏全部标题栏按钮、showZoomSlider=false 隐藏滑杆（ctrl+wheel 仍可用）、hover HUD 就地气泡——悬停节点旁浮出"元素名 + 阶"+ 指向节点的小三角 + 节点青色高亮环，节点靠顶部时翻转到节点下方，离场消失** |
 | CycleTableWindowParams.component.test.tsx | 9 | cycle/table 受控窗口（ViewWindow view=cycle/table）：CycleView 参数面板（showMaximalCycles 勾选/nodeRadius 滑块；无 Show labels——窗口默认隐藏元素标签 foreignObject=0）受控回调、点击元素高亮所在极大循环（fill-opacity 0.18 + ⟨g⟩≅Z_n 标注）、TableView 参数面板（strategy 下拉=子群展示/随机展示/全量展示、cellSize、forceShowLargeGroup 勾选）受控回调、窗口最小尺寸（最小面积撑大）、defaultSize 应用、坏 schema 回退默认 |
 | SublatticeView.component.test.tsx | 12 | FGVE 阶段 2 批次三受控子群格内核（SublatticeScene，i18n/theme mock）：宿主未测得 → fit=1 落 full 档（S₃ 6 节点 + `\|H\|=` 文本 + viewBox `0 0 680 608` 无 1000×600 下限）、transform 只应用一次（`svg > g` 唯一 + `translate(10, 20) scale(2)`）、dots 档 0 text/0 rect/12 circle（命中圆+实色圆）、compact 档每节点一行数字且无 `\|H\|=`、mergeConjugates（S₃ 6→4 节点 + `×3` 徽标；阿贝尔 C₄ 不变且无 `×`；D₄ 节点数下降且现 `×2`）、nodeScale 0.5 世界盒线性收紧、点击回调 (idx,node)→(null,null) 切换、caption（showCaption 才渲染 + hover 出现/离场回落 hint）、series 面板（有 series 才渲染 + showSeriesPanel=false 隐藏）、group=null 与 >60 阶无 lattice 的 .view-empty（后者含 `lattice.backendOnly`） |
@@ -101,6 +105,8 @@
 | BasicGroupPanel.integration.test.tsx | 5 | I18nProvider>GroupProvider 全链路：初始 none/二面体 slider n=4 → 创建 D_{4}/循环群 C_{12}/特殊群 Q_{8}/对称群创建后 badge 含 S（GroupProbe useContext 读 currentGroup.symbol） |
 | Workspace.integration.test.tsx | 7 | 三栏工作台集成：默认 S3 set 视图 svg circles≥6 + localStorage groupviz-session 信封 {__gvVersion,data:{symbol:'S_{3}',view:'set'}}/损坏 payload 回退 S3/键盘 ArrowRight·Left 选中环 circle[stroke="#ffd93d"]/左栏 accordion-section≥8 且默认仅 ViewPanel 展开/drawer 按钮 + Escape 关闭抽屉/9 张视图卡遍历 active 切换（含 restore 后重查 container） |
 | SvgSnapshot.integration.test.tsx | 4 | SVG 结构快照回归：set-S3 {circles:6,foreignObject:6}（元素标签是 foreignObject+KaTeX 非 `<text>`）/cayley happy-dom 边静默跳过仅断言节点/table rects≥36/cycle circles>0（inline snapshot） |
+| SceneTheme.component.test.tsx | 14 | v2.1.0 主题统一 + i18n 免 Provider（SceneThemeRoot/SceneHoverBubble + 7×2D Scene `theme`）：SceneThemeRoot 未传 theme **不注入 data-theme 且不产生额外 DOM（children 直出）**、传 theme 注入 `data-theme="dark"/"light"`、Set/Cycle/Cayley/CosetStrip/Action/Homomorphism/Table 各 Scene 传 theme 后根节点出现对应 data-theme、默认不改动、SetView group=null 时经 `useTranslation().t` 取到真实中文（**不包 I18nProvider 也不回落裸 key**）、SceneHoverBubble 渲染 label+id+阶、未传 element 返回 null |
+| useSceneState.component.test.tsx | 17 | v2.1.0 受控状态便利 hook（useSceneState）：hostProps 挂载后 viewBoxSize 由 ResizeObserver 量得（0×0 → 宿主尺寸）、sceneProps 含 selectedElements/canvasTransform/viewBoxSize/onSelect/onHover 五件且可直接 spread、select 选中 + additive 追加 + clearSelection、hover 出现气泡 + 离场清除、zoomBy 光标锚定缩放（scale 变化且锚点在变换下不动）、resetTransform 归位、节点位置 getNodePosition/onNodePositionChange/resetNodePositions、**换群清空 hover/选中/节点位置**、locked 透传、**滚轮无指针坐标时退回容器中心且变换不出 NaN**、**返回体形状守卫（顶层无 ref 载体 + hostProps.ref 是回调 ref 且 getHostElement 返回宿主节点）**（本文件所有 `s.xxx` 用法同时充当 `react-hooks/refs` 静态回归守卫） |
 
 ### 3.3 E2E（e2e/*.spec.ts，Playwright chromium，13 tests）
 

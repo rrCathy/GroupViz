@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
 import type { Group, GroupActionArrow, GroupActionComputation, GroupActionKind, GroupElement, CanvasTransform } from '../../core/types'
@@ -987,12 +988,23 @@ export interface ActionSceneProps {
   viewBoxSize?: { width: number; height: number }
   /** sylow 作用的素数（banner 标题用）；窗口不传 */
   prime?: number | null
+  /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
+   *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
+  theme?: SceneTheme
+}
+
+export function ActionScene(props: ActionSceneProps) {
+  return (
+    <SceneThemeRoot theme={props.theme}>
+      <ActionSceneBody {...props} />
+    </SceneThemeRoot>
+  )
 }
 
 const DEFAULT_TRANSFORM: CanvasTransform = { x: 0, y: 0, scale: 1 }
 const DEFAULT_VB = { width: 2000, height: 2000 }
 
-export function ActionScene({
+function ActionSceneBody({
   group,
   kind,
   computation,

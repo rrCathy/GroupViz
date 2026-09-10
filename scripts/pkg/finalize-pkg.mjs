@@ -172,6 +172,10 @@ writeFileSync(
 cpSync(path.join(ROOT, 'LICENSE'), path.join(CORE_OUT, 'LICENSE'))
 cpSync(path.join(ROOT, 'LICENSE'), path.join(REACT_OUT, 'LICENSE'))
 
+// API 参考随包分发：消费端不必翻主仓库 docs/ 就能查到每个 Scene 的 props
+cpSync(path.join(ROOT, 'docs', 'API.md'), path.join(CORE_OUT, 'API.md'))
+cpSync(path.join(ROOT, 'docs', 'API.md'), path.join(REACT_OUT, 'API.md'))
+
 // 简短包 README（npm 页面用；详细文档在主仓库 README + docs/）
 writeFileSync(
   path.join(CORE_OUT, 'README.md'),
@@ -195,9 +199,30 @@ const json = serializeDescriptor(g)          // 序列化为跨应用交换的 J
 const restored = deserializeDescriptor(json) // 还原为可计算的群对象
 \`\`\`
 
-**配套**：React 视图组件见 [@groupviz/react](../react)。
+**元素引用与陪集**（v2.1 起）
 
-完整文档：[GroupViz 主仓库](https://github.com/rrCathy/GroupViz)（docs/GROUPS.md · docs/CAYLEY.md · docs/VIEWS.md）。
+\`\`\`js
+import { resolveElement, elementOrder, buildCosetViewData } from '@groupviz/core'
+
+const g = createGroupFromSymbol('S_{4}')
+// id（"1,3,4,2"）与人类记号 label（"34"）都能解析；未命中返回 null（不再静默）
+const el = resolveElement(g, g.elements[3].label)
+console.log(elementOrder(g, el))          // 元素阶
+
+// 给定子群 H 直出陪集视图三件套（H 也可用 label 写）
+const data = buildCosetViewData(g, ['e0', 'e3'])
+console.log(data?.cosetElementMap, data?.cosetColors, data?.cosetHighlightSet)
+\`\`\`
+
+**完整 props / API 表**：见包内 [API.md](./API.md)。
+
+**配套**：React 视图组件见 [@groupviz/react](https://www.npmjs.com/package/@groupviz/react)。
+
+**稳定性**：当前公开 API 为 2.x——破坏性变更才会升 major，非破坏性演进在 minor/patch 内进行；
+变更记录见 [GroupViz CHANGELOG](https://github.com/rrCathy/GroupViz/blob/main/docs/CHANGELOG.md)。
+
+**来源**：本包由 GroupViz 主仓库 \`src/core/\` 构建发布（单仓库内子目录产出，非 monorepo），
+API 与设计文档：[GroupViz 主仓库](https://github.com/rrCathy/GroupViz)（docs/GROUPS.md · docs/CAYLEY.md · docs/VIEWS.md）。
 MIT License。
 `
 )
@@ -205,11 +230,17 @@ writeFileSync(
   path.join(REACT_OUT, 'README.md'),
   `# @groupviz/react
 
-GroupViz 群论可视化的 **React 视图组件**。与 [@groupviz/core](../core) 配套：core 出数据，react 出图。
+GroupViz 群论可视化的 **React 视图组件**。与 [@groupviz/core](https://www.npmjs.com/package/@groupviz/core) 配套：core 出数据，react 出图。
 
 **包含**：10 个视图 Scene（\`SetView\` / \`CycleView\` / \`CayleyView\` / \`TableView\` / \`CosetStripScene\` /
 \`ActionScene\` / \`HomomorphismScene\` / \`SublatticeScene\` / \`Cayley3DScene\` / \`SymmetryViewScene\`）、
-窗口容器壳 \`SceneWindow\`、\`I18nProvider\`（内置中 / 英文语言包）、\`theme.css\`（深 / 浅色主题变量）。
+**便利层 \`useSceneState\`**（受控四件套 + ResizeObserver + 滚轮缩放/拖拽平移 + 就地气泡）、
+窗口容器壳 \`SceneWindow\`、主题作用域 \`SceneThemeRoot\`、悬停气泡 \`SceneHoverBubble\`、
+\`I18nProvider\` / \`useTranslation\`（内置中 / 英文语言包，**无 Provider 也返回真实文案**）、
+\`theme.css\`（深 / 浅色主题变量）。
+
+> 口径说明：主应用 **GroupViz 共 13 种视图**（另含 sylow / tree / prestable 与构建面板内嵌视图）；
+> 本包收录其中可作为受控组件嵌入宿主的 10 个 Scene（sylow / tree / prestable 视图未 props 化，暂不入包）。
 
 **安装**（npm 自动解析 peer：react 19 / three / @react-three/fiber / @react-three/drei / katex）
 
@@ -217,39 +248,64 @@ GroupViz 群论可视化的 **React 视图组件**。与 [@groupviz/core](../cor
 npm i @groupviz/core @groupviz/react
 \`\`\`
 
-**快速开始**
+**快速开始**（推荐：\`useSceneState\` 把受控四件套 + 交互 + 气泡一次给全）
 
 \`\`\`tsx
-import { I18nProvider, SetView } from '@groupviz/react'
+import { useSceneState, SetView } from '@groupviz/react'
 import '@groupviz/react/theme.css'
 import { createGroupFromSymbol } from '@groupviz/core'
 
 const group = createGroupFromSymbol('C_{6}')
 
 export function App() {
+  const s = useSceneState(group, { theme: 'light' })
   return (
-    <I18nProvider>
-      <div style={{ width: 480, height: 360, background: '#0f1115' }}>
-        <SetView
-          group={group}
-          selectedElements={new Set()}
-          canvasTransform={{ x: 0, y: 0, scale: 1 }}
-          viewBoxSize={{ width: 480, height: 360 }}
-        />
-      </div>
-    </I18nProvider>
+    <div {...s.hostProps} style={{ width: 480, height: 360 }}>
+      <SetView group={group} {...s.sceneProps} theme="light" />
+      {s.hoverBubble}
+    </div>
   )
 }
+\`\`\`
+
+> \`hostProps\` 内含回调 ref，**一次 spread 就够**；别再自己写 \`ref\`（会顶掉内建 ref，
+> 尺寸测量与气泡换算会静默失效）。需要 DOM 节点用 \`s.getHostElement()\`。
+
+也可以完全受控（Scene 是纯渲染内核，状态由宿主自持）：
+
+\`\`\`tsx
+<SetView
+  group={group}
+  selectedElements={new Set()}
+  canvasTransform={{ x: 0, y: 0, scale: 1 }}
+  viewBoxSize={{ width: 480, height: 360 }}
+/>
 \`\`\`
 
 \`\`\`ts
 import '@groupviz/react/theme.css' // 主题样式（模块化工程可 import 到全局）
 \`\`\`
 
-**交互约定**：Scene 是纯受控内核——标签显隐 / hover 气泡 / 选中高亮等由宿主通过 props
-（\`showLabels\` / \`onHover\` / \`onSelect\`）注入；更多组合示例见仓库 \`examples/host-minimal/\`。
+**三个常见坑，本版已修**
 
-完整文档：[GroupViz 主仓库](https://github.com/rrCathy/GroupViz)（docs/VIEWS.md · docs/PRESENTATION.md）。
+- **元素引用**：\`actionElementId\` / \`actions[].elementId\` / \`CosetStripScene.subgroup\` 等元素类 props
+  **同时接受 \`id\`（\`"1,3,4,2"\`）与 \`label\`（\`"34"\`）**；解析不到会 \`console.warn\` 一次并忽略该项，
+  不再「动画不动、相机还被锁死」的静默失败。
+- **主题**：全部 10 个 Scene 统一支持 \`theme?: 'dark' | 'light'\`（含 2D 视图；不传则跟随外层主题）；
+  \`SymmetryViewScene\` 的 \`dark\` 保留为兼容别名。
+- **文案**：漏包 \`I18nProvider\` 不再整屏回落成 key。
+
+**交互约定**：Scene 是纯受控内核——标签显隐 / hover 气泡 / 选中高亮等由宿主通过 props
+（\`showLabels\` / \`onHover\` / \`onSelect\`）注入。
+
+**完整 props 全表**：见包内 [API.md](./API.md)（10 个 Scene 逐项 + 便利层 + core 新增导出）；
+更多组合示例见仓库 \`examples/host-minimal/\`。
+
+**稳定性**：当前公开 API 为 2.x——破坏性变更才会升 major（core 与 react 成对同版发布，react peer 锁 core \`^2.x\`），
+非破坏性演进在 minor/patch 内进行；变更记录见 [GroupViz CHANGELOG](https://github.com/rrCathy/GroupViz/blob/main/docs/CHANGELOG.md)。
+
+**来源**：本包由 GroupViz 主仓库 \`src/package/\` 门面构建发布（单仓库内子目录产出，非 monorepo），
+完整组件 / 交互文档：[GroupViz 主仓库](https://github.com/rrCathy/GroupViz)（docs/VIEWS.md · docs/PRESENTATION.md）。
 MIT License。
 `
 )

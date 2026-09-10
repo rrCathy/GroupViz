@@ -1,9 +1,9 @@
 {
     "name": "groupviz",
     "private": true,
-    "version": "2.0.0",
+    "version": "2.1.0",
     "type": "module",
-    "pkgVersion": "2.0.0",
+    "pkgVersion": "2.1.0",
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",

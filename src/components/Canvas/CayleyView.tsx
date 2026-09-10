@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
-import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
+import { computeCayleyActionEdges, cayleyCircleLayout, circleLayoutRadius } from '../../core/algebra/forceLayout'
 import { getSemidirectProductMeta, semidirectFactorMap, semidirectFixedPoints } from '../../core/algebra/semidirectDecompositions'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
 import { texify, renderTex } from '../../utils/texify'
@@ -179,7 +179,9 @@ function CayleyViewBody({
 
   const cx = viewBoxSize.width / 2
   const cy = viewBoxSize.height / 2
-  const graphRadius = Math.min(viewBoxSize.width * 0.3, 180 + n * 10)
+  // 半径同时受容器宽/高约束：嵌入方给的 viewBox 可能宽扁（如 900×360），
+  // 只按宽度取半径会让圆环上下两端节点出画布（见 feedback/issue-circular-radius-overflow.md）
+  const graphRadius = circleLayoutRadius(viewBoxSize.width, viewBoxSize.height, n, nodeRadius)
 
   const gridPositions = useMemo(() => {
     if (!group) return null

@@ -22,7 +22,7 @@ import { ActionView } from './ActionView'
 import { ActionScene } from './ActionScene'
 import { SylowView } from './SylowView'
 import { PresentationTableView } from './PresentationTableView'
-import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
+import { computeCayleyActionEdges, cayleyCircleLayout, circleLayoutRadius } from '../../core/algebra/forceLayout'
 import { compute3DPositions } from '../../core/algebra/layout3D'
 import { listFaceSubgroups, buildUndirectedEdgeKeys, FACE_COLOR_PALETTE, type FaceSubgroupResult } from '../../core/algebra/faces3D'
 import { verifyHomomorphism } from '../../core/algebra/homomorphisms'
@@ -60,7 +60,10 @@ function CayleyGraphViewLocal() {
   const nodeRadius = 28
   const cx = currentGroup ? viewBoxSize.width / 2 : 0
   const cy = currentGroup ? viewBoxSize.height / 2 : 0
-  const graphRadius = currentGroup ? Math.min(viewBoxSize.width * 0.3, 180 + currentGroup.order * 10) : 0
+  // 窗口 viewBox 是内容区尺寸（宽 > 高常见），半径须同时受高度约束，否则上下节点出画布
+  const graphRadius = currentGroup
+    ? circleLayoutRadius(viewBoxSize.width, viewBoxSize.height, currentGroup.order, nodeRadius)
+    : 0
   const n = currentGroup ? currentGroup.order : 0
 
   const circLayout = useMemo(() => {

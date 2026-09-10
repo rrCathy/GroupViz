@@ -22,7 +22,7 @@ export {
   parseCompactFactors, type CompactFactorPart, clusterFactorGroups, tableGroupFactorSplit, clusterIsCyclic,
   factorPipeGroupsGrouped, type PipeFactorGrouped, splitDihedralElements, dihedralSnakeOrder,
 } from './ringOrder'
-export { normalizeLayout2D, computeElementOrder } from './layouts/shared'
+export { normalizeLayout2D, computeElementOrder, circleLayoutRadius, type CircleRadiusOptions } from './layouts/shared'
 export {
   directProductGridLayout2D, buildFactorSubgroup, factorCopyRingLayout,
   cylinderLayout2D, ringGridLayout2D, torusLayout2D,

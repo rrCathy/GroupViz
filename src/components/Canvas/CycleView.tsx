@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
-import { cycleGraphLayout } from '../../core/algebra/forceLayout'
+import { cycleGraphLayout, circleLayoutRadius } from '../../core/algebra/forceLayout'
 import { texify, renderTex } from '../../utils/texify'
 import type { CanvasTransform, Group, GroupElement, NodePosition } from '../../core/types'
 
@@ -198,7 +198,11 @@ function CycleViewBody({
 
   const cx = viewBoxSize.width / 2
   const cy = viewBoxSize.height / 2
-  const graphRadius = Math.min(viewBoxSize.width * 0.32, 160 + group.order * 16)
+  const graphRadius = circleLayoutRadius(viewBoxSize.width, viewBoxSize.height, group.order, nodeRadius, {
+    widthFactor: 0.32,
+    base: 160,
+    growth: 16,
+  })
 
   const getPos = (elId: string): NodePosition => {
     const external = getNodePosition?.(elId)

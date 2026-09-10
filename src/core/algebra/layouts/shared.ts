@@ -32,6 +32,52 @@ export function normalizeLayout2D(
   return { unit, radius }
 }
 
+// ─── Circle radius ─────────────────────────────────────────────────────────
+
+/** `circleLayoutRadius` 的可选参数（各有缺省，调用方只覆盖需要的一项） */
+export interface CircleRadiusOptions {
+  /** 宽度占比上界（缺省 0.3） */
+  widthFactor?: number
+  /** 阶数基准半径（缺省 180） */
+  base?: number
+  /** 每阶增量（缺省 10） */
+  growth?: number
+  /** 容器内边留白（缺省 16） */
+  padding?: number
+}
+
+/**
+ * 圆环布局半径——**同时**受容器宽、高、群阶约束。
+ *
+ * 历史实现只取 `min(width × widthFactor, base + n × growth)`，两项都没有引用 `height`：
+ * 宽扁容器（如博客内嵌 900×360）里半径会超过 `height / 2`，圆环上下两端节点被裁到画布外。
+ * 这里把「半宽/半高扣掉节点半径与留白」也纳入上界——半径 r 时节点外沿到 r + nodeRadius，
+ * 故可用空间必须减去节点自身尺寸。
+ *
+ * 容器小到装不下一个节点时用 `nodeRadius` 兜底，避免半径退化为 0（所有节点叠在中心）；
+ * 此时溢出不可避免，仅保证图形可读。
+ *
+ * 注：方形 viewBox（内部 `getViewBoxSize` 恒返回正方形）下阶数上界始终最紧，
+ * 本函数与原公式取值完全一致，不改变既有布局。
+ */
+export function circleLayoutRadius(
+  width: number,
+  height: number,
+  n: number,
+  nodeRadius: number,
+  opts: CircleRadiusOptions = {},
+): number {
+  const widthFactor = opts.widthFactor ?? 0.3
+  const base = opts.base ?? 180
+  const growth = opts.growth ?? 10
+  const padding = opts.padding ?? 16
+
+  const halfW = Math.max(0, width / 2 - nodeRadius - padding)
+  const halfH = Math.max(0, height / 2 - nodeRadius - padding)
+  const bounded = Math.min(width * widthFactor, halfW, halfH, base + n * growth)
+  return Math.max(nodeRadius, bounded)
+}
+
 // ─── Element Order ─────────────────────────────────────────────────────────
 
 export function computeElementOrder(el: GroupElement, group: Group): number {

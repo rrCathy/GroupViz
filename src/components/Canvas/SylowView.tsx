@@ -7,7 +7,7 @@ import { useTheme } from '../../theme/useTheme'
 import { factorizeOrder, findAllPSubgroups, conjugateSubgroup } from '../../core/algebra/sylow'
 import { computeElementOrderInGroup } from '../../core/algebra/subgroups'
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
-import { cayleyCircleLayout, cosetStripLayout } from '../../core/algebra/forceLayout'
+import { cayleyCircleLayout, circleLayoutRadius, cosetStripLayout } from '../../core/algebra/forceLayout'
 import { COLOR_PALETTE } from '../../core/types'
 import type { CayleyAction, CayleyEdgeData, GroupElement } from '../../core/types'
 
@@ -97,7 +97,7 @@ export function SylowView() {
   const nodeRadius = 28
   const cx = viewBoxSize.width / 2
   const cy = viewBoxSize.height / 2
-  const graphRadius = Math.min(viewBoxSize.width * 0.3, 180 + n * 10)
+  const graphRadius = circleLayoutRadius(viewBoxSize.width, viewBoxSize.height, n, nodeRadius)
 
   const circLayout = useMemo(() => {
     if (!currentGroup || n === 0) return new Map<string, { x: number; y: number }>()

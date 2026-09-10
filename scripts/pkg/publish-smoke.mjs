@@ -210,7 +210,7 @@ console.log('CORE SMOKE PASS')
     path.join(tmp, 'smoke-react.mjs'),
     `import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { I18nProvider, SetView, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
+import { I18nProvider, SetView, CayleyView, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
 import { createGroupFromSymbol } from '@groupviz/core'
 
 const group = createGroupFromSymbol('S_{3}')
@@ -233,6 +233,42 @@ console.log('  react ok  SetView+theme SSR → ' + html.length + ' bytes, svg=' 
 // 便利层可被 import / 是函数（SSR 不挂载，仅验证产物导出面完整）
 for (const [name, fn] of [['useSceneState', useSceneState], ['SceneWindow', SceneWindow], ['SceneHoverBubble', SceneHoverBubble]]) {
   if (typeof fn !== 'function') throw new Error(name + ' 未从产物导出为函数')
+}
+
+// 回归门禁：CayleyView circular 布局半径必须同时受容器**高度**约束。
+// 旧公式只取 min(width × 0.3, 180 + n × 10)（不含 height）→ S₃ 在 900×360 宽扁容器里
+// 上下各 1 个节点被裁到画布外（feedback/issue-circular-radius-overflow.md）。
+{
+  const wide = { width: 900, height: 360 }
+  const s3 = createGroupFromSymbol('S_{3}')
+  const cayleyHtml = renderToStaticMarkup(
+    React.createElement(CayleyView, {
+      group: s3,
+      selectedElements: new Set(),
+      canvasTransform: { x: 0, y: 0, scale: 1 },
+      viewBoxSize: wide,
+    }),
+  )
+  const nodeRe = /<circle r="28"[^>]*>/g
+  let m
+  let count = 0
+  let minY = Infinity
+  let maxY = -Infinity
+  while ((m = nodeRe.exec(cayleyHtml))) {
+    count++
+    // 该节点 <circle> 之前最近的 <g transform="translate(x, y)"
+    const gs = [...cayleyHtml.slice(0, m.index).matchAll(/<g transform="translate\\(([-\\d.]+), ?([-\\d.]+)\\)"/g)]
+    const y = Number(gs[gs.length - 1][2])
+    minY = Math.min(minY, y - 28)
+    maxY = Math.max(maxY, y + 28)
+  }
+  if (count !== s3.order) throw new Error('CayleyView SSR 节点数异常: ' + count + ' ≠ ' + s3.order)
+  if (minY < 0 || maxY > wide.height) {
+    throw new Error(
+      'CayleyView circular 半径溢出宽扁画布: y=[' + minY.toFixed(1) + ', ' + maxY.toFixed(1) + '] / ' + wide.height,
+    )
+  }
+  console.log('  react ok  CayleyView 900×360 SSR 节点全在画布内 → y=[' + minY.toFixed(1) + ', ' + maxY.toFixed(1) + ']')
 }
 
 // 无 I18nProvider 时文案必须是真实中文（不再回落 key）

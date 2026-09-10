@@ -187,4 +187,30 @@ describe('CayleyView (pure props)', () => {
     )
     expect(container.querySelectorAll('svg circle[stroke="#4ecdc4"]')).toHaveLength(0)
   })
+
+  // 回归：宽扁容器（博客内嵌 900×360）里 circular 圆环半径须受高度约束，
+  // 否则上下两端节点被裁到画布外（feedback/issue-circular-radius-overflow.md）
+  it('keeps every node inside a wide-short viewBox (circular radius bounded by height)', () => {
+    const w = 900
+    const h = 360
+    const r = 28
+    const { container } = render(
+      <CayleyView group={s3} selectedElements={noSel} canvasTransform={ct}
+        viewBoxSize={{ width: w, height: h }} />,
+    )
+    const nodes = Array.from(container.querySelectorAll('svg circle[r="28"]'))
+    expect(nodes).toHaveLength(6)
+    let minY = Infinity
+    let maxY = -Infinity
+    nodes.forEach(c => {
+      const m = /translate\(([-\d.]+),\s*([-\d.]+)\)/.exec(
+        c.parentElement?.getAttribute('transform') ?? '',
+      )!
+      const y = Number(m[2])
+      minY = Math.min(minY, y - r)
+      maxY = Math.max(maxY, y + r)
+    })
+    expect(minY).toBeGreaterThanOrEqual(0)
+    expect(maxY).toBeLessThanOrEqual(h)
+  })
 })

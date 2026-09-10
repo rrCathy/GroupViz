@@ -17,7 +17,7 @@ import { useAutoFade } from '../../hooks/useAutoFade'
 const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ default: m.Cayley3DView })))
 const SymmetryViewLazy = lazy(() => import('./SymmetryView').then(m => ({ default: m.SymmetryView })))
 const FreeGroupTreeViewLazy = lazy(() => import('./FreeGroupTreeView').then(m => ({ default: m.FreeGroupTreeView })))
-import { computeCayleyActionEdges, cayleyCircleLayout } from '../../core/algebra/forceLayout'
+import { computeCayleyActionEdges, cayleyCircleLayout, circleLayoutRadius } from '../../core/algebra/forceLayout'
 import { getSemidirectProductMeta, semidirectFactorMap, semidirectFixedPoints } from '../../core/algebra/semidirectDecompositions'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
 import { texify, renderTex } from '../../utils/texify'
@@ -546,7 +546,7 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
   const nodeRadius = hasCompoundNodes ? 72 : 28
   const cx = viewBoxSize.width / 2
   const cy = viewBoxSize.height / 2
-  const graphRadius = Math.min(viewBoxSize.width * 0.3, 180 + n * 10)
+  const graphRadius = circleLayoutRadius(viewBoxSize.width, viewBoxSize.height, n, nodeRadius)
 
   const gridPositions = useMemo(() => {
     if (!currentGroup) return null

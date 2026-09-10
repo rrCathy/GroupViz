@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { computeShape2DPositions } from '../core/algebra/shapeLayouts'
 import { compute3DPositions } from '../core/algebra/layout3D'
-import { ringOrder, computeElementOrder, cayleyCircleLayout } from '../core/algebra/forceLayout'
+import { ringOrder, computeElementOrder, cayleyCircleLayout, circleLayoutRadius } from '../core/algebra/forceLayout'
 import { quaternionCosetMap } from '../core/algebra/ringOrder'
 import { computeCayleyActionEdges } from '../core/algebra/cayleyEdges'
 import { getConjugacyClasses } from '../core/algebra/subgroups'
@@ -520,5 +520,61 @@ describe('Q₁₆ 3D cylinder (Group Explorer style)', () => {
     const C8 = createCyclicGroup(8)
     const pos = compute3DPositions(C8, 'semidirectCylinder')
     expect(pos.length).toBe(8)
+  })
+})
+
+describe('circleLayoutRadius（圆环半径需同时受容器高度约束）', () => {
+  const NODE_R = 28
+  const PAD = 16
+
+  it('宽扁容器里按半高封顶（900×360 的 S₃）——修 feedback/issue-circular-radius-overflow.md', () => {
+    const r = circleLayoutRadius(900, 360, 6, NODE_R)
+    // 旧公式 min(900×0.3, 180+6×10) = 240 > cy(180) → 上下节点出画布
+    expect(r).toBe(360 / 2 - NODE_R - PAD)
+    expect(r).toBeLessThan(240)
+    // 圆环上下外沿（节点中心 ± (r + nodeRadius)）完整落在画布内
+    const cy = 360 / 2
+    expect(cy - r - NODE_R).toBeGreaterThanOrEqual(0)
+    expect(cy + r + NODE_R).toBeLessThanOrEqual(360)
+  })
+
+  it('方形/高容器里阶数上界仍最紧：与原公式取值一致（不改变既有布局）', () => {
+    // 内部 getViewBoxSize 恒返回正方形：order ≤ 16 → 2000×2000
+    for (const n of [4, 6, 8, 12, 16]) {
+      expect(circleLayoutRadius(2000, 2000, n, NODE_R)).toBe(Math.min(2000 * 0.3, 180 + n * 10))
+    }
+    expect(circleLayoutRadius(3000, 3000, 30, NODE_R)).toBe(Math.min(3000 * 0.3, 180 + 30 * 10))
+  })
+
+  it('窄高容器按半宽封顶，节点不横向出画布', () => {
+    const r = circleLayoutRadius(200, 900, 6, NODE_R)
+    expect(r).toBe(200 / 2 - NODE_R - PAD)
+    expect(r).toBeLessThan(180 + 6 * 10)
+  })
+
+  it('容器小到装不下节点时用 nodeRadius 兜底，不退化为 0/负', () => {
+    expect(circleLayoutRadius(40, 40, 6, NODE_R)).toBe(NODE_R)
+    expect(circleLayoutRadius(0, 0, 6, NODE_R)).toBeGreaterThan(0)
+  })
+
+  it('opts 可覆盖 widthFactor/base/growth（CycleView 一套参数）', () => {
+    const r = circleLayoutRadius(2000, 2000, 6, 24, { widthFactor: 0.32, base: 160, growth: 16 })
+    expect(r).toBe(Math.min(2000 * 0.32, 160 + 6 * 16))
+  })
+
+  it('与 cayleyCircleLayout 组合后所有节点都在画布内', () => {
+    const S3 = createS3()
+    const w = 900
+    const h = 360
+    const cx = w / 2
+    const cy = h / 2
+    const pos = cayleyCircleLayout(S3, cx, cy, circleLayoutRadius(w, h, S3.order, NODE_R))
+    expect(pos.size).toBe(6)
+    for (const p of pos.values()) {
+      expect(p.x - NODE_R).toBeGreaterThanOrEqual(0)
+      expect(p.x + NODE_R).toBeLessThanOrEqual(w)
+      expect(p.y - NODE_R).toBeGreaterThanOrEqual(0)
+      expect(p.y + NODE_R).toBeLessThanOrEqual(h)
+    }
   })
 })

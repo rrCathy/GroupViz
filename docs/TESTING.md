@@ -25,7 +25,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，61 文件 / 1592 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，61 文件 / 1598 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -33,7 +33,7 @@
 | actions.test.ts | 51 | 群作用：置换工具（compose 方向/逆/恒等）、共轭作用（S₃/C₆/D₄/S₅ 同态+轨道=共轭类+OST 校验）、自定义作用（C₃ 循环合法、missing-target/conflict/duplicate/range 报错、无箭头生成元恒等初始化、非法阶绑定 → violation、自环固定点、多生成元同节点箭头共存）、正则作用（左平移=Cayley 嵌入单射、Stab(x)={e} 自由、C₄ 与群乘一致）、陪集作用（G↷G/H 传递、Stab(xH)=xHx⁻¹、中心子群全陪集 Stab=H、{e} 退化=正则、空子群 range 报错）、Burnside 引理（S₃/D₄ 共轭 (1/|G|)Σ|Fix| = 轨道数、正则单轨道、空 perms）、共轭固定点 = 中心 Z(G)（S₃/D₄/C₆） |
 | automorphisms.test.ts | 30 | findAllAutomorphisms（已知数量：Z2→2、Z4→2、Z5→4、S2→6、V4→6、Q8→24、D2→6、D4→8；Z₂⁴ 守卫返回 []；**C₇² 全量 2016 = |GL(2,7)| = 48·42，无截断回归**）、createAutomorphismGroup 群律、Aut 群 Cayley 边连通性、标签/映射 |
 | homomorphisms.test.ts | 25 | verifyHomomorphism（含 violation）、naturalProjectionMapping、getHomomorphismProperties、subgroupInclusionMapping、directProductProjectionMapping、extendFromGenerators、formatKernelLabel、isElementIdentity |
-| layouts.test.ts | 30 | computeShape2DPositions（13 形状 size=order、circular→null、grid 需直积）、compute2DPositions（17 布局）、compute3DPositions（含 cone 圆锥：恒等元顶点 + 按阶分圈）、ringOrder 数字感知排序、computeElementOrder、cayleyCircleLayout（S2-perm 六边形 0 交叉、D2/D4 双环 0 交叉 + 配对断言、V4 未误入双环、直积覆盖） |
+| layouts.test.ts | 36 | computeShape2DPositions（13 形状 size=order、circular→null、grid 需直积）、compute2DPositions（17 布局）、compute3DPositions（含 cone 圆锥：恒等元顶点 + 按阶分圈）、ringOrder 数字感知排序、computeElementOrder、cayleyCircleLayout（S2-perm 六边形 0 交叉、D2/D4 双环 0 交叉 + 配对断言、V4 未误入双环、直积覆盖）、**circleLayoutRadius（v2.1.4：宽扁容器按半高封顶 → 节点不出画布、方形容器取值与原公式一致、窄高容器按半宽封顶、过小容器 nodeRadius 兜底、opts 覆盖 widthFactor/base/growth、与 cayleyCircleLayout 组合后全节点在画布内）** |
 | subgroups.test.ts | 37 | findAllSubgroups/getConjugacyClasses/getGroupCenter/computeQuotientGroup/isSimpleGroup/getNormalizer/getCentralizer/closeUnderMultiply（含非交换闭包双向、中心出现在子群格节点）、findAllNormalSubgroups |
 | directProduct.test.ts | 15 | 直积群律（C2×C2≅V4、C2×C2≅C6 等）、pipe id、逐分量乘法/逆元、紧凑符号（C2×C2→`C_{2}^{2}`、C4×C2→`C_{4} \times C_{2}`）、生成元提升 |
 | cayleyEdges.test.ts | 14 | computeCayleyActionEdges：空 actions→[]、右乘/左乘、自逆→双向、单位元→自环、去重、order>60 限流 max(120, order*2)、阿贝尔群左右相同 |
@@ -85,14 +85,14 @@
 | elementRefWarn.test.ts | 7 | v2.1.0 未命中告警（utils/elementRef.ts）：resolveElementWarn 命中不告警、未命中 `console.warn` 一次且返回 null、**同 context+symbol+ref 去重只告警一次**、不同 ref/不同 context 各告各的、group 为 null / 空串 / null ref 静默不告警、resolveElementIdsWarn 过滤未命中项 + clearElementRefWarnCache 后重新告警 |
 | faces3D.test.ts | 4 | 3D 子群陪集面填色（core/algebra/faces3D.ts）：A₄ 截角四面体选 C₃=⟨(234)⟩ → 4 个截角三角面（每个恰一个陪集占满共面 + 边界由作用边闭合）、D₅ 棱柱双环选 C₅=⟨r⟩ → 顶/底 2 五边形、C₂³ 立方体选 V₄ → 相对 2 方块、listFaceSubgroups 候选过滤（跨多陪集的侧面天然不可选、order>60 返回 null） |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，21 文件 / 184 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，21 文件 / 185 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
 | Tex.component.test.tsx | 12 | KaTeX 渲染：tex-span 类、katex 元素存在、Unicode 下标转 TeX、displayMode 行内/块级切换、rerender 更新、HTML 快照 ×2、特殊符号映射（×→\\times 等 each 断言） |
 | AccordionSection.component.test.tsx | 8 | 折叠面板：默认收起/defaultOpen/点击切换箭头 open 类/受控 open=false 覆盖点击/受控 true 常开/onToggle 回调/icon+badge 渲染/结构类名 |
 | TabBar.component.test.tsx | 8 | 标签栏：默认首个 active/只渲染 active 内容/点击切换/defaultTab 覆盖/compact 隐藏 label 留 icon+title/非 compact 完整渲染/结构类名/空 tabs 不崩 |
-| CayleyView.component.test.tsx | 13 | FGVE 阶段 2 批次一受控凯莱视图（CayleyView.tsx）：C₄ 默认 4 节点/4 有向边/1 marker、identity 作用自环裁剪、自逆元素无向边、S₃ 左/右乘边集不同、D₄ 双生成元（r 有向+s 无向）、nodeRadius/showLabels 参数（showLabels=false 不渲染 foreignObject）、选中金圈高亮、每实例唯一 marker id（cv{n} 前缀防多窗口冲突）、normalizeCayleyActions（bogus 过滤/默认色/enabled:false 无 marker）、actions=[] 无有向边、group=null 空态、**hoveredElementId 在该节点外圈绘制 #4ecdc4 青色高亮环（无 hoveredElementId 时无环）** |
+| CayleyView.component.test.tsx | 14 | FGVE 阶段 2 批次一受控凯莱视图（CayleyView.tsx）：C₄ 默认 4 节点/4 有向边/1 marker、identity 作用自环裁剪、自逆元素无向边、S₃ 左/右乘边集不同、D₄ 双生成元（r 有向+s 无向）、nodeRadius/showLabels 参数（showLabels=false 不渲染 foreignObject）、选中金圈高亮、每实例唯一 marker id（cv{n} 前缀防多窗口冲突）、normalizeCayleyActions（bogus 过滤/默认色/enabled:false 无 marker）、actions=[] 无有向边、group=null 空态、**hoveredElementId 在该节点外圈绘制 #4ecdc4 青色高亮环（无 hoveredElementId 时无环）**、**宽扁 viewBox 900×360 的 S₃ 全节点不出画布（v2.1.4 circular 半径高度约束回归）** |
 | Cayley3DView.component.test.tsx | 9 | FGVE 阶段 2 批次二受控 3D 凯莱视图（Cayley3DScene，R3F/drei/i18n/theme mock）：group=null .view-empty 占位、C₄ 默认 4 节点球/4 有向边（cylinder+cone）/0 自环、actions 归一化（bogus 过滤+enabled:false 无边、[] 显式空）、恒等元作用 4 自环（torusGeometry）、S₃ 左/右乘边长多重集不同（cylinderGeometry args[2] 边长 attribute，React19 happy-dom 对象 props 序列化 '[object Object]' 不可读）、nodeScale 球半径 0.42→0.84、autoRotate 受控（▶/❚❚ 工具条联动）、showLabels=false 无选中标签（gv-html-overlay 计数）、layout3D 缺省 getDefaultLayout3D + 覆盖不崩 |
 | CayleyWindowParams.component.test.tsx | 8 | 凯莱受控窗口（ViewWindow view=cayley）：C₄ 默认渲染、C₁₂ 形状下拉可选列表+默认 circular、参数面板受控回调（shape2D/multiplyType 累积）、edge-action 单元素 checkbox 翻 enabled/None→[]/All→全作用、versioned 持久化（gv-vw- 键 + __gvVersion 信封 + debounce）、坏 schema 回退默认不崩溃、默认持久化键含视图名、缩放滑块无双应用 transform（**面板无 Show labels/LOD 开关，复选框 7 个**） |
 | Cayley3DWindowParams.component.test.tsx | 9 | FGVE 阶段 2 批次二 3D 受控窗口（ViewWindow view=3d，R3F mock 同上）：C₄ 默认渲染（4 球/4 边）、面板控件清单（Layout select=cone/circular 默认 circular、滑杆 1 个=Node size、复选框 9 个=6 配置+AutoRotate+ShowLabels+1 作用边、All/None）、**3D 下窗口 zoom slider 隐藏（内容区无 range）**、受控回灌（layout3D/multiplyType/autoRotate/nodeScale 累积载荷）、edge-action checkbox/All（'3d' 视图路径）/None、versioned 持久化信封 viewParams.multiplyType、坏 schema 回退（layout3D:'bogus'/nodeScale:99 整体拒绝→默认 circular）、持久化键含 \|3d（与 cayley 不碰撞）、**`theme` prop 控制场景 isDark 着色分支（v2.1.0）** |

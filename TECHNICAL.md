@@ -405,16 +405,16 @@ Three.js + R3F 渲染，节点不可拖拽。
 #### 元素→旋转映射架构 (`elementRotation.ts`)
 
 ```
-computeElementRotation(group, element) → { axis, angleRad, label }
+computeElementRotation(group, element) → { axis, angleRad, label }   ← 单一真源
         ↓
-getElementRotationKind(symbol, cycleType) → 'vertex' | 'face' | 'edge'
+A₄/S₄：R = A·P·A⁺（点模型 = 正四面体顶点 = 立方体 4 条体对角线；S₄ 奇置换取 -R）
+A₅：A₅ ≅ 正二十面体旋转群，生成元 (12345)/(12)(34) 几何像 BFS 建同构
         ↓
-getGeometryAxes(data, symmetryType) → { vertexAxes, faceAxes, edgeAxes }
-        ↓
-computeGeometricRotation() → { axis, angleRad, label }
+从 R 读轴角（180° 用特征向量分支；轴规范化首非零分量 ≥ 0）
 ```
 
-**轴计算**：从实际多面体顶点数据运行时计算，不依赖硬编码常量。
+**轴计算**：由置换几何反解（不再是 `hash(id) % n` 选候选轴——旧法使 A₄/S₄/A₅ 的三循环塌陷到同一根轴）。
+react `SymmetryViewScene` 直接消费 core 结果，不再二次选轴。
 
 **轴渲染**：
 - 圆柱体 (radius=0.12) + 锥体箭头 (radius=0.28)

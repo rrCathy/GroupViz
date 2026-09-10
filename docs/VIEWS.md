@@ -48,17 +48,30 @@
 | A₅ | 正二十面体 / 正十二面体(切换) | 12/20 | 20△/12⬠ |
 | V₄ | 长方形 | 4 | - |
 
-**双层映射**：`computeGeometricRotation()`（SymmetryView.tsx）调用 `computeElementRotation()`（elementRotation.ts）获取旋转类型/角度，再按实际几何数据计算轴方向：
+**轴由置换几何反解**（单一真源在 core `elementRotation.ts`，react 侧不再二次选轴）：
 
 ```
-computeElementRotation(group, element) → { angleRad, label }  (旋转类型)
+computeElementRotation(group, element) → { axis, angleRad, label }
         ↓
-getElementRotationKind(symbol, cycleType) → 'vertex' | 'face' | 'edge'  (轴类型)
+A₄/S₄：点模型 = 正四面体顶点（恰为立方体 4 条体对角线），R = A·P·A⁺
+       （S₄ 的奇置换得 det=-1，取 -R 即对应旋转）
+A₅：A₅ ≅ 正二十面体旋转群，(12345)、(12)(34) 的几何像经 BFS 建同构
         ↓
-getGeometryAxes(data, symmetryType) → { vertexAxes, faceAxes, edgeAxes }  (从几何数据计算轴池)
-        ↓
-computeGeometricRotation() → { axis, angleRad, label }  (最终结果)
+从 R 读轴角（180° 走特征向量分支；轴规范化首非零分量 ≥ 0）
 ```
+
+> **历史**：旧实现用 `hash(element.id) % n` 在候选轴表里挑轴。A₄ 全部置换的 id 长度相同、字符集相同，
+> 且 `31 ≡ -1 (mod 4)`，任意排列余数恒等（≡2），于是 8 个三循环全落到同一根轴（BUGREPORT 2026-09-10，已修）。
+
+**各群族约定**（轴角必须满足群同态 `R(gh) = R(g)·R(h)`；由 `src/__tests__/elementRotationLaws.test.ts` 的法则型性质测试守护，见 [TESTING.md](TESTING.md) §3.1）：
+
+| 群族 | 旋转 | 反射 / 翻转 |
+|------|------|------------|
+| Cₙ | 绕 Y 轴 `k·2π/n` | — |
+| Dₙ | 绕 Y 轴 `k·2π/n` | 绕**所画正 n 边形镜线** 180°：镜线角 = `−π/2 + kπ/n`（顶点角 = `2πi/n − π/2`）。元素 `[k,1] = r^k·s`，由 `ρ(r^k s) = R(β₀ − kπ/n)` 解得 `β₀ = −π/2`。n 为偶数时镜线**集合**与 `kπ/n` 重合（故肉眼易漏），n 为奇数时连集合都不同 |
+| S₃ | `(132) → +120°`、`(123) → −120°`（`θ = (i − (v[i]−1))·2π/3`） | 对换固定顶点 f ⇒ 过该顶点的镜线 |
+| V₄ / C₂² / C₂×C₂ | — | 三个非单位元 ↦ 三根互相垂直的 180° 轴（X/Y/Z）。分配**由群自身 multiply 推出**（首个非单位元 `x ↦ X`、次个 `y ↦ Y`、`x·y ↦ Z`），不依赖元素命名或值编码 |
+| A₄ / S₄ / A₅ | 见上方几何反解 | — |
 
 **轴渲染**：实体圆柱体 + 锥体箭头（WebGL 线宽不可靠），红色自发光材质。
 

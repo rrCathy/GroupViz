@@ -85,11 +85,6 @@ function getIcosahedron(radius: number): SymmetryData {
 }
 
 const TRIANGULAR_FACE_CACHE = new Map<string, [number, number, number][]>()
-const AXIS_CACHE = new Map<string, { vertexAxes: [number,number,number][]; faceAxes: [number,number,number][]; edgeAxes: [number,number,number][] }>()
-
-function cacheKeyForData(data: SymmetryData, symmetryType: SymmetryType) {
-  return `${symmetryType}:${data.vertices.map(v => `${v.x.toFixed(4)},${v.y.toFixed(4)},${v.z.toFixed(4)}`).join('|')}:${data.edges.map(e => e.join('-')).join('|')}`
-}
 
 function getRectangle(radius: number): SymmetryData {
   const hw = radius * 1.0, hh = radius * 0.55
@@ -221,130 +216,10 @@ function computeFaceCenters(data: SymmetryData, triangularFaces: [number, number
   return []
 }
 
-function getGeometryAxes(data: SymmetryData, symmetryType: SymmetryType):
-  { vertexAxes: [number,number,number][]; faceAxes: [number,number,number][]; edgeAxes: [number,number,number][] } {
-  const key = cacheKeyForData(data, symmetryType)
-  const cached = AXIS_CACHE.get(key)
-  if (cached) return cached
-  const result = { vertexAxes: [] as [number,number,number][], faceAxes: [] as [number,number,number][], edgeAxes: [] as [number,number,number][] }
-
-  const seen = new Set<string>()
-  function addAxis(v: THREE.Vector3, pool: [number,number,number][]) {
-    const rounded = [Math.round(v.x*1e6)/1e6, Math.round(v.y*1e6)/1e6, Math.round(v.z*1e6)/1e6]
-    const k = rounded.join(',')
-    const negK = rounded.map(x => -x).join(',')
-    if (seen.has(k) || seen.has(negK)) return
-    seen.add(k)
-    pool.push([v.x, v.y, v.z])
-  }
-
-  if (symmetryType === 'tetrahedron') {
-    for (const v of data.vertices) {
-      addAxis(v.clone().normalize(), result.vertexAxes)
-    }
-    result.edgeAxes = [[1,0,0], [0,1,0], [0,0,1]]
-  } else if (symmetryType === 'cube') {
-    result.faceAxes = [[1,0,0], [0,1,0], [0,0,1]]
-    result.vertexAxes = [[1,1,1], [1,-1,-1], [-1,1,-1], [-1,-1,1]].map(a =>
-      [a[0]/Math.sqrt(3), a[1]/Math.sqrt(3), a[2]/Math.sqrt(3)] as [number,number,number])
-    result.edgeAxes = [[1,1,0],[1,0,1],[0,1,1],[1,-1,0],[1,0,-1],[0,1,-1]].map(a =>
-      [a[0]/Math.sqrt(2), a[1]/Math.sqrt(2), a[2]/Math.sqrt(2)] as [number,number,number])
-  } else if (symmetryType === 'icosahedron') {
-    const isDodecahedron = data.vertices.length >= 20
-    for (const v of data.vertices) {
-      addAxis(v.clone().normalize(), result.vertexAxes)
-    }
-    const triangularFaces = computeTriangularFaces(data)
-    const faceCenters = computeFaceCenters(data, triangularFaces)
-    for (const fc of faceCenters) {
-      addAxis(fc.clone().normalize(), result.faceAxes)
-    }
-    for (const [a, b] of data.edges) {
-      const mid = data.vertices[a].clone().add(data.vertices[b]).multiplyScalar(0.5)
-      addAxis(mid.clone().normalize(), result.edgeAxes)
-    }
-    if (isDodecahedron) {
-      const swapped = result.vertexAxes
-      result.vertexAxes = result.faceAxes
-      result.faceAxes = swapped
-    }
-  }
-
-  AXIS_CACHE.set(key, result)
-  return result
-}
-
-type ElementRotationKind = 'identity' | 'face' | 'vertex' | 'edge'
-
-function getElementRotationKind(groupSymbol: string, cycleType: string): ElementRotationKind | null {
-  if (cycleType === '1') return 'identity'
-  if (groupSymbol.startsWith('C')) return 'face'
-  if (groupSymbol.startsWith('D')) return cycleType === '1-1' || cycleType === '1' ? null : 'vertex'
-  if (groupSymbol === 'S_{4}') {
-    if (cycleType === '4' || cycleType === '2-2') return 'face'
-    if (cycleType === '3') return 'vertex'
-    if (cycleType === '2') return 'edge'
-  }
-  if (groupSymbol === 'A_{4}') {
-    if (cycleType === '3') return 'vertex'
-    if (cycleType === '2-2') return 'edge'
-  }
-  if (groupSymbol === 'A_{5}') {
-    if (cycleType === '5') return 'vertex'
-    if (cycleType === '3') return 'face'
-    if (cycleType === '2-2') return 'edge'
-  }
-  return null
-}
-
-function computeGeometricRotation(group: Group, element: GroupElement, data: SymmetryData, symmetryType: SymmetryType): { axis: [number,number,number]; angleRad: number; label: string } | null {
-  const fromCode = computeElementRotation(group, element)
-  if (!fromCode) return null
-  if (fromCode.angleRad === 0) return fromCode
-
-  const val = element.value
-  const cycleType = (() => {
-    const n = val.length
-    if (n < 2) return '1'
-    const visited = new Array(n).fill(false)
-    const cycles: number[] = []
-    const normalized = val.map((v: number) => v - 1)
-    for (let i = 0; i < n; i++) {
-      if (visited[i]) continue
-      let len = 0, j = i
-      while (!visited[j]) { visited[j] = true; j = normalized[j]; len++ }
-      if (len > 1) cycles.push(len)
-    }
-    return cycles.sort().join('-') || '1'
-  })()
-
-  const kind = getElementRotationKind(group.symbol, cycleType)
-  if (!kind || kind === 'identity') return fromCode
-
-  const geoAxes = getGeometryAxes(data, symmetryType)
-  const id = element.id
-  let axes: readonly [number,number,number][]
-
-  if (kind === 'vertex') {
-    axes = geoAxes.vertexAxes
-  } else if (kind === 'face') {
-    axes = geoAxes.faceAxes
-  } else {
-    axes = geoAxes.edgeAxes
-  }
-
-  if (axes.length === 0) return fromCode
-
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0
-  const idx = Math.abs(h) % axes.length
-  const axis = axes[idx]
-
-  return {
-    axis: [axis[0], axis[1], axis[2]],
-    angleRad: fromCode.angleRad,
-    label: fromCode.label,
-  }
+/** 轴与转角完全由 core 的置换反解给出（几何体与 core 点模型同源），
+ *  react 侧不再二次选轴——单一真源，避免两层各算一遍导致语义漂移。 */
+function computeGeometricRotation(group: Group, element: GroupElement): { axis: [number,number,number]; angleRad: number; label: string } | null {
+  return computeElementRotation(group, element)
 }
 
 export interface SymmetryViewSceneProps {
@@ -659,10 +534,10 @@ function SymmetryScene({
     // 引用解析接受 id / label / value —— 传 label 不再是静默失败（未命中会 warn 一次）
     const el = resolveElementWarn(group, actionElementId, 'SymmetryViewScene.actionElementId')
     if (!el) return null
-    const result = computeGeometricRotation(group, el, data, symmetryType)
+    const result = computeGeometricRotation(group, el)
     if (!result || result.angleRad === 0) return null
     return result
-  }, [showAction, actionElementId, group, data, symmetryType])
+  }, [showAction, actionElementId, group, data])
 
   const targetQuat = useMemo(() => {
     if (!animInfo || animInfo.angleRad === 0) return null

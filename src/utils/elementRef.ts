@@ -32,7 +32,7 @@ export function resolveElementWarn(
     warned.add(key)
     console.warn(
       `[groupviz] ${context}: 元素引用 ${JSON.stringify(ref)} 在群 ${group?.symbol ?? '?'} 中解析不到` +
-      `（已试 id / label / value 三种记号），该项已忽略。`
+      `（已试 id / label / value / 循环记号四种写法），该项已忽略。`
     )
   }
   return null

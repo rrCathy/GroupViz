@@ -125,7 +125,7 @@ try {
   writeFileSync(
     path.join(tmp, 'smoke-core.mjs'),
     `import { createGroupFromSymbol, serializeDescriptor, deserializeDescriptor,
-  resolveElement, findElement, elementOrder, buildCosetViewData, isTooLarge, sizeLimitFor,
+  resolveElement, findElement, parseCycleNotation, elementOrder, buildCosetViewData, isTooLarge, sizeLimitFor,
   listCosetStripSubgroups, cosetDataForSubgroup } from '@groupviz/core'
 const cases = ['C_{4}', 'S_{3}', 'D_{4}', 'A_{4}', 'Q_{8}', 'GL(2,3)']
 for (const sym of cases) {
@@ -147,7 +147,23 @@ if (resolveElement(s4, probe.label)?.id !== probe.id) throw new Error('resolveEl
 if (findElement(s4, probe.value.join(','))?.id !== probe.id) throw new Error('findElement 按 value 失败')
 if (resolveElement(s4, '(nope)') !== null) throw new Error('未命中应返回 null')
 if (elementOrder(s4, probe) < 1) throw new Error('elementOrder 异常')
-console.log('  core ok  元素引用解析 id/label/value 三档 + elementOrder')
+
+// 第四档：循环记号语义匹配（v2.1.1）——手写标准记号必须命中，且跨群互写
+const el234 = s4.elements.find(e => e.value.join(',') === '1,3,4,2')
+const elDbl = s4.elements.find(e => e.value.join(',') === '2,1,4,3')
+if (!el234 || !elDbl) throw new Error('S_4 缺少 (234) / (12)(34) 样本元素')
+if (resolveElement(s4, '(234)')?.id !== el234.id) throw new Error('S_4 循环记号 (234) 未命中（带括号写法）')
+if (resolveElement(s4, '(2 3 4)')?.id !== el234.id) throw new Error('S_4 循环记号 (2 3 4) 未命中（含空格）')
+if (resolveElement(s4, '234')?.id !== el234.id) throw new Error('S_4 无括号 234 未命中（既有 label 记号）')
+if (resolveElement(s4, '(12)(34)')?.id !== elDbl.id) throw new Error('S_4 多环 (12)(34) 未命中')
+if (resolveElement(s4, '12)(34')?.id !== elDbl.id) throw new Error('S_4 旧畸形 label 12)(34 未命中')
+const a4x = createGroupFromSymbol('A_{4}')
+if (resolveElement(a4x, '234')?.id !== el234.id) throw new Error('A_4 接受无括号 234 失败（跨群互写）')
+if (parseCycleNotation('(12)(34)', 4).join(',') === parseCycleNotation('(1234)', 4).join(','))
+  throw new Error('循环记号歧义防护失效：(12)(34) 与 (1234) 不应等价')
+if (parseCycleNotation('234', 4).join(',') !== '1,3,4,2') throw new Error('parseCycleNotation 逐位拆点失败')
+if (resolveElement(s4, '1') !== null) throw new Error('全不动点引用不应命中恒等元')
+console.log('  core ok  元素引用解析 id/label/value/循环记号 四档 + elementOrder')
 
 // 陪集一键装配 + 阈值覆盖
 const c6 = createGroupFromSymbol('C_{6}')

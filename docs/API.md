@@ -35,15 +35,19 @@ export function Figure() {
 
 ## 1. 元素引用（element reference）—— 所有元素类 props 的通用约定
 
-群元素同时有两种记号：
+群元素同时有多种记号：
 
 | 记号 | 来源 | 例子（S₄） |
 |---|---|---|
 | `id` | 机器键，`GroupElement.id` | `"1,3,4,2"` |
-| `label` | 人类记号，`GroupElement.label` | `"34"` / `"e"` |
+| `label` | 人类记号，`GroupElement.label` | `"34"` / `"234"` / `"(12)(34)"` / `"e"` |
 | `value` | 数组，`GroupElement.value` | `[1,3,4,2]` |
+| 循环记号 | 手写置换 | `"(234)"` / `"(12)(34)"` / `"(1 2 3)"` |
 
-**下列 props 接受任一记号**，内部统一经 `core.resolveElement` 解析（匹配序 `id` → `label` → `value`，忽略空白）：
+> `label` 约定**因群而异**：Aₙ 带括号（`(234)`），Sₙ 单环不带括号（`234`）、多环带括号（`(12)(34)`），循环群为指数（`3`），同构群为 `\alpha_3`。
+> **不必记住用哪套**——手写标准循环记号即可，`resolveElement` 会按语义解析成同一个置换。
+
+**下列 props 接受任一记号**，内部统一经 `core.resolveElement` 解析（匹配序 `id` → `label` → `value` → **循环记号语义档**，忽略空白）：
 
 | 归属 | prop |
 |---|---|
@@ -326,11 +330,12 @@ import { I18nProvider, useTranslation } from '@groupviz/react'
 
 | 导出 | 签名 | 说明 |
 |---|---|---|
-| `resolveElement` | `(group, ref) => GroupElement \| null` | 元素引用解析（`id` → `label` → `value`，忽略空白） |
+| `resolveElement` | `(group, ref) => GroupElement \| null` | 元素引用解析（`id` → `label` → `value` → **循环记号**，忽略空白） |
 | `findElement` | 同上 | `resolveElement` 的别名 |
 | `resolveElementRefs` | `(group, refs) => { elements, ids, unresolved }` | 批量解析 + 未命中回收 |
 | `resolveElementIds` | `(group, refs) => string[]` | 批量解析为规范 id（去重、丢未命中） |
 | `normalizeElementRef` | `(ref) => string` | 去空白归一化 |
+| `parseCycleNotation` | `(ref, degree) => number[] \| null` | 循环记号 → 置换数组；`(234)`/`234`/`(12)(34)`/`(1 2 3)` 均可，非循环记号返回 `null` |
 | `elementOrder` | `(group, el) => number` | 元素阶（group-first 公共入口） |
 | `elementOrderDistribution` | `(group) => Map<number, number>` | 阶分布 |
 | `elementOrderDistributionOf` | `(elements, group) => Map<number, number>` | 子集阶分布 |

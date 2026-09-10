@@ -24,11 +24,12 @@ function permToString(p: number[]): string {
   }
   
   if (cycles.length === 0) return 'e'
-  
-  return cycles.map(c => {
-    if (c.length === 2) return `(${c[0]}${c[1]})`
-    return `(${c.join('')})`
-  }).join('').replace(/\(\)/g, '').replace(/^\(/, '').replace(/\)$/, '') || 'e'
+
+  const parts = cycles.map(c => `(${c.join('')})`)
+  // 单循环括号冗余，去掉以保持紧凑（`(234)` → `234`，与既有 Sₙ 记号一致）；
+  // 多循环必须保留括号，否则 `(12)(34)` 会被剥成有歧义的 `12)(34`。
+  // 旧实现一律剥外层括号，正是多环 label 畸形的根因。
+  return parts.length === 1 ? parts[0].slice(1, -1) : parts.join('')
 }
 
 function findPermIndex(elements: GroupElement[], perm: number[]): number {
@@ -159,17 +160,8 @@ export function createSymmetricGroup(n: number): Group {
 export function createS3(): Group {
   const group = createSymmetricGroup(3)
   
-  const elements = group.elements.map(el => {
-    let label = el.label
-    label = label.replace(/^\(/, '')
-    label = label.replace(/\)$/, '')
-    label = label || 'e'
-    
-    return {
-      ...el,
-      label
-    }
-  })
+  // permToString 已产出最终记号（单环 `12`/`123`、多环 `(12)(34)`），无需再剥括号
+  const elements = group.elements
   
   function multiply(a: GroupElement, b: GroupElement): GroupElement {
     const result = applyPermutation(a.value, b.value)

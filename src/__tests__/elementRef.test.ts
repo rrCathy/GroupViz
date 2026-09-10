@@ -6,13 +6,19 @@ import {
   resolveElementRefs,
   resolveElementIds,
   elementRefId,
+  parseCycleNotation,
 } from '../core/algebra/elementRef'
 import { elementOrder, elementOrderDistribution, elementOrderDistributionOf } from '../core/algebra/elementOrder'
-import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
+import { createSymmetricGroup, createS3 } from '../core/groups/SymmetricGroup'
+import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
+import { createDihedralGroup } from '../core/groups/DihedralGroup'
 
 const s4 = createSymmetricGroup(4)
+const s3 = createS3()
+const a4 = createAlternatingGroup(4)
 const c5 = createCyclicGroup(5)
+const d4 = createDihedralGroup(4)
 
 // S₄ 的某个非恒等元素：id 是逗号置换串、label 是人类记号 —— 两者必然不同
 const someS4 = s4.elements.find(e => e.label !== 'e')!
@@ -90,6 +96,117 @@ describe('resolveElementRefs / resolveElementIds', () => {
     expect(resolveElementRefs(null, ['x'])).toEqual({ elements: [], ids: [], unresolved: [] })
     expect(resolveElementRefs(s4, null)).toEqual({ elements: [], ids: [], unresolved: [] })
     expect(resolveElementIds(c5, ['e0', 'e0'])).toEqual(['e0'])
+  })
+})
+
+describe('parseCycleNotation：循环记号 → 置换', () => {
+  it('连续数字串按单点逐位拆（`234` 不是数字 234，而是 2→3→4）', () => {
+    expect(parseCycleNotation('234', 4)).toEqual([1, 3, 4, 2])
+    expect(parseCycleNotation('(234)', 4)).toEqual([1, 3, 4, 2])
+    expect(parseCycleNotation('(1234)', 4)).toEqual([2, 3, 4, 1])
+    expect(parseCycleNotation('12', 4)).toEqual([2, 1, 3, 4])
+  })
+
+  it('多环：`(12)(34)` 与 `12)(34`（旧畸形 label）等价', () => {
+    expect(parseCycleNotation('(12)(34)', 4)).toEqual([2, 1, 4, 3])
+    expect(parseCycleNotation('12)(34', 4)).toEqual([2, 1, 4, 3])
+  })
+
+  it('带分隔符：空格 / 逗号 / 多位数点', () => {
+    expect(parseCycleNotation('(1 2 3)', 4)).toEqual([2, 3, 1, 4])
+    expect(parseCycleNotation('(1,2)(3,4)', 4)).toEqual([2, 1, 4, 3])
+    // 有分隔符时 token 即点，故多位数点也支持：10→12→3→10
+    const perm24 = parseCycleNotation('(10 12 3)', 24)!
+    expect(perm24[10 - 1]).toBe(12)
+    expect(perm24[12 - 1]).toBe(3)
+    expect(perm24[3 - 1]).toBe(10)
+    expect(perm24.filter((v, i) => v !== i + 1)).toHaveLength(3)
+  })
+
+  it('歧义防护：`(12)(34)` ≠ `(1234)`（naïve 去括号会塌成同一个串）', () => {
+    expect(parseCycleNotation('(12)(34)', 4)).not.toEqual(parseCycleNotation('(1234)', 4))
+  })
+
+  it('非循环记号 / 越界 / 重复点 / 全不动点 → null', () => {
+    expect(parseCycleNotation('1,3,4,2', 4)).toBeNull() // 数组记号交给 value 档
+    expect(parseCycleNotation('e', 4)).toBeNull()
+    expect(parseCycleNotation('\\alpha_3', 4)).toBeNull()
+    expect(parseCycleNotation('(99)', 4)).toBeNull() // 点越界
+    expect(parseCycleNotation('(112)', 4)).toBeNull() // 点重复
+    expect(parseCycleNotation('1', 4)).toBeNull() // 全不动点
+    expect(parseCycleNotation('()', 4)).toBeNull()
+    expect(parseCycleNotation('(234)', 1)).toBeNull() // degree 非法
+  })
+})
+
+describe('resolveElement：循环记号语义档（跨群 / 跨约定）', () => {
+  it('同一置换的多种写法解析到同一元素', () => {
+    const canonical = resolveElement(s4, '(234)')!
+    expect(canonical.id).toBe('1,3,4,2')
+    expect(resolveElement(s4, '234')!.id).toBe(canonical.id) // 旧 S₄ label 记号
+    expect(resolveElement(s4, '(2 3 4)')!.id).toBe(canonical.id)
+  })
+
+  it('跨群互写：A₄ 的 `(234)` 与 S₄ 的 `234` 是同一置换，各自都能命中', () => {
+    const inA4 = resolveElement(a4, '234')! // A₄ 只认带括号，靠语义档命中
+    const inS4 = resolveElement(s4, '(234)')! // S₄ 只认无括号，靠语义档命中
+    expect(inA4.id).toBe('1,3,4,2')
+    expect(inS4.id).toBe('1,3,4,2')
+  })
+
+  it('多环：`(12)(34)` / `12)(34` / `(1 2)(3 4)` 在 S₄ 与 A₄ 都命中', () => {
+    for (const g of [s4, a4]) {
+      for (const ref of ['(12)(34)', '12)(34', '(1 2)(3 4)']) {
+        expect(resolveElement(g, ref)?.id).toBe('2,1,4,3')
+      }
+    }
+  })
+
+  it('精确性：`(1234)` 命中 4-环，不会撞上 `(12)(34)`', () => {
+    expect(resolveElement(s4, '(1234)')!.id).toBe('2,3,4,1')
+    expect(resolveElement(s4, '(1234)')!.id).not.toBe('2,1,4,3')
+  })
+
+  it('S₃ 越界记号仍不命中（不会解析出群里没有的置换）', () => {
+    expect(resolveElement(s3, '(1234)')).toBeNull() // 4 环不在 S₃
+    expect(resolveElement(s3, '(234)')).toBeNull() // 点 4 越界
+    expect(resolveElement(s3, '(1 2 3)')!.id).toBe('2,3,1')
+  })
+
+  it('非置换群不受语义档影响（循环群 / 二面体群）', () => {
+    expect(resolveElement(c5, '(234)')).toBeNull()
+    expect(resolveElement(c5, '(12)')).toBeNull()
+    expect(resolveElement(c5, '3')!.id).toBe('e3') // 指数记号照旧
+    expect(resolveElement(d4, '(12)')).toBeNull()
+    expect(resolveElement(d4, 'r2')!.id).toBe('r2') // 既有 label 记号照旧
+  })
+
+  it('全不动点引用（`1` / `(1)`）不再误命中恒等元', () => {
+    expect(resolveElement(s4, '1')).toBeNull()
+    expect(resolveElement(s4, '(1)')).toBeNull()
+  })
+})
+
+describe('Sₙ 元素 label：环形记法自洽', () => {
+  it('多环 label 不再畸形（`(12)(34)` 而非 `12)(34`）', () => {
+    const el = s4.elements.find(e => e.id === '2,1,4,3')!
+    expect(el.label).toBe('(12)(34)')
+    expect(s4.elements.some(e => /^[0-9]+\)\(/.test(e.label))).toBe(false)
+  })
+
+  it('单环 label 仍保持紧凑无括号（既有约定）', () => {
+    expect(s4.elements.find(e => e.id === '1,3,4,2')!.label).toBe('234')
+    expect(s3.elements.map(e => e.label).sort()).toEqual(['12', '123', '13', '132', '23', 'e'])
+  })
+
+  it('每个非恒等 label 都可被 parseCycleNotation 复原成该元素的 value', () => {
+    for (const g of [s4, s3]) {
+      const degree = g.elements[0].value.length
+      for (const el of g.elements) {
+        if (el.label === 'e') continue
+        expect(parseCycleNotation(el.label, degree)).toEqual(el.value)
+      }
+    }
   })
 })
 

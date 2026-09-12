@@ -12,17 +12,37 @@
  *      a. core   —— node 直跑 createGroupFromSymbol + serialize/deserialize round-trip
  *      b. react  —— node + react-dom/server renderToStaticMarkup 渲染 <I18nProvider><SetView/></I18nProvider>
  *      c. types  —— 消费端 tsc --noEmit 验证 exports["."].types 类型解析（SetViewProps 可构造）
+ *      d. types-strict —— skipLibCheck:false + 构造 Cayley/Table props 家族，
+ *         专门暴露「react 的 .d.ts 内部 import 无法从 core 门面解析」这类盲区
+ *         （2.2.0 实测：core 门面漏导出 types/viewConfig，c 段完全看不见）
  *   4. 成功清临时目录；失败保留并打印路径供排查
  *
  * 用法：npm run publish:smoke（先 npm run build:pkg 保证产物最新）
  */
 import { execSync } from 'node:child_process'
+import * as fsSync from 'node:fs'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
+
+// 诊断用：命令行带 `--log=<文件名>` 时把全部 stdout/stderr 落盘
+// （本机 PowerShell 管道的 stdout 重定向被观测到会丢输出，出问题时靠这个拿全量日志）
+const LOG_ARG = process.argv.find((a) => a.startsWith('--log='))
+if (LOG_ARG) {
+  const _logPath = path.join(ROOT, LOG_ARG.slice('--log='.length))
+  const _log = fsSync.createWriteStream(_logPath, { flags: 'w' })
+  const _ow = process.stdout.write.bind(process.stdout)
+  const _ew = process.stderr.write.bind(process.stderr)
+  process.stdout.write = (c, ...r) => { _log.write(c); return _ow(c, ...r) }
+  process.stderr.write = (c, ...r) => { _log.write(c); return _ew(c, ...r) }
+  // 阶段心跳：脚本卡住时也能看到最后一个完成的阶段
+  let _stage = 0
+  globalThis.__stage = (label) => { _log.write(`\n[stage ${++_stage}] ${label}\n`) }
+  globalThis.__stage('module loaded')
+}
 const CORE_OUT = path.join(ROOT, 'dist-pkg', '@groupviz', 'core')
 const REACT_OUT = path.join(ROOT, 'dist-pkg', '@groupviz', 'react')
 
@@ -51,6 +71,7 @@ function fail(msg) {
 }
 
 try {
+  globalThis.__stage?.('0 产物在位检查')
   // ---- 0. 产物在位检查 ----
   for (const [name, dir] of [['@groupviz/core', CORE_OUT], ['@groupviz/react', REACT_OUT]]) {
     const pkg = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'))
@@ -62,6 +83,7 @@ try {
   }
 
   // ---- 0.5 接口一致性：react 产物 import 的每个 core 符号，core 必须真实导出 ----
+  globalThis.__stage?.('0.5 react→core 具名导出一致性（含 await import core 产物）')
   // 为什么：vite pkg 构建把 core 设为 external，rollup 无法校验 @groupviz/core 的具名导出，
   // 漏导出（如历史上 faces3D 的 FACE_COLOR_PALETTE）会静默打进 react 产物，
   // 直到消费端 import 时才抛 "does not provide an export named"，纯运行期才暴露。
@@ -109,6 +131,7 @@ try {
   }
 
   // ---- 1. pack ----
+  globalThis.__stage?.('1 pack（npm pack 双包）')
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'gv-pkg-smoke-'))
   const pack = (dir) => {
     const out = run(`npm pack --json --pack-destination "${tmp}"`, { cwd: dir })
@@ -327,6 +350,11 @@ console.log('REACT SMOKE PASS')
   )
 
   // 类型冒烟：消费端 tsc 必须能从 exports types 解析并构造 SetViewProps（JSX → 必须 .tsx）
+  //
+  // 另有一份「strict 关卡」（smoke-ts-strict.tsx + tsconfig.strict.json，见下方 4e）：
+  // skipLibCheck: false，专门覆盖 react 的 .d.ts 内部 import 是否都能从 core 门面解析。
+  // 背景（2.2.0 实测盲区）：上面的 skipLibCheck: true 会跳过所有 .d.ts 语义检查，
+  // 于是 react 侧坏 import（core 门面漏导出 types/viewConfig）完全隐形。
   writeFileSync(
     path.join(tmp, 'smoke-ts.tsx'),
     `import { createGroupFromSymbol, resolveElement, buildCosetViewData } from '@groupviz/core'
@@ -443,21 +471,87 @@ export const Smoke = () => {
     ) + '\n'
   )
 
+  // strict 关卡专用样例：只做类型引用，不依赖 react/jsx-runtime 的运行时形状，
+  // 且把 `@groupviz/react` 的 Cayley/Table props 家族全部构造一遍（覆盖 viewConfig 一族）。
+  // 配合 tsconfig.strict.json 的 skipLibCheck:false —— 一旦 react 的 .d.ts 里出现
+  // 无法从 core 门面解析的 import，这里立刻报错（2.2.0 的缺口正是这样被漏掉的）。
+  writeFileSync(
+    path.join(tmp, 'smoke-ts-strict.tsx'),
+    `import { CayleyView, Cayley3DScene, TableView } from '@groupviz/react'
+import type { CayleyViewProps, Cayley3DSceneProps, TableViewProps } from '@groupviz/react'
+// 这些类型由 @groupviz/react 的公开 props 直接引用，消费端理应能从 core 顶层标注
+import type {
+  CayleyActionParam, CayleyPathHighlight, CayleyForceParams, Cayley3DFaceFillParams, TableStrategy,
+} from '@groupviz/core'
+
+const force: CayleyForceParams = { stiffness: 1.4 }
+const hl: CayleyPathHighlight = { word: ['12', '23'], showOrder: true }
+const acts: CayleyActionParam[] = [{ elementId: 'x' }]
+const faceFill: Cayley3DFaceFillParams = { opacity: 0.5 }
+const strategy: TableStrategy = 'subgroup'
+
+const base = {
+  group: null,
+  selectedElements: new Set<string>(),
+  canvasTransform: { x: 0, y: 0, scale: 1 },
+  viewBoxSize: { width: 480, height: 360 },
+}
+const cayley: CayleyViewProps = { ...base, force, pathHighlight: hl, actions: acts, forceDirected: true }
+const cayley3d: Cayley3DSceneProps = { group: null, selectedElements: new Set<string>(), pathHighlight: hl, faceFill, layout3D: 'cone' }
+const table: TableViewProps = { ...base, strategy, cellSize: 50 }
+
+export const StrictSmoke = () => (
+  <>
+    <CayleyView {...cayley} />
+    <Cayley3DScene {...cayley3d} />
+    <TableView {...table} />
+  </>
+)
+`
+  )
+  writeFileSync(
+    path.join(tmp, 'tsconfig.strict.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          ...tsconfigBase.compilerOptions,
+          skipLibCheck: false, // 关键：让 react 的 .d.ts 内部 import 接受语义检查
+          module: 'ESNext',
+          moduleResolution: 'bundler',
+        },
+        include: ['smoke-ts-strict.tsx'],
+      },
+      null,
+      2
+    ) + '\n'
+  )
+
   // ---- 3. install（真实解析 exports + peer 自动安装）----
+  globalThis.__stage?.('3 npm install（consumer 装 tarball + peers）')
   console.log('[publish-smoke] · npm install（真实 tarball + peers，可能耗时 ~1-3min）…')
   run('npm install --no-audit --no-fund --loglevel=error', { cwd: tmp, timeout: 600000 })
   console.log('[publish-smoke] · npm install 成功（exports/peer 解析通过）')
 
-  // ---- 4. 三段冒烟 ----
+  // ---- 4. 四段冒烟 ----
+  globalThis.__stage?.('4a core 冒烟')
   console.log('[publish-smoke] · core 冒烟…')
   console.log(run('node smoke-core.mjs', { cwd: tmp }))
+  globalThis.__stage?.('4b react SSR 冒烟')
   console.log('[publish-smoke] · react SSR 冒烟…')
   console.log(run('node smoke-react.mjs', { cwd: tmp }))
+  globalThis.__stage?.('4c 类型解析冒烟 NodeNext + bundler')
   console.log('[publish-smoke] · 类型解析冒烟（NodeNext + bundler 双 resolution）…')
   run('node node_modules/typescript/bin/tsc -p tsconfig.nodenext.json', { cwd: tmp })
   console.log('[publish-smoke] ·   NodeNext 通过')
   run('node node_modules/typescript/bin/tsc -p tsconfig.bundler.json', { cwd: tmp })
   console.log('[publish-smoke] ·   bundler 通过（SetViewProps 均可从 @groupviz/react 解析）')
+
+  // 4e. strict 类型关卡：skipLibCheck:false —— 覆盖 react 的 .d.ts 内部 import
+  //     （Cayley/Table props 一族，含 core 门面的 viewConfig 类型）。这是 2.2.0 盲区的补丁门禁。
+  globalThis.__stage?.('4e strict 类型关卡（skipLibCheck:false）')
+  console.log('[publish-smoke] · strict 类型关卡（skipLibCheck:false，Cayley/Table props 家族）…')
+  run('node node_modules/typescript/bin/tsc -p tsconfig.strict.json', { cwd: tmp })
+  console.log('[publish-smoke] ·   strict 通过（react .d.ts 内部 import 全部可从 core 门面解析）')
 
   // ---- 5. 收尾 ----
   try { rmSync(tmp, { recursive: true, force: true }) } catch { /* 沙箱/占用，忽略 */ }

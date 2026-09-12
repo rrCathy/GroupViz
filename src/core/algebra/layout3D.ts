@@ -15,6 +15,7 @@ import {
   truncatedOctahedron3Layout3D, truncatedIcosahedronLayout3D,
   truncatedDodecahedronLayout3D,
 } from './layouts3D/archimedeanLayouts3D'
+import { wordLengthSphereLayout3D } from './layouts3D/wordLengthSphereLayout3D'
 
 export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
   const n = group.order
@@ -42,6 +43,7 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
     case 'truncatedOctahedron3': placed = truncatedOctahedron3Layout3D(group, radius); break
     case 'truncatedIcosahedron': placed = truncatedIcosahedronLayout3D(group, radius); break
     case 'truncatedDodecahedron': placed = truncatedDodecahedronLayout3D(group, radius); break
+    case 'wordLengthSphere': placed = wordLengthSphereLayout3D(group, radius); break
     default:
       for (let i = 0; i < n; i++) positions[i] = fibonacciSphere(n, radius)[i]
       break

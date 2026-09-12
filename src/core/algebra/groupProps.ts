@@ -278,6 +278,11 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
     shapes.push('circular', 'hexagon')
   } else if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') {
     shapes.push('circular', 'truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3')
+    // 字长球：相邻对换生成集按字长分层的同心球壳（Sₙ one-line 置换群可用）
+    shapes.push('wordLengthSphere')
+  } else if (sym === 'S_{5}' || sym === 'S5' || sym === 'S₅') {
+    // S₅（120 阶）：除圆环外提供字长球（相邻对换 (12)(23)(34)(45)，字长=逆序数）
+    shapes.push('circular', 'wordLengthSphere')
   } else if (sym === 'Q_{8}' || sym === 'Q8' || sym === 'Q₈') {
     shapes.push('cube')
   } else if (sym === 'Q_{16}' || sym === 'Q16' || sym === 'Q₁₆') {

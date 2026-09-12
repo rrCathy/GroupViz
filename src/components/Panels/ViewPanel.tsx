@@ -8,6 +8,7 @@ import { AccordionSection } from './AccordionSection'
 import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
 import type { SeriesType } from '../../core/algebra/series'
 import { getSymmetryType } from '../../core/symmetryType'
+import { wordLengthSphereActions } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
 
 export function ViewPanel() {
   const {
@@ -65,6 +66,9 @@ export function ViewPanel() {
 
   const canonical3DEdgeIds = ((): string[] => {
     if (!currentGroup || currentView !== '3d') return []
+    if (cayleyShape3D === 'wordLengthSphere') {
+      return wordLengthSphereActions(currentGroup)?.map(a => a.elementId) ?? []
+    }
     const sym = currentGroup.symbol
     if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') {
       if (cayleyShape3D === 'rhombicuboctahedron') return ['4,1,2,3', '3,1,2,4']

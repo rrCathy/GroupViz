@@ -6,7 +6,7 @@ export const LAYOUTS_3D = [
   'cone', 'circular', 'dihedral', 'cylinder', 'torus', 'tetrahedron', 'cube', 'hexagon',
   'cuboctahedron', 'lattice', 'semidirectCylinder', 'truncatedTetrahedron', 'truncatedCube',
   'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3', 'truncatedIcosahedron',
-  'truncatedDodecahedron', 'hypercube',
+  'truncatedDodecahedron', 'hypercube', 'wordLengthSphere',
 ] as const
 
 export type Layout3D = typeof LAYOUTS_3D[number]
@@ -46,6 +46,9 @@ export interface CayleyAction {
   elementId: string
   enabled: boolean
   color: string
+  /** 该作用元素对应边的长度倍率（1 = 原始布局；见 VCL 逐生成元边长）。
+   *  固定几何布局经 relaxEdgeLengths 后处理，力导向布局作为弹簧静止长度倍率 */
+  lengthScale?: number
 }
 
 export interface CayleyEdgeData {

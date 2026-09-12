@@ -13,7 +13,8 @@ export interface ForceLayoutOptions {
 export function computeCayleyActionEdges(
   group: Group,
   actions: CayleyAction[],
-  multiplyType: MultiplyType
+  multiplyType: MultiplyType,
+  maxEdgesOverride?: number,
 ): CayleyEdgeData[] {
   const idToIdx = new Map<string, number>()
   const idToEl = new Map<string, GroupElement>()
@@ -25,7 +26,7 @@ export function computeCayleyActionEdges(
   const enabledActions = actions.filter(a => a.enabled)
   if (enabledActions.length === 0) return []
 
-  const maxEdges = group.order > 60 ? Math.max(120, group.order * 3) : Number.POSITIVE_INFINITY
+  const maxEdges = maxEdgesOverride ?? (group.order > 60 ? Math.max(120, group.order * 3) : Number.POSITIVE_INFINITY)
 
   const actionElementMap = new Map<string, GroupElement>()
   for (const action of enabledActions) {

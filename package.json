@@ -12,6 +12,7 @@
         "publish:check": "npm run build:pkg && npm run publish:smoke",
         "consume:registry": "node scripts/pkg/consume-npm.mjs",
         "consume:compare": "node scripts/pkg/compare-registry.mjs",
+        "consume:types": "node scripts/pkg/consume-types.mjs",
         "consume:browser": "node scripts/pkg/browser-smoke.mjs",
         "lint": "eslint .",
         "preview": "vite preview",

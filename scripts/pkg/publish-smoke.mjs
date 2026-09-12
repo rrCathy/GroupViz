@@ -150,7 +150,8 @@ try {
     path.join(tmp, 'smoke-core.mjs'),
     `import { createGroupFromSymbol, serializeDescriptor, deserializeDescriptor,
   resolveElement, findElement, parseCycleNotation, elementOrder, buildCosetViewData, isTooLarge, sizeLimitFor,
-  listCosetStripSubgroups, cosetDataForSubgroup } from '@groupviz/core'
+  listCosetStripSubgroups, cosetDataForSubgroup, computeCayleyActionEdges, relaxEdgeLengths3D,
+  wordLengthSphereActions, wordLengthSphereLayout3D, wordLengthOf, wordLengthColor } from '@groupviz/core'
 const cases = ['C_{4}', 'S_{3}', 'D_{4}', 'A_{4}', 'Q_{8}', 'GL(2,3)']
 for (const sym of cases) {
   const g = createGroupFromSymbol(sym)
@@ -201,6 +202,47 @@ if (isTooLarge(150, 'table') !== true) throw new Error('isTooLarge 默认阈值�
 if (isTooLarge(150, 'table', 200) !== false) throw new Error('isTooLarge 阈值覆盖无效')
 if (sizeLimitFor('heatmap') !== 240) throw new Error('sizeLimitFor 异常')
 console.log('  core ok  buildCosetViewData + listCosetStripSubgroups + isTooLarge 覆盖')
+
+// 字长球形状（S₄/S₅）：核心公共面须完整——布局 + 标准作用边 + 字长读数/色阶
+const s5 = createGroupFromSymbol('S_{5}')
+const wlActions = wordLengthSphereActions(s5)
+if (!wlActions || wlActions.length !== 4) throw new Error('wordLengthSphereActions(S_5) 应返回 4 条相邻对换')
+if (wlActions.map(a => a.elementId).join('|') !== '2,1,3,4,5|1,3,2,4,5|1,2,4,3,5|1,2,3,5,4')
+  throw new Error('wordLengthSphereActions(S_5) 不是相邻对换序: ' + wlActions.map(a => a.elementId).join('|'))
+if (wordLengthSphereActions(createGroupFromSymbol('C_{4}')) !== null)
+  throw new Error('wordLengthSphereActions 对非置换群应返回 null')
+const pos5 = wordLengthSphereLayout3D(s5, 5)
+if (!pos5 || pos5.length !== 120) throw new Error('wordLengthSphereLayout3D(S_5) 应返回 120 个位置')
+const R5 = 5 * 3
+for (const p of pos5) if (Math.hypot(p[0], p[1], p[2]) > R5 + 1e-6) throw new Error('字长球存在出球节点')
+if (wordLengthOf(s5.identity) !== 0) throw new Error('wordLengthOf(单位元) 应为 0')
+if (typeof wordLengthColor(s5, s5.elements[1]) !== 'string') throw new Error('wordLengthColor 应返回颜色串')
+console.log('  core ok  字长球 S_5：4 条相邻对换 + 120 点实心球布局 + 字长色阶')
+
+// VCL 3D：逐生成元边长（3D 通用后处理）——全 1 原样返回（零配置安全）、放大后该生成元边长变长
+const c4v = createGroupFromSymbol('C_{4}')
+const aId = c4v.elements[1].id
+const c4Edges = computeCayleyActionEdges(c4v, [{ elementId: aId, enabled: true, color: '#fff' }], 'right')
+const base3d = new Map(c4v.elements.map((el, i) => [el.id, [
+  Math.cos((i * Math.PI) / 2) * 5, 0, Math.sin((i * Math.PI) / 2) * 5,
+]]))
+if (relaxEdgeLengths3D(base3d, c4Edges, { lengthScales: new Map([[aId, 1]]) }) !== base3d)
+  throw new Error('relaxEdgeLengths3D 全 1 时应原样返回基础布局（零配置安全）')
+const mean3d = (m) => {
+  let s = 0
+  let n = 0
+  for (const e of c4Edges) {
+    const A = m.get(e.fromId)
+    const B = m.get(e.toId)
+    if (!A || !B) continue
+    s += Math.hypot(B[0] - A[0], B[1] - A[1], B[2] - A[2])
+    n++
+  }
+  return n > 0 ? s / n : 0
+}
+const relaxed3d = relaxEdgeLengths3D(base3d, c4Edges, { lengthScales: new Map([[aId, 2]]) })
+if (!(mean3d(relaxed3d) > mean3d(base3d) * 1.05)) throw new Error('relaxEdgeLengths3D 倍率 2 未拉长边长')
+console.log('  core ok  relaxEdgeLengths3D：全 1 原样返回 + 2× 拉长边长')
 console.log('CORE SMOKE PASS')
 `
   )
@@ -288,10 +330,10 @@ console.log('REACT SMOKE PASS')
   writeFileSync(
     path.join(tmp, 'smoke-ts.tsx'),
     `import { createGroupFromSymbol, resolveElement, buildCosetViewData } from '@groupviz/core'
-import { I18nProvider, SetView, CayleyView, CosetStripScene, SymmetryViewScene,
+import { I18nProvider, SetView, CayleyView, CosetStripScene, SymmetryViewScene, Cayley3DScene,
   SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
 import type {
-  SetViewProps, CayleyViewProps, CosetStripSceneProps, SymmetryViewSceneProps,
+  SetViewProps, CayleyViewProps, CosetStripSceneProps, SymmetryViewSceneProps, Cayley3DSceneProps,
   SceneStateOptions, SceneState, SceneTheme, SceneWindowConfig,
 } from '@groupviz/react'
 
@@ -319,6 +361,16 @@ const cayley: CayleyViewProps = {
 const coset: CosetStripSceneProps = { group, viewBoxSize: { width: 480, height: 360 }, subgroup: ['0', '3'], cosetType: 'left' }
 const sym: SymmetryViewSceneProps = { group, theme: 'light', actionElementId: group.elements[1].label, lockCameraOnAction: false, onAnimationEnd: () => {} }
 
+// VCL 3D（新能力）：逐生成元 lengthScale + pathHighlight 的类型面
+const cayley3d: Cayley3DSceneProps = {
+  group,
+  selectedElements: new Set<string>(),
+  layout3D: 'cone',
+  actions: [{ elementId: group.elements[1].label, lengthScale: 1.8 }],
+  pathHighlight: { word: [group.elements[1].label], showOrder: true },
+  theme: 'dark',
+}
+
 const opts: SceneStateOptions = { theme: 'dark', selectedElements: new Set<string>() }
 const theme: SceneTheme = 'light'
 const win: SceneWindowConfig = { locked: true }
@@ -341,6 +393,7 @@ export const Smoke = () => {
       <SceneHoverBubble element={el0} anchor={{ x: 1, y: 1 }} theme={theme} />
       <CosetStripScene {...coset} {...s.sceneProps} />
       <SymmetryViewScene {...sym} />
+      <Cayley3DScene {...cayley3d} />
       <span>{String(cosetData?.cosetColors.length ?? 0)}</span>
     </I18nProvider>
   )

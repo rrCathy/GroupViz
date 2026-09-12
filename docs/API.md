@@ -170,13 +170,43 @@ const s = useSceneState(group?, options?)
 |---|---|---|---|
 | `shape2D` | `CayleyShape2D` | 按群自动 | 不支持的形状自动回退 `circular` |
 | `multiplyType` | `'right' \| 'left'` | `'right'` | |
-| `actions` | `{elementId, enabled?, color?}[]` | 群生成元 | **`elementId` 接受元素引用** |
+| `actions` | `{elementId, enabled?, color?, lengthScale?}[]` | 群生成元 | **`elementId` 接受元素引用**；`lengthScale` = 该生成元边长倍率（缺省 1） |
 | `nodeRadius` | `number` | `28` | |
 | `showLabels` | `boolean` | `true` | 嵌入小窗常传 `false`（读元素靠 hover 气泡） |
 | `locked` | `boolean` | `false` | |
 | `hoveredElementId` | `string \| null` | — | 悬停高亮环（id） |
 | `largeGroupThreshold` | `number` | `60` | |
+| `edgeCurvature` | `number` | `1` | 边弯曲倍率（0–3）。**0 = 笔直**；2 = 更弯。同一对节点间的平行边按作用序号自动左右分开（笔直模式下也不重叠） |
+| `pathHighlight` | `CayleyPathHighlight \| null` | `null` | 路径高亮（VCL）：**缺省淡化其余边**（`dimOthers`，只留路径醒目）；`showOrder` 序号**悬停该节点时显示** |
+| `forceDirected` | `boolean` | `false` | 动态力导向**开关**（在**当前选定形状**之上把静图"激活"；**拖动一个节点只影响近旁**——1 跳邻居粘性跟随约 20–30%、其余 2–7%，松手轻微回稳；整体重排用 `force.settleSignal`） |
+| `force` | `CayleyForceParams` | — | 力导向微调：`repulsion` / `linkScale` / `gravity` / `damping` / **`stiffness`（刚度 0.4–3）** / `settleSignal`。**参数变化就地生效**（平滑过渡，不重建模拟器） |
 | `theme` | `'dark' \| 'light'` | — | |
+
+#### `CayleyPathHighlight`（路径高亮）
+
+```ts
+{
+  elements?: string[]   // 元素引用序列（id/label/value/循环记号）；相邻须由某条已启用作用边相连
+  word?: string[]       // 生成元单词，从 start（缺省单位元）连续作用 → 自动算 walk
+  start?: string        // word 模式起点
+  color?: string        // 缺省 #ffd93d（球面布局建议换白色等高对比色，避免与生成元配色撞色）
+  width?: number        // 缺省 5
+  animate?: boolean     // 沿路径逐步点亮
+  showOrder?: boolean   // 次序徽标 ① ② ③ …：**悬停该节点时显示**（不常显，避免长路径互相遮挡）
+  closed?: boolean      // word 模式：末元素回起点（展示闭环关系式）
+  dimOthers?: boolean   // 缺省 true：淡化其余边，只留路径上的边醒目（"只显示路径"）
+}
+```
+
+- 方向敏感：非自逆生成元只在其真实方向连通（`e0→e3` 若无该方向的边，只高亮两端节点、不画连段）。
+- 未解析到的引用被忽略（不抛错），行为与 `resolveElement` 一致。
+- **`word` 项建议用生成元 label 而不是元素 id**：Sₙ 的元素 id 形如 `2,1,3,4`（含逗号），会被按 `/[\s,]+/` 分词的输入框拆碎。
+
+#### 动态力导向（`forceDirected`）
+
+不是一种新形状，而是**在任意已选形状之上叠加**的力模拟：初始位置取所选形状的静态布局，随后持续求力平衡（FR 风格：位移按热度 `alpha` 缩放）。
+交互模型（Obsidian 图谱式**局部性**）：**拖动一个节点只影响近旁**——1 跳邻居粘性跟随（约 20–30%），其余节点 2–7%；路径上撞到的节点由最小间距约束推开；**松手只有轻微弹性收尾**（拖到哪基本停哪）。
+`force.*` 参数变化**就地生效**（`sim.setOptions`：保留位置与速度 + 温和升温），是平滑可感的调整而非整图重排；想重新求解整体布局用 `force.settleSignal` 自增（面板「⟳ Re-settle」）。
 
 ### 4.4 `TableView`
 
@@ -267,7 +297,7 @@ const s = useSceneState(group?, options?)
 
 | prop | 类型 | 缺省 | 说明 |
 |---|---|---|---|
-| `actions` / `multiplyType` | — | 群生成元 / `'right'` | `actions[].elementId` 接受元素引用 |
+| `actions` / `multiplyType` | — | 群生成元 / `'right'` | `actions[].elementId` 接受元素引用；**`lengthScale` = 该生成元边长倍率**（缺省 1，经 core `relaxEdgeLengths3D` 三维松弛后处理；全 1 时逐位不变） |
 | `layout3D` | `Layout3D` | 按群自动 | |
 | `nodeScale` | `number` | `1` | 0.5–2.0 |
 | `autoRotate` | `boolean` | `false` | |
@@ -275,8 +305,12 @@ const s = useSceneState(group?, options?)
 | `locked` | `boolean` | `false` | |
 | `subsetHighlights` | `{elementIds,color}[]` | — | |
 | `faceFill` | `Cayley3DFaceFillParams` | — | 子群陪集面填充 |
+| `pathHighlight` | `CayleyPathHighlight \| null` | `null` | **路径高亮（VCL）**：元素序列 / 生成元单词（core `resolveCayleyPath` 解析，与 2D 同语义）；drei `Line` 线段 + 节点环 + 逐步点亮；**缺省淡化其余边**（`dimOthers`）、`showOrder` 序号**悬停该节点时显示** |
+| `hoveredElementId` | `string \| null` | `null` | 受控悬停（与 2D 对称）：命中元素按悬停态渲染（放大 + 标签 + 路径序号），供图例/侧栏联动 |
 | `theme` | `'dark' \| 'light'` | `'dark'` | |
 | `onSelectElement` | `fn` | — | |
+
+**字长球（`layout3D: 'wordLengthSphere'`，S₄/S₅）**：必须把 `actions` 传成**相邻对换生成集**（core 的 `wordLengthSphereActions(group)`），否则缺省生成元不是相邻对换、字长分层不成立。用法与导出一览见 §7 末「字长球形状」。
 
 ### 4.10 `SublatticeScene`
 
@@ -346,6 +380,40 @@ import { I18nProvider, useTranslation } from '@groupviz/react'
 | `sizeLimitFor` | `(view) => number` | 各视图默认「过大」阈值（可读） |
 | `isTooLarge` | `(order, view, limitOverride?) => boolean` | 第三参可覆盖阈值 |
 | `listCosetStripSubgroups` / `findCosetStripSubgroup` / `cosetDataForSubgroup` | 见源码 | 陪集条带候选子群（此前未出门面，现已公开） |
+| `relaxEdgeLengths` | `(base, edges, {lengthScales, ...}) => Map<id,NodePosition>` | **逐生成元边长（2D 通用后处理）**：在任意基础布局之上做长度约束松弛（弱锚定防散架）；所有倍率为 1 时原样返回基础布局（零配置安全） |
+| `relaxEdgeLengths3D` | `(base, edges, {lengthScales, ...}) => Map<id,Vec3>` | **逐生成元边长（3D 后处理）**：与 2D 同一套力模型，距离为三维欧氏距离；斥力按基础布局平均边长 `ref` 自适应（作用半径 0.25·ref），无边界钳制；全 1 时原样返回基础布局 |
+| `isIdentityScale` | `(scales: Map<string,number>) => boolean` | 倍率是否全为 1（渲染层判断是否需要跑松弛） |
+| `resolveCayleyPath` | `(group, actions, multiplyType, {elements?, word?, start?, closed?}) => ResolvedCayleyPath \| null` | **路径高亮解析**：元素序列 / 生成元单词 → 顶点序列 + 逐步连边（方向敏感） |
+| `createCayleyForceSim` | `(group, actions, multiplyType, opts) => CayleyForceSim` | **动态力导向增量模拟器**：`step()` 逐帧推进、`pin/unpin` 拖拽钉住（低热度：拖拽只影响近旁）、`reheat()` 升温、**`setOptions(opts)` 就地更新力参数**（保留位置速度 + 温和升温 → 滑杆调节平滑过渡而非重建重排）；逐生成元弹簧静止长度 + `stiffness` 刚度 + `minSeparation` 最小间距硬约束（防纠缠）。⚠️ `pin()` **原地改写** `sim.positions` 里的对象——拖拽起点须自行快照 `{x,y}` |
+
+**字长球形状（S₄ / S₅，随包分发）** —— 相邻对换生成集按字长分层摆成**实心球**（S₄ 7 层 / S₅ 11 层；S₅ 为纬度分层 + 正根胞格向量初值 + 边距松弛，视图侧自动套一层半透明球壳）：
+
+| 导出 | 签名 | 说明 |
+|---|---|---|
+| `wordLengthSphereActions` | `(group) => CayleyAction[] \| null` | **该形状的标准作用边** = 相邻对换生成集（S₄ 3 条 / S₅ 4 条，按 `COLOR_PALETTE` 配色）。结构不符或 n ∉ {4,5} 返回 `null` |
+| `wordLengthSphereLayout3D` | `(group, radius) => Vec3[] \| null` | 布局本体（`compute3DPositions(group,'wordLengthSphere')` 内部调用） |
+| `wordLengthOf` | `(el) => number \| null` | 元素字长（相邻对换集下 = one-line 置换的**逆序数**） |
+| `wordLengthColor` | `(group, el) => string \| null` | 字长色阶（205° 青蓝 → 330° 品红），同层同色 |
+| `findAdjacentTranspositionGenerators` | `(group) => GroupElement[] \| null` | one-line 置换群的 n−1 个相邻对换（纯结构检测，Sₙ 结构不符返回 `null`） |
+
+```tsx
+import { createGroupFromSymbol, getAvailableShapes3D, wordLengthSphereActions } from '@groupviz/core'
+import { Cayley3DScene, I18nProvider } from '@groupviz/react'
+
+const S5 = createGroupFromSymbol('S_{5}')
+// getAvailableShapes3D(S5) 已含 'wordLengthSphere'
+
+<I18nProvider>
+  <Cayley3DScene
+    group={S5}
+    layout3D="wordLengthSphere"
+    actions={wordLengthSphereActions(S5) ?? undefined}   // ★ 必须传，否则缺省用群的抽象生成元
+  />
+</I18nProvider>
+```
+
+- **`actions` 必须显式传**：视图缺省用 `group.generators`（Sₙ 自动生成的生成元未必是相邻对换），那样字长分层与「层间才连边」都不成立。
+- 节点配色由视图自动套 `wordLengthColor`；球壳是该形状专属渲染（无需 props）。
 
 **陪集视图最省事写法**（宿主不再需要拼三件套）：
 

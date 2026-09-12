@@ -11,8 +11,8 @@
  *              （含 900×360 宽扁 viewBox 节点不出画布的回归）
  *   c. types —— 消费端 tsc --noEmit 验证 exports types 解析（含新 props）
  *
- * 用法：npm run consume:registry [-- 2.2.0] [--keep]
- *   需**非沙箱**运行（npm install 子进程在沙箱内会静默 exit 1）。
+ * 用法：npm run consume:registry [-- 2.2.1] [--keep]
+ *   默认取 package.json 的 version；需**非沙箱**运行（npm install 子进程在沙箱内会静默 exit 1）。
  *   --keep 保留临时目录便于手工排查。
  */
 import { execSync } from 'node:child_process'
@@ -20,7 +20,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os'
 import path from 'node:path'
 
-const VERSION = process.argv[2] ?? '2.2.0'
+// 版本号：显式参数优先，否则读 package.json（避免发版后忘记改默认值、误测旧版本）
+const VERSION = process.argv.slice(2).find((a) => /^\d+\.\d+\.\d+/.test(a))
+  ?? JSON.parse(readFileSync('package.json', 'utf8')).version
 const KEEP = process.argv.includes('--keep')
 
 const run = (cmd, opts = {}) =>

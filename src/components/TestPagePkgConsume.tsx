@@ -17,8 +17,12 @@
  *
  * 改动 src/core / Scene / src/package 后需先 `npm run build:pkg` 再刷新本页。
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { createGroupFromSymbol, buildActionComputation, type Group, type GroupElement } from '@groupviz/core'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  createGroupFromSymbol, buildActionComputation, getAvailableShapes3D, getAvailableShapesForView,
+  wordLengthSphereActions, resolveElement,
+  type Group, type GroupElement, type Layout3D, type CayleyShape2D,
+} from '@groupviz/core'
 import {
   SetView, CycleView, CayleyView, CosetStripScene, TableView,
   ActionScene, HomomorphismScene, SublatticeScene, Cayley3DScene, SymmetryViewScene,
@@ -38,6 +42,7 @@ const GROUP_OPTIONS = [
   { symbol: 'C_{12}', label: 'C₁₂' },
   { symbol: 'D_{4}', label: 'D₄' },
   { symbol: 'D_{6}', label: 'D₆' },
+  { symbol: 'D_{7}', label: 'D₇' },
   { symbol: 'S_{3}', label: 'S₃' },
   { symbol: 'S_{4}', label: 'S₄' },
   { symbol: 'A_{4}', label: 'A₄' },
@@ -125,6 +130,66 @@ function EmptyHint() {
 
 // 稳定空选择集：避免每次渲染新建 Set 触发 Scene 内部 effect
 const EMPTY_SEL = new Set<string>()
+// 稳定空倍率表（换群未匹配时用；字面量 {} 会破坏 useMemo 依赖稳定性）
+const EMPTY_SCALES: Record<string, number> = {}
+
+// ── VCL 示例预设（页头一键复现四个用例；卡片以 key=nonce 重挂载为示例初值） ──
+type VclDemoKind = 's3-curve' | 'a4-len' | 's4-ham' | 'd7-force'
+interface VclDemo {
+  nonce: number
+  kind: VclDemoKind
+  /** a4-len：按生成元顺序的边长倍率（(12)(34) 拉长 / (234) 缩短） */
+  lengthScales?: number[]
+  /** s4-ham：算好的哈密顿路径生成元单词（元素引用，空格分隔） */
+  pathWord?: string
+}
+
+/**
+ * 凯莱图上的一条哈密顿路径（覆盖全部元素的生成元单词）。
+ * 贪心 + 回溯：每步按 Warnsdorff 启发式（优先访问后继最少的邻居）排序，
+ * S₄ 字长球（24 顶点 3-正则）毫秒级命中；步数上限防病态群卡死。
+ *
+ * **返回生成元的 label**（如 S₄ 的 '12 23 34 …'）而非元素 id：Sₙ 的元素 id 是
+ * `2,1,3,4` 这种**含逗号**的形式，会被单词输入框的 `[\s,]+` 分词拆碎，且 label 更好读。
+ */
+function findHamiltonianWord(group: Group, gens: GroupElement[]): string[] | null {
+  if (gens.length === 0) return null
+  const n = group.order
+  const visited = new Set<string>([group.identity.id])
+  const word: string[] = []
+  let steps = 0
+  const MAX_STEPS = 400_000
+  const dfs = (cur: GroupElement): boolean => {
+    if (visited.size === n) return true
+    if (++steps > MAX_STEPS) return false
+    const cands: { el: GroupElement; genRef: string; deg: number }[] = []
+    for (const gen of gens) {
+      const next = group.multiply(cur, gen)
+      if (!next || visited.has(next.id)) continue
+      let deg = 0
+      for (const h of gens) {
+        const nn = group.multiply(next, h)
+        if (nn && !visited.has(nn.id)) deg++
+      }
+      cands.push({ el: next, genRef: gen.label, deg })
+    }
+    cands.sort((a, b) => a.deg - b.deg)
+    for (const c of cands) {
+      visited.add(c.el.id)
+      word.push(c.genRef)
+      if (dfs(c.el)) return true
+      visited.delete(c.el.id)
+      word.pop()
+    }
+    return false
+  }
+  return dfs(group.identity) ? word : null
+}
+
+const DEMO_BTN: React.CSSProperties = {
+  fontSize: 11, padding: '3px 10px', cursor: 'pointer', borderRadius: 6,
+  border: '1px solid #334155', background: '#1e293b', color: '#cbd5e1',
+}
 
 // ── 场景卡片（每个自持控件态，独立 re-render） ──
 
@@ -164,29 +229,66 @@ function CycleCard({ group }: { group: Group | null }) {
   )
 }
 
-function CayleyCard({ group }: { group: Group | null }) {
-  type Shape = 'circular' | 'spiral' | 'dualRing' | 'grid' | 'ringGrid' | 'cylinder' | 'torus'
-  const [shape, setShape] = useState<Shape>('circular')
+function CayleyCard({ group, demo }: { group: Group | null; demo: VclDemo | null }) {
+  // VCL 示例初值（页头按钮以 key=nonce 重挂载本卡片）：S₃ → 笔直（Straight），D₇ → 力导向
+  const preset = demo && (demo.kind === 's3-curve' || demo.kind === 'd7-force') ? demo : null
+  const [shape, setShape] = useState<CayleyShape2D>(preset?.kind === 'd7-force' ? 'dualRing' : 'circular')
   const [labels, setLabels] = useState(true)
   const [mtype, setMtype] = useState<'right' | 'left'>('right')
+  // VCL：边曲率（0 = 笔直）+ 动态力导向
+  const [curvature, setCurvature] = useState(preset?.kind === 's3-curve' ? 0 : 1)
+  const [force, setForce] = useState(preset?.kind === 'd7-force')
+  const [forceLink, setForceLink] = useState(1)
+  const [forceRep, setForceRep] = useState(1)
+  const [forceRigid, setForceRigid] = useState(1)
+  const [forceGravity, setForceGravity] = useState(1)
+
+  const shapes = useMemo<CayleyShape2D[]>(() => getAvailableShapesForView(group, 'cayley'), [group])
+  const shapeValue: CayleyShape2D = shapes.includes(shape) ? shape : (shapes[0] ?? 'circular')
+
   return (
-    <Card testid="pkg-cayley" title="CayleyView ← @groupviz/react" tag="生成元有向边 · 形状/左右乘"
+    <Card testid="pkg-cayley" title="CayleyView ← @groupviz/react" tag="生成元有向边 · 形状/左右乘 · VCL 曲率/力导向"
       controls={<>
         <Ctl label="shape2D">
-          <Sel value={shape} onChange={setShape} testid="pkg-cayley-shape"
-            options={[
-              { value: 'circular', label: 'circular' }, { value: 'spiral', label: 'spiral' },
-              { value: 'dualRing', label: 'dualRing' }, { value: 'grid', label: 'grid' },
-              { value: 'ringGrid', label: 'ringGrid' }, { value: 'cylinder', label: 'cylinder' },
-              { value: 'torus', label: 'torus' },
-            ]} />
+          <Sel value={shapeValue} onChange={setShape} testid="pkg-cayley-shape"
+            options={shapes.map((s) => ({ value: s, label: s }))} />
         </Ctl>
         <Ctl label="multiplyType"><Seg value={mtype} onChange={setMtype} options={[{ value: 'right', label: 'a·c' }, { value: 'left', label: 'c·a' }]} testid="pkg-cayley-mul" /></Ctl>
         <Chk checked={labels} onChange={setLabels} testid="pkg-cayley-labels">标签</Chk>
+        <Ctl label="edgeCurvature">
+          <input type="range" min={0} max={2} step={0.1} value={curvature}
+            data-testid="pkg-cayley-curvature"
+            onChange={(e) => setCurvature(Number(e.target.value))} style={{ width: 90 }} />
+          <span style={{ fontSize: 10, color: '#64748b' }}>{curvature === 0 ? 'straight' : `${curvature.toFixed(1)}×`}</span>
+          <button style={DEMO_BTN} data-testid="pkg-cayley-straight" onClick={() => setCurvature(0)}>Straight</button>
+          <button style={DEMO_BTN} data-testid="pkg-cayley-curved" onClick={() => setCurvature(1)}>Curved</button>
+        </Ctl>
+        <Ctl label="forceDirected">
+          <Chk checked={force} onChange={setForce} testid="pkg-cayley-force">力导向</Chk>
+          {force && (
+            <>
+              <span style={{ fontSize: 10, color: '#64748b' }} title="连线长度：边的理想长度倍率，越大整图越舒展">link</span>
+              <input type="range" min={0.3} max={3} step={0.1} value={forceLink}
+                onChange={(e) => setForceLink(Number(e.target.value))} style={{ width: 70 }} />
+              <span style={{ fontSize: 10, color: '#64748b' }} title="节点排斥力：越大越散开、越不易纠缠（远距离自动淡出）">rep</span>
+              <input type="range" min={0.2} max={3} step={0.1} value={forceRep}
+                onChange={(e) => setForceRep(Number(e.target.value))} style={{ width: 70 }} />
+              <span style={{ fontSize: 10, color: '#64748b' }} title="连线刚度：越大越硬，拖拽时局部形状越不易走样（拖拽中自动加强）">rigid</span>
+              <input type="range" min={0.4} max={3} step={0.1} value={forceRigid}
+                data-testid="pkg-cayley-rigid"
+                onChange={(e) => setForceRigid(Number(e.target.value))} style={{ width: 70 }} />
+              <span style={{ fontSize: 10, color: '#64748b' }} title="向心力：越大整图越收拢（已按群阶归一，大群不压塌）">center</span>
+              <input type="range" min={0} max={3} step={0.1} value={forceGravity}
+                onChange={(e) => setForceGravity(Number(e.target.value))} style={{ width: 70 }} />
+            </>
+          )}
+        </Ctl>
       </>}>
       {group
         ? <CayleyView group={group} selectedElements={EMPTY_SEL} canvasTransform={CT} viewBoxSize={VB}
-            shape2D={shape} multiplyType={mtype} showLabels={labels} />
+            shape2D={shapeValue} multiplyType={mtype} showLabels={labels}
+            edgeCurvature={curvature} forceDirected={force}
+            force={force ? { linkScale: forceLink, repulsion: forceRep, stiffness: forceRigid, gravity: forceGravity } : undefined} />
         : <EmptyHint />}
     </Card>
   )
@@ -330,25 +432,136 @@ function LatticeCard({ group }: { group: Group | null }) {
   )
 }
 
-function Cayley3DCard({ group }: { group: Group | null }) {
+function Cayley3DCard({ group, demo }: { group: Group | null; demo: VclDemo | null }) {
+  // VCL 示例初值（页头按钮以 key=nonce 重挂载本卡片）：
+  // A₄ → 截角四面体 + 逐生成元边长（(12)(34) 拉长 / (234) 缩短）；S₄ → 字长球 + 哈密顿路径
+  const preset = demo && (demo.kind === 'a4-len' || demo.kind === 's4-ham') ? demo : null
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [auto, setAuto] = useState(false)
-  const [layout, setLayout] = useState<'cone' | 'hexagon' | 'cube' | 'torus' | 'hypercube' | 'truncatedIcosahedron'>('cone')
+  const [layout, setLayout] = useState<Layout3D>(
+    preset?.kind === 'a4-len' ? 'truncatedTetrahedron'
+      : preset?.kind === 's4-ham' ? 'wordLengthSphere'
+        : 'cone',
+  )
+  // 换群后旧键失效 → 用「渲染期 key 校正」清空（不在 effect 里同步 setState）
+  const gKey = group ? `${group.symbol}|${group.order}` : ''
+  const [lenState, setLenState] = useState<{ key: string; map: Record<string, number> }>(() => {
+    const map: Record<string, number> = {}
+    if (preset?.kind === 'a4-len' && group) {
+      group.generators.forEach((gen, i) => {
+        const el = gen.apply(group.identity)
+        const v = preset.lengthScales?.[i]
+        if (el && v !== undefined) map[el.id] = v
+      })
+    }
+    return { key: gKey, map }
+  })
+  if (lenState.key !== gKey) setLenState({ key: gKey, map: EMPTY_SCALES })
+  const lenScales = lenState.key === gKey ? lenState.map : EMPTY_SCALES
+  const setLen = (id: string, v: number) => setLenState({ key: gKey, map: { ...lenScales, [id]: v } })
+  const [pathState, setPathState] = useState<{ key: string; mode: 'word' | 'elements'; text: string }>(() => ({
+    key: gKey, mode: 'word', text: preset?.kind === 's4-ham' ? (preset.pathWord ?? '') : '',
+  }))
+  if (pathState.key !== gKey) setPathState({ key: gKey, mode: 'word', text: '' })
+  const pathMode = pathState.key === gKey ? pathState.mode : 'word'
+  const pathText = pathState.key === gKey ? pathState.text : ''
+
+  // 形状下拉按群动态（A₄ → truncatedTetrahedron、S₄ → wordLengthSphere 等）
+  const shapes3d = useMemo<Layout3D[]>(() => (group ? getAvailableShapes3D(group) : []), [group])
+  const layoutValue: Layout3D = shapes3d.includes(layout) ? layout : (shapes3d[0] ?? 'cone')
+
+  // 生成元作用边（elementId 用生成元作用在恒等元上的元素 id）
+  const genRefs = useMemo(() => {
+    if (!group) return [] as { id: string; label: string }[]
+    const seen = new Set<string>()
+    const out: { id: string; label: string }[] = []
+    for (const gen of group.generators) {
+      const el = gen.apply(group.identity)
+      if (!el || seen.has(el.id)) continue
+      seen.add(el.id)
+      out.push({ id: el.id, label: `${gen.name}: ${el.label}` })
+    }
+    return out
+  }, [group])
+
+  // 字长球布局必须用相邻对换生成集（core 结构判定），否则字长分层不成立
+  const wlActions = useMemo(
+    () => (group && layoutValue === 'wordLengthSphere' ? wordLengthSphereActions(group) : null),
+    [group, layoutValue],
+  )
+  // 作用边 = 字长球相邻对换（该布局） 或 群生成元（带逐生成元 lengthScale）
+  const actions = useMemo(
+    () => wlActions ?? genRefs.map((g) => ({ elementId: g.id, lengthScale: lenScales[g.id] ?? 1 })),
+    [wlActions, genRefs, lenScales],
+  )
+  const actionEls = useMemo(() => {
+    if (!group) return [] as GroupElement[]
+    return actions
+      .map((a) => resolveElement(group, a.elementId))
+      .filter((el): el is GroupElement => !!el)
+  }, [group, actions])
+
+  const tokens = pathText.split(/[\s,]+/).filter(Boolean)
+  // 白色路径 + 加粗：与生成元调色板（红/青/黄…）区分，球上最醒目
+  const pathHighlight = tokens.length > 0
+    ? (pathMode === 'word'
+      ? { word: tokens, showOrder: true, color: '#ffffff', width: 6 }
+      : { elements: tokens, showOrder: true, color: '#ffffff', width: 6 })
+    : null
+
+  // 哈密顿路径：覆盖全部 |G| 个元素的一条 walk（字长球上即"串起所有层的蛇形路线"）
+  const hamSteps = useMemo(() => {
+    if (!group || actionEls.length === 0) return 0
+    return findHamiltonianWord(group, actionEls)?.length ?? 0
+  }, [group, actionEls])
+  const applyHamiltonian = () => {
+    if (!group || actionEls.length === 0) return
+    const w = findHamiltonianWord(group, actionEls)
+    if (w) setPathState({ key: gKey, mode: 'word', text: w.join(' ') })
+  }
+
   return (
-    <Card testid="pkg-cayley3d" title="Cayley3DScene ← @groupviz/react" tag={`theme=${theme} · layout3D 显式`}
+    <Card testid="pkg-cayley3d" title="Cayley3DScene ← @groupviz/react" tag={`theme=${theme} · layout3D=${layoutValue} · VCL len/path`}
       controls={<>
         <Ctl label="theme"><Seg value={theme} onChange={setTheme} testid="pkg-3d-theme" options={[{ value: 'dark', label: 'dark' }, { value: 'light', label: 'light' }]} /></Ctl>
         <Ctl label="layout3D">
-          <Sel value={layout} onChange={setLayout} testid="pkg-3d-layout"
-            options={[
-              { value: 'cone', label: 'cone' }, { value: 'hexagon', label: 'hexagon' }, { value: 'cube', label: 'cube' },
-              { value: 'torus', label: 'torus' }, { value: 'hypercube', label: 'hypercube' }, { value: 'truncatedIcosahedron', label: 'truncIcosa' },
-            ]} />
+          <Sel value={layoutValue} onChange={setLayout} testid="pkg-3d-layout"
+            options={shapes3d.map((s) => ({ value: s, label: s }))} />
         </Ctl>
         <Chk checked={auto} onChange={setAuto}>autoRotate</Chk>
+        <Ctl label="lengthScale">
+          {actions.map((a, i) => {
+            const el = group ? resolveElement(group, a.elementId) : null
+            const scale = lenScales[a.elementId] ?? 1
+            return (
+              <label key={`${a.elementId}-${i}`} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', fontSize: 11, color: '#cbd5e1' }}>
+                <span title={a.elementId}>{el ? el.label : a.elementId}</span>
+                <input type="range" min={0.3} max={3} step={0.1} value={scale}
+                  data-testid={`pkg-3d-len-${i}`}
+                  onChange={(e) => setLen(a.elementId, Number(e.target.value))} style={{ width: 72 }} />
+                <span style={{ fontSize: 10, color: '#64748b' }}>{scale.toFixed(1)}×</span>
+              </label>
+            )
+          })}
+        </Ctl>
+        <Ctl label="path">
+          <Seg value={pathMode} onChange={(m) => setPathState({ key: gKey, mode: m, text: pathText })}
+            options={[{ value: 'word', label: 'word' }, { value: 'elements', label: 'elements' }]} testid="pkg-3d-pathmode" />
+          <input value={pathText} placeholder="a b / e1 e2" title={pathText}
+            data-testid="pkg-3d-path"
+            onChange={(e) => setPathState({ key: gKey, mode: pathMode, text: e.target.value })}
+            style={{ width: 150, fontSize: 11, background: '#0f172a', color: '#cbd5e1', border: '1px solid #334155', borderRadius: 4, padding: '2px 4px' }} />
+          <button onClick={applyHamiltonian} disabled={hamSteps === 0}
+            data-testid="pkg-3d-hamiltonian" title={hamSteps > 0 ? `覆盖全部 ${group?.order ?? 0} 个元素（${hamSteps} 步）` : '无可用生成集'}
+            style={{ ...DEMO_BTN, opacity: hamSteps === 0 ? 0.5 : 1 }}>Hamiltonian{hamSteps > 0 ? ` (${hamSteps})` : ''}</button>
+          <button onClick={() => setPathState({ key: gKey, mode: pathMode, text: '' })}
+            style={{ ...DEMO_BTN, background: 'transparent', color: '#94a3b8' }}>clear</button>
+        </Ctl>
       </>}>
       {group
-        ? <Frame h={280}><Cayley3DScene group={group} selectedElements={EMPTY_SEL} theme={theme}
+        ? <Frame h={320}><Cayley3DScene group={group} selectedElements={EMPTY_SEL} theme={theme}
+            actions={actions}
+            pathHighlight={pathHighlight}
             autoRotate={auto} layout3D={layout} /></Frame>
         : <EmptyHint />}
     </Card>
@@ -443,6 +656,27 @@ export default function TestPagePkgConsume() {
   const [symbol, setSymbol] = useState<string>(GROUP_OPTIONS[0].symbol)
   const group: Group | null = useMemo(() => createGroupFromSymbol(symbol), [symbol])
   const errors = usePageErrors()
+  // ── VCL 示例：一键切到目标群 + 以示例参数重挂载对应卡片（key=nonce） ──
+  const [demo, setDemo] = useState<VclDemo | null>(null)
+  const demoNonce = useRef(0)
+  const runDemo = useCallback((kind: VclDemoKind) => {
+    const sym = kind === 's3-curve' ? 'S_{3}' : kind === 'a4-len' ? 'A_{4}' : kind === 's4-ham' ? 'S_{4}' : 'D_{7}'
+    const g = createGroupFromSymbol(sym)
+    if (!g) return
+    setSymbol(sym)
+    const next: VclDemo = { nonce: ++demoNonce.current, kind }
+    if (kind === 'a4-len') {
+      // 生成元顺序 = A₄ 的 a=(12)(34)（拉长）、b=(234)（缩短）
+      next.lengthScales = [2.2, 0.4]
+    }
+    if (kind === 's4-ham') {
+      const gens = (wordLengthSphereActions(g) ?? [])
+        .map((a) => resolveElement(g, a.elementId))
+        .filter((el): el is GroupElement => !!el)
+      next.pathWord = findHamiltonianWord(g, gens)?.join(' ') ?? ''
+    }
+    setDemo(next)
+  }, [])
 
   return (
     <I18nProvider>
@@ -467,6 +701,14 @@ export default function TestPagePkgConsume() {
             {group ? `${group.symbol} · |G|=${group.order} · ${group.name ?? ''}` : `群未载入（${symbol}）`}
           </span>
         </div>
+        <div data-testid="pkg-vcl-demos" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>VCL 示例：</span>
+          <button style={DEMO_BTN} data-testid="pkg-demo-s3-curve" onClick={() => runDemo('s3-curve')}>S₃ · 2D 边弯曲/笔直</button>
+          <button style={DEMO_BTN} data-testid="pkg-demo-a4-len" onClick={() => runDemo('a4-len')}>A₄ · 截角四面体 (12)(34) 长 / (234) 短</button>
+          <button style={DEMO_BTN} data-testid="pkg-demo-s4-ham" onClick={() => runDemo('s4-ham')}>S₄ · 字长球哈密顿路径</button>
+          <button style={DEMO_BTN} data-testid="pkg-demo-d7-force" onClick={() => runDemo('d7-force')}>D₇ · 2D 动态力导向</button>
+          <span style={{ fontSize: 10, color: '#475569' }}>（点击 = 切群 + 以示例参数重挂载 Cayley / Cayley3D 卡片，随后可继续手调）</span>
+        </div>
         <div data-testid="pkg-errors" style={{ fontSize: 11, marginBottom: 12 }}>
           {errors.length === 0
             ? <span style={{ color: '#4ade80' }}>✓ 无未捕获 runtime error</span>
@@ -477,13 +719,13 @@ export default function TestPagePkgConsume() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(430px, 1fr))', gap: 12, alignItems: 'start' }}>
           <SetCard group={group} />
           <CycleCard group={group} />
-          <CayleyCard group={group} />
+          <CayleyCard key={`cayley-${demo?.nonce ?? 0}`} group={group} demo={demo} />
           <TableCard group={group} />
           <CosetCard />
           <ActionCard />
           <HomoCard />
           <LatticeCard group={group} />
-          <Cayley3DCard group={group} />
+          <Cayley3DCard key={`cayley3d-${demo?.nonce ?? 0}`} group={group} demo={demo} />
           <SymmetryCard group={group} />
         </div>
 
@@ -491,12 +733,13 @@ export default function TestPagePkgConsume() {
 
         <p style={{ fontSize: 11, color: '#64748b', marginTop: 16, maxWidth: 1000, lineHeight: 1.7 }}>
           覆盖：columns 极值 / nodeRadius 三档 / 标签开关（Set/Cycle/Cayley/Coset/Homo）/
-          shape2D 7 形状 + multiplyType 左右乘 / table strategy 三档 + 热力图 + 大群告警 /
+          shape2D（按群动态枚举）+ multiplyType 左右乘 / table strategy 三档 + 热力图 + 大群告警 /
           action kind（conjugation/regular）/ 同态双 fixture / labelDetail LOD 四档 + 共轭合并 + 子群列 +
-          sublattice theme dark/light 对照 / Cayley3D theme + layout3D + autoRotate /
-          Symmetry dark + variant + 演示动画（元素受控）+ 锁定相机。群 select 切 12 群同步重渲所有共享群卡片：
+          sublattice theme dark/light 对照 / Cayley3D theme + layout3D（按群动态）+ autoRotate /
+          Symmetry dark + variant + 演示动画（元素受控）+ 锁定相机。群 select 切 13 群同步重渲所有共享群卡片：
           C₈ 八边形 / A₅ 二十面体（60 阶）验证大群对称演示，Q₈ 用于 Symmetry unsupported overlay。
           cosetType（左右乘）属 ViewWindow 壳层参数——包 Scene 中立，上卡以非正规 ⟨s⟩ 数据演示左右分区差异。
+          VCL 示例按钮：边曲率 `edgeCurvature`（0 = 笔直）/ 逐生成元 `lengthScale` / `pathHighlight`（含字长球哈密顿路径）/ `forceDirected`。
           改动包源码后先 npm run build:pkg。
         </p>
       </div>

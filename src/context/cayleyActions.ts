@@ -1,6 +1,7 @@
 import type { Group, ViewMode, CayleyAction, Layout3D } from '../core/types'
 import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, isQuotientGroup, type CayleyShape2D } from '../core/types'
 import type { CayleyActionParam } from '../core/types/viewConfig'
+import { wordLengthSphereActions } from '../core/algebra/layouts3D/wordLengthSphereLayout3D'
 import { resolveElementWarn } from '../utils/elementRef'
 
 export function getInitialCayleyActions(group: Group): CayleyAction[] {
@@ -34,6 +35,7 @@ export function normalizeCayleyActions(group: Group, actions?: CayleyActionParam
       elementId: el.id,
       enabled: a.enabled !== false,
       color: a.color ?? COLOR_PALETTE[out.length % COLOR_PALETTE.length],
+      lengthScale: a.lengthScale,
     })
   }
   return out
@@ -69,6 +71,9 @@ export function getCayleyShapeConfig(group: Group): CayleyShapeConfig {
 }
 
 export function getSpecialCayleyActions(group: Group, shape: Layout3D): CayleyAction[] | null {
+  // 字长球的标准作用边 = 相邻对换生成集：由核心按结构判定（单一真源，见 core）
+  if (shape === 'wordLengthSphere') return wordLengthSphereActions(group)
+
   const sym = group.symbol
 
   if (sym === 'S_{4}') {
@@ -132,6 +137,9 @@ export function addAllCayleyActionsHelper(
   const canonical3D = (() => {
     const sym = group.symbol
     if (currentView !== '3d') return new Set<string>()
+    if (cayleyShape3D === 'wordLengthSphere') {
+      return new Set(wordLengthSphereActions(group)?.map(a => a.elementId) ?? [])
+    }
     if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') {
       if (cayleyShape3D === 'rhombicuboctahedron') return new Set(['4,1,2,3', '3,1,2,4'])
       if (cayleyShape3D === 'truncatedOctahedron2') return new Set(['2,3,4,1', '2,1,3,4'])

@@ -24,6 +24,14 @@ vi.mock('@react-three/drei', () => ({
   Html: (props: { children?: ReactNode; wrapperClass?: string }) => (
     <div className={props.wrapperClass}>{props.children}</div>
   ),
+  Line: (props: { points?: number[][]; lineWidth?: number; color?: string }) => (
+    <div
+      className="gv-three-line"
+      data-points={JSON.stringify(props.points ?? [])}
+      data-line-width={String(props.lineWidth ?? '')}
+      data-color={props.color ?? ''}
+    />
+  ),
 }))
 vi.mock('../i18n/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -162,5 +170,121 @@ describe('Cayley3DScene · controlled 3D cayley view', () => {
       expect(tagAll(container, 'sphereGeometry')).toHaveLength(4)
       unmount()
     }
+  })
+
+  it('adds a translucent shell only for the wordLengthSphere layout', () => {
+    const s4 = createSymmetricGroup(4)
+    // 字长球：24 个节点球 + 1 个球壳（半径 = 5 × 1.55 = 7.75，S₄ 全体贴壳）
+    const shell = render(
+      <Cayley3DScene group={s4} selectedElements={new Set()} layout3D="wordLengthSphere" />,
+    )
+    const shellRadii = tagAll(shell.container, 'sphereGeometry').map(g => geomArg(g, 0))
+    expect(shellRadii.filter(r => r > 5)).toHaveLength(1)
+    expect(shellRadii.filter(r => r > 5)[0]).toBeCloseTo(7.75, 3)
+    expect(shellRadii.filter(r => r < 5)).toHaveLength(24)
+
+    // 其它布局不套壳（cone：仅 24 个节点球，无大半径球）
+    const plain = render(
+      <Cayley3DScene group={s4} selectedElements={new Set()} layout3D="cone" />,
+    )
+    const plainRadii = tagAll(plain.container, 'sphereGeometry').map(g => geomArg(g, 0))
+    expect(plainRadii).toHaveLength(24)
+    expect(plainRadii.some(r => r > 5)).toBe(false)
+  })
+
+  it('per-generator lengthScale stretches that generator’s edges (VCL 3D relax)', () => {
+    const plain = render(<Cayley3DScene group={c4} selectedElements={new Set()} />)
+    const before = edgeLens(plain.container)
+    expect(before).toHaveLength(4)
+
+    const scaled = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        actions={[{ elementId: 'e1', lengthScale: 2 }]} />,
+    )
+    const after = edgeLens(scaled.container)
+    // 边数不变，边长被拉长（取最长边比较，避免排序位置抖动）
+    expect(after).toHaveLength(4)
+    expect(after[after.length - 1]).toBeGreaterThan(before[before.length - 1] * 1.05)
+  })
+
+  it('lengthScale = 1 keeps the base geometry unchanged (attach-safe)', () => {
+    const plain = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()} actions={[{ elementId: 'e1' }]} />,
+    )
+    const explicit = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        actions={[{ elementId: 'e1', lengthScale: 1 }]} />,
+    )
+    expect(edgeLens(explicit.container)).toEqual(edgeLens(plain.container))
+  })
+
+  it('pathHighlight draws one segment per walk step plus node rings', () => {
+    const { container } = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        pathHighlight={{ word: ['e1', 'e1'], color: '#ff6b6b' }} />,
+    )
+    const lines = container.querySelectorAll('.gv-three-line')
+    expect(lines).toHaveLength(2)
+    expect(lines[0].getAttribute('data-line-width')).toBe('5')
+    expect(lines[0].getAttribute('data-color')).toBe('#ff6b6b')
+    // 3 个路径节点环（e0→e1→e2）叠加在 4 个基础节点球之上
+    expect(tagAll(container, 'sphereGeometry')).toHaveLength(4 + 3)
+  })
+
+  it('pathHighlight highlights nodes only for pairs with no connecting edge', () => {
+    const { container } = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        pathHighlight={{ elements: ['e0', 'e2'] }} />,
+    )
+    // e0→e2 需 e2 作用（默认只有生成元 e1）→ 只高亮 2 个节点，无线段
+    expect(container.querySelectorAll('.gv-three-line')).toHaveLength(0)
+    expect(tagAll(container, 'sphereGeometry')).toHaveLength(4 + 2)
+  })
+
+  it('showOrder badges appear only on the hovered path node (none by default)', () => {
+    const { container } = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        pathHighlight={{ word: ['e1'], showOrder: true }} />,
+    )
+    expect(container.querySelectorAll('.gv-three-line')).toHaveLength(1)
+    // 不常显序号（长路径上会互相遮挡）：无悬停时没有徽标
+    expect(container.querySelectorAll('.gv-html-overlay')).toHaveLength(0)
+  })
+
+  it('hoveredElementId (controlled) drives the order badge on that path node', () => {
+    // 受控悬停路径上的第 3 个节点（e2）→ 只显示它的次序徽标（③）
+    const { container } = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        hoveredElementId="e2"
+        pathHighlight={{ word: ['e1', 'e1'], showOrder: true }} />,
+    )
+    expect(container.querySelectorAll('.gv-three-line')).toHaveLength(2)
+    const texts = Array.from(container.querySelectorAll('.gv-html-overlay')).map(el => el.textContent)
+    expect(texts).toContain('3')
+  })
+
+  it('pathHighlight dims non-path edges by default (dimOthers)', () => {
+    // 直线边的材质 opacity：淡化 = 0.2，正常 = 1（节点球材质不设 opacity → null）
+    const edgeOpacities = (container: HTMLElement) =>
+      tagAll(container, 'cylinderGeometry')
+        .map(g => g.parentElement?.querySelector('meshStandardMaterial')?.getAttribute('opacity') ?? null)
+    const plain = render(<Cayley3DScene group={c4} selectedElements={new Set()} />)
+    expect(edgeOpacities(plain.container)).toEqual(['1', '1', '1', '1'])
+    plain.unmount()
+
+    // 路径 e0→e1→e2：4 条生成元边中 2 条在路径上 → 2 条淡化
+    const hi = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        pathHighlight={{ word: ['e1', 'e1'] }} />,
+    )
+    expect(edgeOpacities(hi.container).filter(o => o === '0.2')).toHaveLength(2)
+    hi.unmount()
+
+    // 显式关闭 → 全部保持原状
+    const off = render(
+      <Cayley3DScene group={c4} selectedElements={new Set()}
+        pathHighlight={{ word: ['e1', 'e1'], dimOthers: false }} />,
+    )
+    expect(edgeOpacities(off.container).filter(o => o === '0.2')).toHaveLength(0)
   })
 })

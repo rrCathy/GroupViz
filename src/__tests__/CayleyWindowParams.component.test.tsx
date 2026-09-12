@@ -41,12 +41,40 @@ describe('ViewWindow · cayley view', () => {
     // C₁₂（>7 阶循环群）可用形状：circular/spiral/coil/cone，默认 circular
     expect(Array.from(select.options).map(o => o.value)).toEqual(['circular', 'spiral', 'coil', 'cone'])
     expect(select.value).toBe('circular')
-    // 仅 1 个滑杆（节点半径）；复选框 = 6 窗口配置（锁移动/锁缩放/信息/固定/控件/滑杆）+ 1 条作用边
-    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(1)
-    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(7)
+    // 滑杆 = 节点半径 + 边曲率 + 逐生成元边长（C₁₂ 默认 1 条作用边）→ 3
+    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(3)
+    // 复选框 = 6 窗口配置（锁移动/锁缩放/信息/固定/控件/滑杆）+ 1 条作用边 + Live force-directed
+    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(8)
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
+    // VCL 新增控件（边几何 / 路径高亮 / 动态力导向）
+    expect(screen.getByText('Edge curvature')).toBeInTheDocument()
+    expect(screen.getByText('Path highlight')).toBeInTheDocument()
+    expect(screen.getByText('Live force-directed')).toBeInTheDocument()
+  })
+
+  it('edge-curvature / path-highlight / force-directed controls write back params', () => {
+    const onChange = vi.fn()
+    render(
+      <ViewWindow view="cayley" group={c4} title="C₄ 凯莱" storageKey="cay-vcl"
+        defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }}
+        viewParams={{}} onViewParamsChange={onChange} />,
+    )
+    openPanel()
+
+    // 笔直：edgeCurvature = 0
+    fireEvent.click(screen.getByText('Straight'))
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({ edgeCurvature: 0 })
+
+    // 力导向开关：forceDirected = true（面板展开微调滑杆）
+    fireEvent.click(screen.getByText('Live force-directed'))
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({ forceDirected: true })
+
+    // 路径高亮：元素序列输入 → pathHighlight.elements
+    const input = screen.getByPlaceholderText(/refs, e\.g\./)
+    fireEvent.change(input, { target: { value: 'e0 e1 e2' } })
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({ pathHighlight: { elements: ['e0', 'e1', 'e2'] } })
   })
 
   it('fires onViewParamsChange when shape or multiply changes (controlled mode)', () => {

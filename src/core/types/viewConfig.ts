@@ -60,7 +60,73 @@ export interface CayleyActionParam {
   enabled?: boolean
   /** 边颜色（hex）；缺省按序号取 COLOR_PALETTE */
   color?: string
+  /** 该作用元素的边长倍率；缺省 1（原始布局）。0.3–3。
+   *  固定几何布局经「长度约束松弛」后处理，力导向布局作为弹簧静止长度倍率 */
+  lengthScale?: number
 }
+
+/** 凯莱图路径高亮（VCL）：元素序列 或 生成元单词，二选一 */
+export interface CayleyPathHighlight {
+  /** 元素引用序列（id/label/value/循环记号）；相邻两项须由某条已启用作用边相连 */
+  elements?: string[]
+  /** 生成元单词（元素引用序列，视为连续作用）；从 `start`（缺省单位元）出发累乘。
+   *  与 `elements` 同时给出时 `elements` 优先 */
+  word?: string[]
+  /** `word` 模式的起点（元素引用）；缺省单位元 */
+  start?: string
+  /** 高亮颜色；缺省金色 #ffd93d */
+  color?: string
+  /** 高亮线宽；缺省 5 */
+  width?: number
+  /** 是否沿路径逐步点亮（进入即播放） */
+  animate?: boolean
+  /** 是否在节点上标出经过次序（① ② ③ …）；**悬停该节点时显示**（不常显，避免遮挡） */
+  showOrder?: boolean
+  /** `word` 模式：是否闭合（末元素回单位元，用于展示关系式如 a²=e） */
+  closed?: boolean
+  /** 高亮路径时**淡化其余边**（只留路径上的边醒目；缺省 true = 用户期望的「只显示路径」效果） */
+  dimOthers?: boolean
+}
+
+export const cayleyPathHighlightSchema = z.object({
+  elements: z.array(z.string()).max(240).optional(),
+  word: z.array(z.string()).max(240).optional(),
+  start: z.string().optional(),
+  color: z.string().optional(),
+  width: z.number().min(0.5).max(20).optional(),
+  animate: z.boolean().optional(),
+  showOrder: z.boolean().optional(),
+  closed: z.boolean().optional(),
+  dimOthers: z.boolean().optional(),
+})
+
+/** 动态力导向微调（`forceDirected === true` 时生效） */
+export interface CayleyForceParams {
+  /** 斥力倍率；缺省 1（0.2–3）。越大节点越散、越不易纠缠（1/d²，3.5×理想间距外淡出） */
+  repulsion?: number
+  /** 弹簧静止长度倍率（连线距离）；缺省 1（0.2–3）。与逐生成元 lengthScale 相乘 */
+  linkScale?: number
+  /** 向心力倍率；缺省 1（0–3）。已按群阶归一：对环状布局的向心收缩恒 ≈2.7% 半径，
+   *  大群不会被压塌（越大整图越收拢成团） */
+  gravity?: number
+  /** 速度保留率 0.5–0.95；缺省 0.75（越大越"飘"、越小越"黏"越稳） */
+  damping?: number
+  /** 连线刚度倍率 0.4–3；缺省 1（越大越"硬"：拖拽时局部形状越不易走样）。
+   *  拖拽中自动 ×2.5、松手恢复；也影响均衡密度与 Re-settle 结果 */
+  stiffness?: number
+  /** 自增即「回到给定形状」（重置拖拽塑性记忆 + 重新投影到力平衡态；
+   *  对齐 SymmetryView.replaySignal 语义。拖拽探索出的新形状被清除） */
+  settleSignal?: number
+}
+
+export const cayleyForceParamsSchema = z.object({
+  repulsion: z.number().min(0.2).max(3).optional(),
+  linkScale: z.number().min(0.2).max(3).optional(),
+  gravity: z.number().min(0).max(3).optional(),
+  damping: z.number().min(0.5).max(0.95).optional(),
+  stiffness: z.number().min(0.4).max(3).optional(),
+  settleSignal: z.number().optional(),
+})
 
 export interface CayleyViewParams {
   /** 2D 布局形状；缺省 getDefaultShape2D(group)（按群自动）。群不支持的形状渲染层自然回退 circular */
@@ -73,6 +139,17 @@ export interface CayleyViewParams {
   nodeRadius?: number
   /** 是否显示节点标签；缺省 true（>60 阶沿用主视图自适应规则）。嵌入小窗（ViewWindow）传 false 彻底不显示节点标签、读元素靠悬停就地气泡 */
   showLabels?: boolean
+  /** 边弯曲度倍率；缺省 1（自适应弧，约 min(dist*0.08, 18)）。**0 = 笔直**；2 = 更弯。
+   *  平行边（同一对节点间多条作用边）按作用序号自动左右分开，避免笔直时重叠 */
+  edgeCurvature?: number
+  /** 路径高亮（VCL）；null/缺省 = 不高亮 */
+  pathHighlight?: CayleyPathHighlight | null
+  /** 动态力导向**开关**（在**当前选定形状**之上启用，不是一种新形状）：让静图"活"起来。
+   *  开启后节点持续可拖拽 + 实时受力；初始位置取所选形状的静态布局，平滑过渡到力平衡态。
+   *  缺省 false（保持静态图，零行为变化） */
+  forceDirected?: boolean
+  /** 力导向微调（`forceDirected === true` 时生效） */
+  force?: CayleyForceParams
 }
 
 export const cayleyViewParamsSchema = z.object({
@@ -84,12 +161,17 @@ export const cayleyViewParamsSchema = z.object({
         elementId: z.string(),
         enabled: z.boolean().optional(),
         color: z.string().optional(),
+        lengthScale: z.number().min(0.2).max(3).optional(),
       }),
     )
     .max(240)
     .optional(),
   nodeRadius: z.number().min(8).max(120).optional(),
   showLabels: z.boolean().optional(),
+  edgeCurvature: z.number().min(0).max(3).optional(),
+  pathHighlight: cayleyPathHighlightSchema.nullable().optional(),
+  forceDirected: z.boolean().optional(),
+  force: cayleyForceParamsSchema.optional(),
 })
 
 export interface Cayley3DFaceFillParams {
@@ -118,6 +200,8 @@ export interface Cayley3DViewParams {
   showLabels?: boolean
   /** 子群陪集面填充（面 = 某真子群单个陪集在布局中占满的平面凸多边形） */
   faceFill?: Cayley3DFaceFillParams
+  /** 路径高亮（VCL）；null/缺省 = 不高亮。与 2D 同一套解析（core.resolveCayleyPath）与视觉语义 */
+  pathHighlight?: CayleyPathHighlight | null
 }
 
 export const cayley3DViewParamsSchema = z.object({
@@ -129,6 +213,7 @@ export const cayley3DViewParamsSchema = z.object({
         elementId: z.string(),
         enabled: z.boolean().optional(),
         color: z.string().optional(),
+        lengthScale: z.number().min(0.2).max(3).optional(),
       }),
     )
     .max(240)
@@ -136,6 +221,7 @@ export const cayley3DViewParamsSchema = z.object({
   nodeScale: z.number().min(0.5).max(2).optional(),
   autoRotate: z.boolean().optional(),
   showLabels: z.boolean().optional(),
+  pathHighlight: cayleyPathHighlightSchema.nullable().optional(),
   faceFill: z
     .object({
       enabled: z.boolean().optional(),

@@ -214,3 +214,143 @@ describe('CayleyView (pure props)', () => {
     expect(maxY).toBeLessThanOrEqual(h)
   })
 })
+
+// ── VCL 批次：边曲率 / 路径高亮 / 逐生成元边长 / 动态力导向 ──
+
+/** 解析边 path 的 `M sx sy Q cx cy ex ey` 几何 */
+function parseEdgeGeometry(d: string) {
+  const m = /^M ([-.\d]+) ([-.\d]+) Q ([-.\d]+) ([-.\d]+) ([-.\d]+) ([-.\d]+)$/.exec(d.trim())
+  if (!m) return null
+  return {
+    sx: Number(m[1]), sy: Number(m[2]),
+    cx: Number(m[3]), cy: Number(m[4]),
+    ex: Number(m[5]), ey: Number(m[6]),
+  }
+}
+
+const ctrlOffsetFromChord = (d: string) => {
+  const g = parseEdgeGeometry(d)!
+  return Math.hypot(g.cx - (g.sx + g.ex) / 2, g.cy - (g.sy + g.ey) / 2)
+}
+
+describe('CayleyView · VCL controls', () => {
+  it('edgeCurvature=0 makes single-generator edges perfectly straight (ctrl on the chord midpoint)', () => {
+    const { container } = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        edgeCurvature={0} />,
+    )
+    const paths = Array.from(container.querySelectorAll('path[marker-end]'))
+    expect(paths).toHaveLength(4)
+    for (const p of paths) {
+      const g = parseEdgeGeometry(p.getAttribute('d')!)!
+      expect(Math.abs(g.cx - (g.sx + g.ex) / 2)).toBeLessThan(0.5)
+      expect(Math.abs(g.cy - (g.sy + g.ey) / 2)).toBeLessThan(0.5)
+    }
+  })
+
+  it('default curvature bows the edges off the chord', () => {
+    const { container } = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,
+    )
+    const p = container.querySelector('path[marker-end]')!
+    expect(ctrlOffsetFromChord(p.getAttribute('d')!)).toBeGreaterThan(1)
+  })
+
+  it('parallel edges (two actions on one node pair) fan apart even in straight mode', () => {
+    // C₄ 用 e1 / e3 两条作用 → 同一节点对出现两条方向相反的平行边
+    const { container } = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        edgeCurvature={0} actions={[{ elementId: 'e1' }, { elementId: 'e3' }]} />,
+    )
+    const signed = Array.from(container.querySelectorAll('path[marker-end]')).map(p => {
+      const g = parseEdgeGeometry(p.getAttribute('d')!)!
+      return g.cx - (g.sx + g.ex) / 2
+    })
+    // 平行边不得双双落在弦上（否则完全重叠看不见），应左右分列
+    expect(signed.some(v => v > 1)).toBe(true)
+    expect(signed.some(v => v < -1)).toBe(true)
+  })
+
+  it('path highlight (word) draws one segment per step', () => {
+    const { container } = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        pathHighlight={{ word: ['e1', 'e1'] }} />,
+    )
+    expect(container.querySelectorAll('line')).toHaveLength(2)
+  })
+
+  it('path highlight (elements) respects edge direction: unconnected pair → rings only', () => {
+    const { container } = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        pathHighlight={{ elements: ['e0', 'e3'], color: '#ff0000' }} />,
+    )
+    expect(container.querySelectorAll('line')).toHaveLength(0)
+    expect(container.querySelectorAll('circle[stroke="#ff0000"]')).toHaveLength(2)
+  })
+
+  it('path highlight order badges show only for the hovered path node (none without hover)', () => {
+    const noHover = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        pathHighlight={{ elements: ['e0', 'e1', 'e2'], showOrder: true }} />,
+    )
+    expect(Array.from(noHover.container.querySelectorAll('text')).map(t => t.textContent)).toEqual([])
+    noHover.unmount()
+
+    // 悬停路径上的第 2 个节点（e1）→ 只显示它的次序徽标
+    const hovered = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        hoveredElementId="e1"
+        pathHighlight={{ elements: ['e0', 'e1', 'e2'], showOrder: true }} />,
+    )
+    expect(Array.from(hovered.container.querySelectorAll('text')).map(t => t.textContent)).toEqual(['2'])
+  })
+
+  it('path highlight dims every non-path edge by default (dimOthers)', () => {
+    const edges = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll('path[marker-end], path[stroke]'))
+        .filter(p => p.getAttribute('d') !== null)
+    const plain = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,
+    )
+    const plainOpacities = edges(plain.container).map(p => p.getAttribute('opacity'))
+    expect(plainOpacities.every(o => o === '0.9')).toBe(true)
+    plain.unmount()
+
+    const hi = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        pathHighlight={{ word: ['e1', 'e1'] }} />,
+    )
+    const hiOpacities = edges(hi.container).map(p => p.getAttribute('opacity'))
+    // 4 条生成元边中 2 条在路径上（保持 0.9）、2 条被淡化（0.12）
+    expect(hiOpacities.filter(o => o === '0.12')).toHaveLength(2)
+    expect(hiOpacities.filter(o => o === '0.9')).toHaveLength(2)
+  })
+
+  it('per-generator lengthScale is wired into the layout (node positions change)', () => {
+    const nodeTransforms = (el: HTMLElement) =>
+      Array.from(el.querySelectorAll('svg circle[r="28"]'))
+        .map(c => c.parentElement?.getAttribute('transform') ?? '')
+        .sort()
+    const plain = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,
+    )
+    const before = nodeTransforms(plain.container)
+    plain.unmount()
+    const stretched = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        actions={[{ elementId: 'e1', lengthScale: 2 }]} />,
+    )
+    const after = nodeTransforms(stretched.container)
+    expect(after).toHaveLength(4)
+    expect(after).not.toEqual(before)
+  })
+
+  it('forceDirected keeps rendering the graph (nodes + edges) with live positions', () => {
+    const { container } = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        forceDirected />,
+    )
+    expect(container.querySelectorAll('svg circle[r="28"]')).toHaveLength(4)
+    expect(container.querySelectorAll('path[marker-end]')).toHaveLength(4)
+  })
+})

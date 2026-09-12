@@ -28,7 +28,7 @@ import { listFaceSubgroups, buildUndirectedEdgeKeys, FACE_COLOR_PALETTE, type Fa
 import { verifyHomomorphism } from '../../core/algebra/homomorphisms'
 import { texify, renderTex } from '../../utils/texify'
 import type { CayleyEdgeData } from '../../core/types'
-import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, Cayley3DFaceFillParams, CycleViewParams, TableViewParams, TableStrategy, SublatticeViewParams, CosetStripViewParams, SymmetryViewParams, HomomorphismViewParams, ActionViewParams } from '../../core/types/viewConfig'
+import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, Cayley3DFaceFillParams, CycleViewParams, TableViewParams, TableStrategy, SublatticeViewParams, CosetStripViewParams, SymmetryViewParams, HomomorphismViewParams, ActionViewParams, CayleyPathHighlight } from '../../core/types/viewConfig'
 import { setViewParamsSchema, cayleyViewParamsSchema, cayley3DViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema, sublatticeViewParamsSchema, cosetStripViewParamsSchema, symmetryViewParamsSchema, homomorphismViewParamsSchema, actionViewParamsSchema } from '../../core/types/viewConfig'
 import { getDefaultShape2D, getAvailableShapesForView } from '../../core/types'
 import { getDefaultLayout3D, getAvailableShapes3D } from '../../core/types'
@@ -814,6 +814,111 @@ const MINI_BTN: React.CSSProperties = {
   background: 'var(--bg-interactive)', color: 'var(--text-secondary)',
 }
 
+const PATH_COLORS = ['#ffd93d', '#ff6b6b', '#4ecdc4', '#a78bfa', '#f97316']
+
+/**
+ * 凯莱图路径高亮编辑器（VCL）。
+ * 两种输入：Elements（元素引用序列，相邻须有边）/ Word（生成元单词，从单位元连续作用）。
+ * 本地 text 态避免逐键回写打断输入；`resetKey`（群符号）变化时从 value 重新同步。
+ */
+function CayleyPathEditor({
+  value, onChange, resetKey,
+}: {
+  value: CayleyPathHighlight | null
+  onChange: (next: CayleyPathHighlight | null) => void
+  resetKey: string
+}) {
+  // 本地 text 态：用「渲染期 key 校正」同步换群（resetKey 变化）时的外部值，
+  // 避免在 effect 里同步 setState（React Compiler 会判为级联渲染）
+  const externalText = (value?.elements ?? value?.word ?? []).join(' ')
+  const [state, setState] = useState<{ key: string; text: string }>({ key: resetKey, text: externalText })
+  if (state.key !== resetKey) {
+    setState({ key: resetKey, text: externalText })
+  }
+  const text = state.key === resetKey ? state.text : externalText
+  const setText = (t: string) => setState({ key: resetKey, text: t })
+
+  const mode: 'elements' | 'word' = value?.word && !value?.elements ? 'word' : 'elements'
+
+  const commit = (t: string, m: 'elements' | 'word', patch?: Partial<CayleyPathHighlight>) => {
+    const tokens = t.split(/[\s,]+/).filter(Boolean)
+    if (tokens.length === 0) {
+      onChange(null)
+      return
+    }
+    onChange({
+      ...(value ?? {}),
+      elements: m === 'elements' ? tokens : undefined,
+      word: m === 'word' ? tokens : undefined,
+      ...patch,
+    })
+  }
+
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontWeight: 600 }}>Path highlight</span>
+        <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{mode}</span>
+      </div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+        <button style={segBtn(mode === 'elements')} onClick={() => commit(text, 'elements')}>Elements</button>
+        <button style={segBtn(mode === 'word')} onClick={() => commit(text, 'word')}>Word</button>
+      </div>
+      <input
+        value={text}
+        placeholder={mode === 'word' ? 'generators, e.g.  a a b' : 'refs, e.g.  e (12) (123)'}
+        onChange={e => {
+          setText(e.target.value)
+          commit(e.target.value, mode)
+        }}
+        style={{
+          width: '100%', background: 'var(--bg-primary)', color: 'var(--text-secondary)',
+          border: '1px solid var(--border-primary)', borderRadius: 4, padding: '2px 4px', marginBottom: 4,
+        }}
+      />
+      {value && (
+        <>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!value.animate} onChange={e => commit(text, mode, { animate: e.target.checked })} />Animate
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!value.showOrder} onChange={e => commit(text, mode, { showOrder: e.target.checked })} />Order
+            </label>
+            <label title="淡化其余边，只留路径醒目" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }}>
+              <input type="checkbox" checked={value.dimOthers !== false} onChange={e => commit(text, mode, { dimOthers: e.target.checked })} />Dim others
+            </label>
+            {mode === 'word' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!value.closed} onChange={e => commit(text, mode, { closed: e.target.checked })} />Closed
+              </label>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            {PATH_COLORS.map(c => (
+              <button
+                key={c}
+                title={c}
+                onClick={() => commit(text, mode, { color: c })}
+                style={{
+                  width: 16, height: 16, borderRadius: 4, background: c, cursor: 'pointer', padding: 0,
+                  border: (value.color ?? '#ffd93d') === c ? '2px solid var(--text-primary)' : '1px solid var(--border-primary)',
+                }}
+              />
+            ))}
+            <button style={MINI_BTN} onClick={() => { setText(''); onChange(null) }}>Clear</button>
+          </div>
+        </>
+      )}
+      <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 3 }}>
+        {mode === 'word'
+          ? 'Word = generators applied from identity (shows the walk close up)'
+          : 'Elements = refs joined by existing edges (unconnected pairs highlight nodes only)'}
+      </div>
+    </div>
+  )
+}
+
 export function ViewWindow({
   view,
   group,
@@ -1303,6 +1408,10 @@ export function ViewWindow({
           onSelect={handleSelect}
           onHover={handleHover}
           hoveredElementId={hoverEl?.id ?? null}
+          edgeCurvature={cvp.edgeCurvature}
+          pathHighlight={cvp.pathHighlight ?? null}
+          forceDirected={cvp.forceDirected}
+          force={cvp.force}
         />
       )
     }
@@ -1324,6 +1433,7 @@ export function ViewWindow({
           showLabels={p3.showLabels}
           locked={config.locked}
           faceFill={p3.faceFill}
+          pathHighlight={p3.pathHighlight ?? null}
         />
       )
     }
@@ -1530,6 +1640,12 @@ export function ViewWindow({
     [cayleyActionsList],
   )
 
+  // 逐生成元边长：写回 actions[].lengthScale（未启用项忽略）
+  const setCayleyActionLength = useCallback((elementId: string, lengthScale: number) => {
+    const next = cayleyActionsList.map(a => (a.elementId === elementId ? { ...a, lengthScale } : a))
+    updateViewParams({ actions: next })
+  }, [cayleyActionsList, updateViewParams])
+
   // ── cayley3d 视图参数面板数据（与 Cayley3DScene 渲染层同一套缺省/归一化规则） ──
   const shapes3d = useMemo<Layout3D[]>(
     () => (view === '3d' && group ? getAvailableShapes3D(group) : []),
@@ -1552,6 +1668,12 @@ export function ViewWindow({
     () => cayley3dActionsList.filter(a => a.enabled).length,
     [cayley3dActionsList],
   )
+
+  // 3D 逐生成元边长：写回 actions[].lengthScale（与 2D 同一套语义，未启用项忽略）
+  const setCayley3DActionLength = useCallback((elementId: string, lengthScale: number) => {
+    const next = cayley3dActionsList.map(a => (a.elementId === elementId ? { ...a, lengthScale } : a))
+    updateViewParams({ actions: next })
+  }, [cayley3dActionsList, updateViewParams])
 
   // ── 3D 面填充：几何上有陪集面可用的子群候选（作者在此选择 H） ──
   const faceSubgroupCands = useMemo<FaceSubgroupResult[]>(() => {
@@ -1956,6 +2078,82 @@ export function ViewWindow({
               </div>
               <div style={{ marginBottom: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <span>Edge curvature</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                    {(cayleyVp.edgeCurvature ?? 1) === 0 ? 'straight' : `${cayleyVp.edgeCurvature ?? 1}×`}
+                  </span>
+                </div>
+                <input type="range" min={0} max={2} step={0.1} value={cayleyVp.edgeCurvature ?? 1}
+                  onChange={e => updateViewParams({ edgeCurvature: Number(e.target.value) })} style={{ width: '100%' }} />
+                <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                  <button style={segBtn((cayleyVp.edgeCurvature ?? 1) === 0)}
+                    onClick={() => updateViewParams({ edgeCurvature: 0 })}>Straight</button>
+                  <button style={segBtn((cayleyVp.edgeCurvature ?? 1) === 1)}
+                    onClick={() => updateViewParams({ edgeCurvature: 1 })}>Curved</button>
+                </div>
+              </div>
+              <CayleyPathEditor
+                value={cayleyVp.pathHighlight ?? null}
+                onChange={next => updateViewParams({ pathHighlight: next })}
+                resetKey={group.symbol}
+              />
+              <div style={{ marginBottom: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontWeight: 600 }}>
+                  <input type="checkbox" checked={!!cayleyVp.forceDirected}
+                    onChange={e => updateViewParams({ forceDirected: e.target.checked })} />
+                  Live force-directed
+                </label>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', marginLeft: 19, marginTop: 2 }}>
+                  On top of the chosen shape — drag any node to feel the springs
+                </div>
+                {cayleyVp.forceDirected && (
+                  <div style={{ marginLeft: 19, marginTop: 6 }}>
+                    <div style={{ marginBottom: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span title="边的理想长度倍率（连线距离）：越大相邻节点越远、整图越舒展">Link length</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyVp.force?.linkScale ?? 1}×</span>
+                      </div>
+                      <input type="range" min={0.3} max={3} step={0.1} value={cayleyVp.force?.linkScale ?? 1}
+                        onChange={e => updateViewParams({ force: { ...(cayleyVp.force ?? {}), linkScale: Number(e.target.value) } })}
+                        style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ marginBottom: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span title="节点间排斥力：越大越散开、越不易纠缠（远距离自动淡出，不产生全局耦合）">Repulsion</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyVp.force?.repulsion ?? 1}×</span>
+                      </div>
+                      <input type="range" min={0.2} max={3} step={0.1} value={cayleyVp.force?.repulsion ?? 1}
+                        onChange={e => updateViewParams({ force: { ...(cayleyVp.force ?? {}), repulsion: Number(e.target.value) } })}
+                        style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ marginBottom: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span title="向心力：越大整图越向中心收拢。已按群阶归一，大群不会被压塌">Gravity</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyVp.force?.gravity ?? 1}×</span>
+                      </div>
+                      <input type="range" min={0} max={3} step={0.1} value={cayleyVp.force?.gravity ?? 1}
+                        onChange={e => updateViewParams({ force: { ...(cayleyVp.force ?? {}), gravity: Number(e.target.value) } })}
+                        style={{ width: '100%' }} />
+                    </div>
+                    <div style={{ marginBottom: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span title="连线刚度：越大越硬——拖拽时局部形状越不易走样（拖拽中自动加强、松手恢复）；也影响均衡密度与 Re-settle 结果">Rigidity</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyVp.force?.stiffness ?? 1}×</span>
+                      </div>
+                      <input type="range" min={0.4} max={3} step={0.1} value={cayleyVp.force?.stiffness ?? 1}
+                        onChange={e => updateViewParams({ force: { ...(cayleyVp.force ?? {}), stiffness: Number(e.target.value) } })}
+                        style={{ width: '100%' }} />
+                    </div>
+                    <button style={MINI_BTN}
+                      title="回到给定形状：清除拖拽塑性记忆（探索出的新形状被丢弃）并重新投影到力平衡态"
+                      onClick={() => updateViewParams({ force: { ...(cayleyVp.force ?? {}), settleSignal: (cayleyVp.force?.settleSignal ?? 0) + 1 } })}>
+                      ⟳ Re-settle
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <span style={{ fontWeight: 600 }}>Edge actions</span>
                   <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyEnabledCount}/{cayleyActionsList.length}</span>
                 </div>
@@ -1965,19 +2163,31 @@ export function ViewWindow({
                   <button title="Clear all actions (no edges)" style={MINI_BTN}
                     onClick={() => updateViewParams({ actions: [] })}>None</button>
                 </div>
-                <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                   {cayleyActionsList.map(a => {
                     const el = group.elements.find(e => e.id === a.elementId)
+                    const scale = a.lengthScale ?? 1
                     return (
-                      <label key={a.elementId} title={a.elementId} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={a.enabled}
-                          onChange={() => updateViewParams({ actions: toggleCayleyActionReducer(cayleyActionsList, a.elementId) })} />
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
-                        <span
-                          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          dangerouslySetInnerHTML={{ __html: renderTex(texify(el?.label ?? a.elementId)) }}
-                        />
-                      </label>
+                      <div key={a.elementId} style={{ marginBottom: 4 }}>
+                        <label title={a.elementId} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={a.enabled}
+                            onChange={() => updateViewParams({ actions: toggleCayleyActionReducer(cayleyActionsList, a.elementId) })} />
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            dangerouslySetInnerHTML={{ __html: renderTex(texify(el?.label ?? a.elementId)) }}
+                          />
+                        </label>
+                        {a.enabled && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 19 }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>len</span>
+                            <input type="range" min={0.3} max={3} step={0.1} value={scale}
+                              onChange={e => setCayleyActionLength(a.elementId, Number(e.target.value))}
+                              style={{ flex: 1, minWidth: 0 }} />
+                            <span style={{ fontSize: 10, color: 'var(--text-dim)', width: 28, textAlign: 'right' }}>{scale}×</span>
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -2026,6 +2236,13 @@ export function ViewWindow({
                   onChange={e => updateViewParams({ showLabels: e.target.checked })} />
                 Show labels
               </label>
+              <div style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
+                <CayleyPathEditor
+                  value={p3d.pathHighlight ?? null}
+                  onChange={next => updateViewParams({ pathHighlight: next })}
+                  resetKey={group.symbol}
+                />
+              </div>
               <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                   <input type="checkbox" checked={p3d.faceFill?.enabled !== false}
@@ -2104,16 +2321,28 @@ export function ViewWindow({
                 <div style={{ maxHeight: 180, overflowY: 'auto' }}>
                   {cayley3dActionsList.map(a => {
                     const el = group.elements.find(e => e.id === a.elementId)
+                    const scale = a.lengthScale ?? 1
                     return (
-                      <label key={a.elementId} title={a.elementId} style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2, cursor: 'pointer' }}>
-                        <input type="checkbox" checked={a.enabled}
-                          onChange={() => updateViewParams({ actions: toggleCayleyActionReducer(cayley3dActionsList, a.elementId) })} />
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
-                        <span
-                          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          dangerouslySetInnerHTML={{ __html: renderTex(texify(el?.label ?? a.elementId)) }}
-                        />
-                      </label>
+                      <div key={a.elementId} style={{ marginBottom: 4 }}>
+                        <label title={a.elementId} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={a.enabled}
+                            onChange={() => updateViewParams({ actions: toggleCayleyActionReducer(cayley3dActionsList, a.elementId) })} />
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, flexShrink: 0 }} />
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            dangerouslySetInnerHTML={{ __html: renderTex(texify(el?.label ?? a.elementId)) }}
+                          />
+                        </label>
+                        {a.enabled && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 19 }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-dim)', flexShrink: 0 }}>len</span>
+                            <input type="range" min={0.3} max={3} step={0.1} value={scale}
+                              onChange={e => setCayley3DActionLength(a.elementId, Number(e.target.value))}
+                              style={{ flex: 1, minWidth: 0 }} />
+                            <span style={{ fontSize: 10, color: 'var(--text-dim)', width: 28, textAlign: 'right' }}>{scale}×</span>
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>

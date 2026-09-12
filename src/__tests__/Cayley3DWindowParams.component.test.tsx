@@ -25,6 +25,14 @@ vi.mock('@react-three/drei', () => ({
   Html: (props: { children?: ReactNode; wrapperClass?: string }) => (
     <div className={props.wrapperClass}>{props.children}</div>
   ),
+  Line: (props: { points?: number[][]; lineWidth?: number; color?: string }) => (
+    <div
+      className="gv-three-line"
+      data-points={JSON.stringify(props.points ?? [])}
+      data-line-width={String(props.lineWidth ?? '')}
+      data-color={props.color ?? ''}
+    />
+  ),
 }))
 vi.mock('../i18n/useTranslation', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -55,7 +63,7 @@ describe('ViewWindow · cayley3d view', () => {
     expect(tagAll('cylindergeometry')).toHaveLength(4)
   })
 
-  it('params panel offers layout/multiply/node-size/autorotate/labels/edge-action controls', () => {
+  it('params panel offers layout/multiply/node-size/autorotate/labels/path/edge-action controls', () => {
     render(
       <ViewWindow view="3d" group={c4} title="C₄ 3D" storageKey="d3-panel"
         defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }} />,
@@ -66,12 +74,13 @@ describe('ViewWindow · cayley3d view', () => {
     // C₄ 循环群可用 3D 形状：cone + circular，默认 circular（getDefaultLayout3D）
     expect(Array.from(select.options).map(o => o.value)).toEqual(['cone', 'circular'])
     expect(select.value).toBe('circular')
-    // 仅 1 个滑杆（Node size；透明度滑杆仅在选中面子群后出现）；复选框 = 6 窗口配置 + Auto rotate
-    // + Show labels + Face fills + 1 条作用边
-    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(1)
+    // 滑杆 = Node size + 每启用作用边一条 len（C₄ 生成元 e1）；透明度滑杆仅在选中面子群后出现
+    // 复选框 = 6 窗口配置 + Auto rotate + Show labels + Face fills + 1 条作用边（Path highlight 未设值时无复选框）
+    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(2)
     expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(10)
     expect(screen.getByText('Auto rotate')).toBeInTheDocument()
     expect(screen.getByText('Show labels')).toBeInTheDocument()
+    expect(screen.getByText('Path highlight')).toBeInTheDocument()
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
@@ -90,9 +99,9 @@ describe('ViewWindow · cayley3d view', () => {
     expect(Array.from(faceSelect.options).map(o => o.value)).toEqual(['', expect.stringContaining(',')] as never)
     const c3Value = faceSelect.options[1].value
     fireEvent.change(faceSelect, { target: { value: c3Value } })
-    // 4 个陪集三角面 → 4 个颜色行 + 透明度滑杆
+    // 4 个陪集三角面 → 4 个颜色行 + 透明度滑杆（滑杆另含 Node size + 2 条生成元 len）
     expect(panel.querySelectorAll('input[type="color"]')).toHaveLength(4)
-    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(2) // Node size + Opacity
+    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(4) // Node size + a/b len + Opacity
     // 改色写回参数并同步回颜色行（选中色随 faceFill.faceColors 持久化）
     const colors = panel.querySelectorAll('input[type="color"]')
     fireEvent.change(colors[1], { target: { value: '#123456' } })
@@ -162,6 +171,38 @@ describe('ViewWindow · cayley3d view', () => {
     fireEvent.click(screen.getByText('None'))
     const nonePayload = onChange.mock.lastCall?.[0] as { actions: unknown[] }
     expect(nonePayload.actions).toEqual([])
+  })
+
+  it('len slider writes per-generator lengthScale into params.actions (3D)', () => {
+    const onChange = vi.fn()
+    render(
+      <ViewWindow view="3d" group={c4} title="C₄ 3D" storageKey="d3-len"
+        defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }}
+        viewParams={{}} onViewParamsChange={onChange} />,
+    )
+    const panel = openPanel()
+    // 滑杆顺序：Node size → e1 的 len
+    const ranges = panel.querySelectorAll('input[type="range"]')
+    expect(ranges).toHaveLength(2)
+    fireEvent.change(ranges[1], { target: { value: '2' } })
+    const payload = onChange.mock.lastCall?.[0] as { actions: Array<{ elementId: string; lengthScale?: number }> }
+    expect(payload.actions).toHaveLength(1)
+    expect(payload.actions[0]).toMatchObject({ elementId: 'e1', lengthScale: 2 })
+  })
+
+  it('path highlight editor writes pathHighlight into viewParams (3D)', () => {
+    const onChange = vi.fn()
+    render(
+      <ViewWindow view="3d" group={c4} title="C₄ 3D" storageKey="d3-path"
+        defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }}
+        viewParams={{}} onViewParamsChange={onChange} />,
+    )
+    const panel = openPanel()
+    const input = panel.querySelector('input[placeholder^="refs"]') as HTMLInputElement
+    expect(input).not.toBeNull()
+    fireEvent.change(input, { target: { value: 'e0 e1' } })
+    const payload = onChange.mock.lastCall?.[0] as { pathHighlight?: { elements?: string[] } }
+    expect(payload.pathHighlight?.elements).toEqual(['e0', 'e1'])
   })
 
   it('persists 3d params under the versioned envelope (debounced)', async () => {

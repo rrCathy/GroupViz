@@ -1,18 +1,24 @@
-import { useRef, useMemo, useEffect, useState, useCallback, memo } from 'react'
+import { useRef, useMemo, useEffect, useState, useCallback, memo, type ReactNode } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
+import { Html, Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useTheme } from '../../theme/useTheme'
 import type { Group, GroupElement, Generator, MultiplyType, Layout3D } from '../../core/types'
 import { getDefaultLayout3D } from '../../core/types'
-import { computeCayleyActionEdges } from '../../core/algebra/forceLayout'
+import {
+  computeCayleyActionEdges, isIdentityScale, relaxEdgeLengths3D, resolveCayleyPath,
+} from '../../core/algebra/forceLayout'
+import type { Vec3 } from '../../core/algebra/layouts3D/shared'
 import { compute3DPositions } from '../../core/algebra/layout3D'
+import { wordLengthColor } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
 import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
 import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
 import { normalizeCayleyActions } from '../../context/cayleyActions'
-import type { CayleyActionParam, Cayley3DFaceFillParams } from '../../core/types/viewConfig'
+import type {
+  CayleyActionParam, Cayley3DFaceFillParams, CayleyPathHighlight,
+} from '../../core/types/viewConfig'
 import { subgroupFaces, buildUndirectedEdgeKeys, FACE_COLOR_PALETTE } from '../../core/algebra/faces3D'
 
 interface EdgeData {
@@ -113,17 +119,22 @@ interface EdgeLineProps {
   isSelfLoop: boolean
   isBidirectional?: boolean
   showArrow?: boolean
+  /** 贴球面弧边（wordLengthSphere 布局）：边沿球面拱起而非直弦穿球 */
+  curved?: boolean
+  /** 淡化（字长球布局的环边/非树边）：减细减淡，凸显主干场线 */
+  dimmed?: boolean
 }
 
-const StraightEdge = memo(function StraightEdge({ start, end, color, isHighlighted }: { start: THREE.Vector3; end: THREE.Vector3; color: string; isHighlighted: boolean }) {
+const StraightEdge = memo(function StraightEdge({ start, end, color, isHighlighted, dimmed }: { start: THREE.Vector3; end: THREE.Vector3; color: string; isHighlighted: boolean; dimmed?: boolean }) {
   const meshRef = useRef<THREE.Mesh>(null)
+  const matRef = useRef<THREE.MeshStandardMaterial>(null)
 
   const dir = new THREE.Vector3().subVectors(end, start)
   const len = dir.length()
   dir.normalize()
 
   const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5)
-  const thickness = isHighlighted ? 0.08 : 0.05
+  const thickness = isHighlighted ? 0.08 : dimmed ? 0.018 : 0.05
 
   useEffect(() => {
     const mesh = meshRef.current
@@ -134,35 +145,128 @@ const StraightEdge = memo(function StraightEdge({ start, end, color, isHighlight
     mesh.quaternion.copy(quat)
   }, [dir])
 
+  // transparent 切换需要显式 needsUpdate（否则 three 不会重新编译/应用混合状态，
+  // 表现为"淡化只在材质首次创建时生效、之后改路径无效"）
+  useEffect(() => {
+    const m = matRef.current
+    if (m && typeof m.needsUpdate !== 'undefined') m.needsUpdate = true
+  }, [dimmed])
+
   return (
     <mesh ref={meshRef} position={mid}>
       <cylinderGeometry args={[thickness, thickness, len, 4, 1]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isHighlighted ? 0.7 : 0.25} roughness={0.4} />
+      <meshStandardMaterial
+        ref={matRef}
+        color={color}
+        emissive={color}
+        emissiveIntensity={isHighlighted ? 0.7 : dimmed ? 0.1 : 0.25}
+        roughness={0.4}
+        transparent={!!dimmed}
+        opacity={dimmed ? 0.2 : 1}
+      />
+    </mesh>
+  )
+})
+
+/**
+ * 贴球面弧边（wordLengthSphere 专用）：**slerp 球面航线弧**——
+ * 沿两端点的径向方向做球面插值（slerp），半径随路径线性渐变。
+ * 短边（同枝相邻壳层）≈ 微拱短弧；跨枝长边贴着壳层绕行而不是
+ * 直弦穿球，球内边网有序。S₄ 球面嵌入下即标准大圆弧（测地线）。
+ * 字长球布局的边全为无向（对换生成元），无箭头。
+ * 曲线顶点为场景绝对坐标，mesh 不再附加位移。
+ */
+const GeodesicEdge = memo(function GeodesicEdge({ start, end, color, isHighlighted, dimmed }: { start: THREE.Vector3; end: THREE.Vector3; color: string; isHighlighted: boolean; dimmed?: boolean }) {
+  const geometry = useMemo(() => {
+    const a = new THREE.Vector3(...start)
+    const b = new THREE.Vector3(...end)
+    const ra = a.length()
+    const rb = b.length()
+    const ua = ra < 1e-9 ? new THREE.Vector3(0, 1, 0) : a.clone().divideScalar(ra)
+    const ub = rb < 1e-9 ? new THREE.Vector3(0, 1, 0) : b.clone().divideScalar(rb)
+    const omega = THREE.MathUtils.clamp(ua.dot(ub), -1, 1)
+    const angle = Math.acos(omega)
+    const segments = THREE.MathUtils.clamp(Math.ceil(angle / 0.25) + 2, 4, 48)
+    const points: THREE.Vector3[] = []
+    const sinOmega = Math.sin(angle)
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      let dir: THREE.Vector3
+      if (sinOmega < 1e-9) {
+        dir = ua.clone().lerp(ub, t) // 同方向（含同点）：线性兜底
+      } else {
+        const wa = Math.sin((1 - t) * angle) / sinOmega
+        const wb = Math.sin(t * angle) / sinOmega
+        dir = ua.clone().multiplyScalar(wa).addScaledVector(ub, wb)
+      }
+      points.push(dir.multiplyScalar(ra + (rb - ra) * t))
+    }
+    const curve = new THREE.CatmullRomCurve3(points)
+    // 弧边管细 + 微透明：球面布局边密度高（S₅ 240 条），细管减负、透明度让交叉处不糊
+    const thickness = isHighlighted ? 0.07 : dimmed ? 0.012 : 0.024
+    return new THREE.TubeGeometry(curve, Math.min(64, segments * 2), thickness, 6, false)
+  }, [start, end, isHighlighted, dimmed])
+
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  // transparent / opacity 变化后需要 needsUpdate（同 StraightEdge）
+  const matRef = useRef<THREE.MeshStandardMaterial>(null)
+  useEffect(() => {
+    const m = matRef.current
+    if (m && typeof m.needsUpdate !== 'undefined') m.needsUpdate = true
+  }, [dimmed])
+
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial
+        ref={matRef}
+        color={color}
+        emissive={color}
+        emissiveIntensity={isHighlighted ? 0.7 : dimmed ? 0.05 : 0.35}
+        roughness={0.4}
+        transparent
+        opacity={isHighlighted ? 1 : dimmed ? 0.12 : 0.8}
+      />
     </mesh>
   )
 })
 
 // 直线边箭头锥：仅小群渲染（避免大群 draw call 爆炸）；与 2D 约定一致，双向边不画箭头
-const ArrowCone = memo(function ArrowCone({ position, direction, color, isHighlighted }: {
+const ArrowCone = memo(function ArrowCone({ position, direction, color, isHighlighted, dimmed }: {
   position: THREE.Vector3
   direction: THREE.Vector3
   color: string
   isHighlighted: boolean
+  dimmed?: boolean
 }) {
   const quat = useMemo(() => {
     const q = new THREE.Quaternion()
     q.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction)
     return q
   }, [direction])
+  // transparent 切换需要 needsUpdate（同 StraightEdge）
+  const matRef = useRef<THREE.MeshStandardMaterial>(null)
+  useEffect(() => {
+    const m = matRef.current
+    if (m && typeof m.needsUpdate !== 'undefined') m.needsUpdate = true
+  }, [dimmed])
   return (
     <mesh position={position} quaternion={quat}>
       <coneGeometry args={[0.11, 0.32, 8, 1]} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={isHighlighted ? 0.7 : 0.25} roughness={0.4} />
+      <meshStandardMaterial
+        ref={matRef}
+        color={color}
+        emissive={color}
+        emissiveIntensity={isHighlighted ? 0.7 : dimmed ? 0.05 : 0.25}
+        roughness={0.4}
+        transparent={!!dimmed}
+        opacity={dimmed ? 0.12 : 1}
+      />
     </mesh>
   )
 })
 
-const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSelfLoop, isBidirectional, showArrow }: EdgeLineProps) {
+const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSelfLoop, isBidirectional, showArrow, curved, dimmed }: EdgeLineProps) {
   if (isSelfLoop) {
     return (
       <group position={start}>
@@ -178,18 +282,24 @@ const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSe
     )
   }
 
+  // 贴球面弧边：字长球等球面布局专用（全为无向边，不画箭头）
+  if (curved) {
+    return <GeodesicEdge start={start} end={end} color={color} isHighlighted={isHighlighted} dimmed={dimmed} />
+  }
+
   const dir = new THREE.Vector3().subVectors(end, start)
   dir.normalize()
 
   return (
     <group>
-      <StraightEdge start={start} end={end} color={color} isHighlighted={isHighlighted} />
+      <StraightEdge start={start} end={end} color={color} isHighlighted={isHighlighted} dimmed={dimmed} />
       {showArrow && !isBidirectional && (
         <ArrowCone
           position={end.clone().addScaledVector(dir, -0.66)}
           direction={dir}
           color={color}
           isHighlighted={isHighlighted}
+          dimmed={dimmed}
         />
       )}
     </group>
@@ -227,6 +337,12 @@ export interface Cayley3DSceneProps {
   /** 子群陪集面填充（面 = 某真子群单个陪集在布局中占满的平面凸多边形）。
    *  作者在 ⚙ 面板选择子群 H 后，几何上成面的陪集以半透明多边形显示，可逐面指定颜色 */
   faceFill?: Cayley3DFaceFillParams
+  /** 路径高亮（VCL）：元素序列 / 生成元单词，见 core.resolveCayleyPath。
+   *  与 2D 同一套解析与视觉语义（线段 + 节点环 + 可选序号/逐步点亮） */
+  pathHighlight?: CayleyPathHighlight | null
+  /** 受控悬停元素 id（与 2D `CayleyView.hoveredElementId` 对称）：命中该元素时按悬停态渲染
+   *  （放大节点 + 标签 + 路径序号徽标），供外部联动（如图例/侧栏悬停）。缺省 null = 只用内部指针悬停 */
+  hoveredElementId?: string | null
 }
 
 function Cayley3DSceneBody({
@@ -243,6 +359,8 @@ function Cayley3DSceneBody({
   subsetHighlights = [],
   theme = 'dark',
   faceFill,
+  pathHighlight = null,
+  hoveredElementId = null,
 }: Cayley3DSceneProps & { group: Group }) {
   const { t } = useTranslation()
   const { gl, camera, scene } = useThree()
@@ -257,6 +375,12 @@ function Cayley3DSceneBody({
   const [autoRotateState, setAutoRotateState] = useState(false)
   const autoRotate = autoRotateProp ?? autoRotateState
   const [hoverElement, setHoverElement] = useState<GroupElement | null>(null)
+  // 受控悬停（外部联动）优先；缺省回落内部指针悬停
+  const controlledHover = useMemo(
+    () => (hoveredElementId ? group.elements.find(el => el.id === hoveredElementId) ?? null : null),
+    [group, hoveredElementId],
+  )
+  const effectiveHover = controlledHover ?? hoverElement
 
   // 自定义轨道状态（替代 drei OrbitControls）：theta/phi 球坐标，phi 无界（可无限翻越上下极点，无 makeSafe 钳制）
   const orbit = useRef({
@@ -294,7 +418,9 @@ function Cayley3DSceneBody({
     return (len >= 8 ? 0.35 + Math.min(0.65, len / 360) : 1) * 2 * Math.PI
   }, [])
 
-  const isLargeGroup = group.order > 100
+  // 大群限流抽稀会破坏字长球的分层球壳结构（S₅=120 阶），该布局豁免：
+  // 120 节点 + ~240 边对 Three.js 无压力，全量渲染保证字长分层完整可见
+  const isLargeGroup = group.order > 100 && layout3D !== 'wordLengthSphere'
   const visibleElementIds = useMemo(() => {
     if (!isLargeGroup) return new Set(group.elements.map(e => e.id))
     const ids = new Set<string>([group.identity.id])
@@ -307,14 +433,40 @@ function Cayley3DSceneBody({
   }, [group, actions, selectedElements, isLargeGroup])
 
   const cayleyEdges = useMemo(() => {
-    return computeCayleyActionEdges(group, actions, multiplyType)
-  }, [group, actions, multiplyType])
+    // 字长球布局需要完整凯莱边集（S₅ 4 生成元 × 120 元素 = 480 push / 240 边，
+    // 默认大群限流 order*3=360 会中途截断丢 48 条边），该布局下解除限流
+    return computeCayleyActionEdges(
+      group, actions, multiplyType,
+      layout3D === 'wordLengthSphere' ? Number.POSITIVE_INFINITY : undefined,
+    )
+  }, [group, actions, multiplyType, layout3D])
+
+  // 逐生成元边长倍率（VCL）：仅取启用且非 1 的项 → 全 1 时完全跳过松弛计算
+  const lengthScaleMap = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const a of actions) {
+      if (!a.enabled) continue
+      if (a.lengthScale !== undefined && a.lengthScale !== 1) m.set(a.elementId, a.lengthScale)
+    }
+    return m
+  }, [actions])
 
   const positions = useMemo(() => {
-    return compute3DPositions(group, layout3D).map(
-      p => new THREE.Vector3(p[0], p[1], p[2])
-    )
-  }, [group, layout3D])
+    const base = compute3DPositions(group, layout3D)
+    // 逐生成元边长（VCL）：在基础布局之上跑长度约束松弛；倍率全 1 时原样返回（零行为变化）
+    const scaled: Vec3[] = isIdentityScale(lengthScaleMap)
+      ? base
+      : (() => {
+          const byId = new Map<string, Vec3>()
+          group.elements.forEach((el, i) => {
+            const p = base[i]
+            if (p) byId.set(el.id, p)
+          })
+          const relaxed = relaxEdgeLengths3D(byId, cayleyEdges, { lengthScales: lengthScaleMap })
+          return group.elements.map((el, i) => relaxed.get(el.id) ?? base[i])
+        })()
+    return scaled.map(p => new THREE.Vector3(p[0], p[1], p[2]))
+  }, [group, layout3D, cayleyEdges, lengthScaleMap])
 
   // 外接球：节点云质心为球心，最大距离为半径（含节点球/自环余量），复位与初始视角均基于它
   const bounds = useMemo(() => {
@@ -326,6 +478,15 @@ function Cayley3DSceneBody({
     for (const p of positions) r = Math.max(r, p.distanceTo(center))
     return { center, radius: r + 1.4 }
   }, [positions])
+
+  // 字长球壳半径：最外层节点所在的球面（S₅ 有节点被吸附到壳上 ⇒ 恰为布局半径 R；
+  // S₄ 全体贴壳）。壳只作"这是一个球"的轮廓参照，不参与布局。
+  const shellRadius = useMemo(() => {
+    if (layout3D !== 'wordLengthSphere' || positions.length === 0) return 0
+    let r = 0
+    for (const p of positions) r = Math.max(r, p.distanceTo(bounds.center))
+    return r
+  }, [layout3D, positions, bounds])
 
   // 默认视角（复位目标）：外接球直径 ≈ 视口高度 2/3（d = 1.5R/tan(fov/2)），相机远在球外（d ≈ 3.2R > R）。
   // minRadius = 球外（视角不可进入外接球）；maxRadius = 适配距离 3 倍
@@ -646,12 +807,156 @@ function Cayley3DSceneBody({
     return m
   }, [cayleyEdges, positions, group, isLargeGroup, visibleElementIds, elementLookup])
 
+  // ── 路径高亮（VCL）：与 2D 同一套解析（resolveCayleyPath）；3D 线段用 drei Line（像素宽）、
+  //    节点环用半透明球壳、序号徽标用 Html ──
+  const resolvedPath = useMemo(() => {
+    if (!group || !pathHighlight) return null
+    return resolveCayleyPath(group, actions, multiplyType, pathHighlight)
+  }, [group, actions, multiplyType, pathHighlight])
+
+  // 路径上的边集合（双向键，含 actionElementId）：路径高亮时其余边淡化，
+  // 让"只有路径"一眼可见（缺省行为，`pathHighlight.dimOthers === false` 可关）
+  const pathEdgeKeys = useMemo(() => {
+    if (!resolvedPath || resolvedPath.edges.length === 0) return null
+    if (pathHighlight?.dimOthers === false) return null
+    const s = new Set<string>()
+    for (const e of resolvedPath.edges) {
+      if (!e.actionElementId) continue
+      s.add(`${e.fromId}|${e.toId}|${e.actionElementId}`)
+      s.add(`${e.toId}|${e.fromId}|${e.actionElementId}`)
+    }
+    return s
+  }, [resolvedPath, pathHighlight?.dimOthers])
+
+  // 路径动画：用「渲染期 key 校正 + 定时器自增」代替在 effect 里同步 setState（同 2D 实现）
+  const pathAnimKey = resolvedPath
+    ? `${resolvedPath.nodeIds.join(',')}|${resolvedPath.edges.map(e => e.actionElementId).join(',')}|${pathHighlight?.animate ? 1 : 0}`
+    : ''
+  const [revealState, setRevealState] = useState<{ key: string; tick: number }>({ key: '', tick: 0 })
+  if (revealState.key !== pathAnimKey) {
+    setRevealState({ key: pathAnimKey, tick: 0 })
+  }
+  const pathReveal = revealState.key === pathAnimKey ? revealState.tick : 0
+
+  useEffect(() => {
+    const total = resolvedPath?.edges.length ?? 0
+    if (!resolvedPath || !pathHighlight?.animate || total === 0) return
+    let i = 0
+    const timer = window.setInterval(() => {
+      i += 1
+      setRevealState(prev => (prev.key === pathAnimKey ? { key: pathAnimKey, tick: i } : prev))
+      if (i >= total) window.clearInterval(timer)
+    }, 320)
+    return () => window.clearInterval(timer)
+  }, [pathAnimKey, resolvedPath, pathHighlight?.animate])
+
+  const pathOverlay = useMemo(() => {
+    if (!group || !resolvedPath || positions.length === 0) return null
+    const color = pathHighlight?.color ?? '#ffd93d'
+    const width = pathHighlight?.width ?? 5
+    const animate = !!pathHighlight?.animate
+    const total = resolvedPath.edges.length
+    const visible = animate ? Math.min(pathReveal, total) : total
+
+    const indexOfId = new Map<string, number>()
+    group.elements.forEach((el, i) => indexOfId.set(el.id, i))
+
+    const segments: ReactNode[] = []
+    for (let i = 0; i < visible; i++) {
+      const e = resolvedPath.edges[i]
+      if (!e.actionElementId) continue
+      const a = indexOfId.get(e.fromId)
+      const b = indexOfId.get(e.toId)
+      if (a === undefined || b === undefined) continue
+      const pa = positions[a]
+      const pb = positions[b]
+      segments.push(
+        <Line
+          key={`ph-seg-${i}`}
+          points={[[pa.x, pa.y, pa.z], [pb.x, pb.y, pb.z]]}
+          color={color}
+          lineWidth={width}
+          transparent
+          opacity={0.95}
+        />,
+      )
+    }
+
+    const nodeLimit = animate
+      ? Math.min(visible + 1, resolvedPath.nodeIds.length)
+      : resolvedPath.nodeIds.length
+    const rings = resolvedPath.nodeIds.slice(0, nodeLimit).map((id, i) => {
+      const idx = indexOfId.get(id)
+      if (idx === undefined) return null
+      // 序号不常显（几百个徽标互相遮挡、远处看不清）：仅悬停该节点时显示它的次序
+      const showBadge = !!pathHighlight?.showOrder && effectiveHover?.id === id
+      return (
+        <group key={`ph-node-${id}-${i}`} position={positions[idx]}>
+          <mesh>
+            <sphereGeometry args={[0.42 * nodeScale + 0.2, 16, 16]} />
+            <meshBasicMaterial color={color} transparent opacity={0.3} />
+          </mesh>
+          {showBadge && (
+            <Html
+              position={[0, 0.95, 0]}
+              distanceFactor={12}
+              center
+              style={{ pointerEvents: 'none', userSelect: 'none' }}
+              wrapperClass="gv-html-overlay"
+            >
+              <div style={{
+                background: color, color: '#111111', borderRadius: 9, width: 18, height: 18,
+                fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontFamily: 'monospace',
+              }}>{i + 1}</div>
+            </Html>
+          )}
+        </group>
+      )
+    })
+
+    return (
+      <>
+        {segments}
+        {rings}
+      </>
+    )
+  }, [group, resolvedPath, positions, nodeScale, pathHighlight, pathReveal, effectiveHover])
+
   return (
     <>
+      {/* 字长球：深度雾——远处的节点/边向背景淡化，前后层次可辨、投影交叉感降低 */}
+      {layout3D === 'wordLengthSphere' && (
+        <fog
+          attach="fog"
+          args={[
+            theme === 'dark' ? '#0a0a1a' : '#f4f4f7',
+            bounds.radius * 2.6,
+            bounds.radius * 5.2,
+          ]}
+        />
+      )}
+
       <ambientLight intensity={0.3} />
       <directionalLight position={[10, 15, 10]} intensity={0.8} color="#ffffff" />
       <directionalLight position={[-10, -5, -10]} intensity={0.3} color="#4488ff" />
       <pointLight position={[0, 0, 0]} intensity={0.3} color="#ffffff" />
+
+      {/* 字长球：半透明球壳——给出"球"的整体轮廓，depthWrite=false 不遮挡内部节点/边
+          （受光材质才有球面明暗渐变，纯 basic 材质会退化成一块均匀色圆盘） */}
+      {shellRadius > 0 && (
+        <mesh renderOrder={-1}>
+          <sphereGeometry args={[shellRadius, 48, 32]} />
+          <meshStandardMaterial
+            color={theme === 'dark' ? '#6f9bff' : '#4f7fd6'}
+            transparent
+            opacity={0.07}
+            depthWrite={false}
+            roughness={0.9}
+            metalness={0}
+          />
+        </mesh>
+      )}
 
       <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
         <div style={{
@@ -733,6 +1038,8 @@ function Cayley3DSceneBody({
           selectedElements.has(fromEl.id) ||
           selectedElements.has(toEl.id)
         )
+        // 路径高亮时：非路径边淡化（只留路径上的边醒目）
+        const dimmed = !!pathEdgeKeys && !pathEdgeKeys.has(`${edge.fromId}|${edge.toId}|${edge.gen.name}`)
         return (
           <EdgeLine
             key={`edge-${edge.fromIdx}-${edge.toIdx}`}
@@ -743,9 +1050,13 @@ function Cayley3DSceneBody({
             isSelfLoop={edge.isSelfLoop}
             isBidirectional={edge.isBidirectional}
             showArrow={!isLargeGroup}
+            curved={false}
+            dimmed={dimmed}
           />
         )
       })}
+
+      {pathOverlay}
 
       {positions.map((pos, i) => {
         const el = group.elements[i]
@@ -757,9 +1068,9 @@ function Cayley3DSceneBody({
             key={el.id}
             position={pos}
             label={el.label}
-            color={getElementColor(i, group.order, group.isAbelian)}
+            color={(layout3D === 'wordLengthSphere' ? wordLengthColor(group, el) : null) ?? getElementColor(i, group.order, group.isAbelian)}
             isSelected={isSelected}
-            isHovered={hoverElement?.id === el.id}
+            isHovered={effectiveHover?.id === el.id}
             subsetColor={parentSubset ? parentSubset.color : null}
             element={el}
             nodeScale={nodeScale}

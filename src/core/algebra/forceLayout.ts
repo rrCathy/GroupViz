@@ -37,3 +37,14 @@ export {
   type CosetStripData, type CosetStripInfo, cosetStripLayout,
   projection3DLayout, semidirectProductLayout, q8PythagoreanLayout,
 } from './layouts/specialLayouts'
+// VCL 批次：逐生成元边长 / 路径高亮 / 动态力导向
+export { relaxEdgeLengths, isIdentityScale, type RelaxEdgeLengthOptions } from './edgeLengthRelax'
+export { relaxEdgeLengths3D, type RelaxEdgeLengths3DOptions } from './edgeLengthRelax3D'
+export {
+  resolveCayleyPath,
+  type ResolvedCayleyPath, type ResolvedPathEdge, type CayleyPathInput,
+} from './cayleyPath'
+export {
+  createCayleyForceSim,
+  type CayleyForceSim, type CayleyForceOptions,
+} from './cayleyForce'

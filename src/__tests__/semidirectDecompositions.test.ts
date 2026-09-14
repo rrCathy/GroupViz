@@ -332,12 +332,14 @@ describe('findSemidirectDecompositions', () => {
   })
 
   it('S₅(120) 在枚举线内，能给出 A₅⋊C₂ 分解（旧 guard 60 误杀）', () => {
+    // 真跑 S₅ 子群枚举 + 半直积搜索（本机 ~1–2 s，CI 慢 2–3 倍），
+    // 5 s 默认超时在 CI 上必然误报 → 显式 30 s
     const S5 = createSymmetricGroup(5)
     const ds = findSemidirectDecompositions(S5)
     expect(ds.length).toBeGreaterThan(0)
     // S₅ ≅ A₅ ⋊ C₂：正规因子应为 60 阶的 A₅
     expect(ds.some(d => d.normal.order === 60)).toBe(true)
-  })
+  }, 30_000)
 
   it('returns [] for cyclic groups of prime order', () => {
     expect(findSemidirectDecompositions(createCyclicGroup(7))).toEqual([])

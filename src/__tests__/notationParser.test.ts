@@ -2,20 +2,55 @@ import { describe, it, expect } from 'vitest'
 import {
   parseNotation,
   normalizeNotation,
+  canonicalizeNotation,
   groupOrderGL,
   groupOrderSL,
   groupOrderPSL,
 } from '../core/algebra/notationParser'
 
 describe('normalizeNotation', () => {
-  it('normalizes whitespace, unicode superscripts, Z_, × and bare subscripts', () => {
-    expect(normalizeNotation(' C 3 ')).toBe('C3')
+  it('normalizes whitespace, Z_, × and bare subscripts to engine symbol form', () => {
+    expect(normalizeNotation(' C 3 ')).toBe('C_{3}')
     expect(normalizeNotation('Z_5')).toBe('C_{5}')
     expect(normalizeNotation('A \\times B')).toBe('A×B')
     expect(normalizeNotation('A ⋊ B')).toBe('A:B')
     expect(normalizeNotation('A \\rtimes B')).toBe('A:B')
     expect(normalizeNotation('S_5')).toBe('S_{5}')
-    expect(normalizeNotation('C_4^3')).toBe('C_{4}^3')
+    // 上标也补花括号，否则 createGroupFromSymbol 认不出（它只匹配 ^{n}）
+    expect(normalizeNotation('C_4^3')).toBe('C_{4}^{3}')
+  })
+
+  it('accepts lowercase, bare digits, x as product, and the Z/nZ spelling', () => {
+    expect(normalizeNotation('c4')).toBe('C_{4}')
+    expect(normalizeNotation('s3')).toBe('S_{3}')
+    expect(normalizeNotation('S3xS3')).toBe('S_{3}×S_{3}')
+    expect(normalizeNotation('C2xC2')).toBe('C_{2}×C_{2}')
+    expect(normalizeNotation('Z/4Z')).toBe('C_{4}')
+    expect(normalizeNotation('(C_2)^2')).toBe('C_{2}^{2}')
+    expect(normalizeNotation('gl(2,3)')).toBe('GL(2,3)')
+  })
+
+  it('does not fold brackets that contain a top-level separator', () => {
+    // (A×B)^2 ≠ A×B^2 —— 折叠必须只作用于单原子括号
+    expect(normalizeNotation('(C_2×C_2)^2')).toBe('(C_{2}×C_{2})^{2}')
+  })
+
+  it('rejects unicode sub/superscripts with a concrete TeX suggestion', () => {
+    const sub = canonicalizeNotation('C₄')
+    expect(sub.ok).toBe(false)
+    if (sub.ok) throw new Error('unreachable')
+    expect(sub.error).toBe('unicode-script')
+    expect(sub.hint).toBe('请改用 TeX 记号：C_{4}')
+
+    const sup = canonicalizeNotation('C_2²')
+    expect(sup.ok).toBe(false)
+    if (sup.ok) throw new Error('unreachable')
+    expect(sup.error).toBe('unicode-script')
+    // 关键：绝不能猜成 C_{22}
+    expect(sup.hint).toBe('请改用 TeX 记号：C_{2}^{2}')
+    expect(sup.issue.suggestion).toBe('C_{2}^{2}')
+
+    expect(canonicalizeNotation('S₃').ok).toBe(false)
   })
 })
 
@@ -107,11 +142,22 @@ describe('parseNotation — GAP family expressions with order formulas', () => {
     expect(r.gapExpr === 'KleinFourGroup()' || r.localSymbol === 'V_{4}').toBe(true)
   })
 
-  it('C_8:C_2 → semidirect error (missing φ)', () => {
+  it('C_8:C_2 resolves locally via the registry (previously rejected as semidirect)', () => {
     const r = parseNotation('C_8:C_2')
+    expect(r.ok).toBe(true)
+    expect(r.localSymbol).toBe('C_{8}:C_{2}')
+    expect(r.order).toBe(16)
+    expect(r.gapExpr).toBeNull()
+    expect(r.source).toBe('local')
+  })
+
+  it('a semidirect notation with neither a local ring nor a valid φ still reports semidirect', () => {
+    // C_{5}:C_{7}：registry 没有，且 Aut(C_5)=C_4 上不存在阶整除 7 的非平凡自同构 → 定不了 φ
+    const r = parseNotation('C_5:C_7')
     expect(r.ok).toBe(false)
     expect(r.error).toBe('semidirect')
     expect(r.gapExpr).toBeNull()
+    expect(r.hint).toContain('SmallGroup')
   })
 
   it('unknown garbage → unknown error; empty → empty error', () => {

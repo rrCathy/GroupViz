@@ -424,3 +424,58 @@ const data = buildCosetViewData(group, ['e0', 'e3'], { side: 'left' })  // H 也
 <CosetStripScene group={group} viewBoxSize={vb} {...data} />
 // 或者更直接：<CosetStripScene group={group} viewBoxSize={vb} subgroup={['e0','e3']} />
 ```
+
+## 8. 群记号解析与别名（v2.2.2+）
+
+宿主的 `symbol` 现在可以吃**人类写法**，不再要求写引擎内部的规范 TeX 形态。
+
+### 8.1 统一入口
+
+| 导出 | 签名 | 说明 |
+|---|---|---|
+| `parseGroupNotation` | `(input) => GroupNotation` | **唯一入口**：规范化 → 专名展开 → 本地建群 → 后端 GAP → 定向报错 |
+| `canonicalizeNotation` | `(input) => CanonicalResult` | 只做形态归一（不建群）；失败时给 `issue.kind` + 建议写法 |
+| `getGroupAliases` | `(group) => string[]` | 反向：这个群还有哪些叫法（含 Frobenius 专名反查、幂⇄直积等价写法） |
+| `parseNotation` | `(input) => NotationParseResult` | 旧门面（保留兼容），字段与 `GroupNotation` 基本一致 |
+
+`GroupNotation` 关键字段：`ok` · `symbol`（引擎规范符号，本地可建时非空）· `order` · `source`（`'local'` / `'named'` / `'backend'`）· `gapExpr`（需后端时）· `canonical` · `applied`（命中的归一规则）· `via`（命中的别名规则，如 `F_{21} → C_{7}:C_{3}`）· `issue` + `hint`（失败时；`issue.kind` 供 UI 走 i18n 模板）。
+
+**本地优先是硬保证**：只要本地工厂能建，`source` 必为 `local`/`named`，`gapExpr` 为 `null` —— 离线环境不会静默退化到后端。
+
+### 8.2 支持的写法（同一群的多种记法都落到同一规范符号）
+
+| 规范符号 | 同时接受 |
+|---|---|
+| `C_{4}` | `C4` `c4` `C_4` `C{4}` `Z_4` `Z4` `Z/4Z` `ℤ_{4}` |
+| `S_{3}` | `S3` `s3` `S_3` `Sym(3)` `Symmetric(3)` |
+| `D_{4}` | `D4` `D_4` `Dihedral(4)` |
+| `S_{3}^{2}` | `S_3^2` `S_3^{2}` `S3xS3` `S_3×S_3` `S_3\times S_3` |
+| `C_{2}\times C_{2}` | `C_2×C_2` `C2xC2` `C_2^2` `(C_2)^2` |
+| `C_{7}:C_{3}` | `C7:C3` `C_7:C_3` `C7⋊C3` `C_7\rtimes C_3` **`F21`** `F_{21}` `Frobenius(21)` |
+| `QD_{16}` | `QD16` `qd16` |
+| `V_{4}` | `V4` `Klein` `K4` `K_4` |
+| `C_{3}:C_{4}` | `Dic_3` `Dic3` |
+| `Q_{8}` | `Q8` `Quaternion(8)` |
+| `A_{5}` | `A5` `Alt(5)` |
+| `GL(2,3)` | `gl(2,3)` |
+
+专名规则是**算出来的、不猜**：`F_n` / `Frobenius(n)` → 阶为 n 且唯一的 `C_p:C_q`（F₂₁ / F₂₀ / F₁₂ / F₂₈ 均可）；多义（F₁₆ 有 `C_{4}:C_{4}` 与 `C_{8}:C_{2}`）或超出注册表（F₄₂）一律拒绝，`issue.candidates` 列出候选让你指定。
+
+### 8.3 两条硬规则（有意为之，不是缺陷）
+
+1. **只收 TeX 形态，拒绝 Unicode 上下标**：`C₄` / `S₃` / `C_2²` 返回 `issue.kind = 'unicode'` 并给 `issue.suggestion`（如 `C_{2}^{2}`）。原因是收 Unicode 就得在两套写法间猜，而 `C_2²` 会被猜成 22 阶的 `C_{22}`——静默给出错误的群，比报错危险。（展示方向 `texify` 仍支持 Unicode，那是给人看的。）
+2. **`D_n` 约定为 2n 阶**（与注册表一致）：`D_4` = 8 阶、`D_8` = 16 阶。GAP 与部分教材写 `D_8` 指 8 阶群，那在本引擎里是 `D_4` —— 不会为兼容它而让同一符号指向两个群。
+
+```tsx
+import { parseGroupNotation, getGroupAliases, createGroupFromSymbol } from '@groupviz/core'
+
+const r = parseGroupNotation('F21')
+// { ok: true, symbol: 'C_{7}:C_{3}', order: 21, source: 'named', via: 'F_{21} → C_{7}:C_{3}' }
+
+const bad = parseGroupNotation('C₄')
+// { ok: false, issue: { kind: 'unicode', suggestion: 'C_{4}' } }
+
+const aliases = getGroupAliases(createGroupFromSymbol('C_{7}:C_{3}')!)
+// ['C_{7}:C_{3}', 'F_{21}', ...]   ← 可用来给读者标注「同一个群的其他记号」
+```
+

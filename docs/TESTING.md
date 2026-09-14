@@ -25,7 +25,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，64 文件 / 1679 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，65 文件 / 1694 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -90,7 +90,8 @@
 | planarity.test.ts | 14 | testGraphPlanarity：K₅ / K₃,₃ / Petersen 非平面、重复边去重后平面、凯莱图平面性表驱动（平面组组合嵌入有效、非平面组判定） |
 | detectIsomorphicGroup.test.ts | 6 | detectAbelianType（有限阿贝尔分类定理精确识别：多因子、非阿贝尔返回 null）与 detectIsomorphicGroup 回归（既有阿贝尔/非阿贝尔结果保持、超两因子直积、无候选返回 null） |
 | importGroup.test.ts | 10 | createGroupFromImport（GAP 导入群）：构造参数/symbol/非交换标记、乘法与逆元按 Cayley 表、词标签 assignWordLabels、D 结构正规形、生成元逆元左乘、findTwoGeneratorPair 多生成元瘦身（Q₈ → 两生成元对，C₂³ 不生成时保留原生成元） |
-| notationParser.test.ts | 16 | 记号导入解析：normalizeNotation（空白 / 上标 / Z_→C_ / × / 裸下标）、parseNotation 本地可构造（S/A/C/D/Q/V）与 GAP 族表达式（PSL/PGL/SL 阶公式、C_3×D_16 直积、Aut(S_4)、(C_2×C_2)² 幂、C_8:C_2 缺 φ 报错、垃圾/空串错误码）、矩阵群阶公式（GL(2,2)=6 / GL(2,3)=48 / GL(3,2)=168） |
+| notationParser.test.ts | 20 | 记号导入解析：normalizeNotation（空白 / Z_→C_ / × / 裸下标 / 上标补花括号 / 小写 / `S3xS3` 的 x 乘号 / `Z/4Z` 商群写法 / `(C_2×C_2)^2` 不折叠——含顶层分隔符的括号不得折叠）、**Unicode 上下标拒绝并给出等价 TeX 写法**、parseNotation 本地可构造（S/A/C/D/Q/V）与 GAP 族表达式（PSL/PGL/SL 阶公式、C_3×D_16 直积、Aut(S_4)、(C_2×C_2)² 幂、垃圾/空串错误码）、`C_8:C_2` 走 registry 本地解析（回归：曾按「缺 φ」误拒）、矩阵群阶公式（GL(2,2)=6 / GL(2,3)=48 / GL(3,2)=168） |
+| notationAlias.test.ts | 11 | **群记号别名系统**：同群多写法归一（C_4/C4/c4/Z_4/Z4/C{4}/Z/4Z → `C_{4}`；S_3/S3/s3/Sym(3) → `S_{3}`；`S_3^2`/`S3xS3`/`S_3×S_3` → `S_{3}^{2}`；`F21`/`F_{21}`/`Frobenius(21)`/`C7:C3`/`C7⋊C3` → `C_{7}:C_{3}`；QD16/Dic_3/Klein/K_4/Quaternion(8)…），全部走本地不依赖后端；来源三档（local/named/backend）与 `via` 识别说明；F_n 无解（F_42）与歧义（F_16 两候选）拒绝并给定向提示；Unicode 上下标拒绝（`C₄`/`S₃`/`C_2²`/`C₂²` 给出正确 TeX 建议，**回归：`C_2²` 曾静默变成 `C_{22}`**）；D_n 保持 2n 阶约定；二义写法不误判。反向 `getGroupAliases`：幂⇄直积等价写法、Frobenius 专名反查（`C_{7}:C_{3}` → `F_{21}`）、Klein 等价写法、结果稳定去重 |
 | combinatorics.test.ts | 7 | binomialMod：门面可 import、越界返回 0、C(n,0)=C(n,n)=1、小 n 与朴素 Pascal 一致、C(10,3)=120、Lucas 定理（p ≤ n 情形）、大 n（2000 量级）与 BigInt 精确值一致 |
 | core/cosetStrip.test.ts | 9 | 陪集条带候选与数据（core/algebra/cosetStrip.ts）：listCosetStripSubgroups（代表元/指数/轨道/结构、C₃ 循环快通道、order>60 守卫）、findCosetStripSubgroup（按元素 id 精确恢复、换群失效 null）、cosetDataForSubgroup（由 H 直算左陪集 = H） |
 

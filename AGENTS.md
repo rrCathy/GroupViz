@@ -31,7 +31,7 @@
 | [docs/STATE.md](docs/STATE.md) | 状态管理：12 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端）、GAP 大群计算引擎 |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 6 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：85 文件 1884 tests（node+dom 双项目）、Playwright E2E 13 tests、vitest 配置、覆盖率、测试约定、**法则型性质测试（元素→数学对象映射的 11 条结构法则 oracle）** |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：86 文件 1899 tests（node+dom 双项目）、Playwright E2E 13 tests、vitest 配置、覆盖率、测试约定、**法则型性质测试（元素→数学对象映射的 11 条结构法则 oracle）** |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/正则/陪集/自定义/Sylow 五来源、同态校验、轨道/稳定化子/OST、Burnside 自检、轨道视图、几何作用暂缓记录 |
 | [docs/API.md](docs/API.md) | **引擎消费 API（FGVE 双包随包分发）**：Scene props 全表、core 门面导出、元素引用解析（id/label/value）、`useSceneState`、`theme` 约定、阈值 props、内嵌 `I18nProvider` |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图（**只列未做事项/边界决策**）：FGVE 引擎化进行中——阶段 2 余 tree/prestable props 化与 action 窗口 sylow/coset、阶段 3 余 CI 消费冒烟接入 / exports 子路径 / descriptor round-trip 载群（双包 @groupviz/core+react **v2.0.0 已发布 npm**，**v2.1.0 消费端卡点优化** = 元素引用/`useSceneState`/`theme`/阈值/`API.md`，2026-09-10）；中期特征标表 / GAP 后端完善；远期 GVL 教学实验室 |
@@ -58,7 +58,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 85 个测试文件（1884 tests，node+dom 双项目），见 docs/TESTING.md
+│   ├── __tests__/              # 86 个测试文件（1899 tests，node+dom 双项目），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
@@ -101,6 +101,7 @@ GroupViz/
 
 ## 5. 当前状态
 
+- ✅ **群记号别名系统（v2.2.2，`src/core/algebra/notation/`）**：统一入口 `parseGroupNotation`（规范化 → 专名展开 → **本地优先** → 后端 GAP → 定向报错），宿主 `symbol` 可直接写人类记法——`C4`/`c4`/`Z_4`/`Z/4Z`、`S3xS3`/`S_3^2`/`S_3×S_3`、`C7:C3`/`C7⋊C3`/**`F21`**/`Frobenius(21)`、`QD16`、`Klein`/`K4`/`K_4`、`Sym(3)`/`Alt(5)`、`Dic_3`、`gl(2,3)` 等。**两条硬规则**：只收 TeX 形态、**拒绝 Unicode 上下标**（`C₄`/`C_2²` 报错并给等价写法——曾静默把 `C_2²` 解成 22 阶的 `C_{22}`）；`D_n` 保持 **2n 阶**约定（D_8 = 16 阶）。多义专名（F₁₆ 两候选）或无解一律拒绝并列候选，不猜。反向 `getGroupAliases(群)` 给出别名列表（含 `C_{7}:C_{3}` → `F_{21}`）。详见 docs/API.md §8
 - ✅ 13 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow / tree / prestable（其中 tree / prestable 两个群展示专用视图的入口在左侧「群展示」面板底部，不在视图面板卡片中）
 - ✅ 群族：Sₙ(2-5)、Cₙ(2-120)、Dₙ(3-8)、Aₙ(3-5)、V₄、Q₈、**GL(2,2) ≅ S₃ / GL(2,3)（48 阶，矩阵群）**、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（UI 上限出于性能：S₅=120 在本地兜底 FALLBACK_CUTOFF=240 内，S₆=720 超限故不提供）
 - ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、14 种 2D 形状（含 rewiring、直积 cylinder/torus）、18 种 3D 形状模板（按群性质自动分配）

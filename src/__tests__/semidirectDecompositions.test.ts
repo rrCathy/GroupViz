@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
+import { createDirectProduct } from '../core/groups/DirectProduct'
 import { createSemidirectProduct } from '../core/groups/SemidirectProduct'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
@@ -324,10 +325,18 @@ describe('findSemidirectDecompositions', () => {
     }
   })
 
-  it('returns [] for order > 60 (guard)', () => {
+  it('returns [] beyond ENUMERATION_LIMIT (144)：169 阶直积不触发枚举', () => {
+    // C₁₃×C₁₃ = 169 阶 > 144：guard 生效时直接返回空，不会真的跑子群枚举
+    const big = createDirectProduct(createCyclicGroup(13), createCyclicGroup(13))
+    expect(findSemidirectDecompositions(big)).toEqual([])
+  })
+
+  it('S₅(120) 在枚举线内，能给出 A₅⋊C₂ 分解（旧 guard 60 误杀）', () => {
     const S5 = createSymmetricGroup(5)
-    expect(findSemidirectDecompositions(S5)).toEqual([])
-    expect(findSemidirectDecompositions(S5, true)).toEqual([])
+    const ds = findSemidirectDecompositions(S5)
+    expect(ds.length).toBeGreaterThan(0)
+    // S₅ ≅ A₅ ⋊ C₂：正规因子应为 60 阶的 A₅
+    expect(ds.some(d => d.normal.order === 60)).toBe(true)
   })
 
   it('returns [] for cyclic groups of prime order', () => {
@@ -356,16 +365,20 @@ describe('detectStructureType', () => {
     expect(detectStructureType(createAlternatingGroup(5))).toBe('indecomposable')
   })
 
-  it('labels large groups from their symbol beyond the search cutoff', () => {
+  it('S₅(120) 已在枚举线内：真算结构得 semidirect（旧 cutoff 60 只能从 symbol 猜）', () => {
     const g = createSymmetricGroup(5)
     expect(g.order).toBeGreaterThan(60)
-    expect(detectStructureType(g)).toBe('indecomposable')
-    const semi = { ...g, symbol: 'C_{8} : C_{2}' }
-    expect(detectStructureType(semi)).toBe('semidirect')
-    const direct = { ...g, symbol: 'C_{2} x C_{32}' }
-    expect(detectStructureType(direct)).toBe('direct')
-    const star = { ...g, symbol: 'C_{64}' }
-    expect(detectStructureType(star)).toBe('indecomposable')
+    // S₅ ≅ A₅⋊C₂，枚举线放宽到 144 后能真算出来
+    expect(detectStructureType(g)).toBe('semidirect')
+  })
+
+  it('labels groups beyond the search cutoff from their symbol', () => {
+    // order 超过 ENUMERATION_LIMIT(144) 时不真算，走 symbol 兜底识别
+    const beyond = { ...createSymmetricGroup(5), order: 200 }
+    expect(detectStructureType({ ...beyond, symbol: 'Mystery(200)' })).toBe('indecomposable')
+    expect(detectStructureType({ ...beyond, symbol: 'C_{8} : C_{2}' })).toBe('semidirect')
+    expect(detectStructureType({ ...beyond, symbol: 'C_{2} x C_{32}' })).toBe('direct')
+    expect(detectStructureType({ ...beyond, symbol: 'C_{64}' })).toBe('indecomposable')
   })
 
   it('fast-paths groups built as semidirect products', () => {

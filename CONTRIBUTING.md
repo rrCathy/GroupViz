@@ -47,7 +47,7 @@ src/
 │   ├── polyhedra.ts / elementRotation.ts / viewBox.ts
 ├── context/          State: layered Providers + actions modules, aggregated via useGroup()
 ├── utils/            texify, export (SVG/PNG/GIF), api, hybridCompute, groupFactory
-├── backend/          FastAPI service (order > 60 computation), pytest suite
+├── backend/          FastAPI service (order > 144 computation), pytest suite
 └── docs/             Technical documentation (see below)
 ```
 
@@ -64,7 +64,7 @@ npm run lint           # ESLint (typescript-eslint + react-hooks + react-refresh
 npm run build          # tsc -b && vite build
 ```
 
-Backend (needed for groups of order > 60; falls back to local TS up to order 240):
+Backend (needed for groups of order > 144; falls back to local TS up to order 240):
 
 ```bash
 cd backend
@@ -95,7 +95,7 @@ npm run export
 - **Math notation**: KaTeX everywhere (`texify()` + `<Tex>` / `renderTex()`), never raw Unicode superscripts for displayed math.
 - **State**: follow the Provider layering in [`docs/STATE.md`](docs/STATE.md); new state belongs in the matching domain Provider and is exposed via `useGroup()`.
 - **Styling**: global CSS custom properties (dark/light themes via tokens like `--accent-*`, `--btn-on-accent`); no Tailwind/CSS framework. Theme-dependent colors must use tokens, never hardcoded hex on accent buttons.
-- **Performance guards**: local/backend threshold order ≤ 60; subgroup/conjugacy cutoff 60; Cayley edge throttling; automorphism enumeration bail-out (> 30000 combos).
+- **Performance guards**: thresholds follow the three measured lines in `docs/PERF.md` (constants in `src/core/guards.ts`): interactive 120 / enumeration 144 / static 480; backend prefetch cache still triggers at order > 60; Cayley edge throttling; automorphism enumeration bail-out (> 30000 combos).
 
 ## Testing conventions
 

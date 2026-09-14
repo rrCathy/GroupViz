@@ -81,12 +81,14 @@ describe('EngineError constructors', () => {
 })
 
 describe('guard constants: canonical values preserved', () => {
-  it('guards.ts values match the historical literals', () => {
-    expect(SERIES_MAX_ORDER).toBe(240)
+  it('guards.ts 值对齐 2026-09-14 重定的三条实测线（docs/PERF.md §4）', () => {
+    // 枚举线：子群列 / Sylow / 性质 / 发现器全部对齐 ENUMERATION_LIMIT（144）
+    expect(SERIES_MAX_ORDER).toBe(144)
+    expect(SYLOW_MAX_ORDER).toBe(144)
+    expect(PROPERTIES_CUTOFF).toBe(144)
+    expect(DISCOVERER_MAX_ORDER).toBe(144)
+    // 保持不变：TC 建表有独立陪集数守卫；FALLBACK 是「慢但正确」的兜底线
     expect(PRESENTATION_MAX_ORDER).toBe(240)
-    expect(SYLOW_MAX_ORDER).toBe(240)
-    expect(PROPERTIES_CUTOFF).toBe(60)
-    expect(DISCOVERER_MAX_ORDER).toBe(120)
     expect(FALLBACK_CUTOFF).toBe(240)
     expect(TC_MAX_COSETS).toBe(3000)
     expect(TC_MAX_STEPS).toBe(5_000_000)

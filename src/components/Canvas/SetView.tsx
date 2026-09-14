@@ -3,6 +3,7 @@ import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { texify, renderTex } from '../../utils/texify'
 import type { Group } from '../../core/types'
 import type { InternalEdgeData } from '../../core/types'
+import { INTERACTIVE_LIMIT } from '../../core/guards'
 
 export interface SetViewProps {
   group: Group | null
@@ -214,7 +215,7 @@ function SetViewBody({
   gap: gapOverride,
   columns: columnsOverride,
   showLabels: showLabelsOverride,
-  largeGroupThreshold = 60,
+  largeGroupThreshold = INTERACTIVE_LIMIT,
 }: SetViewProps) {
   type SubsetView = { elementIds: string[]; color: string }
   const subsetDetailMap = useMemo(() => {

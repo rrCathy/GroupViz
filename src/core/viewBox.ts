@@ -1,4 +1,5 @@
 import type { ViewMode } from './types'
+import { STATIC_LIMIT, ENUMERATION_LIMIT, RENDER_3D_LIMIT } from './guards'
 
 export interface ViewBoxSize {
   width: number
@@ -45,27 +46,36 @@ export function getViewBoxSize(order: number, view: ViewMode, force = false): Vi
 /**
  * 各视图「过大」判定的**默认**阶阈值。
  *
+ * 口径对齐 docs/PERF.md 的实测三条线（常量定义在 guards.ts）：
+ * - 图形类（set / cayley / cycle / table / prestable / heatmap）→ **静态可用线**
+ *   `STATIC_LIMIT`（240 阶静态 60 fps、交互 26–45 fps——超出只是交互会卡，
+ *   静态/出图完全可用，警告文案已按此措辞）；
+ * - 子群枚举类（sylow / symmetry / sublattice / action / homomorphism / cosetstrip）
+ *   → **枚举 2 秒线** `ENUMERATION_LIMIT`（144 阶 1.81s，168 阶 3.45s 超预算；
+ *   sylow 原值 240 会让枚举跑 19s）；
+ * - `3d` → `RENDER_3D_LIMIT`：DOM 恒定（1 个 canvas），S₆(720) 缩放 20–43 fps，
+ *   与 2D 完全不同量级，原值 100 严重偏紧；
+ * - `tree` → ∞（逐节点惰性展开）。
+ *
  * 这些数字原本写死在 `isTooLarge` 里，嵌入方无法覆盖（如博客插图想强行展开一张
  * 120 阶的文字乘法表）。现在既可从外围读取，也可经 `isTooLarge` 的第三参逐次覆盖。
  */
 export function sizeLimitFor(view: ViewMode): number {
-  if (view === 'table' || view === 'prestable') {
-    return 100
-  }
-  if (view === 'heatmap' || view === 'sylow') {
-    // 热力图聚合缩略图，超大群也能展示宏观结构，阈值放宽到 240（与 sylow 一致）
-    return 240
-  }
-  if (view === 'symmetry' || view === 'sublattice' || view === 'action') {
-    return 120
-  }
   if (view === 'tree') {
     return Number.POSITIVE_INFINITY
   }
   if (view === '3d') {
-    return 100
+    return RENDER_3D_LIMIT
   }
-  return 100
+  if (
+    view === 'sylow' || view === 'symmetry' || view === 'sublattice' ||
+    view === 'action' || view === 'homomorphism' || view === 'cosetstrip'
+  ) {
+    return ENUMERATION_LIMIT
+  }
+  // set / cayley / cycle / table / prestable / heatmap：图形类，静态可用线
+  // （heatmap 原本就是 240，与静态线天然一致）
+  return STATIC_LIMIT
 }
 
 /**

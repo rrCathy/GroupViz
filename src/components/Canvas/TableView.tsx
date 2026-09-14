@@ -10,6 +10,7 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { isTooLarge } from '../../core/viewBox'
 import { findAllSubgroups } from '../../core/algebra/subgroups'
+import { ENUMERATION_LIMIT } from '../../core/guards'
 import { triggerDownload } from '../../utils/download'
 import type { CanvasTransform, Group, GroupElement, Subset } from '../../core/types'
 import type { CosetInfo } from '../../core/algebra/subgroups'
@@ -147,7 +148,7 @@ function pickSubgroup(group: Group, idToIdx: Map<string, number>, subsets: Subse
     }
   }
 
-  if (group.order <= 60) {
+  if (group.order <= ENUMERATION_LIMIT) {
     for (const sg of findAllSubgroups(group)) {
       if (sg.order < 2 || sg.order > 16) continue
       const idxs: number[] = []

@@ -7,6 +7,8 @@ import {
 } from '../../core/algebra/cosetStrip'
 import { createSymmetricGroup } from '../../core/groups/SymmetricGroup'
 import { createAlternatingGroup } from '../../core/groups/AlternatingGroup'
+import { createCyclicGroup } from '../../core/groups/CyclicGroup'
+import { createDirectProduct } from '../../core/groups/DirectProduct'
 
 function keyOf(opt: CosetStripSubgroupOption): string {
   return opt.elementIds.slice().sort().join(',')
@@ -69,9 +71,15 @@ describe('listCosetStripSubgroups', () => {
     expect(listCosetStripSubgroups(c2)).toEqual([])
   })
 
-  it('群阶 >60 本地守卫：S₅ 返回空（与 findAllSubgroups 同策略）', () => {
+  it('S₅(120) 在枚举线内，能列出陪集条带子群（旧 guard 60 误杀）', () => {
     const s5 = createSymmetricGroup(5)
-    expect(listCosetStripSubgroups(s5)).toEqual([])
+    expect(listCosetStripSubgroups(s5).length).toBeGreaterThan(0)
+  })
+
+  it('群阶超过枚举线（144）返回空：与 findAllSubgroups 同策略', () => {
+    // C₁₃×C₁₃ = 169 阶 > ENUMERATION_LIMIT，guard 生效不真跑枚举
+    const big = createDirectProduct(createCyclicGroup(13), createCyclicGroup(13))
+    expect(listCosetStripSubgroups(big)).toEqual([])
   })
 })
 

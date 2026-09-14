@@ -99,7 +99,7 @@ A₅：A₅ ≅ 正二十面体旋转群，(12345)、(12)(34) 的几何像经 BF
 
 ### 7.1 受控内核与小窗口可读性（v1.19.0，FGVE 阶段 2 批次三）
 
-`SubgroupLatticeView.tsx` 拆为三块：**`SublatticeScene`**（受控内核，全 props 可选、缺省在渲染层 `??` 解析）、**`SeriesPanel`**（纯呈现）、尾部同名组装壳 `SubgroupLatticeView()`（吃 `useGroup()`，GroupCanvas 与旧浮动窗零改动）。内核可只给 `group` 自算格（order ≤ 60），或由宿主传 `lattice`（大群后端通路）。
+`SubgroupLatticeView.tsx` 拆为三块：**`SublatticeScene`**（受控内核，全 props 可选、缺省在渲染层 `??` 解析）、**`SeriesPanel`**（纯呈现）、尾部同名组装壳 `SubgroupLatticeView()`（吃 `useGroup()`，GroupCanvas 与旧浮动窗零改动）。内核可只给 `group` 自算格（order ≤ 144，`ENUMERATION_LIMIT`），或由宿主传 `lattice`（大群后端通路）。
 
 小窗口里"名片糊成一团"靠四层解决（布局/LOD 纯函数在 `src/core/algebra/latticeLayout.ts`）：
 

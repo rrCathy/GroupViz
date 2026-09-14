@@ -1,4 +1,5 @@
 import type { Group, GroupElement } from '../../types'
+import { ENUMERATION_LIMIT } from '../../guards'
 import {
   transitiveReduce,
   levelsByOrderRank,
@@ -7,7 +8,7 @@ import {
 } from './lattice'
 
 export function getGroupCenter(group: Group, allowLarge = false): GroupElement[] {
-  if (group.order > 60 && !allowLarge) return group.isAbelian ? [...group.elements] : [group.identity]
+  if (group.order > ENUMERATION_LIMIT && !allowLarge) return group.isAbelian ? [...group.elements] : [group.identity]
   const center: GroupElement[] = []
 
   for (const a of group.elements) {
@@ -61,7 +62,7 @@ export function getNormalizer(group: Group, elements: GroupElement[]): GroupElem
 }
 
 export function getConjugacyClasses(group: Group, allowLarge = false): GroupElement[][] {
-  if (group.order > 60 && !allowLarge) {
+  if (group.order > ENUMERATION_LIMIT && !allowLarge) {
     return group.elements.map(e => [e])
   }
   const classes: GroupElement[][] = []

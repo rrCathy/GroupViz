@@ -29,15 +29,16 @@
 | [docs/VIEWS.md](docs/VIEWS.md) | 13 种视图模式（ViewPanel 9 卡片 + 同态/轨道经构建面板进入 + 群展示 2 专用视图：tree/展示乘法表）+ 多视图 |
 | [docs/PRESENTATION.md](docs/PRESENTATION.md) | 群展示系统：解析器、Todd–Coxeter 陪集枚举、presentationOf 分发、通用关系发现器、创建/持久化、tree与展示乘法表视图 |
 | [docs/STATE.md](docs/STATE.md) | 状态管理：12 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
-| [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端）、GAP 大群计算引擎 |
+| [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤144 本地 / >144 后端，预取缓存 >60）、GAP 大群计算引擎 |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 6 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：86 文件 1899 tests（node+dom 双项目）、Playwright E2E 13 tests、vitest 配置、覆盖率、测试约定、**法则型性质测试（元素→数学对象映射的 11 条结构法则 oracle）** |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：86 文件 1902 tests（node+dom 双项目）、Playwright E2E 13 tests、vitest 配置、覆盖率、测试约定、**法则型性质测试（元素→数学对象映射的 11 条结构法则 oracle）** |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/正则/陪集/自定义/Sylow 五来源、同态校验、轨道/稳定化子/OST、Burnside 自检、轨道视图、几何作用暂缓记录 |
 | [docs/API.md](docs/API.md) | **引擎消费 API（FGVE 双包随包分发）**：Scene props 全表、core 门面导出、元素引用解析（id/label/value）、`useSceneState`、`theme` 约定、阈值 props、内嵌 `I18nProvider` |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图（**只列未做事项/边界决策**）：FGVE 引擎化进行中——阶段 2 余 tree/prestable props 化与 action 窗口 sylow/coset、阶段 3 余 CI 消费冒烟接入 / exports 子路径 / descriptor round-trip 载群（双包 @groupviz/core+react **v2.0.0 已发布 npm**，**v2.1.0 消费端卡点优化** = 元素引用/`useSceneState`/`theme`/阈值/`API.md`，2026-09-10）；中期特征标表 / GAP 后端完善；远期 GVL 教学实验室 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 变更记录（已完成历史唯一权威）：已完成里程碑 + 逐次开发记录（2026-08-15 起；AGENTS 批次记录与 ROADMAP 旧进度均以本表为准） |
 | [feedback/README.md](feedback/README.md) | **引擎缺陷反馈收件箱（本地、不入库）**：宿主项目用引擎踩 bug 时，由其 Agent 按 `PROTOCOL.md` 协议（自包含）产出反馈文件放入 `feedback/`；含 `_TEMPLATE.md` 模板、`INDEX.md` 台账、消费端 SOP |
 | [docs/PLAN_VIEW_CONTROL_LAYER.md](docs/PLAN_VIEW_CONTROL_LAYER.md) | **视图控制层（VCL）规划**：三层架构（计算层 / 视图渲染层 / 控制层）+ ViewParams·Decorations·ControlUI·FigurePreset 四子系统 + §8 发散清单（Tier A/B/C）+ §9 实施状态 + §10 参考实现可借鉴细节（S₅ 字长球单文件 HTML 的面板读数/悬停联动/渲染开关/布局旋钮/形态层五类） |
+| [docs/PERF.md](docs/PERF.md) | **性能基准（三层极限实测）**：L1 本地计算 / L2 前端计算（React+DOM）/ L3 浏览器渲染（静态 vs 交互）分别的群阶上限与实测数据 + **判别实验（瓶颈是每帧 React 重渲染，不是栅格化）** + 两条天花板（交互 120 阶 / 子群枚举 144 阶）+ 4 个已确认瓶颈的根因与位置 + 可复现测量方法与三个坑 + 优化取舍（做/不做清单） |
 
 ## 3. 技术栈
 
@@ -58,7 +59,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 86 个测试文件（1899 tests，node+dom 双项目），见 docs/TESTING.md
+│   ├── __tests__/              # 86 个测试文件（1902 tests，node+dom 双项目），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/
@@ -103,7 +104,7 @@ GroupViz/
 
 - ✅ **群记号别名系统（v2.2.2，`src/core/algebra/notation/`）**：统一入口 `parseGroupNotation`（规范化 → 专名展开 → **本地优先** → 后端 GAP → 定向报错），宿主 `symbol` 可直接写人类记法——`C4`/`c4`/`Z_4`/`Z/4Z`、`S3xS3`/`S_3^2`/`S_3×S_3`、`C7:C3`/`C7⋊C3`/**`F21`**/`Frobenius(21)`、`QD16`、`Klein`/`K4`/`K_4`、`Sym(3)`/`Alt(5)`、`Dic_3`、`gl(2,3)` 等。**两条硬规则**：只收 TeX 形态、**拒绝 Unicode 上下标**（`C₄`/`C_2²` 报错并给等价写法——曾静默把 `C_2²` 解成 22 阶的 `C_{22}`）；`D_n` 保持 **2n 阶**约定（D_8 = 16 阶）。多义专名（F₁₆ 两候选）或无解一律拒绝并列候选，不猜。反向 `getGroupAliases(群)` 给出别名列表（含 `C_{7}:C_{3}` → `F_{21}`）。详见 docs/API.md §8
 - ✅ 13 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow / tree / prestable（其中 tree / prestable 两个群展示专用视图的入口在左侧「群展示」面板底部，不在视图面板卡片中）
-- ✅ 群族：Sₙ(2-5)、Cₙ(2-120)、Dₙ(3-8)、Aₙ(3-5)、V₄、Q₈、**GL(2,2) ≅ S₃ / GL(2,3)（48 阶，矩阵群）**、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（UI 上限出于性能：S₅=120 在本地兜底 FALLBACK_CUTOFF=240 内，S₆=720 超限故不提供）
+- ✅ 群族（记号构造范围，2026-09-14 与代码对齐）：Sₙ(2-6)、Cₙ(1-120)、Dₙ(3-15)、Aₙ(3-5，A₆ 本地构造即拒、走后端)、V₄、Q₈、QD₁₆、**GL(2,2) ≅ S₃ / GL(2,3)（48 阶，矩阵群）**、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（S₆=720 可构造但超出子群枚举线，相关视图自动走后端 GAP / 大群警告）
 - ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、14 种 2D 形状（含 rewiring、直积 cylinder/torus）、18 种 3D 形状模板（按群性质自动分配）
 - ✅ 2D 凯莱图布局策略：**循环群默认 circular**（cayleyCircleLayout 兜底，注册表/基本群数字感知环序，spiral 仅作手动可选）、**注册表 Dₙ 双环**（splitDihedralElements 元素阶分类：m=|G|/2 找阶 m 元素 r → 旋转=⟨r⟩ 幂闭包、反射=其余、配对 sᵢ=rⁱ·s₀，dualRingLayout/cayleyCircleLayout 的 value 分类失败自动回退，覆盖按阶创建 16-30 阶二面体；对 C₂ₘ/Cₘ×C₂/Q₈/C₈:C₂ 也匹配，A₄/C₂³ 返回 null 走原 fallback）、**注册表生成元标准化**（createTableGroup 的 buildGenerators：D_m 结构按乘法表重建标准 (r,s) 生成对——r=阶 m 元素、s=阶 2 反射，⟨r,s⟩ 闭包=全群验证，替代 GAP 任意生成对如两个反射；其他结构保持 rec.gens）、**半直积盘内蛇形环序**（dihedralSnakeOrder：rotations 幂序正排 + reflections 配对角反排摊平单环，C₄×C₂ 盘内 a 边外环相邻 b 边径向；失败回退 powerRingOrder）、**cylinder 各层同相位**（循环因子生成元边成径向直线母线，俯视圆柱感；Cₘ×C₂ 盘内环序 powerRingOrder 特判：外圈 t0 行升序 + 内圈 t1 行降序）
 - ✅ 直积 2D 形状分类（`classifyDirectProduct2D`）：全循环因子→grid 网格、恰一个循环因子→**cylinder 圆柱**（循环因子沿径向同心多层环，每层=非循环因子副本，Dₙ 因子保留双环内外层）、全非循环因子→**torus 甜甜圈**（嵌套环：主轴环 + 每点挂剩余因子乘积副本，**任意因子数**）；紧凑符号因子识别（`factorPipeGroupsOrTokens`：C₂²×S₃ = 2 因子分组、S₃² 幂合并自动按 pipe 段拆分为 2 因子），`buildFactorSubgroup` 因子临时群重建 + `factorCopyRingLayout` 副本环（Dₙ 双环 r=1/0.55）；**相邻同底循环因子归组**（`analyzeDPFactorsGrouped2D`/`factorPipeGroupsGrouped`：C₂×C₂×S₃ → [C₂², S₃]，C₂×C₂×C₂ 三连合并 C₂³ 单因子退回网格）；相邻层 stagger 错位防遮挡；形状下拉自动可用（cylinder/torus + grid）；**注册表群（16-31 阶非 pipe 直积）网格兜底**：`tableGroupGridFactors` union-find 聚类（生成元不可交换聚类→因子划分 + 混合进制枚举），C₄×C₄/Z₄×Z₂×Z₂/C₂⁴ 等 4×4 满网格；**注册表非 pipe 直积 cylinder 聚类支持（多因子）**：`clusterFactorGroups`/`tableGroupFactorSplit`/`clusterIsCyclic` 按生成元交换性聚类因子 + 循环性判定（Z₂×D₄/Z₂×Q₈ 显示 2 层同心环；C₂×C₂×S₃ 注册表聚类 3 簇 → 3 环嵌套甜甜圈）；**半直积不误判直积**：`hasTopLevelTimes` 顶层 \\times 检测——'(Z₄×Z₂):Z₂' 不误判直积（走半直积重布线）；**环网格 ringGrid**（C₄×C₂×C₂ 类直积，仅 ≥3 个循环因子）：`isRingGridGroup`/`findRingGridDecomposition` 纯群论探测（阶≤2 元素生成 V₄ 网格 + 环生成元 x 幂覆盖全群唯一分解 + 交换性检查拒绝 C₂×D₄ 伪分解）+ `ringGridLayout2D` n 边形环 × 2×2 网格每格挂完整环（C₁₀×C₂ 等 2 因子直积排除，回 grid）；**cylinder 更名「交错同心圆」**：相邻层半格交错（offset = layerIdx·π/copyN，Cₙ 生成元边为层间斜线）；**注册表 C₃×S₃ 生成元标准化**（18,3 GAP gens [g3,g4] 缺 2 阶反射 → (c,r,s) 标准三元 [2,3,4]，层内呈现完整 S₃ 凯莱图而非两个 C₃ 三角）
@@ -124,9 +125,9 @@ GroupViz/
 - ✅ KaTeX 全应用渲染、i18n 中英文、深/浅主题、会话保存与恢复
 - ✅ 视图导出：SVG/PNG/GIF + 批量导出 CLI（`npm run export`）；**3D 凯莱图 GIF 导出**（`exportCayley3DGif`，时长可选「约 3 秒」或「5 个旋转周期」——**离屏渲染**：`beginRotation` 记录基准 theta/phi/radius/target 并创建独立离屏 WebGLRenderer + 相机，`frameAt(i, frameDelayMs)` 按帧序号精确求角 = 基准 + radPerSec×帧延时×帧序号（与实时渲染耗时无关，大群渲染变慢 GIF 不加速），渲染到离屏 canvas；**速度对齐展示区**：`displayAngVel()` 返回 ▶ 自动旋转当前角速度，帧数 = cycles×2π ÷ 展示速度重新推导（>=2），保证导出动图转速与展示区一致且总转角恒为整圈（无缝循环）；导出期间展示区照常旋转，结束后仅释放离屏渲染器（无需恢复相机）；gifenc 逐帧 quantize，i18n 「约 3 秒」/「~3 seconds」）
 - ✅ 群作用系统：共轭/自定义/正则（左平移）/陪集（G↷G/H）/Sylow 五来源、同态校验（violation 定位）、轨道/稳定化子/轨道-稳定化子定理验证、轨道视图（簇布局 + 生成元作用边 + hover 全箭头 + 固定点 ★）、**正则作用 = Cayley 定理可视化（G ≅ Sym(G) 嵌入，轨道唯一且自由 Stab(x)={e}）**、**陪集作用 G ↷ G/H 传递（面板内 findAllSubgroups 下拉选 H，节点标注 xH，右侧 Stab(xH)=xHx⁻¹ ≅ H 标注）**、**Sylow 作用面板入口（p 素数下拉 + Sylow p-作用按钮）**、**Burnside 引理自检（|X/G| = (1/|G|)·Σ|Fix(g)| 右侧通用行）**、**共轭作用固定点 = 中心 Z(G) 自检标注**、自定义作用交互式箭头编辑（点击/拖放绑定 + 退出编辑）、自定义作用草稿自动保存（localStorage，刷新/切群按群符号自动恢复，清除时删除）、**已完成作用持久保存（groupviz-actions，面板列表可见/切群保留/点击激活恢复，同同态模式）**（见 docs/ACTIONS.md）
-- ✅ Sylow 型视图：以群元素为最小节点（节点 = 元素），p 可选素数（|G| 素因子）；展示 p-元素、全部 p-子群（p-元素 → 循环 p-子群 → pair-join 闭合，专用算法本地算到 S₅=120，SYLOW_MAX_ORDER=240 守卫）、Sylow p-子群（★ 标记，n_p 计数 + `n_p ≡ 1 (mod p)` / `n_p | m` 验证 + 正规化子阶 `|N_G(P)| = |G|/n_p`）；默认凯莱图布局（边 = 群生成元作用，点击子群切换为该子群生成元作用，颜色对应）；单选子群 → 陪集条带布局（Lagrange `|G| = |H|·[G:H]`）；Ctrl/⌘ 或 ⊕ 复选两个子群 → 上下布局 + 竖直共轭箭头（Sylow 第二定理，自动求共轭元 g 满足 gPg⁻¹ = Q）+ 两子群内部生成元边（P 青 / Q 紫）；其他 p-子群默认收起；右侧子群列表可收起；G 共轭作用在 Syl_p(G) 上（轨道大小 = n_p，稳定子 = 正规化子）经轨道视图验证
+- ✅ Sylow 型视图：以群元素为最小节点（节点 = 元素），p 可选素数（|G| 素因子）；展示 p-元素、全部 p-子群（p-元素 → 循环 p-子群 → pair-join 闭合，专用算法本地算到 S₅=120，SYLOW_MAX_ORDER=144 守卫）、Sylow p-子群（★ 标记，n_p 计数 + `n_p ≡ 1 (mod p)` / `n_p | m` 验证 + 正规化子阶 `|N_G(P)| = |G|/n_p`）；默认凯莱图布局（边 = 群生成元作用，点击子群切换为该子群生成元作用，颜色对应）；单选子群 → 陪集条带布局（Lagrange `|G| = |H|·[G:H]`）；Ctrl/⌘ 或 ⊕ 复选两个子群 → 上下布局 + 竖直共轭箭头（Sylow 第二定理，自动求共轭元 g 满足 gPg⁻¹ = Q）+ 两子群内部生成元边（P 青 / Q 紫）；其他 p-子群默认收起；右侧子群列表可收起；G 共轭作用在 Syl_p(G) 上（轨道大小 = n_p，稳定子 = 正规化子）经轨道视图验证
 - ✅ 群中心 Z(G) 集成：子群格高亮中心节点（金色 + 右上角 Z(G) 角标）、右侧子群列表中心突出（金色边框 + 中心徽章）、群信息面板「中心 Z(G)」行（元素 TeX 展示）
-- ✅ 群结构识别：群信息面板新增「结构」行（detectStructureType：直积/半直积/不可分解/未知——fast path 读 _semidirectProduct/isGroupDirectProduct，order≤60 本地搜索 N×M 分解与半直积分解，>60 显示未知）
+- ✅ 群结构识别：群信息面板新增「结构」行（detectStructureType：直积/半直积/不可分解/未知——fast path 读 _semidirectProduct/isGroupDirectProduct，order≤144 本地搜索 N×M 分解与半直积分解，>144 按 symbol 兜底识别）
 - ✅ 由子集生成子群：任意子集 E ⊂ G 一键生成 ⟨E⟩（closeUnderMultiply 闭包），跳转陪集条带展示 Lagrange `|G| = |H|·[G:H]`
 - ✅ 正规化子/中心化子：任意子集 E ⊂ G 一键求 `N_G(E) = {g | gEg⁻¹ = E}` 与 `C_G(E) = {g | gx = xg, ∀x ∈ E}`（getNormalizer/getCentralizer 纯函数），两者均为子群，跳转陪集条带展示 Lagrange
 - ✅ 凯莱图圆形布局无交叉：cayleyCircleLayout 对 S₃（六边形）/二面体结构（双环）自动免交叉布局（同态/同构动画/Aut 弹窗/主视图共用）
@@ -231,12 +232,15 @@ uvicorn main:app --reload --port 8000
 | 第一同构 | G/ker ≅ im | 核与像、四阶段动画 |
 | 轨道-稳定子 | \|G\| = \|O\|·\|S\| | 群作用 |
 
-### 9.4 性能守卫
+### 9.4 性能守卫（2026-09-14 按 docs/PERF.md 实测三线重定，常量集中在 `src/core/guards.ts`）
 
-- 本地/后端阈值：order ≤ 60 本地，> 60 后端
-- 子群/共轭类/中心 cutoff：60；Cayley 边限流：`max(120, order*3)`
+- 三条实测线：`INTERACTIVE_LIMIT=120`（交互流畅线）、`ENUMERATION_LIMIT=144`（子群枚举 2 秒线）、`STATIC_LIMIT=480`（静态/出图）；3D 视图阈值 `RENDER_3D_LIMIT=720`（DOM 恒定）
+- 本地计算分界：子群/共轭类/中心/性质/半直积分解 cutoff = 144（原 60 偏紧 2.4 倍）；超过走后端 GAP，`FALLBACK_CUTOFF=240` 为「慢但正确」的本地兜底线
+- 后端预取缓存仍以 order > 60 触发（GroupBackendContext，预取优化不影响正确性）
+- 视图「过大」阈值：图形类 240、子群枚举类 144、3d 720、tree ∞（`sizeLimitFor`）；警告文案区分「静态可看、交互会卡」
+- 标签裁剪 largeGroupThreshold：120（原 60）
+- Cayley 边限流：`max(120, order*3)`（order > 60 时，视觉降噪、非枚举守卫）
 - findAllAutomorphisms：生成元映射组合 > 30000 直接返回 []（如 Z₂⁴）
-- 直积/半直积最大阶：144
 
 ---
 

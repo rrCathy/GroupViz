@@ -8,6 +8,7 @@ import {
   type SubgroupLatticeEdge,
 } from '../../core/algebra/subgroups'
 import { computeChainFactors, type SeriesFactor } from '../../core/algebra/series'
+import { ENUMERATION_LIMIT } from '../../core/guards'
 import type { GroupElement } from '../../core/types'
 import {
   SublatticeScene,
@@ -110,7 +111,7 @@ export function SubgroupLatticeView() {
 
   const centerIds = useMemo(() => {
     if (!currentGroup) return undefined
-    const center = backendCache.center ?? (currentGroup.order <= 60 ? getGroupCenter(currentGroup) : null)
+    const center = backendCache.center ?? (currentGroup.order <= ENUMERATION_LIMIT ? getGroupCenter(currentGroup) : null)
     return center ? center.map(e => e.id) : undefined
   }, [currentGroup, backendCache.center])
 

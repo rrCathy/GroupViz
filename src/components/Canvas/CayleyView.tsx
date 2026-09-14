@@ -11,6 +11,7 @@ import { texify, renderTex } from '../../utils/texify'
 import { getDefaultShape2D } from '../../core/types'
 import type { CanvasTransform, CayleyEdgeData, CayleyShape2D, Group, GroupElement, MultiplyType, NodePosition } from '../../core/types'
 import type { CayleyActionParam, CayleyPathHighlight, CayleyForceParams } from '../../core/types/viewConfig'
+import { INTERACTIVE_LIMIT } from '../../core/guards'
 // 纯函数模块（无 react 依赖），FGVE 打包期随视图层迁入 core
 import { normalizeCayleyActions } from '../../context/cayleyActions'
 
@@ -170,7 +171,7 @@ function CayleyViewBody({
   onHover,
   hoveredElementId,
   noGroupText,
-  largeGroupThreshold = 60,
+  largeGroupThreshold = INTERACTIVE_LIMIT,
   edgeCurvature: edgeCurvatureProp,
   pathHighlight = null,
   forceDirected = false,

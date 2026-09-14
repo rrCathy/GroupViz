@@ -289,7 +289,7 @@ interface Group {
 | `computeSubgroupLattice()` | O(k²) | Hasse 图的包含关系矩阵 + 层级分配 |
 | `isSimpleGroup()` | 委托 | 阿贝尔群→素数判定；非阿贝尔→`findAllNormalSubgroups` |
 
-**性能守卫**：所有计算函数在 `order > 60` 时短路返回，防止大群组合爆炸。
+**性能守卫**：子群枚举类计算函数在 `order > 144`（`ENUMERATION_LIMIT`，实测 2 秒线）时短路返回，防止大群组合爆炸；各视图「过大」阈值见 `sizeLimitFor`（图形类 240 / 3d 720）。
 
 ---
 
@@ -737,11 +737,11 @@ localStorage.setItem('groupviz-session', JSON.stringify({ symbol, view }))
 
 | 函数 | 阈值 | 行为 |
 |------|------|------|
-| `findAllSubgroups()` | order > 60 | 返回空数组 |
-| `findAllNormalSubgroups()` | order > 60 | 返回空数组 |
-| `getConjugacyClasses()` | order > 60 | 每个元素独立成类 |
-| `getGroupCenter()` | order > 60 | 返回 `[identity]` |
-| `computeCayleyActionEdges()` | order > 60 | `maxEdges = max(120, order*3)` |
+| `findAllSubgroups()` | order > 144 | 返回空数组（`ENUMERATION_LIMIT`，allowLarge 可越过） |
+| `findAllNormalSubgroups()` | order > 144 | 返回空数组 |
+| `getConjugacyClasses()` | order > 144 | 每个元素独立成类 |
+| `getGroupCenter()` | order > 144 | 返回 `[identity]` |
+| `computeCayleyActionEdges()` | order > 60 | `maxEdges = max(120, order*3)`（边限流，非枚举守卫） |
 
 ### 16.2 缓存
 

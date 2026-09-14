@@ -66,6 +66,28 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 - monorepo 拆分（pnpm workspaces / packages/*）：单仓库子目录构建已覆盖，仍推迟。
 - 包内嵌 GAP 计算引擎：`@groupviz/core` 仅提供 adapter 接口，宿主自接后端。
 
+### 2.6 性能优化挂账（2026-09-13 基准实测后列入）
+
+数据与判别实验见 [PERF.md](PERF.md)。核心结论：SVG 视图的卡顿来自**交互每帧重跑 React 全量重渲染**（非栅格化），故优化项一律围绕「减少重渲染频次」与「降算法复杂度」，**不做渲染层重写**。
+
+**已完成**：三层极限基线（2026-09-13）。
+
+**待办（按性价比排序）**：
+
+- **交互期冻结节点树**（性价比最高，预期 480 阶缩放 9 fps → 接近 58 fps）：拖拽/滚轮期间用 ref 直接写 `<g transform>`，`canvasTransform` 只在手势结束或节流后才回 React state。涉及 `SetView` / `CycleView` / `CayleyView` 三处。
+  - **前置决策（未定，阻塞项）**：`isNodeOnScreen` 裁剪依赖 `canvasTransform`，冻结后拉远不会补出新节点。二选一——手势期间按放大包围盒预裁留余量 / 手势结束再补。影响手感，需先定策略。
+- **`findPermIndex` 改 `Map`**（`SymmetricGroup.ts:35`，约 5 行）：`elements` 的 `id` 本就是 `perm.join(',')`，建 `Map<id, idx>` 即可，Sₙ 单次乘法从 O(n!) 降到 O(1)。预期百倍量级提速，**这是「S₆ 组合视图卡死」的硬伤修复**。
+- **大群阈值改成本模型**：现按群阶一刀切禁止，但实测 120 阶静态 60 fps、交互 49–56 fps 完全可用。改为「可看，但交互会卡顿」的提示语义 + 按视图分档。
+- **`forceLayout` 大群切异步渐进**（`cycleLayouts.ts:116/254`）：`iterations` 封顶 500 是旋钮不是极限；复用已有的 `forceLayoutAsync` + RAF 分块，大群先出粗布局再细化。
+- **子群枚举改 worklist**（`subgroups/enumerate.ts:99`）：pair-join 闭包现每轮重扫全部对（O(S²·n)），改为只把新发现的子群与已有子群求 join。预期 D84(168) 3.45 s → 1 s 内。
+
+**明确不做（边界，附理由）**：
+
+- 2D 视图上 Canvas / WebGL 重写 —— 栅格层在 5.9 万节点下仍有 41–58 fps，纯属浪费。
+- Web Worker —— 子群枚举慢是算法复杂度，修算法远便宜于搬线程。
+- 虚拟列表 / 窗口化 —— 绘制量不是瓶颈，只增加状态复杂度。
+- 继续按群阶加硬编码特判 —— 现有特判已多，性能阈值不再进这个列表。
+
 ## 3. 远期：GVL 教学实验室（2027-04 → 2027-12）
 
 **GVL**（Group Visualization Lab）：面向大学抽象代数课程的教学产品形态，消费 FGVE 双包（§3.8）。

@@ -83,14 +83,14 @@ describe('hybrid compute cutoff (order �?60 local)', () => {
   })
 
   it('returns cached subgroups for large groups', () => {
-    const big = makeBigGroup(120)
+    const big = makeBigGroup(200)
     const cached = [{ elements: [], isNormal: true, order: 60, index: 2, generators: [] }]
     const res = computeSubgroups(big, cached)
     expect(res).toBe(cached)
   })
 
   it('returns [] for cached missing subgroups on large groups', () => {
-    const big = makeBigGroup(120)
+    const big = makeBigGroup(200)
     expect(computeSubgroups(big)).toEqual([])
   })
 
@@ -100,7 +100,7 @@ describe('hybrid compute cutoff (order �?60 local)', () => {
   })
 
   it('uses cache for conjugacy classes on large groups', () => {
-    const big = makeBigGroup(120)
+    const big = makeBigGroup(200)
     const cached = [[{ id: 'e0', label: '0', value: [0] }]]
     expect(computeConjugacyClasses(big, cached)).toBe(cached)
   })
@@ -111,7 +111,7 @@ describe('hybrid compute cutoff (order �?60 local)', () => {
   })
 
   it('falls back to identity for center on large groups without cache', () => {
-    const big = makeBigGroup(120)
+    const big = makeBigGroup(200)
     expect(computeCenter(big)).toEqual([big.identity])
   })
 
@@ -123,15 +123,15 @@ describe('hybrid compute cutoff (order �?60 local)', () => {
   })
 
   it('derives simplicity from cached subgroups for large groups', () => {
-    const big = makeBigGroup(120)
+    const big = makeBigGroup(200)
     // only trivial normal subgroups -> simple
     const trivialOnly = [
-      { elements: [], isNormal: true, order: 1, index: 120, generators: [] },
-      { elements: [], isNormal: true, order: 120, index: 1, generators: [] },
+      { elements: [], isNormal: true, order: 1, index: 200, generators: [] },
+      { elements: [], isNormal: true, order: 200, index: 1, generators: [] },
     ]
     expect(computeIsSimple(big, trivialOnly)).toBe(true)
     // has a nontrivial normal subgroup -> not simple
-    const withNormal = [...trivialOnly, { elements: [], isNormal: true, order: 60, index: 2, generators: [] }]
+    const withNormal = [...trivialOnly, { elements: [], isNormal: true, order: 100, index: 2, generators: [] }]
     expect(computeIsSimple(big, withNormal)).toBe(false)
     // no cache -> conservative false
     expect(computeIsSimple(big)).toBe(false)
@@ -143,7 +143,7 @@ describe('hybrid compute cutoff (order �?60 local)', () => {
   })
 
   it('returns empty lattice fallback for large groups', () => {
-    const big = makeBigGroup(120)
+    const big = makeBigGroup(200)
     expect(computeLattice(big)).toEqual({ nodes: [], edges: [] })
   })
 
@@ -158,7 +158,7 @@ describe('hybrid compute cutoff (order �?60 local)', () => {
   })
 
   it('uses backend cache for large groups, null when unavailable', () => {
-    const big = makeBigGroup(120)
+    const big = makeBigGroup(200)
     expect(computeGroupProperties(big)).toBeNull()
     expect(computeGroupProperties(big, {
       ...createEmptyBackendCache(),
@@ -189,7 +189,7 @@ describe('fetchBackendResults', () => {
   })
 
   it('collects and converts backend results for large groups', async () => {
-    const big = makeBigGroup(120, ['g0', 'g1', 'g2'])
+    const big = makeBigGroup(200, ['g0', 'g1', 'g2'])
     mockFetchFunctions.fetchSubgroups.mockResolvedValue({
       subgroups: [
         { elements: [{ id: 'g0', label: 'g0', value: [0] }], is_normal: true, order: 1 },
@@ -232,33 +232,34 @@ describe('fetchBackendResults', () => {
   })
 
   it('falls back to local computation when the backend fails', async () => {
-    const s5 = createSymmetricGroup(5)
+    // C₂₀₀：order 200 > 枚举线 144 → 走后端；后端挂了 → 本地兜底（≤ FALLBACK_CUTOFF 240）
+    const c200 = createCyclicGroup(200)
     mockFetchFunctions.fetchSubgroups.mockRejectedValue(new Error('backend down'))
-    const res = await fetchBackendResults(s5)
+    const res = await fetchBackendResults(c200)
     expect(res.error).toBe('backend down')
     expect(res.subgroups!.length).toBeGreaterThan(0)
     expect(res.normalSubgroups!.length).toBeGreaterThan(0)
     expect(res.isSimple).toBe(false)
-    expect(res.center!.map(e => e.id)).toEqual([s5.identity.id])
-    expect(res.conjugacyClasses).toHaveLength(7)
-    expect(res.isSolvable).toBe(false)
-    expect(res.isNilpotent).toBe(false)
-    expect(res.isPerfect).toBe(false)
+    // 阿贝尔群：center = 全体元素，共轭类 = 每元素一类
+    expect(res.center!.length).toBe(200)
+    expect(res.conjugacyClasses).toHaveLength(200)
+    expect(res.isSolvable).toBe(true)
+    expect(res.isNilpotent).toBe(true)
     expect(res.lattice!.nodes.length).toBeGreaterThan(2)
   }, 30000)
 
   it('falls back when the backend returns truncated results', async () => {
-    const s5 = createSymmetricGroup(5)
+    const c200 = createCyclicGroup(200)
     mockFetchFunctions.fetchSubgroups.mockResolvedValue({
       subgroups: [],
       total_count: 0,
       truncated: true,
     })
-    const res = await fetchBackendResults(s5)
+    const res = await fetchBackendResults(c200)
     expect(res.error).toContain('truncated')
     expect(res.subgroups!.length).toBeGreaterThan(0)
-    expect(res.conjugacyClasses).toHaveLength(7)
-    expect(res.isSolvable).toBe(false)
+    expect(res.conjugacyClasses).toHaveLength(200)
+    expect(res.isSolvable).toBe(true)
   }, 30000)
 
   it('computeLocalFallbackResults returns empty above the cutoff', () => {
@@ -287,7 +288,7 @@ describe('fetchBackendCayleyEdges', () => {
   })
 
   it('maps backend edges for large groups', async () => {
-    const big = makeBigGroup(120, ['g0', 'g1'])
+    const big = makeBigGroup(200, ['g0', 'g1'])
     mockFetchFunctions.fetchCayleyEdges.mockResolvedValue({
       edges: [{
         from_idx: 0, to_idx: 1, from_id: 'g0', to_id: 'g1',
@@ -301,11 +302,11 @@ describe('fetchBackendCayleyEdges', () => {
       actionElementId: 'g1', color: '#ff6b6b',
       isBidirectional: true, isSelfLoop: false,
     }])
-    expect(mockFetchFunctions.fetchCayleyEdges).toHaveBeenCalledWith('C_{120}', ['g1'], 'left')
+    expect(mockFetchFunctions.fetchCayleyEdges).toHaveBeenCalledWith('C_{200}', ['g1'], 'left')
   })
 
   it('returns [] when backend raises', async () => {
-    const big = makeBigGroup(120, ['g0'])
+    const big = makeBigGroup(200, ['g0'])
     mockFetchFunctions.fetchCayleyEdges.mockRejectedValue(new Error('boom'))
     expect(await fetchBackendCayleyEdges(big, ['g0'], 'right')).toEqual([])
   })
@@ -325,7 +326,7 @@ describe('fetchBackendElementOrder', () => {
   })
 
   it('maps backend element order for large groups', async () => {
-    const big = makeBigGroup(120, ['g0', 'g1'])
+    const big = makeBigGroup(200, ['g0', 'g1'])
     mockFetchFunctions.fetchElementOrder.mockResolvedValue({
       element_id: 'g1', element_label: 'x', order: 10,
       cycle: [{ id: 'g1', label: 'x', value: [1] }, { id: 'g0', label: 'g0', value: [0] }],
@@ -336,7 +337,7 @@ describe('fetchBackendElementOrder', () => {
   })
 
   it('returns null when backend raises and element unknown', async () => {
-    const big = makeBigGroup(120, ['g0'])
+    const big = makeBigGroup(200, ['g0'])
     mockFetchFunctions.fetchElementOrder.mockRejectedValue(new Error('boom'))
     expect(await fetchBackendElementOrder(big, 'g9')).toBeNull()
   })

@@ -3,6 +3,7 @@ import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
 import { renderTex } from '../../utils/texify'
 import { findAllSubgroups } from '../../core/algebra/subgroups'
+import { ENUMERATION_LIMIT } from '../../core/guards'
 import { factorizeOrder } from '../../core/algebra/sylow'
 import { AccordionSection } from './AccordionSection'
 
@@ -35,7 +36,9 @@ export function GroupActionPanel() {
 
   const subgroups = useMemo(() => {
     if (!currentGroup) return []
-    if (currentGroup.order > 60) return []
+    // findAllSubgroups 自身按 ENUMERATION_LIMIT 守卫（allowLarge 可越过），
+    // 这里提前拦只是省一次空跑，口径必须与守卫一致
+    if (currentGroup.order > ENUMERATION_LIMIT) return []
     return findAllSubgroups(currentGroup)
   }, [currentGroup])
 

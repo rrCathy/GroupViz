@@ -221,10 +221,16 @@ if (!coset || coset.cosetElementMap.size !== 6 || coset.cosetColors.length !== 3
   throw new Error('buildCosetViewData 结果异常')
 if (listCosetStripSubgroups(c6).length === 0) throw new Error('listCosetStripSubgroups 为空')
 if (!cosetDataForSubgroup(c6, h)) throw new Error('cosetDataForSubgroup 为空')
-if (isTooLarge(150, 'table') !== true) throw new Error('isTooLarge 默认阈值异常')
+// 阈值口径对齐 guards.ts 三条实测线（docs/PERF.md）：图形类静态线 240、3d 720、
+// 子群枚举类 144；limitOverride 仍可逐次覆盖
+if (isTooLarge(150, 'table') !== false) throw new Error('isTooLarge 图形类静态线(240)异常')
+if (isTooLarge(300, 'table') !== true) throw new Error('isTooLarge 图形类静态线未生效')
+if (isTooLarge(200, '3d') !== false) throw new Error('isTooLarge 3D 阈值(720)异常')
+if (isTooLarge(150, 'sublattice') !== true) throw new Error('isTooLarge 枚举线(144)异常')
 if (isTooLarge(150, 'table', 200) !== false) throw new Error('isTooLarge 阈值覆盖无效')
 if (sizeLimitFor('heatmap') !== 240) throw new Error('sizeLimitFor 异常')
-console.log('  core ok  buildCosetViewData + listCosetStripSubgroups + isTooLarge 覆盖')
+if (sizeLimitFor('3d') !== 720 || sizeLimitFor('sylow') !== 144) throw new Error('sizeLimitFor 三线口径异常')
+console.log('  core ok  buildCosetViewData + listCosetStripSubgroups + isTooLarge 三线口径')
 
 // 字长球形状（S₄/S₅）：核心公共面须完整——布局 + 标准作用边 + 字长读数/色阶
 const s5 = createGroupFromSymbol('S_{5}')

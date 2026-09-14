@@ -18,6 +18,7 @@
   - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，61 文件；`src/__tests__/helpers/*.ts` 为非测试辅助模块，不被收集）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
+- **临时探针约定**：性能/复杂度探针放 `src/__tests__/`（node 项目跑纯计算、dom 项目跑组件渲染），**用完必须删除**——残留文件会挡住 `tsc -b`（`npm run build` 一并失败）。探针结果一律 `appendFileSync` 落盘再从文件读，**不要靠 console 输出**（vitest stdout 会被截断）。三层性能极限的实测口径与方法见 [PERF.md](PERF.md) §6。
 - **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 89.79% stmts，lines 92.59%，branches 79.58%、funcs 93.19%；v2.1.0 实测）
 - **playwright.config.ts**：testDir `./e2e`、fullyParallel:false + workers:1（会话/localStorage 隔离靠串行）、viewport 1440×900、locale zh-CN、chromium 单浏览器、retries CI?2:0、trace on-first-retry、webServer `npm run dev -- --strictPort`（reuseExistingServer 本地复用）、`toHaveScreenshot { maxDiffPixelRatio: 0.02, animations: 'disabled' }`
 - TypeScript 测试源码（.ts/.tsx），import 项目内部模块直接使用（ESM；不要用 `require()`）；tsx 文件走 tsconfig jsx react-jsx
@@ -25,7 +26,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，65 文件 / 1694 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，65 文件 / 1697 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -49,13 +50,13 @@
 | quotientFlow.test.ts | 1 | 商群流程 |
 | quotientRendering.test.ts | 1 | 商群渲染数据 |
 | quotientLayout.test.ts | 1 | 商群 projection2D 布局 |
-| hybridCompute.test.ts | 34 | 混合计算：order ≤60 本地 / >60 后端缓存、fetchBackendResults 合并转换、computeGroupProperties 本地/后端、后端失败本地兜底（computeLocalFallbackResults：S₅ 子群/共轭类/性质、>240 空兜底）、fetchBackendCayleyEdges/ElementOrder |
+| hybridCompute.test.ts | 34 | 混合计算：order ≤144 本地 / >144 后端缓存（mock 大群用 200 阶）、fetchBackendResults 合并转换、computeGroupProperties 本地/后端、后端失败本地兜底（computeLocalFallbackResults：C₂₀₀ 子群/共轭类/性质、>240 空兜底）、fetchBackendCayleyEdges/ElementOrder |
 | types.test.ts | 55 | 群类型判定函数、analyzeDPFactors、analyzeDPFactorsGrouped2D（相邻同底循环因子归组：C₂×C₂×S₃→[C₂²,S₃]、C₂×C₂×C₂ 合并 C₂³、S₃×S₃ 不合并、非 DP null）、isCyclicFactorKeys、isGroupSemidirectProduct（顶层 ':' 检测）、isRingGridGroup（C₄×C₂×C₂ pipe+注册表 16,9、C₆×C₂² true；C₁₀×C₂ 仅两因子/C₁₂×C₂/C₂³/C₄×C₄/C₄×C₂/C₂×D₄/S₃ false）、getAvailableShapes2D/形状与布局默认值（循环群默认 circular、classifyDirectProduct2D 直积 2D 分类与注册表群分类：C₂²×S₃→torus、(24,13)→torus、半直积→rewiring、hasTopLevelTimes 顶层 \\times 检测、注册表群直积判定、C₄×C₂×C₂ 默认 ringGrid）、getViewBoxSize 全分支 |
 | api.test.ts | 14 | 后端 API 客户端：9 端点 URL/method/body、错误路径（detail 优先、否则 statusText） |
 | cycleLayouts.test.ts | 23 | computeCycleSubgroups、computeMaximalCycles、forceLayout（自环/initialPositions/cycleSubgroups）、planarCycleLayout、**cycleGraphLayout**（GE 忠实复刻：C4 中心+dist>0、S3 三角叶+3 叶柄、C4×C2 蝴蝶、V4 3 叶柄、3 C3 循环共享 1 元素仍全放、C6×C2/GL(2,3) 全部 ≥4 多边形无自交、**风车式**：S3 型只共享 e 群 360° 均匀绕一圈、共享判定排除 e 防恒并） |
 | cycleGraphCrossings.test.ts | 5 | 循环图交叉度检测（self/cross/overlap 三探测器）：38 群目录硬不变式（C2..C16、D3..D8、S3..S5、A4/A5、V4、Q8、C4×C2、C6×C2、C3×C3、C2³、C4×C4、C8×C2、C3×C6、GL(2,3)、SL(2,3)）self=0 且 overlap=0，唯一异常 C5×S3 self==1（GE 固有）；软基线：S3/D3 cross≤6、C4×C4≤12、SL(2,3) 7 循环共点 −I 交叉≤8 |
 | ringOrder.test.ts | 33 | S2 排列/Z₂ 位向量/整数/eN 排序、parseProductFactors、matrixGridLayout、nestedFactorLayout2D、factorPipeGroups/parseCompactFactors、factorPipeGroupsGrouped（相邻同底循环归组：C₂²×S₃→2 组、C₂×C₂×C₃→[C₂²,C₃]、段数不符 null）、powerRingOrder（C₆ 幂序、V₄ bit 向量方形环序、C₄×C₂ pipe 特判（外圈 t0 升序 + 内圈 t1 降序）、直积 4 覆盖、S₃ 置换序、无生成元回退字典序）、tableGroupGridFactors（注册表群 C₄×C₄ 4×4、C₄×C₂×C₂ 4×4、C₂⁴ 4×4、C₂×D₄ 2×8、D₈ null）、clusterFactorGroups/tableGroupFactorSplit/clusterIsCyclic（Z₂×D₄ 聚类 2+8、D₈ null） |
-| viewBox.test.ts | 12 | getViewBoxSize（table clamp、sublattice、force 放大）、isTooLarge 各视图阈值、**`sizeLimitFor(view)` 默认阈值表 + `isTooLarge(order, view, limitOverride?)` 第三参覆盖（v2.1.0）** |
+| viewBox.test.ts | 12 | getViewBoxSize（table clamp、sublattice、force 放大）、isTooLarge 各视图阈值（**口径锁定 guards 三条实测线：图形类 240 / 3d 720 / 子群枚举类 144**）、**`sizeLimitFor(view)` 默认阈值表 + `isTooLarge(order, view, limitOverride?)` 第三参覆盖（v2.1.0）** |
 | semidirectProduct.test.ts | 16 | createSemidirectProduct：C2⋊C2→D2、平凡φ→直接积、幂等回退、非同态φ抛错、exponent=lcm、生成元提升；getSemidirectProductMeta（pipe 元数据直返、注册表 (16,2) findSemidirectDecompositions 恢复 N/H/φ 且 normal.order·acting.order=16、S₃/C5 null、**QD16 命名半直积恢复 C₈⋊C₂ 且 φ(b)(a)=a³**）、semidirectFactorMap（pipe id 拆分、注册表 n=g·h⁻¹ 代数分解）、semidirectFixedPoints（identity φ 空 map、inversion φ 仅单位元固定） |
 | semidirectDecompositions.test.ts | 29 | 半直积分解（semidirectDecompositions.ts）：findAutoByMap（命中/不命中/空）、verifyPhiHomomorphism（C4⋊C2 反转≅D4、C2⋊C2 平凡 φ、错阶 auto 拒绝、缺失回退 identity）、buildPhiFromGroup（round-trip/非半直积 null）、minimalGenerators（V4⊂A4 2 生成元、{e}→[]、全群）、buildSubgroupGroup（S3 换位 order2、C6 偶数子群 order3）、findSemidirectDecompositions（S3 3 候选全 verified、D4 8 候选、A4 4 候选 Frobenius、S4 ≥9 双型、C6 2 候选、Q8 []、D12 19 候选全 verified、S5 守卫 []、C7 []） |
 | properties.test.ts | 13 | 群性质：S₃/A₄/S₄ 导出列可解非幂零、A₅ 完美不可解、D₈ 幂零/D₁₂ 非幂零、Q₈、Cₙ/V₄、S₃×C₂、>60 cutoff 返回 null、导出列均为子群 |

@@ -82,7 +82,7 @@
 - **Group construction lab** — build G×H, N⋊_φ H, Aut(G), G/N and homomorphisms interactively.
 - **Presentation system** — define any finite group from a presentation ⟨S|R⟩ via Todd–Coxeter enumeration.
 - **Import by notation** — type `S₅`, `PSL(2,7)`, `C₃×D₄`, `Aut(S₄)` … and get the group, its Cayley graphs and full structure pipeline.
-- **Hybrid computation** — small groups computed locally in TypeScript, large ones (order > 60) offloaded to a FastAPI + GAP backend with automatic fallback.
+- **Hybrid computation** — groups up to order 144 computed locally in TypeScript, larger ones offloaded to a FastAPI + GAP backend with automatic fallback (local TS fallback up to order 240).
 
 ## 🚀 Quick Start
 
@@ -97,7 +97,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173/` in your browser. For large groups (order > 60), start the backend:
+Open `http://localhost:5173/` in your browser. For large groups (order > 144), start the backend:
 
 ```bash
 cd backend

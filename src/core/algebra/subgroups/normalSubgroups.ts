@@ -1,4 +1,5 @@
 import type { Group, GroupElement } from '../../types'
+import { ENUMERATION_LIMIT } from '../../guards'
 import { type Subgroup, findMinimalGenerators } from './shared'
 import { findAllSubgroups } from './enumerate'
 import { getConjugacyClasses } from './conjugacy'
@@ -11,7 +12,7 @@ export function isSimpleGroup(group: Group): boolean {
   }
 
   // Short-circuit for large groups to avoid main thread freeze
-  if (group.order > 60) return false
+  if (group.order > ENUMERATION_LIMIT) return false
 
   const normalSubgroups = findAllNormalSubgroups(group)
   return normalSubgroups.length <= 2
@@ -29,7 +30,7 @@ function isPrime(n: number): boolean {
 
 export function findAllNormalSubgroups(group: Group): Subgroup[] {
   // Short-circuit for large groups to avoid 2^N conjugacy class combinations freeze
-  if (group.order > 60) return []
+  if (group.order > ENUMERATION_LIMIT) return []
 
   const classes = getConjugacyClasses(group)
   const identityClass = classes.find(c =>

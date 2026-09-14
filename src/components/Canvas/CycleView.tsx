@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { cycleGraphLayout, circleLayoutRadius } from '../../core/algebra/forceLayout'
+import { INTERACTIVE_LIMIT } from '../../core/guards'
 import { texify, renderTex } from '../../utils/texify'
 import type { CanvasTransform, Group, GroupElement, NodePosition } from '../../core/types'
 
@@ -79,7 +80,7 @@ function CycleViewBody({
   onSelect,
   onHover,
   noGroupText,
-  largeGroupThreshold = 60,
+  largeGroupThreshold = INTERACTIVE_LIMIT,
 }: CycleViewProps) {
   // 惰性初始化的每实例唯一前缀（useState 初始化器每实例只执行一次）
   const [filterPrefix] = useState(() => `cyv${++_cycleViewInst}`)

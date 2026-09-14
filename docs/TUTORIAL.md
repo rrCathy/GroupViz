@@ -25,7 +25,7 @@ KaTeX, and the visual conventions (Cayley graphs, cosets, symmetry views) follow
 3. You land on the welcome page. There you can switch the UI language (中文 / English)
    and the theme (dark / light). Click the entry button to open the workspace.
 
-The backend is **optional** for the first steps: groups of order ≤ 60 are computed
+The backend is **optional** for the first steps: groups of order ≤ 144 are computed
 entirely in the browser. Only when you explore very large groups (|G| > 60) is a small
 FastAPI backend used — see [§13 Troubleshooting](#13-troubleshooting-and-performance)
 to start it.

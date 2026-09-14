@@ -1,5 +1,6 @@
 import type { Group, GroupElement, Generator } from '../types'
 import { COLOR_PALETTE, isGroupDirectProduct, isGroupSemidirectProduct } from '../types'
+import { ENUMERATION_LIMIT } from '../guards'
 import type { Automorphism } from './automorphisms'
 import {
   findAllNormalSubgroups,
@@ -289,13 +290,13 @@ function subgroupTypeSymbol(sub: Group): string {
  * isoSymbol (fallback: isAbelian + element-order distribution) → `verified`.
  * Candidates are deduplicated by the (N, H) element sets and sorted with
  * verified decompositions first, then by |N| descending.
- * Returns [] for groups of order > 60 (subgroup enumeration guard).
+ * Returns [] for groups of order > ENUMERATION_LIMIT (subgroup enumeration guard).
  */
 export function findSemidirectDecompositions(
   group: Group,
   allowLarge = false
 ): SemidirectDecompositionCandidate[] {
-  if (group.order > 60) return []
+  if (group.order > ENUMERATION_LIMIT) return []
 
   const normals = findAllNormalSubgroups(group)
     .filter(n => n.order > 1 && n.order < group.order)
@@ -391,7 +392,7 @@ export type GroupStructureType = 'direct' | 'semidirect' | 'indecomposable' | 'u
 export function detectStructureType(group: Group): GroupStructureType {
   if (group._semidirectProduct) return 'semidirect'
   if (isGroupDirectProduct(group)) return 'direct'
-  if (group.order > 60) return detectStructureFromSymbol(group.symbol)
+  if (group.order > ENUMERATION_LIMIT) return detectStructureFromSymbol(group.symbol)
 
   const normals = findAllNormalSubgroups(group).filter(
     (n) => n.order > 1 && n.order < group.order,

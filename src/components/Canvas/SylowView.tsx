@@ -5,6 +5,7 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
 import { useTheme } from '../../theme/useTheme'
 import { factorizeOrder, findAllPSubgroups, conjugateSubgroup } from '../../core/algebra/sylow'
+import { ENUMERATION_LIMIT } from '../../core/guards'
 import { computeElementOrderInGroup } from '../../core/algebra/subgroups'
 import { computeCayleyActionEdges } from '../../core/algebra/cayleyEdges'
 import { cayleyCircleLayout, circleLayoutRadius, cosetStripLayout } from '../../core/algebra/forceLayout'
@@ -273,7 +274,7 @@ export function SylowView() {
     )
   }
 
-  const isLarge = currentGroup.order > 60
+  const isLarge = currentGroup.order > ENUMERATION_LIMIT
 
   const factor = effectivePrime !== null ? factors.find(f => f.prime === effectivePrime) : null
   const pPower = factor ? Math.pow(factor.prime, factor.exponent) : 0

@@ -162,9 +162,9 @@ interface Automorphism { id: string; map: Map<string,string>; label: string; app
 
 | 函数 | 说明 |
 |------|------|
-| `findAllSubgroups(group, allowLarge?)` | 所有子群（idx 化乘法表 + 循环子群 + pair-join 闭包，order > 60 有守卫，allowLarge 强制计算） |
+| `findAllSubgroups(group, allowLarge?)` | 所有子群（idx 化乘法表 + 循环子群 + pair-join 闭包，order > 144 有守卫，allowLarge 强制计算） |
 | `findAllNormalSubgroups(group)` | 正规子群 |
-| `getConjugacyClasses(group, allowLarge?)` | 共轭类（order > 60 时每元素单独成类，allowLarge 强制计算） |
+| `getConjugacyClasses(group, allowLarge?)` | 共轭类（order > 144 时每元素单独成类，allowLarge 强制计算） |
 | `getGroupCenter(group, allowLarge?)` | 群中心 |
 | `getCentralizer(group, elements)` | 中心化子 C_G(E) = {g \| gx = xg, ∀x ∈ E} |
 | `getNormalizer(group, elements)` | 正规化子 N_G(E) = {g \| gEg⁻¹ = E} |

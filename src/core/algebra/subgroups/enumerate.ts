@@ -1,9 +1,11 @@
 import type { Group } from '../../types'
+import { ENUMERATION_LIMIT } from '../../guards'
 import { findMinimalGenerators, type Subgroup } from './shared'
 
 export function findAllSubgroups(group: Group, allowLarge = false): Subgroup[] {
-  // Short-circuit for large groups to avoid combinatorial explosion
-  if (group.order > 60 && !allowLarge) return []
+  // Short-circuit beyond the measured 2s line (D72(144)=1.81s, 168 阶 3.45s) to
+  // avoid combinatorial explosion; allowLarge lets the UI force it anyway.
+  if (group.order > ENUMERATION_LIMIT && !allowLarge) return []
 
   const n = group.order
   const elems = group.elements

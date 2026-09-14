@@ -244,7 +244,7 @@ const zh: TranslationMap = {
   'series.jordanHolder': 'Jordan–Hölder：因子多重集唯一',
   'series.solvable': '可解',
   'series.nilpotent': '幂零',
-  'series.tooLarge': '群阶超过 240，跳过本地系列计算',
+  'series.tooLarge': '群阶超过本地计算上限（144），已改用后端 GAP 计算',
   'series.loading': '后端（GAP）计算系列中…',
   'series.truncated': '合成列超过 20 条，仅展示前 20 条',
 
@@ -280,7 +280,7 @@ const zh: TranslationMap = {
   /* Canvas Common */
   'canvas.noGroup': '请先选择一个群',
   'canvas.noGroupCreate': '请先创建或选择一个群',
-  'canvas.orderTooLarge': '群阶数太大 (|G| = {n})',
+  'canvas.orderTooLarge': '群阶较大（|G| = {n}）：静态浏览与出图通常没问题，但拖拽 / 缩放会明显卡顿。仍要显示请点下方按钮',
   'canvas.show': '显示',
   'canvas.hintBox': '提示信息',
   'canvas.history': '操作历史',
@@ -941,7 +941,7 @@ const en: TranslationMap = {
   'series.jordanHolder': 'Jordan–Hölder: unique factor multiset',
   'series.solvable': 'Solvable',
   'series.nilpotent': 'Nilpotent',
-  'series.tooLarge': 'Order exceeds 240; local series computation skipped',
+  'series.tooLarge': 'Order exceeds the local computation limit (144); computed via backend GAP instead',
   'series.loading': 'Computing series via backend (GAP)…',
   'series.truncated': 'More than 20 chains; showing first 20',
 
@@ -981,7 +981,7 @@ const en: TranslationMap = {
   /* Canvas Common */
   'canvas.noGroup': 'Please select a group first',
   'canvas.noGroupCreate': 'Please create or select a group first',
-  'canvas.orderTooLarge': 'Group order is too large (|G| = {n})',
+  'canvas.orderTooLarge': 'Large group (|G| = {n}): static browsing and exporting are usually fine, but dragging / zooming will lag. Click below to show anyway',
   'canvas.show': 'Show',
   'canvas.hintBox': 'Hints',
   'canvas.history': 'History',

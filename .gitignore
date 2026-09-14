@@ -64,6 +64,11 @@ hostminimal-*.png
 hostminimal-*.svg
 testpage-pkgconsume.png
 
+# 验收脚本（consume:browser / consume:types）落在仓库根的产物
+browser-*.png
+browser-smoke-log.txt
+viewconfig-verify.txt
+
 gl23-*.png
 
 # Playwright artifacts

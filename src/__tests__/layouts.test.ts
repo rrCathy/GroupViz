@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { computeShape2DPositions } from '../core/algebra/shapeLayouts'
 import { compute3DPositions } from '../core/algebra/layout3D'
 import { ringOrder, computeElementOrder, cayleyCircleLayout, circleLayoutRadius } from '../core/algebra/forceLayout'
-import { quaternionCosetMap } from '../core/algebra/ringOrder'
+import { quaternionCosetMap, matrixGridLayout } from '../core/algebra/ringOrder'
 import { computeCayleyActionEdges } from '../core/algebra/cayleyEdges'
 import { getConjugacyClasses } from '../core/algebra/subgroups'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
@@ -62,6 +62,73 @@ describe('computeShape2DPositions', () => {
     for (const p of pos.values()) {
       expect(Math.abs(p.x)).toBeLessThanOrEqual(W)
       expect(Math.abs(p.y)).toBeLessThanOrEqual(H)
+    }
+  })
+
+  it('grid cells shrink on narrow canvases instead of overflowing (feedback 观察项 9)', () => {
+    const C6xC4 = createDirectProduct(createCyclicGroup(6), createCyclicGroup(4))
+    const idx = new Map(C6xC4.elements.map((e, i) => [e.id, i]))
+    const NODE_R = 28
+    // 351 宽 = 390 移动端视口下的实际 viewBox 宽度；旧实现（cellSize 下限 80）在此左出 52.5px
+    for (const [w, h] of [[351, 560], [360, 640], [750, 560], [1280, 720]] as [number, number][]) {
+      const pos = matrixGridLayout(
+        6, 4, el => idx.get(el.id)! % 6, el => Math.floor(idx.get(el.id)! / 6), C6xC4, w, h,
+      )
+      for (const p of pos.values()) {
+        expect(p.x - NODE_R).toBeGreaterThanOrEqual(0)
+        expect(p.x + NODE_R).toBeLessThanOrEqual(w)
+        expect(p.y - NODE_R).toBeGreaterThanOrEqual(0)
+        expect(p.y + NODE_R).toBeLessThanOrEqual(h)
+      }
+    }
+  })
+
+  it('coil draws a petal form: even inward spacing + non-wrap crossings (feedback 观察项 8)', () => {
+    const segCross = (pts: { x: number; y: number }[], n: number) => {
+      const cr = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) =>
+        (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+      const hit = (
+        p1: { x: number; y: number }, p2: { x: number; y: number },
+        p3: { x: number; y: number }, p4: { x: number; y: number },
+      ) => {
+        const d1 = cr(p3, p4, p1), d2 = cr(p3, p4, p2), d3 = cr(p1, p2, p3), d4 = cr(p1, p2, p4)
+        return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+      }
+      let k = 0
+      for (let i = 0; i < n - 1; i++) {
+        for (let j = i + 1; j < n - 1; j++) {
+          const a = i, b = (i + 1) % n, c = j, d = (j + 1) % n
+          if (a === c || a === d || b === c || b === d) continue
+          if (hit(pts[a], pts[b], pts[c], pts[d])) k++
+        }
+      }
+      return k
+    }
+    for (const n of [12, 16, 30, 36]) {
+      const g = createCyclicGroup(n)
+      const ids = g.elements.map(e => e.id)
+      for (const [w, h] of [[750, 560], [354, 460]] as [number, number][]) {
+        const m = computeShape2DPositions(g, 'coil', w, h)!
+        const pts = ids.map(id => m.get(id)!)
+        // 1) 不出画布（半径归一化，调制后最大半径仍落在 0.42·min）
+        for (const p of pts) {
+          expect(p.x - 28).toBeGreaterThanOrEqual(0)
+          expect(p.x + 28).toBeLessThanOrEqual(w)
+          expect(p.y - 28).toBeGreaterThanOrEqual(0)
+          expect(p.y + 28).toBeLessThanOrEqual(h)
+        }
+        // 2) 内侧不再塌成一团：最小环向距 ≥ 中位距的 45%（旧实现 C30/C36 只有 0.076/0.064）
+        const dists: number[] = []
+        for (let i = 0; i < n; i++) {
+          const a = pts[i], b = pts[(i + 1) % n]
+          dists.push(Math.hypot(a.x - b.x, a.y - b.y))
+        }
+        const sorted = dists.slice(0, n - 1).sort((a, b) => a - b)
+        const median = sorted[Math.floor(sorted.length / 2)]
+        expect(sorted[0] / median).toBeGreaterThan(0.45)
+        // 3) 花瓣脉络：非绕回边出现交叉（旧实现恒为 0，与 spiral 的交叉模式完全相同）
+        expect(segCross(pts, n)).toBeGreaterThan(0)
+      }
     }
   })
 

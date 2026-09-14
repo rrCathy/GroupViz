@@ -6,9 +6,19 @@ import { createAlternatingGroup } from './AlternatingGroup'
 import { createKleinFour, createQuaternion } from './SpecialGroup'
 import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3, createZ6xZ2, getSmallGroupBySymbol } from './SmallGroups'
 import { createDirectProduct } from './DirectProduct'
+import { createSemidirectProduct } from './SemidirectProduct'
+import type { Automorphism } from '../algebra/automorphisms'
 import { createGL2 } from './GeneralLinearGroup'
 import { createTableGroup } from './SmallGroups/tableGroup'
 import { SMALL_GROUP_DATA } from './smallGroupData'
+
+/**
+ * 循环群记号构造上限（C_{n} / Z_{n} 两种写法共用）。
+ * 与群族面板的 Cₙ(2–120) 对齐。纯循环群的乘法是闭式 `(i+j) mod n`，
+ * 不需要 GAP 小群表，任意阶都算得动；原上限 30 会让 C₃₁ 以上的记号构造
+ * 直接返回 null（见 feedback 观察项 7：博客要展示 coil 需 C₃₆ 起）。
+ */
+export const CYCLIC_GROUP_MAX_ORDER = 120
 
 function parseTexSubscript(symbol: string, prefix: string): number | null {
   const re = new RegExp(`^${prefix}_\\{(\\d+)\\}$`, '')
@@ -23,6 +33,73 @@ function parseTexSuperscript(symbol: string): { base: string; exponent: number }
   const exponent = parseInt(m[2], 10)
   if (exponent < 1) return null
   return { base: m[1], exponent }
+}
+
+function gcdInt(a: number, b: number): number {
+  while (b) { const t = a % b; a = b; b = t }
+  return a
+}
+
+function modPow(base: number, exp: number, mod: number): number {
+  let result = 1
+  let b = base % mod
+  let e = exp
+  while (e > 0) {
+    if (e & 1) result = (result * b) % mod
+    b = (b * b) % mod
+    e >>= 1
+  }
+  return result
+}
+
+/** C_n 上的自同构 a ↦ a^k（k 与 n 互素） */
+function cyclicAuto(N: Group, k: number, n: number): Automorphism {
+  const kk = ((k % n) + n) % n
+  return {
+    id: `a->a^${kk}`,
+    map: new Map(N.elements.map(el => [el.id, `e${(el.value[0] * kk) % n}`])),
+    label: `a\\mapsto a^{${kk}}`,
+    apply: (el) => N.elements[(el.value[0] * kk) % n],
+  }
+}
+
+/**
+ * 通用 `C_{n}:C_{m}` 半直积兜底（registry 未收录时）。
+ *
+ * φ 取 C_n 上乘法阶最大、且满足 k^m ≡ 1 (mod n) 的非平凡自同构 a ↦ a^k
+ * —— k^m ≡ 1 保证作用经 C_m 下降（φ 良定义），取最大阶让作用尽量不平凡。
+ * 这是群论里 `:` 记号的标准含义（split extension）。不存在这样的 k
+ * （如 Aut(C_n) 平凡、或阶不整除 m）时返回 null，交由调用方走其他分支。
+ *
+ * 注意顺序：调用点必须在 registry 查询**之后**，已收录的记号（C_{7}:C_{3}、
+ * C_{8}:C_{2} …带预计算子群数据的 14 个）保持原有构造路径不变。
+ */
+function buildCyclicSplitExtension(n: number, m: number): Group | null {
+  if (n < 2 || m < 2) return null
+  let bestK = 0
+  let bestOrder = 0
+  for (let k = 2; k < n; k++) {
+    if (gcdInt(k, n) !== 1) continue
+    if (modPow(k, m, n) !== 1) continue
+    let ord = 1
+    let cur = k % n
+    while (cur !== 1) { cur = (cur * k) % n; ord++ }
+    if (ord > bestOrder) { bestOrder = ord; bestK = k }
+  }
+  if (bestK === 0) return null
+
+  const N = createCyclicGroup(n)
+  const H = createCyclicGroup(m)
+  const phi = new Map<string, Automorphism>()
+  // e_j = a^j ⟹ φ(e_j) = φ(a)^j = (a ↦ a^k)^j = a ↦ a^{k^j}
+  for (let j = 0; j < m; j++) {
+    phi.set(H.elements[j].id, cyclicAuto(N, modPow(bestK, j, n), n))
+  }
+  try {
+    return createSemidirectProduct(N, H, phi)
+  } catch {
+    return null
+  }
 }
 
 export function createGroupFromSymbol(symbol: string): Group | null {
@@ -90,25 +167,25 @@ export function createGroupFromSymbol(symbol: string): Group | null {
 
   // Cyclic groups: C_{n}
   const cN = parseTexSubscript(symbol, 'C')
-  if (cN !== null && cN >= 1 && cN <= 30) {
+  if (cN !== null && cN >= 1 && cN <= CYCLIC_GROUP_MAX_ORDER) {
     return createCyclicGroup(cN)
   }
   // Plain-digit fallback: C3, C5, etc.
   const cMatch = /^C(\d+)$/.exec(symbol)
   if (cMatch) {
     const n = parseInt(cMatch[1], 10)
-    if (n >= 1 && n <= 30) return createCyclicGroup(n)
+    if (n >= 1 && n <= CYCLIC_GROUP_MAX_ORDER) return createCyclicGroup(n)
   }
 
   // Z_{n} alias for cyclic groups: Z_{3}, Z_{n}, etc.
   const zN = parseTexSubscript(symbol, 'Z')
-  if (zN !== null && zN >= 1 && zN <= 30) {
+  if (zN !== null && zN >= 1 && zN <= CYCLIC_GROUP_MAX_ORDER) {
     return createCyclicGroup(zN)
   }
   const zMatch = /^Z(\d+)$/.exec(symbol)
   if (zMatch) {
     const n = parseInt(zMatch[1], 10)
-    if (n >= 1 && n <= 30) return createCyclicGroup(n)
+    if (n >= 1 && n <= CYCLIC_GROUP_MAX_ORDER) return createCyclicGroup(n)
   }
 
   // Dihedral groups: D_{n}
@@ -120,6 +197,13 @@ export function createGroupFromSymbol(symbol: string): Group | null {
   if (dMatch) {
     const n = parseInt(dMatch[1], 10)
     if (n >= 3 && n <= 15) return createDihedralGroup(n)
+  }
+
+  // 命名半直积的无下标写法：QD16（规范符号是 'QD_{16}'）。registry 命中失败
+  // 时返回 null——不猜测结构，交由调用方处理。
+  const qdMatch = /^QD(\d+)$/.exec(symbol)
+  if (qdMatch) {
+    return getSmallGroupBySymbol(`QD_{${qdMatch[1]}}`)?.group ?? null
   }
 
   // Symmetric groups: S_{n}
@@ -166,5 +250,15 @@ export function createGroupFromSymbol(symbol: string): Group | null {
   }
 
   // Fallback: look up the SmallGroups registry by symbol (orders 16-31, Dic3, ...)
-  return getSmallGroupBySymbol(symbol)?.group ?? null
+  const registered = getSmallGroupBySymbol(symbol)?.group
+  if (registered) return registered
+
+  // 通用 C_{n}:C_{m} 半直积兜底。放在 registry 之后：已收录的 14 个 ':' 记号
+  // （C_{7}:C_{3}、C_{8}:C_{2} … 带预计算子群数据与标准化生成对）保持原路径；
+  // 只有未收录的写法（如 C_{4}:C_{2}，即 D₄ 的常见记号）才走这里现场构造。
+  const colonMatch = /^C_\{(\d+)\}:C_\{(\d+)\}$/.exec(symbol)
+  if (colonMatch) {
+    return buildCyclicSplitExtension(parseInt(colonMatch[1], 10), parseInt(colonMatch[2], 10))
+  }
+  return null
 }

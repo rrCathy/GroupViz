@@ -29,6 +29,7 @@ import { createDirectProduct } from '../core/groups/DirectProduct'
 import { createSemidirectProduct } from '../core/groups/SemidirectProduct'
 import { findAllSubgroups } from '../core/algebra/subgroups'
 import { getSmallGroup } from '../core/groups/SmallGroups'
+import { createGroupFromSymbol } from '../core/groups/groupFactory'
 import { createQuaternion } from '../core/groups/SpecialGroup'
 import type { Group, GroupElement } from '../core/types'
 import type { Automorphism } from '../core/algebra/automorphisms'
@@ -764,6 +765,44 @@ describe('semidirectProductLayout', () => {
       expect(Number.isFinite(p.x)).toBe(true)
       expect(Number.isFinite(p.y)).toBe(true)
     }
+  })
+
+  it('fits the ring layout into narrow / short canvases (feedback 主项)', () => {
+    const NODE_R = 28
+    const f21 = createGroupFromSymbol('C_{7}:C_{3}')!
+    const qd16 = getSmallGroup(16, 7)!.group
+    const cases: [string, Group, number, number][] = [
+      ['F21 750x460（反馈源：原顶部环裁 60–80px）', f21, 750, 460],
+      ['F21 354x460（390 移动端：原横向溢出 ~150px/侧）', f21, 354, 460],
+      ['QD16 354x440（反馈源：原上下各裁 ~150px）', qd16, 354, 440],
+      ['QD16 750x440', qd16, 750, 440],
+      ['QD16 800x600（常规容器）', qd16, 800, 600],
+    ]
+    for (const [name, g, w, h] of cases) {
+      const pos = semidirectProductLayout(g, w, h)
+      expect(pos, name).not.toBeNull()
+      for (const p of pos!.values()) {
+        expect(p.x - NODE_R, name).toBeGreaterThanOrEqual(0)
+        expect(p.x + NODE_R, name).toBeLessThanOrEqual(w)
+        expect(p.y - NODE_R, name).toBeGreaterThanOrEqual(0)
+        expect(p.y + NODE_R, name).toBeLessThanOrEqual(h)
+      }
+    }
+  })
+
+  it('keeps the φ-twist distinction after viewport scaling (feedback 主项)', () => {
+    // 包围盒缩放是等比的，不应抹掉 QD16 与 C8:C2 的环间相位差
+    const qd16 = getSmallGroup(16, 7)!.group
+    const c8c2 = getSmallGroup(16, 5)!.group
+    const a = semidirectProductLayout(qd16, 354, 440)!
+    const b = semidirectProductLayout(c8c2, 354, 440)!
+    let differ = false
+    for (const el of qd16.elements) {
+      const p = a.get(el.id)
+      const q = b.get(el.id)
+      if (p && q && (Math.abs(p.x - q.x) > 1e-3 || Math.abs(p.y - q.y) > 1e-3)) { differ = true; break }
+    }
+    expect(differ).toBe(true)
   })
 
   it('twists N-rings by phi(h) so QD16 and C8:C2 differ (issue 9)', () => {

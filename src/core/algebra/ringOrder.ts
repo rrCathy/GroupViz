@@ -729,7 +729,12 @@ export function matrixGridLayout(
 
   const usableW = width - 2 * margin
   const usableH = height - 2 * margin
-  const cellSize = Math.max(80, Math.min(usableW / c, usableH / r, 160))
+  // 下限 24（正值保护）而非固定 80：80 是绝对值下限，窄画布（390 视口 → viewBox ≈351）
+  // 下算出的 fit 会被顶到 80，网格总宽 c×80 超过画布 → offX 变负、首列被推出左边界
+  // （见 feedback 观察项 9：C₆×C₄ 在 351 宽下左出 52.5px）。格子小一点只影响疏密，
+  // 图被裁则丢失信息，故宁可压缩。上限 160 不会引致横向溢出（fit ≤ usableW/c）。
+  const fit = Math.min(usableW / c, usableH / r)
+  const cellSize = Math.min(160, Math.max(24, fit))
   const gridW = c * cellSize
   const gridH = r * cellSize
   const offX = (width - gridW) / 2 + cellSize / 2

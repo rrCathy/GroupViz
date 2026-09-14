@@ -110,6 +110,19 @@ export function analyzeDPFactorsGrouped2D(group: Group): DPFactorGrouped2DInfo |
     parts = [sym]
   }
 
+  // 规范化后的紧凑幂：createDirectProduct 落盘时把 'S₃\times S₃' 记成 'S₃^{2}'，
+  // 原 \times 结构信息因此丢失。循环底（C/Z）保持紧凑是刻意的归组规则
+  // （C₂×C₂ → V₄ 视为单个非循环因子），但**非循环底不合并**——按 pipe 段数
+  // 展开成同基因子。否则 S₃×S₃ 会被记成 1 个因子 → count=1 → 2D 落 grid、
+  // 3D 落 lattice（见 feedback 观察项 1）。
+  if (parts.length === 1 && isPipe) {
+    const m = parts[0].match(/^(.+)\^\{(\d+)\}$/)
+    if (m && !(m[1].startsWith('C') || m[1].startsWith('Z_'))) {
+      const tokenCount = group.elements[0].id.split('|').length
+      if (tokenCount === Number(m[2])) parts = Array(tokenCount).fill(m[1])
+    }
+  }
+
   if (parts.length === 0 && isPipe) {
     const tokenCount = group.elements[0].id.split('|').length
     parts = Array(tokenCount).fill('unknown')
@@ -292,9 +305,9 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
     shapes.push('circular', 'truncatedTetrahedron')
   } else if (sym === 'A_{5}' || sym === 'A5') {
     shapes.push('circular', 'truncatedIcosahedron', 'truncatedDodecahedron')
-  } else if (sym.startsWith('A')) {
+  } else if (/^A_?\{?\d/.test(sym)) {
     shapes.push('circular')
-  } else if (sym.startsWith('S')) {
+  } else if (/^S_?\{?\d/.test(sym)) {
     shapes.push('circular')
   }
 
@@ -328,7 +341,10 @@ export function getDefaultLayout3D(group: Group): Layout3D {
   if (sym === 'A_{4}' || sym === 'A4') return 'truncatedTetrahedron'
   if (sym === 'A_{5}' || sym === 'A5') return 'truncatedIcosahedron'
   if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') return 'truncatedOctahedron2'
-  if (sym.startsWith('S') || sym.startsWith('A')) return 'circular'
+  // 收紧为置换群记号 Sₙ/Aₙ：'SL(2,3)'、'Sz(8)'、'SmallGroup(n,i)' 等结构名首字母
+  // 同为 S，用 startsWith('S') 会把它们误判进置换群族、拿不到 cone 兜底
+  // （见 feedback 观察项 2：SL(2,3) 的 3D 默认形状落 circular 而非 cone）。
+  if (/^(S|A)_?\{?\d/.test(sym)) return 'circular'
   return 'cone'
 }
 

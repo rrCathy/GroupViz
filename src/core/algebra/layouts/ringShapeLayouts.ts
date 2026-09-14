@@ -574,7 +574,16 @@ export function spiralLayout(
   return result
 }
 
-// ─── Coil Layout (variable-pitch spiral, only wrap-edge crosses) ────────
+// ─── Coil Layout（花瓣状变螺距螺旋）─────────────────────────────────────────
+//
+// 循环群 C_n 的「玫瑰」形态：螺旋外扩的同时对半径做周期性调制，使相邻圈在
+// 空间上交错，环向相邻的两点不再沿同一条光滑螺线推进，凯莱边因而彼此交叉，
+// 形成花瓣的脉络。
+//
+// 关键参数是调制相位与圈数的**错位**：花瓣数取 turns + 1。若两者同步
+// （petals = turns），相邻圈的点径向对齐、边互相平行，实测交叉数为 0——
+// 这正是旧实现「看不出花瓣」的原因（r 线性外扩、θ 只做 t^0.7 变形，
+// 全图只有绕回长边与其它边相交，且与 spiral 的交叉模式完全相同）。
 
 export function coilLayout(
   group: Group,
@@ -592,18 +601,24 @@ export function coilLayout(
     return result
   }
 
-  const maxR = Math.min(width, height) * 0.42
   const turns = Math.max(2, Math.ceil(n / 6))
-  const alpha = 0.7
+  const petals = turns + 1
+  const amp = 0.3
+  const base = 0.45
+  const span = 0.55
+
+  // 归一化：调制后的最大半径恰落在 0.42·min（与 spiral/archimedean 同口径）。
+  // 不归一化时 (base+span)(1+amp) = 1.3 会让最外圈冲出画布。
+  const maxR = (Math.min(width, height) * 0.42) / ((base + span) * (1 + amp))
 
   for (let i = 0; i < n; i++) {
     const t = n > 1 ? i / (n - 1) : 0
-    const r = maxR * t
-    const theta = Math.pow(t, alpha) * turns * 2 * Math.PI
+    const theta = 2 * Math.PI * turns * t - Math.PI / 2
+    const r = maxR * (base + span * t) * (1 + amp * Math.cos(2 * Math.PI * petals * t))
 
     result.set(group.elements[i].id, {
-      x: cx + r * Math.cos(theta - Math.PI / 2),
-      y: cy + r * Math.sin(theta - Math.PI / 2)
+      x: cx + r * Math.cos(theta),
+      y: cy + r * Math.sin(theta)
     })
   }
 

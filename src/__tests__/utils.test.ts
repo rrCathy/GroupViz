@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { texify, renderTex } from '../utils/texify'
 import { createGroupFromSymbol } from '../utils/groupFactory'
+import { createDihedralGroup } from '../core/groups/DihedralGroup'
 
 describe('texify', () => {
   it('converts unicode subscripts', () => {
@@ -135,7 +136,63 @@ describe('createGroupFromSymbol', () => {
     expect(createGroupFromSymbol('S_{7}')).toBeNull()
     expect(createGroupFromSymbol('A_{2}')).toBeNull()
     expect(createGroupFromSymbol('A_{7}')).toBeNull()
-    expect(createGroupFromSymbol('Z_{32}')).toBeNull()
+    // 循环群上限由 30 放宽到 120（与群族面板 Cₙ(2–120) 对齐，见 feedback 观察项 7）
+    expect(createGroupFromSymbol('Z_{121}')).toBeNull()
+    expect(createGroupFromSymbol('C_{121}')).toBeNull()
+  })
+
+  it('accepts cyclic groups up to the panel limit (Cₙ 2–120)', () => {
+    for (const n of [32, 36, 100, 120]) {
+      expect(createGroupFromSymbol(`C_{${n}}`)!.order).toBe(n)
+      expect(createGroupFromSymbol(`Z_{${n}}`)!.order).toBe(n)
+      expect(createGroupFromSymbol(`C${n}`)!.order).toBe(n)
+    }
+  })
+
+  it('resolves the un-subscripted QD16 spelling', () => {
+    const g = createGroupFromSymbol('QD16')
+    expect(g).not.toBeNull()
+    expect(g!.order).toBe(16)
+    expect(g!.symbol).toBe('QD_{16}')
+    // 不猜结构：registry 里没有的阶返回 null，而不是退化成别的群
+    expect(createGroupFromSymbol('QD99')).toBeNull()
+  })
+
+  it('builds unregistered C_{n}:C_{m} split extensions (C₄:C₂ ≅ D₄)', () => {
+    // registry 的 14 个 ':' 条目里没有 C_{4}:C_{2}，走通用半直积兜底
+    const g = createGroupFromSymbol('C_{4}:C_{2}')
+    expect(g).not.toBeNull()
+    expect(g!.order).toBe(8)
+    expect(g!.isAbelian).toBe(false)
+
+    // 与 D₄ 的同构指纹：元素阶分布 1/5/2、对合元（x²=e）6 个、中心 2 阶
+    type G = NonNullable<ReturnType<typeof createGroupFromSymbol>>
+    const orderSpec = (grp: G) => {
+      const cnt = new Map<number, number>()
+      for (const el of grp.elements) {
+        let o = 1
+        let cur = el
+        while (cur.id !== grp.identity.id) { cur = grp.multiply(cur, el); o++ }
+        cnt.set(o, (cnt.get(o) ?? 0) + 1)
+      }
+      return [...cnt.entries()].sort((a, b) => a[0] - b[0]).map(([o, c]) => `${o}:${c}`).join(',')
+    }
+    const d4 = createDihedralGroup(4)
+    expect(orderSpec(g!)).toBe('1:1,2:5,4:2')
+    expect(orderSpec(g!)).toBe(orderSpec(d4))
+
+    const involutions = (grp: G) =>
+      grp.elements.filter(e => grp.multiply(e, e).id === grp.identity.id).length
+    const centerSize = (grp: G) =>
+      grp.elements.filter(e => grp.elements.every(o => grp.multiply(e, o).id === grp.multiply(o, e).id)).length
+    expect(involutions(g!)).toBe(6)
+    expect(involutions(g!)).toBe(involutions(d4))
+    expect(centerSize(g!)).toBe(centerSize(d4))
+
+    // registry 已收录的 ':' 记号仍走原路径（符号保持 registry 规范写法）
+    const f21 = createGroupFromSymbol('C_{7}:C_{3}')
+    expect(f21!.order).toBe(21)
+    expect(f21!.symbol).toBe('C_{7}:C_{3}')
   })
 
   it('resolves previously out-of-range symbols via the SmallGroups registry', () => {

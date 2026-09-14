@@ -27,6 +27,7 @@ import { createS3 } from '../core/groups/SymmetricGroup'
 import { createDirectProduct } from '../core/groups/DirectProduct'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
 import { createAlternatingGroup } from '../core/groups/AlternatingGroup'
+import { createGroupFromSymbol } from '../core/groups/groupFactory'
 
 const ID: GroupElement = { id: 'e', label: '0', value: [] }
 
@@ -223,6 +224,19 @@ describe('getDefaultLayout3D', () => {
     expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times C_{3} \\times S_{3}' }))).toBe('cylinder')
     expect(getDefaultLayout3D(mk({ symbol: 'C_{2} \\times C_{2} \\times S_{3}' }))).toBe('torus')
     expect(getDefaultLayout3D(mk({ symbol: 'S_{3} \\times S_{3}' }))).toBe('torus')
+  })
+
+  it('does not mistake structure-name families for symmetric groups (feedback 观察项 2)', () => {
+    // SL(2,3)（SmallGroup(24,3)，矩阵群）的 symbol 以 'S' 开头。旧实现用
+    // startsWith('S') 兜底，把它当 Sₙ 族 → 3D 落 circular；应收紧为置换群
+    // 记号 Sₙ/Aₙ 的正则匹配，落到通用 cone 兜底。
+    const sl23 = createGroupFromSymbol('SL(2,3)')
+    expect(sl23).not.toBeNull()
+    expect(sl23!.symbol).toBe('SL(2,3)')
+    expect(getDefaultLayout3D(sl23!)).toBe('cone')
+    expect(getAvailableShapes3D(sl23!)).toEqual(['cone'])
+    // 真置换群不受影响
+    expect(getDefaultLayout3D(createGroupFromSymbol('S_{6}')!)).toBe('circular')
   })
 
   it('defaults C2 cube groups to the cube layout', () => {
@@ -426,6 +440,28 @@ describe('classifyDirectProduct2D', () => {
     expect(classifyDirectProduct2D(getSmallGroup(16, 11)!.group)).toBe('cylinder') // Z₂×Q₈
     expect(classifyDirectProduct2D(getSmallGroup(16, 2)!.group)).toBe('grid') // (Z₄×Z₂):Z₂ 半直积防御
     expect(classifyDirectProduct2D(getSmallGroup(24, 13)!.group)).toBe('torus') // C₂×C₂×S₃ 归组 C₂²×S₃ 全非循环
+  })
+
+  it('expands compact powers of non-cyclic bases into separate factors (feedback 观察项 1)', () => {
+    // createDirectProduct 落盘 symbol 时把 'S₃×S₃' 规范化成 'S₃^{2}'，原 \times
+    // 结构信息丢失。循环底保持紧凑是刻意的归组规则（C₂×C₂ → V₄ 视为单个非循环
+    // 因子），但非循环底必须按 pipe 段数展开——否则 S₃×S₃ 被记成单个因子
+    // → count=1 → 2D 落 grid、3D 落 lattice。
+    const s3sq = createDirectProduct(createS3(), createS3())
+    expect(s3sq.symbol).toBe('S_{3}^{2}')
+    expect(analyzeDPFactorsGrouped2D(s3sq)!.count).toBe(2)
+    expect(classifyDirectProduct2D(s3sq)).toBe('torus')
+    expect(getDefaultShape2D(s3sq)).toBe('torus')
+    expect(getDefaultLayout3D(s3sq)).toBe('torus')
+
+    // 循环底仍按原规则紧凑归组
+    const c2sq = createDirectProduct(createCyclicGroup(2), createCyclicGroup(2))
+    expect(c2sq.symbol).toBe('C_{2}^{2}')
+    expect(analyzeDPFactorsGrouped2D(c2sq)!.count).toBe(1)
+    // 非循环单因子 + 循环因子：不受影响
+    const c2s3 = createDirectProduct(createCyclicGroup(2), createS3())
+    expect(analyzeDPFactorsGrouped2D(c2s3)!.count).toBe(2)
+    expect(classifyDirectProduct2D(c2s3)).toBe('cylinder')
   })
 })
 

@@ -382,6 +382,36 @@ export function semidirectProductLayout(
     result.set(el.id, { x: hp.x + rN * Math.cos(nAngle), y: hp.y + rN * Math.sin(nAngle) })
   }
 
+  // 视口适配：上面的环半径带绝对下限（minRN/minRH 按 56px/节点起算、copyGap ≥ 90），
+  // 容器小于布局需求时（窄屏/矮画布）环会被推出画布裁掉。照 projection3DLayout 的
+  // 尾部模式按包围盒整体等比缩放平移到画布内；只缩不放大，环间相位差（φ 扭转）
+  // 与边形态保持不变。
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const p of result.values()) {
+    minX = Math.min(minX, p.x)
+    minY = Math.min(minY, p.y)
+    maxX = Math.max(maxX, p.x)
+    maxY = Math.max(maxY, p.y)
+  }
+  if (isFinite(minX)) {
+    const dataW = maxX - minX || 1
+    const dataH = maxY - minY || 1
+    const margin = 44
+    const scale = Math.min(
+      (width - margin * 2) / dataW,
+      (height - margin * 2) / dataH,
+      1,
+    )
+    const dataCx = (minX + maxX) / 2
+    const dataCy = (minY + maxY) / 2
+    for (const [id, p] of result) {
+      result.set(id, { x: cx + (p.x - dataCx) * scale, y: cy + (p.y - dataCy) * scale })
+    }
+  }
+
   return result
 }
 

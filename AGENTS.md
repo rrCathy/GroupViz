@@ -31,7 +31,7 @@
 | [docs/STATE.md](docs/STATE.md) | 状态管理：12 Provider 分层、子集/陪集/同态/商群状态、持久化 key、导出、i18n/主题 |
 | [docs/BACKEND.md](docs/BACKEND.md) | 后端系统：FastAPI 端点、服务端缓存、混合计算（≤60 本地 / >60 后端）、GAP 大群计算引擎 |
 | [docs/UI.md](docs/UI.md) | UI 结构：三栏布局、左侧 6 面板、右侧双模式、组件清单、i18n 键缺口 |
-| [docs/TESTING.md](docs/TESTING.md) | 测试体系：85 文件 1869 tests（node+dom 双项目）、Playwright E2E 13 tests、vitest 配置、覆盖率、测试约定、**法则型性质测试（元素→数学对象映射的 11 条结构法则 oracle）** |
+| [docs/TESTING.md](docs/TESTING.md) | 测试体系：85 文件 1884 tests（node+dom 双项目）、Playwright E2E 13 tests、vitest 配置、覆盖率、测试约定、**法则型性质测试（元素→数学对象映射的 11 条结构法则 oracle）** |
 | [docs/ACTIONS.md](docs/ACTIONS.md) | 群作用系统：共轭/正则/陪集/自定义/Sylow 五来源、同态校验、轨道/稳定化子/OST、Burnside 自检、轨道视图、几何作用暂缓记录 |
 | [docs/API.md](docs/API.md) | **引擎消费 API（FGVE 双包随包分发）**：Scene props 全表、core 门面导出、元素引用解析（id/label/value）、`useSceneState`、`theme` 约定、阈值 props、内嵌 `I18nProvider` |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 路线图（**只列未做事项/边界决策**）：FGVE 引擎化进行中——阶段 2 余 tree/prestable props 化与 action 窗口 sylow/coset、阶段 3 余 CI 消费冒烟接入 / exports 子路径 / descriptor round-trip 载群（双包 @groupviz/core+react **v2.0.0 已发布 npm**，**v2.1.0 消费端卡点优化** = 元素引用/`useSceneState`/`theme`/阈值/`API.md`，2026-09-10）；中期特征标表 / GAP 后端完善；远期 GVL 教学实验室 |
@@ -58,7 +58,7 @@
 ```
 GroupViz/
 ├── src/
-│   ├── __tests__/              # 85 个测试文件（1869 tests，node+dom 双项目），见 docs/TESTING.md
+│   ├── __tests__/              # 85 个测试文件（1884 tests，node+dom 双项目），见 docs/TESTING.md
 │   ├── components/
 │   │   ├── Canvas/             # GroupCanvas/SetView/CycleView/TableView/Cayley3DView/
 │   │   │                       # SymmetryView/SubgroupLatticeView/FloatingViewWindow/

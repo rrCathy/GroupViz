@@ -11,6 +11,9 @@ node_modules
 dist
 dist-ssr
 # Library-mode package build output (@groupviz/core + @groupviz/react)
+# 临时工作目录（扫描/截图/日志）
+.tmp-*/
+
 dist-pkg
 *.local
 coverage

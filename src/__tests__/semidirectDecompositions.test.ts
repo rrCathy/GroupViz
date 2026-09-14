@@ -368,9 +368,10 @@ describe('detectStructureType', () => {
   it('S₅(120) 已在枚举线内：真算结构得 semidirect（旧 cutoff 60 只能从 symbol 猜）', () => {
     const g = createSymmetricGroup(5)
     expect(g.order).toBeGreaterThan(60)
-    // S₅ ≅ A₅⋊C₂，枚举线放宽到 144 后能真算出来
+    // S₅ ≅ A₅⋊C₂，枚举线放宽到 144 后能真算出来。
+    // 真算走 findAllSubgroups（S₅ 约 1–2 s），全量并行负载下 5 s 默认超时会偶发误报 → 显式 30 s
     expect(detectStructureType(g)).toBe('semidirect')
-  })
+  }, 30_000)
 
   it('labels groups beyond the search cutoff from their symbol', () => {
     // order 超过 ENUMERATION_LIMIT(144) 时不真算，走 symbol 兜底识别

@@ -234,7 +234,7 @@ uvicorn main:app --reload --port 8000
 
 ### 9.4 性能守卫（2026-09-14 按 docs/PERF.md 实测三线重定，常量集中在 `src/core/guards.ts`）
 
-- 三条实测线：`INTERACTIVE_LIMIT=120`（交互流畅线）、`ENUMERATION_LIMIT=144`（子群枚举 2 秒线）、`STATIC_LIMIT=480`（静态/出图）；3D 视图阈值 `RENDER_3D_LIMIT=720`（DOM 恒定）
+- 三条实测线：`INTERACTIVE_LIMIT=120`（交互流畅线）、`ENUMERATION_LIMIT=144`（子群枚举 2 秒线）、`STATIC_LIMIT=240`（图形类视图警告线：静态/出图可用、拖拽明显卡）；3D 视图阈值 `RENDER_3D_LIMIT=720`（DOM 恒定）
 - 本地计算分界：子群/共轭类/中心/性质/半直积分解 cutoff = 144（原 60 偏紧 2.4 倍）；超过走后端 GAP，`FALLBACK_CUTOFF=240` 为「慢但正确」的本地兜底线
 - 后端预取缓存仍以 order > 60 触发（GroupBackendContext，预取优化不影响正确性）
 - 视图「过大」阈值：图形类 240、子群枚举类 144、3d 720、tree ∞（`sizeLimitFor`）；警告文案区分「静态可看、交互会卡」

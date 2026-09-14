@@ -29,8 +29,8 @@ export const INTERACTIVE_LIMIT = 120
 /** 子群枚举类（findAllSubgroups / 共轭类 / 正规子群 / 半直积分解 / 性质检测）的 2 秒线。 */
 export const ENUMERATION_LIMIT = 144
 
-/** 仅静态展示 / 出图 / 导出可接受的上限（图形类视图）。 */
-export const STATIC_LIMIT = 480
+/** 图形类视图「过大」警告线：静态/出图可用、拖拽明显卡（更高阶由 limitOverride 放开）。 */
+export const STATIC_LIMIT = 240
 
 /** 3D 视图上限：DOM 恒定（1 个 canvas），与群阶基本无关。 */
 export const RENDER_3D_LIMIT = 720

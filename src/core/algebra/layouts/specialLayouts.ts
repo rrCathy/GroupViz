@@ -34,32 +34,113 @@ const NODE_DIAMETER = NODE_RADIUS * 2
 const MIN_NODE_GAP = 12
 const MIN_NODE_STEP = NODE_DIAMETER + MIN_NODE_GAP
 const IDEAL_NODE_STEP = NODE_DIAMETER + 24
-const MIN_COL_WIDTH = NODE_DIAMETER + 8
+/** 条带目标宽度：单列条带的观感上限（分列需要更宽时按需放宽，但仍受列宽约束） */
+const TARGET_STRIP_W = NODE_DIAMETER * 3
+/** 节点到条带边框的内边距 */
+const STRIP_PAD = 4
+/** 条带标签（`H` / `g_iH`）占用的纵向间隙 */
+const STRIP_LABEL_GAP = 12
+/** 步距压缩硬底（空间实在不够时的下限，防止退化成 0/NaN） */
+const MIN_STEP_FLOOR = 20
 
-function computeCosetGrid(totalStrips: number, stripSize: number, usableW: number, usableH: number) {
-  let cols = totalStrips
-  let rows = 1
-  let colWidth = usableW / totalStrips
-  let nodeStep = usableH / Math.max(1, stripSize)
+/**
+ * 条带网格规划（两个分支共用）。
+ *
+ * 旧实现的两处硬伤（2026-09-17 实测修复）：
+ *  ① `nodeStep` 有**绝对**下限 `MIN_NODE_STEP`（68），|H| 大时条带总高 = |H|×68
+ *     远超画布（S₅ 的 A₅：60×68+12 = 4092 vs 可用高 562）→ 条带被画到画布外；
+ *  ② 列宽不足时要求「纵向也必须够松」才分行，否则退回 totalStrips 列细条
+ *     （S₅ 的 C₂：60 条带各 6px 宽，节点横跨相邻条带）。
+ *
+ * 现在的口径：
+ *  - 横向：每行条带数由 `MIN_COL_WIDTH` 决定，列宽不足就分行（不再退回细条）；
+ *  - 条带内：|H| 在最小间距下单列塞不进可用高度时**横向分列**（在条带宽允许的前提下）；
+ *  - 步距：先取理想值，空间不足则按可用空间**压缩**（图完整优先，节点可轻微重叠）。
+ */
+interface CosetStripGrid {
+  colsPerRow: number
+  numRows: number
+  /** 相邻条带中心距（= stripW + 间隙）；条带整体居中而非铺满可用宽度 */
+  colStride: number
+  rowHeight: number
+  /** 条带内横向列数 */
+  stripCols: number
+  /** 条带内每列节点数 */
+  rowsInStrip: number
+  stepX: number
+  stepY: number
+  stripW: number
+  /** 条带高（= 内边距 + 节点直径 + 列内行程），保证整条带连同节点外沿都在可用高度内 */
+  stripH: number
+}
 
-  if (colWidth < MIN_COL_WIDTH && totalStrips > 1) {
-    const candidateCols = Math.max(1, Math.floor(usableW / MIN_COL_WIDTH))
-    const candidateRows = Math.ceil(totalStrips / candidateCols)
-    const candidateStep = usableH / candidateRows / Math.max(1, stripSize)
+/** 条带间隙（相邻条带之间） */
+const STRIP_GAP = 12
+/** 单行条带的最小高度：至少容得下一个节点 + 内边距 + 标签行 */
+const MIN_ROW_H = NODE_DIAMETER + 2 * STRIP_PAD + STRIP_LABEL_GAP
 
-    if (candidateStep >= MIN_NODE_STEP) {
-      cols = Math.min(candidateCols, totalStrips)
-      rows = candidateRows
-      colWidth = usableW / cols
-      nodeStep = candidateStep
-    }
+function planCosetStripGrid(
+  totalStrips: number,
+  stripSize: number,
+  usableW: number,
+  usableH: number,
+): CosetStripGrid {
+  // 行数上限由「每行至少放得下一个节点」决定：否则行高被压到节点直径以下，
+  // 节点必然越出条带（S₅ 的 60 条带曾被排成 15 行 × 37.5px 行高）。
+  const maxRowsByHeight = Math.max(1, Math.floor(usableH / MIN_ROW_H))
+  const clampCols = (w: number) => {
+    const byWidth = Math.floor((usableW + STRIP_GAP) / Math.max(1, w + STRIP_GAP))
+    const byHeight = Math.ceil(totalStrips / maxRowsByHeight)
+    return Math.max(1, Math.min(totalStrips, Math.max(byWidth, byHeight)))
   }
 
-  nodeStep = Math.max(nodeStep, MIN_NODE_STEP)
-  nodeStep = Math.min(nodeStep, IDEAL_NODE_STEP)
+  const build = (colsPerRow: number) => {
+    const numRows = Math.max(1, Math.ceil(totalStrips / colsPerRow))
+    const rowHeight = usableH / numRows
+    // 每条带的可用高度（扣掉标签行）与可用宽度（扣掉内边距）
+    const availStripH = Math.max(1, rowHeight - STRIP_LABEL_GAP)
+    const availStripW = Math.max(1, usableW / colsPerRow - STRIP_GAP)
 
-  return { cols, rows, colWidth, nodeStep }
+    // 条带内分列：单列在最小间距下放得下就保持单列（向后兼容旧观感）
+    let stripCols = 1
+    let rowsInStrip = Math.max(1, stripSize)
+    if (availStripH / Math.max(1, stripSize) < MIN_NODE_STEP) {
+      const wantCols = Math.max(1, Math.ceil((stripSize * MIN_NODE_STEP) / availStripH))
+      const maxCols = Math.max(1, Math.floor(availStripW / MIN_NODE_STEP))
+      stripCols = Math.max(1, Math.min(wantCols, maxCols))
+      rowsInStrip = Math.max(1, Math.ceil(stripSize / stripCols))
+    }
+
+    // 圆心行程扣掉节点半径与内边距，确保首/末节点外沿也不越出条带
+    const innerH = Math.max(1, availStripH - NODE_DIAMETER - 2 * STRIP_PAD)
+    const stepY = rowsInStrip > 1
+      ? Math.min(IDEAL_NODE_STEP, innerH / (rowsInStrip - 1))
+      : IDEAL_NODE_STEP
+    const stripH = Math.min(availStripH, (rowsInStrip - 1) * stepY + NODE_DIAMETER + 2 * STRIP_PAD)
+    const stripW = Math.min(
+      availStripW,
+      Math.max(TARGET_STRIP_W, (stripCols - 1) * MIN_NODE_STEP + NODE_DIAMETER + 2 * STRIP_PAD),
+    )
+    const stepX = stripCols > 1
+      ? Math.min(IDEAL_NODE_STEP, Math.max(MIN_STEP_FLOOR, (stripW - NODE_DIAMETER - 2 * STRIP_PAD) / (stripCols - 1)))
+      : 0
+
+    return { numRows, rowHeight, stripCols, rowsInStrip, stepX, stepY, stripW, stripH }
+  }
+
+  // 条带宽度与每行条带数互相牵制（列多了条带变窄、分列又让条带变宽）——迭代到稳定
+  let colsPerRow = clampCols(TARGET_STRIP_W)
+  let plan = build(colsPerRow)
+  for (let i = 0; i < 4; i++) {
+    const next = clampCols(plan.stripW)
+    if (next === colsPerRow) break
+    colsPerRow = next
+    plan = build(colsPerRow)
+  }
+
+  return { colsPerRow, colStride: plan.stripW + STRIP_GAP, ...plan }
 }
+
 
 export function cosetStripLayout(
   group: Group,
@@ -102,37 +183,36 @@ export function cosetStripLayout(
       }
     }
 
-    const maxCosetSize = Math.max(...cosetBuckets.map(b => b.length))
+    const maxCosetSize = Math.max(1, ...cosetBuckets.map(b => b.length))
     const marginX = 32
     const marginTop = topPadding ?? 44
     const marginBottom = 14
-    const labelGap = 12
     const usableW = width - 2 * marginX
     const usableH = height - marginTop - marginBottom
 
-    const { cols: colsPerRow, rows: numRows, colWidth, nodeStep } = computeCosetGrid(totalCosets, maxCosetSize, usableW, usableH)
+    const { colsPerRow, colStride, rowHeight, stripCols, rowsInStrip, stepX, stepY, stripW, stripH } =
+      planCosetStripGrid(totalCosets, maxCosetSize, usableW, usableH)
 
-    const TARGET_COL_WIDTH = NODE_DIAMETER * 3
-    const cappedColW = Math.min(colWidth, TARGET_COL_WIDTH)
-    const totalWidth = cappedColW * colsPerRow
-    const startX = marginX + (usableW - totalWidth) / 2
-
-    const totalLayoutHeight = numRows * (maxCosetSize * nodeStep + labelGap)
-    const verticalOffset = (usableH - totalLayoutHeight) / 2
+    // 条带整体居中（窄条带聚拢，不铺满可用宽度）
+    const totalWidth = colStride * colsPerRow - STRIP_GAP
+    const startX = marginX + Math.max(0, (usableW - totalWidth) / 2)
 
     for (let c = 0; c < totalCosets; c++) {
       const row = Math.floor(c / colsPerRow)
       const col = c % colsPerRow
       const bucket = cosetBuckets[c]
-      const rowHeight = usableH / Math.max(1, numRows)
-      const bx = startX + cappedColW * (col + 0.5)
-      const stripTop = marginTop + verticalOffset + row * rowHeight + labelGap
-      const by = stripTop + (bucket.length > 0 ? (bucket.length - 1) * nodeStep / 2 : 0) + nodeStep / 2
+      const bx = startX + stripW / 2 + col * colStride
+      // 条带在行内纵向居中；节点「列优先」填格（stripCols === 1 时与旧观感一致）
+      const stripTop = marginTop + row * rowHeight + STRIP_LABEL_GAP
+        + Math.max(0, (rowHeight - STRIP_LABEL_GAP - stripH) / 2)
+      const firstNodeY = stripTop + STRIP_PAD + NODE_RADIUS
 
       bucket.forEach((elId, ri) => {
+        const ci = Math.floor(ri / rowsInStrip)
+        const rj = ri % rowsInStrip
         result.set(elId, {
-          x: bx,
-          y: by + (ri - (bucket.length - 1) / 2) * nodeStep
+          x: bx + (stripCols > 1 ? (ci - (stripCols - 1) / 2) * stepX : 0),
+          y: firstNodeY + rj * stepY,
         })
       })
 
@@ -140,10 +220,10 @@ export function cosetStripLayout(
         elementIds: bucket,
         label: repLabels[c],
         color: colors[c % colors.length],
-        x: startX + cappedColW * col + 4,
-        y: stripTop - nodeStep / 2,
-        w: cappedColW - 8,
-        h: Math.max(1, bucket.length) * nodeStep,
+        x: bx - stripW / 2,
+        y: stripTop,
+        w: stripW,
+        h: stripH,
         isSubgroup: c === 0,
       })
     }
@@ -204,32 +284,29 @@ export function cosetStripLayout(
   const marginX = 32
   const marginTop = topPadding ?? 44
   const marginBottom = 14
-  const labelGap = 12
   const usableW = width - 2 * marginX
   const usableH = height - marginTop - marginBottom
-  const { cols, rows, colWidth: colW, nodeStep: step } = computeCosetGrid(numStrips, hSize, usableW, usableH)
+  const { colsPerRow, colStride, rowHeight, stripCols, rowsInStrip, stepX, stepY, stripW, stripH } =
+    planCosetStripGrid(numStrips, hSize, usableW, usableH)
 
-  const TARGET_COL_WIDTH = NODE_DIAMETER * 3
-  const cappedColW = Math.min(colW, TARGET_COL_WIDTH)
-  const totalWidth = cappedColW * cols
-  const startX = marginX + (usableW - totalWidth) / 2
-
-  const totalLayoutHeight = rows * (hSize * step + labelGap)
-  const verticalOffset = (usableH - totalLayoutHeight) / 2
+  const totalWidth = colStride * colsPerRow - STRIP_GAP
+  const startX = marginX + Math.max(0, (usableW - totalWidth) / 2)
 
   for (let s = 0; s < allCosetStrips.length; s++) {
-    const row = Math.floor(s / cols)
-    const col = s % cols
+    const row = Math.floor(s / colsPerRow)
+    const col = s % colsPerRow
     const strip = allCosetStrips[s]
-    const rowHeight = usableH / Math.max(1, rows)
-    const bx = startX + cappedColW * (col + 0.5)
-    const stripTop = marginTop + verticalOffset + row * rowHeight + labelGap
-    const by = stripTop + (strip.length - 1) * step / 2 + step / 2
+    const bx = startX + stripW / 2 + col * colStride
+    const stripTop = marginTop + row * rowHeight + STRIP_LABEL_GAP
+      + Math.max(0, (rowHeight - STRIP_LABEL_GAP - stripH) / 2)
+    const firstNodeY = stripTop + STRIP_PAD + NODE_RADIUS
 
     strip.forEach((elId, ri) => {
+      const ci = Math.floor(ri / rowsInStrip)
+      const rj = ri % rowsInStrip
       result.set(elId, {
-        x: bx,
-        y: by + (ri - (strip.length - 1) / 2) * step
+        x: bx + (stripCols > 1 ? (ci - (stripCols - 1) / 2) * stepX : 0),
+        y: firstNodeY + rj * stepY,
       })
     })
 
@@ -238,21 +315,22 @@ export function cosetStripLayout(
       elementIds: strip,
       label: s === 0 ? 'H' : `g_{${s}}H`,
       color,
-      x: startX + cappedColW * col + 4,
-      y: stripTop - step / 2,
-      w: cappedColW - 8,
-      h: Math.max(1, strip.length) * step,
+      x: bx - stripW / 2,
+      y: stripTop,
+      w: stripW,
+      h: stripH,
       isSubgroup: s === 0,
     })
   }
 
+  // 陪集划分不全时的兜底：未落位元素匀在画布底部一行（正常划分不会触发）
   for (const el of group.elements) {
     if (!result.has(el.id)) {
       const idx = group.elements.indexOf(el)
-      const col = idx % cols
+      const col = idx % colsPerRow
       result.set(el.id, {
-        x: startX + cappedColW * (col + 0.5),
-        y: marginTop + (idx % hSize) * step + step / 2
+        x: startX + stripW / 2 + col * colStride,
+        y: marginTop + usableH - stepY / 2,
       })
     }
   }

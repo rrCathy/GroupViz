@@ -23,6 +23,12 @@ import type { CosetStripInfo } from '../../core/algebra/forceLayout'
 import { COLOR_PALETTE } from '../../core/types'
 import type { Group, GroupElement } from '../../core/types'
 
+/** 子群凯莱图的节点数上限。圆环布局下约 9px/节点（|H| ≤ 24 时节点间距仍接近节点直径），
+ *  再大就只能挤成一团 —— 超过时**保留条带并显式提示**，不再静默消失（2026-09-17）。 */
+const CAYLEY_MAX_ORDER = 24
+/** 子群凯莱图因超限隐藏时，顶部只留一行提示所需的空间 */
+const HIDDEN_HINT_PAD = 40
+
 // ─── Coset Strip props-化内核 ──────────────────────────────────────────
 // 受控 ViewWindow (FGVE) 与主画布（经 context 壳）共用。除 group / viewBoxSize 外
 // 全部可选：主画布壳由全局 Provider 组装装饰数据（陪集/子集高亮、选中、变换），
@@ -134,10 +140,12 @@ function CosetStripSceneBody({
     if (hCi === undefined) return null
     let hSize = 0
     for (const ci of cosetElementMap.values()) { if (ci === hCi) hSize++ }
-    if (hSize < 2 || hSize > 12) return null
-    const r = Math.max(40, Math.min(96, hSize * 16))
-    return { hSize, r, topPad: 2 * r + 64 }
-  }, [group, cosetElementMap])
+    if (hSize < 2) return null
+    // 半径按容器尺寸的比例给足（先前是 |H|×9 的绝对值，主画布 3000×3000 下小得看不清边）
+    const r = Math.max(36, Math.min(400, Math.min(viewBoxSize.width, viewBoxSize.height) * 0.16))
+    const cayleyShown = hSize <= CAYLEY_MAX_ORDER
+    return { hSize, r, cayleyShown, topPad: cayleyShown ? 2 * r + 64 : HIDDEN_HINT_PAD }
+  }, [group, cosetElementMap, viewBoxSize])
 
   const cosetStripData = useMemo(() => {
     if (!group) return null
@@ -162,7 +170,7 @@ function CosetStripSceneBody({
     if (hCi === undefined) return null
     const hIds: string[] = []
     for (const [id, ci] of cosetElementMap) { if (ci === hCi) hIds.push(id) }
-    if (hIds.length < 2 || hIds.length > 12) return null
+    if (hIds.length < 2 || hIds.length > CAYLEY_MAX_ORDER) return null
     const hIdSet = new Set(hIds)
     const hElements = group.elements.filter(el => hIdSet.has(el.id))
     const hGenerators = findMinimalGenerators(hElements, group)
@@ -230,19 +238,29 @@ function CosetStripSceneBody({
           </g>
         ))}
 
+          {/* |H| 超过子群凯莱图上限：保留条带 + 明示原因（旧实现是静默不画，看着像坏了） */}
+          {showSubgroupCayley && subgroupInfo && !subgroupInfo.cayleyShown && (
+            <text
+              x={viewBoxSize.width / 2}
+              y={subgroupInfo.topPad - 14}
+              textAnchor="middle"
+              fill="var(--text-muted)"
+              fontSize={12}
+              fontFamily="KaTeX_Main, monospace"
+            >{t('canvas.cosetStripCayleyHidden', { n: String(subgroupInfo.hSize), max: String(CAYLEY_MAX_ORDER) })}</text>
+          )}
+
           {subgroupCayley && cosetStripData && cosetStripData.strips[0] && subgroupInfo && group && (() => {
           const strip = cosetStripData.strips[0]
           const cx = strip.x + strip.w / 2
           const cy = strip.y - subgroupInfo.r - 24
           const hGroup = { ...group, order: subgroupInfo.hSize, elements: subgroupCayley.hElements }
           const positions = cayleyCircleLayout(hGroup, cx, cy, subgroupInfo.r)
-          const maxLabelLen = Math.max(...subgroupCayley.hElements.map(el => {
-            const l = el.label
-            if (l.startsWith('\\begin{smallmatrix}')) return 4
-            return l.length
-          }))
-          const labelFs = maxLabelLen <= 4 ? 15 : maxLabelLen <= 6 ? 13 : maxLabelLen <= 8 ? 11 : 9.5
-          const hNodeR = Math.max(12, Math.min((maxLabelLen * labelFs * 0.62 + 10) / 2, subgroupInfo.r * 0.35))
+          // 节点半径取「环上相邻弦长的 30%」——留出 70% 给边，先前按标签尺寸反推导致
+          // 节点几乎顶到相邻节点、边被挤没（用户报「看不清边」）
+          const chord = 2 * subgroupInfo.r * Math.sin(Math.PI / Math.max(3, subgroupInfo.hSize))
+          const hNodeR = Math.max(5, Math.min(22, chord * 0.3))
+          const labelFs = Math.max(7, Math.min(12, hNodeR * 1.1))
           return (
             <g key="subgroup-cayley">
               <text

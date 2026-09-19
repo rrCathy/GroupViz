@@ -1,7 +1,7 @@
 import { memo, useMemo } from 'react'
 import { useGroup } from '../../context/useGroup'
 import { useTranslation } from '../../i18n/useTranslation'
-import { findAllSubgroups, getConjugacyClasses, isSimpleGroup, getGroupCenter } from '../../core/algebra/subgroups'
+import { findAllSubgroups, getConjugacyClasses, isSimpleGroup, getGroupCenter, findMinimalGenerators } from '../../core/algebra/subgroups'
 import { getPrecomputed } from '../../core/groups/SmallGroups'
 import { texify, renderTex } from '../../utils/texify'
 import { verifyHomomorphism, getHomomorphismProperties, formatKernelLabel } from '../../core/algebra/homomorphisms'
@@ -237,14 +237,18 @@ export function RightPanel() {
     return map
   }, [currentGroup])
 
+  // 列表项只给「阶数 + 生成元」：把全部元素列出来在 |H| 大时既冗长又没信息量
+  // （阶数由 .sg-order 单独显示，这里只补 ⟨生成元⟩）
   const subgroupHtml = useMemo(() => {
     const map = new Map<string, string>()
+    if (!currentGroup) return map
     for (const sg of subgroups) {
       const key = sg.elements.map(e => e.id).sort().join(',')
-      map.set(key, renderTex(texify(sg.elements.map(e => e.label).join(', '))))
+      const gens = findMinimalGenerators(sg.elements, currentGroup)
+      map.set(key, renderTex(texify(`\\langle ${gens.map(g => g.label).join(', ')} \\rangle`)))
     }
     return map
-  }, [subgroups])
+  }, [subgroups, currentGroup])
 
   const classHtml = useMemo(() => {
     const map = new Map<string, string>()
@@ -791,11 +795,12 @@ export function RightPanel() {
                   key={key}
                   className={`subgroup-item ${sg.isNormal ? 'normal' : ''} ${isCenter ? 'center' : ''} ${inCosetStripMode && isCosetActive ? 'coset-active' : ''}`}
                   onClick={() => {
+                    // 只把该子群设为陪集候选（高亮其元素、备好陪集数据），**不强行跳转视图**；
+                    // 跳转由选中后出现在同一行的「跳转」按钮触发。
                     const ids = sg.elements.map(el => el.id)
                     clearSelection()
                     ids.forEach(id => selectElement(id, true))
                     showCosetsFromElements([...ids], subgroupLabel, sg.isNormal)
-                    setCurrentView('cosetstrip')
                   }}
                   style={{ cursor: 'pointer' }}
                 >
@@ -826,6 +831,19 @@ export function RightPanel() {
                           }}
                         >
                           {t('quotient.create')}
+                        </button>
+                      )}
+                      {isCosetActive && (
+                        <button
+                          className="panel-btn"
+                          title={t('right.gotoCosetStripTitle')}
+                          onClick={() => setCurrentView('cosetstrip')}
+                          style={{
+                            minWidth: '54px', fontSize: '9px', padding: '2px 4px',
+                            backgroundColor: 'var(--accent-teal)', color: '#0f0f1a',
+                          }}
+                        >
+                          {t('right.gotoCosetStrip')}
                         </button>
                       )}
                     </div>

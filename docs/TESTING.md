@@ -15,7 +15,7 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`test.projects` 双项目——
-  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，61 文件；`src/__tests__/helpers/*.ts` 为非测试辅助模块，不被收集）
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，65 文件；`src/__tests__/helpers/*.ts` 为非测试辅助模块，不被收集）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
 - **临时探针约定**：性能/复杂度探针放 `src/__tests__/`（node 项目跑纯计算、dom 项目跑组件渲染），**用完必须删除**——残留文件会挡住 `tsc -b`（`npm run build` 一并失败）。探针结果一律 `appendFileSync` 落盘再从文件读，**不要靠 console 输出**（vitest stdout 会被截断）。三层性能极限的实测口径与方法见 [PERF.md](PERF.md) §6。
@@ -96,7 +96,7 @@
 | combinatorics.test.ts | 7 | binomialMod：门面可 import、越界返回 0、C(n,0)=C(n,n)=1、小 n 与朴素 Pascal 一致、C(10,3)=120、Lucas 定理（p ≤ n 情形）、大 n（2000 量级）与 BigInt 精确值一致 |
 | core/cosetStrip.test.ts | 9 | 陪集条带候选与数据（core/algebra/cosetStrip.ts）：listCosetStripSubgroups（代表元/指数/轨道/结构、C₃ 循环快通道、order>60 守卫）、findCosetStripSubgroup（按元素 id 精确恢复、换群失效 null）、cosetDataForSubgroup（由 H 直算左陪集 = H） |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，21 文件 / 205 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，22 文件 / 217 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -121,6 +121,7 @@
 | useSceneState.component.test.tsx | 17 | v2.1.0 受控状态便利 hook（useSceneState）：hostProps 挂载后 viewBoxSize 由 ResizeObserver 量得（0×0 → 宿主尺寸）、sceneProps 含 selectedElements/canvasTransform/viewBoxSize/onSelect/onHover 五件且可直接 spread、select 选中 + additive 追加 + clearSelection、hover 出现气泡 + 离场清除、zoomBy 光标锚定缩放（scale 变化且锚点在变换下不动）、resetTransform 归位、节点位置 getNodePosition/onNodePositionChange/resetNodePositions、**换群清空 hover/选中/节点位置**、locked 透传、**滚轮无指针坐标时退回容器中心且变换不出 NaN**、**返回体形状守卫（顶层无 ref 载体 + hostProps.ref 是回调 ref 且 getHostElement 返回宿主节点）**（本文件所有 `s.xxx` 用法同时充当 `react-hooks/refs` 静态回归守卫） |
 | SymmetryWindowParams.component.test.tsx | 10 | FGVE 阶段 2 批次七对称性受控窗口（ViewWindow view=symmetry）：C₄ 场景渲染（cyclic n-gon）+ 无引导浮条、Q₈ 不支持覆盖层（无 canvas）、参数面板（Show element actions → 元素列表；循环群无 shape 段）、shape 选项仅 cube/icosahedron 类群（S₄: Cube / Octahedron）、元素行点击起演示 / 再点重播 / Reset 复位（受控回传）、variant / rotateSpeed 受控载荷、坏 schema 回退默认、**actionLocked 固定演示**（列表与 Reset 隐藏、fixed 元素只读、Replay 与 speed 仍可用；无预置元素时占位）、默认持久化键含视图名（symmetry 不碰撞） |
 | CosetStripWindowParams.component.test.tsx | 7 | FGVE 阶段 2 批次四陪集条带受控窗口（ViewWindow view=cosetstrip）：S₃ 默认 H=C₃ → [G:H]=2 两条带 × 6 节点且窗口缺省无标签/无凯莱圈、A₄ 首选 H=V₄ → 3 条带 + 子群下拉含共轭合并候选（V₄/C₃/C₂）、切换 H（C₃→C₂）条带 2→3 且受控载荷正确、hover 节点就地气泡（窗口缺省无标签，读元素靠气泡）、版本化持久化信封含 subgroup、坏 schema（cosetType 非法 / subgroup 非真子群键）回退默认 H、默认持久化键含视图名（cosetstrip 与 set 不碰撞） |
+| SylowScene.component.test.tsx | 12 | FGVE 阶段 2 批次八 sylow props 化（SylowScene，受控内核）：受控面——节点点击回 `onSelect(id, multi)`（ctrl/⌘ 置 multi）、缺省不传 onSelect/onHover 交互不抛错、`selectedElements` 命中节点走金色描边（`#ffd93d`）且仅命中者、进入/离开节点回调给元素与 null；主题与空态——缺省不注入 `data-theme`、`theme="light"` 注入作用域且内含 `svg.view-svg`、`group=null` 出真实中文空态（非裸 key）；三布局模式（由右侧 chip 点击切换，S₃ = 3 个 Sylow 2-子群）——缺省 circle（无条带无共轭箭头、统计行 `n_p=3`）、点 chip → coset（底部 `\|G\|=6 = 2·3` 的 Lagrange 行）、再 ctrl 点第二个 → two（`marker-end=url(#sylow-conj-arrow)` 共轭箭头 + P/Q 边 marker 就位）、再点同一 chip → 取消回 circle、工具栏 `p = 2 / p = 3` 切换后统计行随之变（Sylow 3-子群仅 1 个）；列表折叠 ▸/◀ 往返 |
 
 ### 3.3 E2E（e2e/*.spec.ts，Playwright chromium，13 tests）
 

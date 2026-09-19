@@ -11,10 +11,12 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 | 阶段 | 时间窗 | 名称 | 状态（截至 2026-09-10，v2.1.0） |
 |------|--------|------|------|
 | 近期 | 2026-08 → 2026-10 | 功能夯实期 | ✅ 2026-08-23 收官 |
-| 中期 | 2026-10 → 2027-04 | FGVE 引擎化 | 🔄 进行中（阶段 2 视图 props 化 10/13 + 阶段 3 双包已发布，余项见 §2） |
+| 中期 | 2026-10 → 2027-04 | FGVE 引擎化 | 🔄 进行中（阶段 2 视图 props 化 **11/13 收官**，余 tree/prestable 移交拓展包轨道 + 阶段 3 双包已发布，余项见 §2） |
 | 远期 | 2027-04 → 2027-12 | GVL 教学实验室 | ⏳ 未开始 |
 
 核心演进（详见 §5 决策记录）：近期全部交付（群作用 / Sylow / 数学缺口 / 直连 GAP 的大群引擎）；**FGVE 目标 = UI 与算法解耦 + 产出可消费 npm 包**（2026-08-25 定案，保持单仓库，`src/package/` 门面 + vite library mode）——`@groupviz/core`（纯算法）+ `@groupviz/react`（视图组件）双包已于 **2026-09-09 以 v2.0.0 发布 npm**，**2026-09-10 以 v2.1.0 交付「消费端卡点优化」批次**（元素引用按 label 解析 / `useSceneState` 便利层 / `theme` 统一 / 阈值可覆盖 / `docs/API.md` 入包，全附加式 minor）；GVL 定位大学抽象代数课程配套（Fraleigh / Dummit & Foote 风格）。
+
+**拓展轨道（2026-09-16 立项）**：三个拓展包规划中——`@groupviz/symmetric-families`（对称群族 + 点群）/ `@groupviz/rep-theory`（表示论深化）/ `@groupviz/galois`（伽罗瓦对应），全部为引擎双包的 peerDeps 下游消费者、包间零依赖，**均未开始**——关系模型、内容边界与开发顺序见 [PLAN_EXTENSION_PACKS.md](PLAN_EXTENSION_PACKS.md)。其中点群提前兑现 §3.7 DLC；表示论深化与 §2.3 特征标表分工（主表归引擎，深化归包）见其 §4.1。
 
 ## 1. 近期：功能夯实期 —— ✅ 已收官
 
@@ -38,7 +40,7 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 ### 2.2 延后项（定案暂缓，规划留存）
 
-- **tree / prestable 视图 props 化**：阶段 2 剩余 2 个视图（13 视图已完成 10 个窗口化；此二者入口在左侧「群展示」面板）。
+- **tree / prestable 视图 → 移交拓展包轨道（2026-09-16 定）**：13 视图中最后 2 个未 props 化的视图（入口在左侧「群展示」面板），**不再在引擎侧 props 化**。理由：二者与**无限群**方向绑定（自由群 Cayley 树 / 展示的无限族），当前没有消费需求，硬塞进双包会带一批只为自身服务的 props。承接方与边界见 [PLAN_EXTENSION_PACKS.md](PLAN_EXTENSION_PACKS.md) §9；引擎侧视图 props 化至此**收官**（sylow 于同日入包，见 [CHANGELOG.md](CHANGELOG.md) 2026-09-16）。
 - **action 窗口内 sylow/coset actionKind**：`ActionViewParams` 目前仅 conjugation/regular/custom 三来源。
 
 ### 2.3 中期正式交付项（未开始）
@@ -112,6 +114,7 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 ### 3.7 DLC（空间群 / 点群）
 晶体学方向（欢迎页已预告）：点群对称可视化、空间群平移对称。
+> 2026-09-16 注记：**点群提前兑现**——由拓展包 `@groupviz/symmetric-families` 承接（见 [PLAN_EXTENSION_PACKS.md](PLAN_EXTENSION_PACKS.md) §3.1）；**空间群**（平移对称、无限群方向）不在拓展包范围，仍留 GVL。
 
 ### 3.8 工程形态
 GVL 阶段消费 FGVE 双包（宿主即 GVL 自身 / 学校课程页面）；若出现 monorepo 拆分需求届时再评估。
@@ -121,7 +124,7 @@ GVL 阶段消费 FGVE 双包（宿主即 GVL 自身 / 学校课程页面）；�
 | 阶段 | 验收标准 | 状态 |
 |------|----------|------|
 | 近期 | 全部交付收官 + lint/test/build 全绿 + 覆盖率 ≥ 85% | ✅ 已达成（2026-08-23） |
-| 中期 | FGVE 双包可消费（✅ v2.0.0 发布 npm，registry 安装冒烟通过；✅ v2.1.0 消费端卡点优化 = 元素引用/`useSceneState`/`theme`/阈值/`API.md`）；视图 props 化 10/13（✅ set/cayley/cycle/table/3d/sublattice/cosetstrip/homomorphism/action/symmetry；余 tree/prestable，见 §2.2）；descriptor round-trip 可用（✅ 幂等测试 + 发布门禁）；host-minimal 消费实证（✅ 浏览器实证，CI 化见 §2.1）；**特征标表上线（§2.3，未开始）** | 🔄 |
+| 中期 | FGVE 双包可消费（✅ v2.0.0 发布 npm，registry 安装冒烟通过；✅ v2.1.0 消费端卡点优化 = 元素引用/`useSceneState`/`theme`/阈值/`API.md`）；视图 props 化 **11/13 收官**（✅ set/cayley/cycle/table/3d/sublattice/cosetstrip/homomorphism/action/symmetry/sylow；余 tree/prestable 已移交拓展包轨道，见 §2.2）；descriptor round-trip 可用（✅ 幂等测试 + 发布门禁）；host-minimal 消费实证（✅ 浏览器实证，CI 化见 §2.1）；**特征标表上线（§2.3，未开始）** | 🔄 |
 | 远期 | 教育模式上线；≥1 套完整大学抽象代数课程；教师"制作→分享→学生作答"闭环 | ⏳ |
 
 ## 5. 决策记录
@@ -139,3 +142,5 @@ GVL 阶段消费 FGVE 双包（宿主即 GVL 自身 / 学校课程页面）；�
 | 2026-09-07 | 阶段 3 推进节奏定案：批次八最小闭环（v1.24.0）→ i18n「语言包入包」策略（v1.25.0，react 包内置语言包并导出 I18nProvider）→ 余 6 Scene 全量入包收官（v1.26.0） |
 | 2026-09-09 | 双包发布治理定案：`pkgVersion` 独立于主应用迭代版本；两包成对同版（v2.0.0，react peer 锁 core ^2.0.0）；发布门禁 `publish:smoke`（真实 npm 安装 + SSR + 双 resolution 类型冒烟）。同日主应用版本对齐 2.0.0 |
 | 2026-09-10 | **消费端 API 加固定案（v2.1.0）**：以外部博客嵌入实测卡点为输入，确立「**元素引用类 props 一律接受 label/id/value 并在内部解析**」（未命中 warn 一次 + 忽略，不抛错）、「**主题统一为 `theme?: 'dark' \| 'light'`**（经 `SceneThemeRoot` 注入 `data-theme`，未传=零变化）」、「相机门控改 `lockCameraOnAction` 默认 **false**（默认不再锁死）」三条约定；全部改动**附加式**（未传=旧行为）故走 2.x minor；发布门禁强化为 react→core 具名导出一致性 + 消费端钉死宿主已解析 react/three 版本 |
+| 2026-09-16 | **阶段 2 视图 props 化收官（11/13）**：sylow 入包（第 11 个 Scene `SylowScene`，三布局模式 circle/coset/two + `--sylow-*` 主题变量走 CSS 变量，故主画布壳零行为变化）；**tree / prestable 不再 props 化**，移交拓展包轨道——理由是与无限群方向绑定、当前无消费需求（见 §2.2 与 [PLAN_EXTENSION_PACKS.md](PLAN_EXTENSION_PACKS.md) §9）。VCL 仍挂账，待 sylow 之后另行推进 |
+

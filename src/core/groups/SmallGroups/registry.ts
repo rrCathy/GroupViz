@@ -129,5 +129,13 @@ export function getSmallGroupBySymbol(symbol: string): SmallGroupEntry | null {
 
 export function getPrecomputed(group: Group): PrecomputedData | null {
   ensureTable()
-  return _bySymbol!.get(group.symbol)?.precomputed ?? null
+  const entry = _bySymbol!.get(group.symbol)
+  if (!entry) return null
+  // 预计算是拿「注册表自己那个群」算的。只有元素 id 体系一致时才能直接复用：
+  // 同 symbol 可能来自不同构造器（registry 里的 GAP 表群用 g0.. 索引 id，而用户侧
+  // S₄ 用置换串 id '1,2,3,4'），此时子群/中心/共轭类里带的 id 在真实群中**找不到** ——
+  // 表现为「点右侧子群 → 陪集条带空态」。不一致就回退调用方自行本地枚举。
+  if (entry.group.order !== group.order) return null
+  if (entry.group.elements[0]?.id !== group.elements[0]?.id) return null
+  return entry.precomputed
 }

@@ -65,7 +65,7 @@ AppWrapper (I18nProvider → ThemeProvider)
   3. 群信息（name/symbol/order/generators/阿贝尔性 + 可点击 isoSymbol 跳转同构群）
   4. 单群徽章（isSimple）
   5. 本地内联 AccordionSection（RightPanel 自有副本，非 Panels 目录组件）：
-     - 子群(n)：点击选中元素 + 显示陪集 + 跳转 cosetstrip 视图；正规子群有「创建商群」按钮
+     - 子群(n)：列表项只显示 **阶数 + ⟨生成元⟩**（2026-09-19 起不再罗列全部元素——|H| 大时既冗长又没信息量）；点击该项 = 选中该子群元素 + 备好陪集数据（**不跳转视图**），同一行的「跳转」按钮随后出现，点它才切到 cosetstrip；正规子群有「创建商群」按钮
      - 共轭类(n)：点击选中类
      - 元素列表 chips 网格
   6. 大群占位：`正在从后端计算群结构...`

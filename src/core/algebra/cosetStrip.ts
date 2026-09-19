@@ -31,7 +31,7 @@ export interface CosetStripSubgroupOption {
 /**
  * 列出可作陪集条带 H 的非平凡真子群候选（按共轭轨道合并，一个轨道一个代表）。
  *
- * - 群阶 >60 本地枚举超限 → 返回 []（与 sublattice / findAllSubgroups 同守卫）；
+ * - 群阶 > ENUMERATION_LIMIT（144）本地枚举超限 → 返回 []（与 sublattice / findAllSubgroups 同守卫）；
  * - 共轭子群的陪集划分结构相同，合并为一个选项避免列表冗长（A₄: 6 个 C₂ + 4 个
  *   C₃ → 各一项），选项标注 orbitSize；
  * - 确定性排序：index 升序（条带少者在前）→ 轨道长降序 → 键字典序。

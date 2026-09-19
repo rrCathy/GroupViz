@@ -4,7 +4,7 @@
 > 面向主应用开发者 / 内嵌者；仓库内部实现细节见 [docs/VIEWS.md](VIEWS.md) · [docs/GROUPS.md](GROUPS.md) · [docs/CAYLEY.md](CAYLEY.md)。
 >
 > 口径：**Scene 是纯受控渲染内核**（不读应用级 context）；状态、hover 气泡、主题开关全部由宿主经 props 注入。
-> `@groupviz/react` 收录 10 个 Scene（sylow / tree / prestable 未 props 化，不入包）。
+> `@groupviz/react` 收录 11 个 Scene（tree / prestable 未 props 化，不入包 —— 二者与无限群方向相关，改由拓展包轨道承接）。
 
 ---
 
@@ -326,6 +326,24 @@ const s = useSceneState(group?, options?)
 | `series` / `centerIds` / `subsets` / `activeNodeIdx` / `onActivateNode` / `noGroupText` | — | — | |
 | `theme` | `'dark' \| 'light'` | ThemeContext | |
 | `maxEnumerateOrder` | `number` | `60` | 本地枚举子群格的群阶上限 |
+
+### 4.11 `SylowScene`
+
+p-子群 / Sylow 子群的探索视图。三种布局模式由右侧 chip 的选择驱动，选中态是**视图内部状态**，宿主无需接管。
+
+| prop | 类型 | 缺省 | 说明 |
+|---|---|---|---|
+| `group` | `Group \| null` | — | `null` 渲染空态 |
+| `selectedElements` | `Set<string>` | 空集 | 选中元素 id（影响节点描边与边高亮） |
+| `onSelect` | `(elId, multi) => void` | — | `multi` = ctrl/⌘ |
+| `onHover` | `(el \| null) => void` | — | 不传 = 不挂 hover |
+| `canvasTransform` | `{x,y,scale}` | 恒等 | 大群分支的屏内裁剪用 |
+| `viewBoxSize` | `{width,height}` | `800×600` | |
+| `theme` | `'dark' \| 'light'` | — | 不传 = 跟随外层 |
+
+**三种模式**（视图内切换，不需要 props）：`circle`（全体元素环，缺省）→ 点一个 Sylow chip 进 `coset`（陪集条带 + `|G| = |H|·[G:H]` 数值行）→ ctrl/⌘ 点第二个 chip 进 `two`（P/Q 上下两行 + Sylow II 共轭箭头与共轭元 g 标注）。群阶 > `ENUMERATION_LIMIT`（144）时走大群分支：不画节点阴影、标签缩到 10px、按 `canvasTransform` 做屏内裁剪。
+
+**配色**：三套语义色（P 子群 teal / Q 子群 purple / 交集 gold）走 `theme.css` 的 `--sylow-p-stroke`、`--sylow-sel-fill`、`--sylow-sel-stroke`、`--sylow-chip-active`、`--sylow-q-fill`、`--sylow-q-stroke`、`--sylow-i-fill`、`--sylow-i-stroke`，因此 `theme` prop 或外层 `data-theme` 都能整体换色（主画布不传 `theme`，跟随应用全局主题）。
 
 ---
 

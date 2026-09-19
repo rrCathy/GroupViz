@@ -99,6 +99,17 @@ body {
   --node-fill-selected: #2a3a56;
   --node-text: white;
 
+  /* Sylow 视图：P 子群（teal）/ Q 子群（purple）/ 交集（gold）三套配色。
+     提为变量供 SylowScene 消费 —— 嵌入宿主经 theme prop 即可整体换色 */
+  --sylow-p-stroke: #2f8f86;
+  --sylow-sel-fill: #1e3f3f;
+  --sylow-sel-stroke: #4ecdc4;
+  --sylow-chip-active: #4ecdc4;
+  --sylow-q-fill: #2a2440;
+  --sylow-q-stroke: #a78bfa;
+  --sylow-i-fill: #3a3010;
+  --sylow-i-stroke: #ffd93d;
+
   --preview-bg-center: #1e2040;
   --preview-bg-edge: #0c0c1a;
   --preview-pointer-color: #1e2040;
@@ -168,6 +179,16 @@ body {
   --node-stroke: #3a3a4e;
   --node-fill-selected: #cdd2dc;
   --node-text: #1c1c28;
+
+  /* Sylow 视图浅色档（见深色块同名变量的说明） */
+  --sylow-p-stroke: #17a398;
+  --sylow-sel-fill: #b6e8e2;
+  --sylow-sel-stroke: #0ea5a0;
+  --sylow-chip-active: #0ea5a0;
+  --sylow-q-fill: #ece4fa;
+  --sylow-q-stroke: #a78bfa;
+  --sylow-i-fill: #fbf3d6;
+  --sylow-i-stroke: #d4a017;
 
   --preview-bg-center: #f0f1f6;
   --preview-bg-edge: #fafbfe;

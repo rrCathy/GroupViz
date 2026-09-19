@@ -6,6 +6,22 @@ import { getViewBoxSize, type ViewBoxSize } from '../../core/viewBox'
 import { useTranslation } from '../../i18n/useTranslation'
 import { initializeNodePositions, type NodePositionsMap } from '../positionUtils'
 
+/**
+ * 「以元素集合为选中语义」的视图：只有在这组视图**内部**切换时才保留元素选中高亮。
+ * 只要切换的一端是子群/作用类视图（sylow / cosetstrip / sublattice / action /
+ * homomorphism / symmetry 等），那份选中就是上一个视图的副产物（例如 sylow 点 chip、
+ * 陪集条带点子群候选都会把一整个子群的元素塞进选中集），跨视图继承没有意义，只会让
+ * 新视图凭空多出一组高亮。
+ */
+const ELEMENT_SELECTION_VIEWS: ReadonlySet<ViewMode> = new Set<ViewMode>([
+  'set', 'cayley', 'cycle', 'table', '3d',
+])
+
+/** 视图切换时是否保留已有的元素选中：只有元素族内部互切才保留 */
+export function shouldKeepSelectionOnViewChange(from: ViewMode, to: ViewMode): boolean {
+  return ELEMENT_SELECTION_VIEWS.has(from) && ELEMENT_SELECTION_VIEWS.has(to)
+}
+
 interface GroupCoreState {
   currentGroup: Group | null
   /** Live ref of the current group, updated synchronously on every setCurrentGroup/clearCurrentGroup call.
@@ -141,10 +157,14 @@ export function GroupCoreProvider({ children }: { children: ReactNode }) {
   }, [startTransition, t])
 
   const setCurrentView = useCallback((view: ViewMode) => {
+    // 跨族切换清空元素选中（元素族内部切换才保留），避免子群级选中跨视图乱窜
+    if (!shouldKeepSelectionOnViewChange(currentView, view)) {
+      setSelectedElements(new Set())
+    }
     setCurrentViewState(view)
     setCanvasTransformState({ x: 0, y: 0, scale: 1 })
     addOperationHistory(t('op.switchView', { view: getViewLabel(view) }))
-  }, [addOperationHistory, t, getViewLabel])
+  }, [addOperationHistory, t, getViewLabel, currentView])
 
   const selectElement = useCallback((id: string, additive = false) => {
     setSelectedElements(prev => {

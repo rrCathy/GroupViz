@@ -17,7 +17,6 @@ import { SubgroupLatticeView } from './SubgroupLatticeView'
 import { HomomorphismView } from './HomomorphismView'
 import { HomomorphismScene } from './HomomorphismScene'
 import { CosetStripScene } from './CosetStripScene'
-import { CosetStripView } from './CosetStripView'
 import { ActionView } from './ActionView'
 import { ActionScene } from './ActionScene'
 import { SylowView } from './SylowView'
@@ -47,6 +46,7 @@ import type { GroupActionArrow, GroupActionComputation } from '../../core/types'
 import { computeCosetElementMap, computeCosetColors, computeCosetHighlightSet } from '../../context/cosetActions'
 import { loadVersionedJson, saveVersionedJson, removeStoredKey } from '../../utils/persistence'
 import { VIEWWINDOW_RESET_EVENT } from '../../utils/resetViewWindows'
+import { ENUMERATION_LIMIT } from '../../core/guards'
 import { z } from 'zod'
 
 const Cayley3DViewLazy = lazy(() => import('./Cayley3DView').then(m => ({ default: m.Cayley3DView })))
@@ -417,6 +417,44 @@ function SvgPanZoom({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** 窗口内陪集条带（老式窗口路径）。
+ *
+ * 窗口里**没有**右侧子群面板，因此不能只依赖主画布的陪集状态 —— 旧实现直接渲染
+ * `CosetStripView`（context 壳），用户没在主画布选过子群时窗口只会显示「在右侧面板
+ * 点击一个子群」，指向一个窗口内不存在的交互（2026-09-17 修）。
+ * 现在：全局已有陪集数据时原样沿用；没有则自动取首个候选子群（自包含兜底）。 */
+function CosetStripWindowView() {
+  const {
+    currentGroup, selectedElements, selectElement, canvasTransform, viewBoxSize,
+    cosetElementMap, cosetColors, cosetHighlightSet, subsets,
+  } = useGroup()
+  const { setHoverElement } = useHover()
+  const fallbackIds = useMemo(
+    () => (currentGroup ? listCosetStripSubgroups(currentGroup)[0]?.elementIds : undefined),
+    [currentGroup],
+  )
+  const hasGlobal = !!cosetElementMap && cosetElementMap.size > 0
+  const noCandidate = !hasGlobal && !fallbackIds
+  return (
+    <CosetStripScene
+      group={currentGroup}
+      selectedElements={selectedElements}
+      canvasTransform={canvasTransform}
+      viewBoxSize={viewBoxSize}
+      cosetElementMap={hasGlobal ? cosetElementMap : undefined}
+      cosetColors={hasGlobal ? cosetColors : undefined}
+      cosetHighlightSet={hasGlobal ? cosetHighlightSet : undefined}
+      subgroup={hasGlobal ? undefined : fallbackIds}
+      subsets={subsets}
+      showLabels={true}
+      showSubgroupCayley={true}
+      noCosetsText={noCandidate ? COSETSTRIP_NO_LOCAL_SUBGROUPS : undefined}
+      onSelect={selectElement}
+      onHover={setHoverElement}
+    />
+  )
+}
+
 function renderViewContent(view: ViewMode) {
   switch (view) {
     case 'set':
@@ -436,7 +474,7 @@ function renderViewContent(view: ViewMode) {
     case 'homomorphism':
       return <SvgPanZoom><HomomorphismView /></SvgPanZoom>
     case 'cosetstrip':
-      return <SvgPanZoom><CosetStripView /></SvgPanZoom>
+      return <SvgPanZoom><CosetStripWindowView /></SvgPanZoom>
     case 'action':
       return <SvgPanZoom><ActionView /></SvgPanZoom>
     case 'sylow':
@@ -450,7 +488,8 @@ function renderViewContent(view: ViewMode) {
   }
 }
 
-const COSETSTRIP_NO_LOCAL_SUBGROUPS = 'Local subgroup enumeration is limited to groups of order ≤ 60'
+/** 候选子群为空时的说明。阈值取自 guards（曾硬编码 60，与 ENUMERATION_LIMIT=144 脱节） */
+const COSETSTRIP_NO_LOCAL_SUBGROUPS = `Local subgroup enumeration is limited to groups of order ≤ ${ENUMERATION_LIMIT}`
 
 /** TeX 结构符号 → unicode（供 <select> 选项纯文本展示）：C_{2}\\times C_{2} → C₂×C₂、D_{4} → D₄ */
 function csUnicodeStruct(sym: string): string {

@@ -4,6 +4,8 @@
 
 13 种视图模式（`ViewMode`：'set' | 'cayley' | 'cycle' | 'table' | '3d' | 'symmetry' | 'sublattice' | 'homomorphism' | 'cosetstrip' | 'action' | 'sylow' | 'tree' | 'prestable'），主画布 `GroupCanvas.tsx` 按 `currentView` 分发渲染。其中 ViewPanel 显示 9 个视图卡片；**tree / prestable 两个群展示专用视图的入口在左侧「群展示」面板底部按钮**（不在视图卡片中）。
 
+**视图切换时的选中清理（2026-09-19）**：`GroupCoreContext.setCurrentView` 按 `shouldKeepSelectionOnViewChange(from, to)` 决定——**只有元素族视图（set / cayley / cycle / table / 3d）内部互切才保留元素高亮**；只要切换的一端是子群/作用类视图（sylow / cosetstrip / sublattice / action / homomorphism / symmetry / tree / prestable），选中集一律清空。依据：那份选中通常由上一个视图的机制制造（Sylow 点 chip、陪集条带点子群候选都会把一整个子群的元素塞进选中集），跨视图继承没有用户意图可言，只会让新视图凭空多出一组高亮。
+
 ## 1. 集合视图 (SetView.tsx)
 
 - 元素按 ⌈√n⌉ 列密堆积网格排列（替代早期圆圈排列）
@@ -126,26 +128,30 @@ A₅：A₅ ≅ 正二十面体旋转群，(12345)、(12)(34) 的几何像经 BF
 
 ## 9. 陪集条带视图 (CosetStripView.tsx)
 
-- `cosetStripLayout()` 带标签的彩色列（条带）
+- `cosetStripLayout()` 带标签的彩色列（条带）；**大 |H| / 多条带自适应**（2026-09-17 重写 `planCosetStripGrid`）：单列按最小间距放不下时条带内**横向分列**，空间不足继续**压缩步距**（图完整优先），条带宽下限 = 节点直径（不再退化成细条）——旧实现 `|H|×68` 的条带会被画到画布外（S₅ 的 A₅ 高 4080px vs 画布 620px）
 - 子群列实线粗标签，其余虚线；节点按陪集着色，点击/ctrl 选中
 - 底部 `|G|=n = |H|·[G:H]` Lagrange 定理验证
-- **子群凯莱图（圆形）**：子群条带上方展示 ⟨H⟩ 的圆形凯莱图（`cayleyCircleLayout` + 子群最小生成元作用边，箭头按生成元着色，自逆无向；|H| ∈ [2,12] 时显示，布局自动加顶部留白 `topPadding`）
+- **子群凯莱图（圆形）**：子群条带上方展示 ⟨H⟩ 的圆形凯莱图（`cayleyCircleLayout` + 子群最小生成元作用边，箭头按生成元着色，自逆无向；半径随 |H| 自适应、上限 200；|H| ∈ [2,24] 时显示；**|H| > 24 时不再静默消失**——顶部留白区明示 `|H| = n 超过凯莱图上限 24`，条带照常显示）
+- 老式浮动窗口（`FloatingViewWindow`）内的陪集条带**自包含**：全局无陪集数据时自动取首个候选子群（窗口内没有右侧子群面板，不能再指向它）
 - 空态提示目前为硬编码英文
 
 ## 10. 轨道视图 / 群作用 (ActionView.tsx)
 
 详见 [ACTIONS.md](ACTIONS.md)。轨道簇布局（大小升序左→右，固定点 ★ 最左）、生成元作用边、hover 群元素显示全部箭头、点击元素 → 右侧面板 OST/Stab 详情；自定义作用编辑模式（元素围圈 + 生成元 chips + 虚线未绑定箭头）。isTooLarge 阈值 120。
 
-## 11. Sylow 视图 (SylowView.tsx)
+## 11. Sylow 视图 (SylowView.tsx / SylowScene.tsx)
 
 以群元素为最小节点（节点 = 元素）的 p-子群浏览器：p 可选素数（|G| 素因子），工具栏统计 p-元素数 / p-子群数 / n_p / `|G| = p^k·m`。
 
 - **默认凯莱图布局**：圆环排列（`cayleyCircleLayout`），边 = 群生成元作用（右乘，颜色对应）；点击子群 → 边切换为该子群生成元作用
-- **单选子群 → 陪集条带布局**：`cosetStripLayout` + 底部 Lagrange 验证 `|G| = |H|·[G:H]`
-- **Ctrl/⌘ 或 ⊕ 复选两个子群 → 共轭视图（Sylow 第二定理）**：上下两行布局（公共元素 P∩Q 中间拉链交错列），自动求共轭元 g 满足 gPg⁻¹ = Q，竖直双向金色共轭箭头 + 图上标注 `共轭: g = …`；两子群内部生成元边（P 青 / Q 紫）
+- **单选子群 → 陪集条带布局**：`cosetStripLayout` + 条带上方 **`⟨H⟩` 圆形凯莱图**（`data-subgroup-cayley`；半径按容器比例 `clamp(min(w,h)×0.16, 36, 400)`、节点半径按环上弦长的 30%（`clamp(5, 22)`，留 70% 给边）、布局以 `2r+64` 预留顶部）+ 底部 Lagrange 验证 `|G| = |H|·[G:H]`；条带按 `colStride`（条带宽 + 间隙）聚拢居中，不铺满可用宽度
+- **Ctrl/⌘ 或 ⊕ 复选两个子群 → 共轭视图（Sylow 第二定理，2026-09-17 重做）**：**左右两份子群凯莱图 + 逐点映射线** —— P 侧用 `cayleyCircleLayout` 排成子群自己的凯莱图（半径按容器比例 `clamp(min(w,h)×0.18, ≥60)`、节点随环上弦长收缩），**Q 侧几何整体跟随 P 平移**（`g·x·g⁻¹` 落在「x 的位置 + 中心位移」处），因此映射线全部等长同向、**零交叉**（两侧各自布局时 D₄ 双环会错位交叉）；P 青环 / Q 紫环 + 虚线导轨（按节点实际包围半径）+ `⟨生成元⟩` 标注；映射线为金色直线（双向箭头，交集元素加粗）；**P∩Q 元素两侧各画一份并连线**（金色描边）——实测选 g 只保证交集**集合**稳定、不逐点固定（S₄ 交集上做 3-/4-循环、GL(2,3) 做 4-循环），旧版「交集共享中间一行」的画法有误导。图上标注 `共轭: g = …`
+- **「纤维化 3D」模式（2026-09-17 新增，工具栏「平面 / 纤维化 3D」切换）**：把该素数下**全部** n_p 个 Sylow p-子群铺成一条共轭纤维化 —— 每层 = 一个 Sylow p-子群（垂直于路径的截面圆，|P| 个节点），层内青边 = 子群自身凯莱边（所有层同色：它们是同一群的不同共轭副本），层间金棱 = 共轭映射 `x ↦ gxg⁻¹` 的逐点连线（同 slot 对齐 ⇒ 天然平行等长；元素同时属于相邻两层时棱加粗）。**n_p ≥ 4 路径闭合成圆环面、n_p < 4 铺成弧状柱面（n_p = 2 即棱柱）**。核心布局 `layoutSylowFiber`（`src/core/algebra/layoutSylowFiber.ts`）：路径半径带「环内侧不塌陷」硬约束（R 太小时内侧点向轴心挤成一团），实测 14 组群×素数最近节点对 ≥ 0.9（球直径 0.6）。绕一圈的复合共轭在绝大多数群恒等（环面完美闭合）；GL(2,3) p=2 实测非平凡回旋（`closesCleanly=false`，N_G(P) 在 P 上有非平凡自同构）。Sylow 子群唯一（正规，如 D₄ 的 p=2）→ 空态提示。渲染 `SylowTorusScene`（自包含 Canvas：R3F + OrbitControls + hover 标签；初机位斜上方偏方位角、fov 40；已入 `@groupviz/react`）
 - **子群列表**：Sylow p-子群（★ + ◁ 正规标记，|H|=p^i + ⟨生成元⟩ TeX）+ 其他 p-子群（默认收起）；⊕ 复选按钮；列表可整体收起（▶/◀）
 - 节点配色：选中金色 → P∩Q 金色 → P 青 → Q 紫 → p-元素青描边 → 其他灰化（opacity 0.3）；legend 随模式切换
-- 数据：`findAllPSubgroups`（专用 p-子群枚举算法，SYLOW_MAX_ORDER=240 守卫，isTooLarge 阈值 240）
+- **props 化（2026-09-16，阶段 2 收官）**：渲染内核抽为 **`SylowScene`** 受控组件（`group` / `selectedElements` / `onSelect` / `onHover` / `canvasTransform` / `viewBoxSize` / `theme`，已入 `@groupviz/react`，见 [API.md](API.md) §4.11）；`SylowView.tsx` 退化为 context 壳（组装 Provider 状态后原样透传）。三种布局模式的选中态仍是**视图内部状态**（与 ActionScene 的 legendHover 同类），宿主不需要接管
+- 配色走 `--sylow-*`  CSS 变量（`--sylow-p-stroke` / `--sylow-sel-fill` / `--sylow-sel-stroke` / `--sylow-chip-active` / `--sylow-q-fill` / `--sylow-q-stroke` / `--sylow-i-fill` / `--sylow-i-stroke`，深浅两档定义在 `src/index.css` 并随 `finalize-pkg` 进包 `theme.css`），因此 `theme` prop 或外层 `data-theme` 都能整体换色
+- 数据：`findAllPSubgroups`（专用 p-子群枚举算法，SYLOW_MAX_ORDER=144，视图阈值 ENUMERATION_LIMIT=144）
 
 ## 12. 树视图 / 退化树 (FreeGroupTreeView.tsx)
 

@@ -365,10 +365,10 @@ console.log('REACT SMOKE PASS')
     path.join(tmp, 'smoke-ts.tsx'),
     `import { createGroupFromSymbol, resolveElement, buildCosetViewData } from '@groupviz/core'
 import { I18nProvider, SetView, CayleyView, CosetStripScene, SymmetryViewScene, Cayley3DScene,
-  SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
+  SylowScene, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
 import type {
   SetViewProps, CayleyViewProps, CosetStripSceneProps, SymmetryViewSceneProps, Cayley3DSceneProps,
-  SceneStateOptions, SceneState, SceneTheme, SceneWindowConfig,
+  SylowSceneProps, SceneStateOptions, SceneState, SceneTheme, SceneWindowConfig,
 } from '@groupviz/react'
 
 const group = createGroupFromSymbol('C_{6}')! // 冒烟常量群，非空断言
@@ -411,6 +411,17 @@ const win: SceneWindowConfig = { locked: true }
 const cosetData = buildCosetViewData(group, ['e0'], { side: 'right' })
 const el0 = resolveElement(group, 'e1')
 
+// Sylow（第 11 个 Scene）：受控选中 + 悬停回调 + 主题作用域
+const sylow: SylowSceneProps = {
+  group,
+  selectedElements: new Set<string>(),
+  onSelect: (id: string, multi: boolean) => { void id; void multi },
+  onHover: (el) => { void el },
+  canvasTransform: { x: 0, y: 0, scale: 1 },
+  viewBoxSize: { width: 900, height: 620 },
+  theme: 'dark',
+}
+
 export const Smoke = () => {
   const s: SceneState = useSceneState(group, opts)
   return (
@@ -428,6 +439,7 @@ export const Smoke = () => {
       <CosetStripScene {...coset} {...s.sceneProps} />
       <SymmetryViewScene {...sym} />
       <Cayley3DScene {...cayley3d} />
+      <SylowScene {...sylow} />
       <span>{String(cosetData?.cosetColors.length ?? 0)}</span>
     </I18nProvider>
   )
@@ -483,8 +495,8 @@ export const Smoke = () => {
   // 无法从 core 门面解析的 import，这里立刻报错（2.2.0 的缺口正是这样被漏掉的）。
   writeFileSync(
     path.join(tmp, 'smoke-ts-strict.tsx'),
-    `import { CayleyView, Cayley3DScene, TableView } from '@groupviz/react'
-import type { CayleyViewProps, Cayley3DSceneProps, TableViewProps } from '@groupviz/react'
+    `import { CayleyView, Cayley3DScene, TableView, SylowScene } from '@groupviz/react'
+import type { CayleyViewProps, Cayley3DSceneProps, TableViewProps, SylowSceneProps } from '@groupviz/react'
 // 这些类型由 @groupviz/react 的公开 props 直接引用，消费端理应能从 core 顶层标注
 import type {
   CayleyActionParam, CayleyPathHighlight, CayleyForceParams, Cayley3DFaceFillParams, TableStrategy,
@@ -505,12 +517,14 @@ const base = {
 const cayley: CayleyViewProps = { ...base, force, pathHighlight: hl, actions: acts, forceDirected: true }
 const cayley3d: Cayley3DSceneProps = { group: null, selectedElements: new Set<string>(), pathHighlight: hl, faceFill, layout3D: 'cone' }
 const table: TableViewProps = { ...base, strategy, cellSize: 50 }
+const sylow: SylowSceneProps = { ...base, onSelect: (id, multi) => { void id; void multi }, theme: 'light' }
 
 export const StrictSmoke = () => (
   <>
     <CayleyView {...cayley} />
     <Cayley3DScene {...cayley3d} />
     <TableView {...table} />
+    <SylowScene {...sylow} />
   </>
 )
 `

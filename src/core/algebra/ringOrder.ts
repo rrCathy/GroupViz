@@ -22,6 +22,11 @@ export function ringOrder(keys: string[]): string[] {
   }
 
   const deduped = Array.from(new Set(keys))
+  if (deduped.every(k => /^auto-\d+$/.test(k))) {
+    // 自同构群元素 id（createAutomorphismGroup 的 auto-N）：按数字排序。
+    // 字典序会把 auto-10 排到 auto-2 前，≥10 阶的环序直接乱掉。
+    return deduped.sort((a, b) => Number(a.slice(5)) - Number(b.slice(5)))
+  }
   if (deduped.every(k => /^-?\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a) - Number(b))
   }
@@ -458,6 +463,31 @@ export function dihedralSnakeOrder(group: Group): string[] | null {
     .sort((a, b) => b[1] - a[1])
     .map(([id]) => id)
   return [...split.rotations.map(e => e.id), ...refsDesc]
+}
+
+/**
+ * 二面体**结构**判定（不依赖符号前缀）：splitDihedralElements 的陪集分解成立
+ * + 反射全为对合 + m ≥ 3。用于符号不带 `D` 前缀的群（典型 = 自同构群，
+ * 如 Aut(D₄) ≅ D₄、Aut(S₃) ≅ D₃）识别「它同构于二面体群」，让圆形凯莱图
+ * 走与 registry Dₙ 一致的双环形状。
+ *
+ * 为什么额外两条校验：Q₈ 也有同型的 C₄ 陪集分解（⟨i⟩ + {±j,±k}）但"反射"阶 4，
+ * 会把 Q₈ 误判成 D₄ —— 反射必须全为对合；m = 2 的情形（V₄ ≅ D₂）双环只剩
+ * 2+2 两点，正方形（幂序）更好看，也拒绝。
+ */
+export function splitDihedralStructure(group: Group): {
+  rotations: GroupElement[]
+  reflectPair: Map<string, number>
+} | null {
+  const split = splitDihedralElements(group)
+  if (!split) return null
+  if (split.rotations.length < 3) return null
+  const byId = new Map(group.elements.map(e => [e.id, e]))
+  for (const refId of split.reflectPair.keys()) {
+    const el = byId.get(refId)
+    if (!el || group.multiply(el, el).id !== group.identity.id) return null
+  }
+  return split
 }
 
 /**

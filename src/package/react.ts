@@ -35,6 +35,8 @@ export { SylowScene } from '../components/Canvas/SylowScene'
 export type { SylowSceneProps } from '../components/Canvas/SylowScene'
 export { SylowTorusScene } from '../components/Canvas/SylowTorusScene'
 export type { SylowTorusSceneProps } from '../components/Canvas/SylowTorusScene'
+export { AutomorphismScene } from '../components/Canvas/AutomorphismScene'
+export type { AutomorphismSceneProps } from '../components/Canvas/AutomorphismScene'
 
 export { SceneWindow } from '../components/Canvas/SceneWindow'
 export type { SceneWindowProps, SceneWindowConfig, SceneWindowCaps, SceneWindowTheme } from '../components/Canvas/SceneWindow'

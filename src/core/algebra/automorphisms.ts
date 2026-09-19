@@ -428,3 +428,18 @@ export function isAutomorphismGroup(group: Group): boolean {
   const g = group as Group & { automorphismParentSymbol?: string }
   return typeof g.automorphismParentSymbol === 'string' && g.automorphismParentSymbol !== ''
 }
+
+/**
+ * Aut(G) 的「元素 id → 自同构」表；非自同构群 / 空输入 → null。
+ *
+ * createAutomorphismGroup 把这张表挂在 Aut(G) 的 `_automorphismById` 上。消费端
+ * （自同构预览 Scene、右侧映射面板等）经本访问器读取，避免各处裸读下划线字段、
+ * 也免得漏掉空值判断；`_automorphismById` 本身仍是实现细节，不作为公共契约。
+ */
+export function getAutomorphismMap(
+  group: Group | null | undefined
+): Map<string, Automorphism> | null {
+  if (!group) return null
+  const g = group as Group & { _automorphismById?: Map<string, Automorphism> }
+  return g._automorphismById ?? null
+}

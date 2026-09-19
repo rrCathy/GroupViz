@@ -281,8 +281,8 @@ console.log('CORE SMOKE PASS')
     path.join(tmp, 'smoke-react.mjs'),
     `import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { I18nProvider, SetView, CayleyView, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
-import { createGroupFromSymbol } from '@groupviz/core'
+import { I18nProvider, SetView, CayleyView, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState, AutomorphismScene } from '@groupviz/react'
+import { createGroupFromSymbol, createAutomorphismGroup } from '@groupviz/core'
 
 const group = createGroupFromSymbol('S_{3}')
 const el = React.createElement(I18nProvider, null,
@@ -342,6 +342,34 @@ for (const [name, fn] of [['useSceneState', useSceneState], ['SceneWindow', Scen
   console.log('  react ok  CayleyView 900×360 SSR 节点全在画布内 → y=[' + minY.toFixed(1) + ', ' + maxY.toFixed(1) + ']')
 }
 
+// 自同构预览（第 12 个 Scene）：SSR 必须零 window 依赖（尺寸自测只在客户端跑，服务端走兜底尺寸）
+{
+  const s3 = createGroupFromSymbol('S_{3}')
+  const autoGroup = createAutomorphismGroup(s3)
+  if (!autoGroup) throw new Error('Aut(S₃) 构造失败 —— 冒烟前置条件不成立')
+  const autoHtml = renderToStaticMarkup(
+    React.createElement(AutomorphismScene, {
+      group: autoGroup,
+      selectedElements: new Set([autoGroup.elements[1].id]),
+      viewBoxSize: { width: 360, height: 320 },
+      theme: 'light',
+    }),
+  )
+  if (!autoHtml.includes('data-testid="automorphism-scene"')) throw new Error('AutomorphismScene SSR 未渲染容器')
+  if (!autoHtml.includes('<svg')) throw new Error('AutomorphismScene SSR 未输出 <svg>（选中自同构时应画重连图）')
+  if (!autoHtml.includes('data-testid="automorphism-mapping"')) {
+    throw new Error('AutomorphismScene 映射表未渲染（父群阶 ≤ 20 且尺寸足够时应全列）')
+  }
+  // 非自同构群 → 空态（不抛错、不画图）
+  const emptyHtml = renderToStaticMarkup(
+    React.createElement(AutomorphismScene, { group: s3, selectedElements: new Set() }),
+  )
+  if (!emptyHtml.includes('data-testid="automorphism-scene"') || emptyHtml.includes('<svg')) {
+    throw new Error('AutomorphismScene 在非自同构群上应渲染空态而非图形')
+  }
+  console.log('  react ok  AutomorphismScene SSR（选中 → 图 + 映射表；非自同构群 → 空态）')
+}
+
 // 无 I18nProvider 时文案必须是真实中文（不再回落 key）
 const bare = renderToStaticMarkup(React.createElement(SetView, {
   group: null,
@@ -363,12 +391,12 @@ console.log('REACT SMOKE PASS')
   // 于是 react 侧坏 import（core 门面漏导出 types/viewConfig）完全隐形。
   writeFileSync(
     path.join(tmp, 'smoke-ts.tsx'),
-    `import { createGroupFromSymbol, resolveElement, buildCosetViewData } from '@groupviz/core'
+    `import { createGroupFromSymbol, createAutomorphismGroup, resolveElement, buildCosetViewData } from '@groupviz/core'
 import { I18nProvider, SetView, CayleyView, CosetStripScene, SymmetryViewScene, Cayley3DScene,
-  SylowScene, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
+  SylowScene, AutomorphismScene, SceneWindow, SceneThemeRoot, SceneHoverBubble, useSceneState } from '@groupviz/react'
 import type {
   SetViewProps, CayleyViewProps, CosetStripSceneProps, SymmetryViewSceneProps, Cayley3DSceneProps,
-  SylowSceneProps, SceneStateOptions, SceneState, SceneTheme, SceneWindowConfig,
+  SylowSceneProps, AutomorphismSceneProps, SceneStateOptions, SceneState, SceneTheme, SceneWindowConfig,
 } from '@groupviz/react'
 
 const group = createGroupFromSymbol('C_{6}')! // 冒烟常量群，非空断言
@@ -422,6 +450,17 @@ const sylow: SylowSceneProps = {
   theme: 'dark',
 }
 
+// 自同构预览（第 12 个 Scene）：受控选中 + 映射表开关 + 悬停回调 + 主题作用域
+const autoGroup = createAutomorphismGroup(createGroupFromSymbol('S_{3}')!)!
+const autoPreview: AutomorphismSceneProps = {
+  group: autoGroup,
+  selectedElements: new Set<string>([autoGroup.elements[1].id]),
+  viewBoxSize: { width: 360, height: 320 },
+  showMapping: true,
+  onHover: (el) => { void el },
+  theme: 'dark',
+}
+
 export const Smoke = () => {
   const s: SceneState = useSceneState(group, opts)
   return (
@@ -440,6 +479,7 @@ export const Smoke = () => {
       <SymmetryViewScene {...sym} />
       <Cayley3DScene {...cayley3d} />
       <SylowScene {...sylow} />
+      <AutomorphismScene {...autoPreview} />
       <span>{String(cosetData?.cosetColors.length ?? 0)}</span>
     </I18nProvider>
   )
@@ -495,8 +535,8 @@ export const Smoke = () => {
   // 无法从 core 门面解析的 import，这里立刻报错（2.2.0 的缺口正是这样被漏掉的）。
   writeFileSync(
     path.join(tmp, 'smoke-ts-strict.tsx'),
-    `import { CayleyView, Cayley3DScene, TableView, SylowScene } from '@groupviz/react'
-import type { CayleyViewProps, Cayley3DSceneProps, TableViewProps, SylowSceneProps } from '@groupviz/react'
+    `import { CayleyView, Cayley3DScene, TableView, SylowScene, AutomorphismScene } from '@groupviz/react'
+import type { CayleyViewProps, Cayley3DSceneProps, TableViewProps, SylowSceneProps, AutomorphismSceneProps } from '@groupviz/react'
 // 这些类型由 @groupviz/react 的公开 props 直接引用，消费端理应能从 core 顶层标注
 import type {
   CayleyActionParam, CayleyPathHighlight, CayleyForceParams, Cayley3DFaceFillParams, TableStrategy,
@@ -518,6 +558,7 @@ const cayley: CayleyViewProps = { ...base, force, pathHighlight: hl, actions: ac
 const cayley3d: Cayley3DSceneProps = { group: null, selectedElements: new Set<string>(), pathHighlight: hl, faceFill, layout3D: 'cone' }
 const table: TableViewProps = { ...base, strategy, cellSize: 50 }
 const sylow: SylowSceneProps = { ...base, onSelect: (id, multi) => { void id; void multi }, theme: 'light' }
+const autoPreview: AutomorphismSceneProps = { ...base, showMapping: false, onHover: (el) => { void el }, theme: 'dark' }
 
 export const StrictSmoke = () => (
   <>
@@ -525,6 +566,7 @@ export const StrictSmoke = () => (
     <Cayley3DScene {...cayley3d} />
     <TableView {...table} />
     <SylowScene {...sylow} />
+    <AutomorphismScene {...autoPreview} />
   </>
 )
 `

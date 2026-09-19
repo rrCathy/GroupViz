@@ -701,6 +701,13 @@ const zh: TranslationMap = {
   'sylowView.collapseList': '收起子群列表',
   'sylowView.expandList': '展开子群列表',
 
+  /* Automorphism Preview View */
+  'automorphismView.gen': '生成元：',
+  'automorphismView.fixedMoved': '{fixed} 不动 · {moved} 移动',
+  'automorphismView.noSelection': '选中单个自同构元素，查看它如何扭转 {symbol} 的乘法结构',
+  'automorphismView.notAutomorphism': '当前群不是自同构群',
+  'automorphismView.parentUnavailable': '父群 {symbol} 超出本地构造范围',
+
   /* Theme Toggle */
   'theme.dark': '深色模式',
   'theme.light': '浅色模式',
@@ -1407,6 +1414,13 @@ const en: TranslationMap = {
   'sylowView.torusLegendShape': 'n_p ≥ 4 lays out as a torus, n_p < 4 as an arced cylinder (n_p = 2 is a prism)',
   'sylowView.collapseList': 'Collapse subgroup list',
   'sylowView.expandList': 'Expand subgroup list',
+
+  /* Automorphism Preview View */
+  'automorphismView.gen': 'gen:',
+  'automorphismView.fixedMoved': '{fixed} fixed · {moved} moved',
+  'automorphismView.noSelection': 'Select a single automorphism to see how it rewires {symbol}',
+  'automorphismView.notAutomorphism': 'Current group is not an automorphism group',
+  'automorphismView.parentUnavailable': 'Parent group {symbol} is beyond local construction',
 
   /* Theme Toggle */
   'theme.dark': 'Dark Mode',

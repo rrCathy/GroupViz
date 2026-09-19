@@ -143,4 +143,5 @@ GVL 阶段消费 FGVE 双包（宿主即 GVL 自身 / 学校课程页面）；�
 | 2026-09-09 | 双包发布治理定案：`pkgVersion` 独立于主应用迭代版本；两包成对同版（v2.0.0，react peer 锁 core ^2.0.0）；发布门禁 `publish:smoke`（真实 npm 安装 + SSR + 双 resolution 类型冒烟）。同日主应用版本对齐 2.0.0 |
 | 2026-09-10 | **消费端 API 加固定案（v2.1.0）**：以外部博客嵌入实测卡点为输入，确立「**元素引用类 props 一律接受 label/id/value 并在内部解析**」（未命中 warn 一次 + 忽略，不抛错）、「**主题统一为 `theme?: 'dark' \| 'light'`**（经 `SceneThemeRoot` 注入 `data-theme`，未传=零变化）」、「相机门控改 `lockCameraOnAction` 默认 **false**（默认不再锁死）」三条约定；全部改动**附加式**（未传=旧行为）故走 2.x minor；发布门禁强化为 react→core 具名导出一致性 + 消费端钉死宿主已解析 react/three 版本 |
 | 2026-09-16 | **阶段 2 视图 props 化收官（11/13）**：sylow 入包（第 11 个 Scene `SylowScene`，三布局模式 circle/coset/two + `--sylow-*` 主题变量走 CSS 变量，故主画布壳零行为变化）；**tree / prestable 不再 props 化**，移交拓展包轨道——理由是与无限群方向绑定、当前无消费需求（见 §2.2 与 [PLAN_EXTENSION_PACKS.md](PLAN_EXTENSION_PACKS.md) §9）。VCL 仍挂账，待 sylow 之后另行推进 |
+| 2026-09-19 | **附属窗口功能入包形态定案**：13 视图之外的「自同构作用预览」props 化为 `AutomorphismScene`（`@groupviz/react` 第 12 个 Scene）。形态 = **内容内核 + 宿主 `SceneWindow` 嵌套预览窗**（用户当日定：「在 view window 里面嵌套一个窗口就行」）——内核零 context / 零 `window`、不含窗口 chrome，窗口能力（拖拽 / resize / 持久化 / 关闭）由通用壳提供，主应用浮层与包消费端共用同一份实现。后续同类附属窗口功能循此形态 |
 

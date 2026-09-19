@@ -1,8 +1,8 @@
 import type { Group, GroupElement, NodePosition } from '../../types'
-import { isC2Cube, isGroupDihedral } from '../../types'
+import { isC2Cube, isGroupDihedral, isAutomorphismGroup } from '../../types'
 import {
   ringOrder, detectS3PermSet, S3_PERM_IDS, powerRingOrder,
-  splitDihedralElements, quaternionCosetMap,
+  splitDihedralElements, splitDihedralStructure, quaternionCosetMap,
 } from '../ringOrder'
 import { getConjugacyClasses } from '../subgroups'
 import { computeElementOrder } from './shared'
@@ -475,6 +475,39 @@ export function cayleyCircleLayout(
       }
       return result
     }
+  }
+
+  // 自同构群：走「它同构的那个群」的圆形形状——符号是 \operatorname{Aut}(...)，
+  // 不带 D/C 前缀，上面的循环/二面体分支全进不去，此前落到 id 字典序兜底
+  // （auto-10 < auto-2，元素在环上近乎随机摆）。这里按结构识别：
+  //   · 二面体结构（Aut(D₄)≅D₄、Aut(S₃)≅D₃、Aut(C₄×C₂)≅D₄ 型）摆成
+  //     旋转外环 + 反射内环 —— 与 registry Dₙ 的 circular 逐角度一致；
+  //   · 其余（Aut(Q₈)≅S₄、Aut(C₃×C₃)≅GL(2,3) 等）按生成元 BFS 幂序摆单环，
+  //     生成元边沿环连贯。
+  if (isAutomorphismGroup(group)) {
+    const split = splitDihedralStructure(group)
+    if (split) {
+      const cnt = split.rotations.length
+      const innerR = radius * 0.55
+      for (let i = 0; i < cnt; i++) {
+        const angle = (i * 2 * Math.PI) / cnt - Math.PI / 2
+        result.set(split.rotations[i].id, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) })
+      }
+      for (const [refId, ri] of split.reflectPair) {
+        const angle = (ri * 2 * Math.PI) / cnt - Math.PI / 2
+        result.set(refId, { x: cx + innerR * Math.cos(angle), y: cy + innerR * Math.sin(angle) })
+      }
+      return result
+    }
+    const autoOrder = powerRingOrder(group)
+    const autoIdx = new Map(autoOrder.map((k, i) => [k, i]))
+    for (const el of group.elements) {
+      const idx = autoIdx.get(el.id)
+      if (idx === undefined) continue
+      const angle = angleAt(idx)
+      result.set(el.id, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) })
+    }
+    return result
   }
 
   const keys = group.elements.map(e => e.id)

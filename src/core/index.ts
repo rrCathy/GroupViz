@@ -43,6 +43,7 @@ export * from './algebra/properties'
 export {
   findAllAutomorphisms,
   createAutomorphismGroup,
+  getAutomorphismMap,
 } from './algebra/automorphisms'
 export type { Automorphism } from './algebra/automorphisms'
 export * from './algebra/presentations'

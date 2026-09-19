@@ -4,7 +4,7 @@
 > 面向主应用开发者 / 内嵌者；仓库内部实现细节见 [docs/VIEWS.md](VIEWS.md) · [docs/GROUPS.md](GROUPS.md) · [docs/CAYLEY.md](CAYLEY.md)。
 >
 > 口径：**Scene 是纯受控渲染内核**（不读应用级 context）；状态、hover 气泡、主题开关全部由宿主经 props 注入。
-> `@groupviz/react` 收录 11 个 Scene（tree / prestable 未 props 化，不入包 —— 二者与无限群方向相关，改由拓展包轨道承接）。
+> `@groupviz/react` 收录 **12 个 Scene**：11 个视图 Scene + 附属窗口功能 `AutomorphismScene`（tree / prestable 未 props 化，不入包 —— 二者与无限群方向相关，改由拓展包轨道承接）。
 
 ---
 
@@ -111,7 +111,7 @@ const s = useSceneState(group?, options?)
 
 | 组件 | 主题 prop |
 |---|---|
-| 7 个 2D Scene：`SetView` `CycleView` `CayleyView` `TableView` `CosetStripScene` `ActionScene` `HomomorphismScene` | `theme?: 'dark' \| 'light'` |
+| 8 个 2D Scene：`SetView` `CycleView` `CayleyView` `TableView` `CosetStripScene` `ActionScene` `HomomorphismScene` `AutomorphismScene` | `theme?: 'dark' \| 'light'` |
 | `SymmetryViewScene` | `theme?: 'dark' \| 'light'`（`dark?: boolean` 为兼容别名，`theme` 优先） |
 | `Cayley3DScene` `SublatticeScene` | `theme?: 'dark' \| 'light'` |
 
@@ -347,7 +347,57 @@ p-子群 / Sylow 子群的探索视图。三种布局模式由右侧 chip 的选
 
 ---
 
-## 5. `SceneWindow`
+### 4.12 `AutomorphismScene`
+
+自同构作用预览：把 Aut(G) 里的一个自同构 α 作用在**父群 G** 上的效果画出来 —— 父群 G 的圆环 Cayley 图，边按 α 改接到生成元的像 α(g)（「自同构如何扭转乘法结构」的可视化）、α 的不动点高亮，下方附元素映射表与不动 / 移动计数。
+
+**不含窗口 chrome**：它是内容内核，宿主用 `SceneWindow` 在自己的视图窗口里**嵌套一层预览窗**（主应用即如此，见下方示例）。
+
+| prop | 类型 | 缺省 | 说明 |
+|---|---|---|---|
+| `group` | `Group \| null` | — | 自同构群 Aut(G)；`null` / 非自同构群 → 空态 |
+| `selectedElements` | `Set<string>` | 空集 | 受控选中；**恰一个且命中自同构**时渲染该 α 的作用 |
+| `viewBoxSize` | `{ width, height }` | 自测容器 | 绘图区像素（不含头部 / 映射表）；不传则 ResizeObserver 实测 |
+| `showMapping` | `boolean` | `true` | 元素映射表开关（小窗 / 大群时本来就自动隐藏） |
+| `onHover` | `(el \| null) => void` | — | 节点是**父群元素**；不传 = 不挂 hover |
+| `theme` | `'dark' \| 'light'` | — | 不传 = 跟随外层 |
+
+**空态**：`group` 为 null / 非自同构群 / 未选中 / 选中多个 / 选中 id 不在自同构表里 —— 都在 `[data-testid="automorphism-scene"]` 容器内给提示文案，不抛错、不留白屏。
+
+**在 ViewWindow 里嵌套一个预览窗**（宿主想把它当「窗中窗」用时的标准写法）：
+
+```tsx
+import { createGroupFromSymbol, createAutomorphismGroup, getAutomorphismMap } from '@groupviz/core'
+import { AutomorphismScene, SceneWindow } from '@groupviz/react'
+
+const G = createGroupFromSymbol('S_{3}')
+const autG = createAutomorphismGroup(G)!        // Aut(S₃) ≅ S₃
+
+export function Preview({ selected }: { selected: Set<string> }) {
+  return (
+    <SceneWindow
+      title="Aut(G)"
+      theme="dark"
+      config={{ viewportFixed: true }}                        // 视口固定，可拖可缩
+      capabilities={{ toggleInfo: false, params: false }}     // 本 Scene 无窗口级参数
+      storageKey="automorphism-preview"                        // 位置/尺寸持久化（可省）
+      defaultPosition={{ x: 24, y: 24 }}
+      defaultSize={{ width: 380, height: 440 }}
+      onClose={() => clearSelection()}
+    >
+      <AutomorphismScene group={autG} selectedElements={selected} theme="dark" />
+    </SceneWindow>
+  )
+}
+```
+
+要点：
+
+- 「选中哪个自同构」就是 Aut(G) 的**元素 id** —— 与其它视图共用同一套受控选中即可（`useSceneState().selectedElements`）。
+- 想看 α 把每个元素送到哪：`getAutomorphismMap(autG)!.get(elId)!.map`（`Map<父群元素 id, 父群元素 id>`）；`label` 是 α 的 TeX 记号。
+- 父群 G 由 Aut(G) 自带的 `automorphismParentSymbol` 反查重建，宿主不必再传一次。
+
+
 
 窗口 chrome 壳（标题栏 / 拖拽 / resize / ⚙ View Config / localStorage 持久化），**不接管 Scene 状态**。
 
@@ -402,6 +452,7 @@ import { I18nProvider, useTranslation } from '@groupviz/react'
 | `relaxEdgeLengths3D` | `(base, edges, {lengthScales, ...}) => Map<id,Vec3>` | **逐生成元边长（3D 后处理）**：与 2D 同一套力模型，距离为三维欧氏距离；斥力按基础布局平均边长 `ref` 自适应（作用半径 0.25·ref），无边界钳制；全 1 时原样返回基础布局 |
 | `isIdentityScale` | `(scales: Map<string,number>) => boolean` | 倍率是否全为 1（渲染层判断是否需要跑松弛） |
 | `resolveCayleyPath` | `(group, actions, multiplyType, {elements?, word?, start?, closed?}) => ResolvedCayleyPath \| null` | **路径高亮解析**：元素序列 / 生成元单词 → 顶点序列 + 逐步连边（方向敏感） |
+| `getAutomorphismMap` | `(group) => Map<string, Automorphism> \| null` | Aut(G) 的「元素 id → 自同构」表（非自同构群 / 空输入 → `null`）；`AutomorphismScene` 与外部宿主共用，替代裸读 `_automorphismById` |
 | `createCayleyForceSim` | `(group, actions, multiplyType, opts) => CayleyForceSim` | **动态力导向增量模拟器**：`step()` 逐帧推进、`pin/unpin` 拖拽钉住（低热度：拖拽只影响近旁）、`reheat()` 升温、**`setOptions(opts)` 就地更新力参数**（保留位置速度 + 温和升温 → 滑杆调节平滑过渡而非重建重排）；逐生成元弹簧静止长度 + `stiffness` 刚度 + `minSeparation` 最小间距硬约束（防纠缠）。⚠️ `pin()` **原地改写** `sim.positions` 里的对象——拖拽起点须自行快照 `{x,y}` |
 
 **字长球形状（S₄ / S₅，随包分发）** —— 相邻对换生成集按字长分层摆成**实心球**（S₄ 7 层 / S₅ 11 层；S₅ 为纬度分层 + 正根胞格向量初值 + 边距松弛，视图侧自动套一层半透明球壳）：

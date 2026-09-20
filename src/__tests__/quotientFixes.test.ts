@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
+import type { GroupElement } from '../core/types'
 import { createGroupFromSymbol } from '../utils/groupFactory'
 import { computeQuotientGroup, findAllSubgroups } from '../core/algebra/subgroups'
 import { ringOrder, splitDihedralStructure } from '../core/algebra/ringOrder'
+import { findMinimalGenerators, closeUnderMultiply } from '../core/algebra/subgroups/shared'
 import { getAvailableShapesForView, getAvailableShapes3D } from '../core/types'
 import { getCayleyShapeConfig } from '../context/cayleyActions'
 
@@ -84,6 +86,39 @@ describe('商群圆形布局走同构群结构', () => {
     expect(splitDihedralStructure(q)).toBeNull()
     // C₂：identity 在首位（幂序 / 字典序在这里一致，作为兜底口径的锚点）
     expect(ringOrder(q.elements.map(e => e.id))[0]).toBe(q.identity.id)
+  })
+})
+
+describe('商群生成元按结构挑（第二轮反馈 2026-09-20）', () => {
+  it('S₄/V₄ ≅ S₃ 的生成元阶 = [3, 2]（先旋转后反射），不再是父群生成元的陪集', () => {
+    // 旧实现继承父群生成元：S₄ 的 (12)、(1234) 在商群里都是对合 ⇒ 凯莱图
+    // 画成六边形，永远摆不出同构群 S₃ 的标准双三角。
+    const q = computeQuotientGroup(s4, v4)!
+    const orderOf = (el: GroupElement) => {
+      let cur = q.identity
+      let ord = 0
+      do {
+        cur = q.multiply(cur, el)
+        ord++
+      } while (cur.id !== q.identity.id && ord <= q.order)
+      return ord
+    }
+    const orders = q.generators.map(g => orderOf(g.apply(q.identity)))
+    expect(orders).toEqual([3, 2])
+    // 生成元确实生成整个商群
+    const closure = closeUnderMultiply(q, q.generators.map(g => g.apply(q.identity)))
+    expect(closure.length).toBe(q.order)
+    // 两类边颜色可区分（继承撞色时用调色板补位）
+    expect(new Set(q.generators.map(g => g.color)).size).toBe(q.generators.length)
+  })
+
+  it('N 的内部凯莱边 = N 自己的最小生成元（不是随手挑的 2/3 阶元）', () => {
+    const q = computeQuotientGroup(s4, v4)!
+    const nmin = findMinimalGenerators(v4.elements, s4).map(e => e.id)
+    const edges = q.identity.cosetInternalEdges ?? []
+    // V₄ ≅ C₂×C₂：2 个最小生成元 ⇒ 每个给 2 条无向对 = 4 条边（旧实现 3 个候选给 6 条）
+    expect(edges.length).toBe(4)
+    expect(edges.every(e => { const a = e.actionElementId; return a !== undefined && nmin.includes(a) })).toBe(true)
   })
 })
 

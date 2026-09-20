@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, fireEvent } from '@testing-library/react'
 import { SetView } from '../components/Canvas/SetView'
 import { CayleyView } from '../components/Canvas/CayleyView'
 import { quotientInsetGeometry } from '../core/viewBox'
@@ -32,10 +32,34 @@ describe('商群画布：普通节点 + 正规子群凯莱图面板', () => {
     const inset = container.querySelector('[data-testid="quotient-subgroup-inset"]')
     expect(inset).toBeTruthy()
     expect(inset!.querySelectorAll('[data-testid="inset-node"]').length).toBe(4)
-    expect(inset!.querySelectorAll('[data-testid="inset-edge"]').length).toBeGreaterThan(0)
+    // N 的凯莱边 = N 自己的最小生成元（V₄ ≅ C₂×C₂：2 个生成元 ⇒ 4 条无向对）
+    expect(inset!.querySelectorAll('[data-testid="inset-edge"]').length).toBe(4)
     // 面板标题与 |N| 标注
     expect(inset!.textContent).toContain('正规子群 N 的凯莱图')
     expect(inset!.textContent).toContain('|N| = 4')
+  })
+
+  it('悬浮窗可收起成药丸、点药丸再展开', () => {
+    const { container } = render(
+      <SetView
+        group={qg}
+        selectedElements={noSel}
+        canvasTransform={ct}
+        viewBoxSize={vb}
+        quotientInsetTitle="正规子群 N 的凯莱图"
+      />,
+    )
+    // 收起：药丸出现，小凯莱图消失
+    fireEvent.click(container.querySelector('[data-testid="quotient-inset-toggle"]')!)
+    const pill = container.querySelector('[data-testid="quotient-inset-pill"]')
+    expect(pill).toBeTruthy()
+    expect(container.querySelectorAll('[data-testid="inset-node"]').length).toBe(0)
+    expect(pill!.textContent).toContain('|N| = 4')
+    // 展开：pointerdown + 原地 pointerup（位移 < 4px 视为点击）
+    fireEvent.pointerDown(pill!)
+    fireEvent.pointerUp(pill!)
+    expect(container.querySelector('[data-testid="quotient-inset-pill"]')).toBeNull()
+    expect(container.querySelectorAll('[data-testid="inset-node"]').length).toBe(4)
   })
 
   it('节点是普通节点：不存在复合节点的大圆（r=72）', () => {

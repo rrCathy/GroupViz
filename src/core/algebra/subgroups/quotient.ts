@@ -1,7 +1,6 @@
 import type { Group, GroupElement } from '../../types'
 import { COLOR_PALETTE } from '../../types'
-import { computeElementOrderInGroup } from './detection'
-import { type Subgroup } from './shared'
+import { type Subgroup, findMinimalGenerators } from './shared'
 import { computeCayleyActionEdges, type ForceLayoutEdge } from '../cayleyEdges'
 import { forceLayout } from '../cycleLayouts'
 
@@ -98,25 +97,14 @@ export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Gr
   const identityIdx = cosetMap.get(normalSubgroup.elements.map(e => e.id).sort().join(',')) ?? 0
 
   const nSubgroup = leftCosets[identityIdx]
-  const actionCandidates: GroupElement[] = []
-  for (const nEl of nSubgroup) {
-    if (nEl.id === group.identity.id) continue
-    const ord = computeElementOrderInGroup(nEl, group)
-    if (ord === 2 || ord === 3) actionCandidates.push(nEl)
-    if (actionCandidates.length >= 3) break
-  }
-  if (actionCandidates.length === 0) {
-    for (const nEl of nSubgroup) {
-      if (nEl.id !== group.identity.id) {
-        actionCandidates.push(nEl)
-        break
-      }
-    }
-  }
+  // N 的凯莱图只画 **N 自己的最小生成元** 作为边（用户 2026-09-20：「只需要展示
+  // 它自己的生成元作为边就够了」）。旧实现随手挑 N 里前 3 个 2/3 阶元 —— 那不是
+  // 生成集，画出来的「内部凯莱图」既不标准也不必要地密。
+  const nGeneratorEls = findMinimalGenerators(nSubgroup, group)
 
-  if (actionCandidates.length > 0) {
+  if (nGeneratorEls.length > 0) {
     const palette = ['#ff6b6b','#4ecdc4','#ffd93d']
-    const actions: import('../../types').CayleyAction[] = actionCandidates.map((el, i) => ({
+    const actions: import('../../types').CayleyAction[] = nGeneratorEls.map((el, i) => ({
       elementId: el.id,
       enabled: true,
       color: palette[i % palette.length],
@@ -232,49 +220,61 @@ export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Gr
     }
   }
 
-  const generators: import('../../types').Generator[] = []
-  const sourceGens = group.generators.length > 0
-    ? group.generators.map(g => g.apply(group.identity))
+  // 生成元按**商群自己的结构**挑（findMinimalGenerators：阶从大到小 + 贪心扩张，
+  // 直到生成整个商群），不再继承父群生成元的陪集。
+  // 为什么必须换：父群生成元映射到商群里可能全是低阶元 —— S₄ 的默认生成元
+  // (12)、(1234) 在 S₄/V₄ ≅ S₃ 里**都是对合**，画出来是六边形；而 S₃ 的标准
+  // 形状（双三角）需要先选 3 阶旋转元。同构群的形状 = 同构群的生成元集。
+  const genEls = order > 1
+    ? findMinimalGenerators(elements, {
+        multiply,
+        elements,
+        identity: elements[identityIdx],
+      } as unknown as Group).filter(el => el.id !== elements[identityIdx].id)
     : []
 
-  const seenGens = new Set<number>()
-  for (let genIdx = 0; genIdx < sourceGens.length; genIdx++) {
-    const genEl = sourceGens[genIdx]
+  // 尽量沿用父群生成元的配色：若所选陪集里含父群某生成元，就继承它的颜色；
+  // 继承不到（或撞色）的用调色板里还没被用的颜色补位 —— 两个生成元同色会
+  // 让凯莱图上的两类边无法区分。
+  const parentColorByCoset = new Map<number, string>()
+  for (const pg of group.generators) {
+    const genEl = pg.apply(group.identity)
     for (let i = 0; i < leftCosets.length; i++) {
       if (leftCosets[i].some(e => e.id === genEl.id)) {
-        if (i !== identityIdx && !seenGens.has(i)) {
-          seenGens.add(i)
-          const idx = i
-          const parentColor = group.generators[genIdx]?.color ?? COLOR_PALETTE[generators.length % COLOR_PALETTE.length]
-          const gen: import('../../types').Generator = {
-            name: `g${idx}`,
-            symbol: `\\bar{g}_{${idx}}`,
-            color: parentColor,
-            apply: (el: GroupElement) => multiply(el, elements[idx]),
-            inverse: {} as import('../../types').Generator,
-          }
-          generators.push(gen)
-        }
+        if (!parentColorByCoset.has(i)) parentColorByCoset.set(i, pg.color)
         break
       }
     }
   }
 
-  if (generators.length === 0 && order > 1) {
-    for (let i = 1; i < leftCosets.length && generators.length < 3; i++) {
-      if (seenGens.has(i)) continue
-      seenGens.add(i)
-      const idx = i
-      const gen: import('../../types').Generator = {
-        name: `g${idx}`,
-        symbol: `\\bar{g}_{${idx}}`,
-        color: COLOR_PALETTE[generators.length % COLOR_PALETTE.length],
-        apply: (el: GroupElement) => multiply(el, elements[idx]),
-        inverse: {} as import('../../types').Generator,
-      }
-      generators.push(gen)
-    }
+  const genColors: string[] = []
+  const usedColors = new Set<string>()
+  for (const el of genEls) {
+    const idx = parseInt(el.id.split('-')[1], 10)
+    const inherited = parentColorByCoset.get(idx)
+    const color = inherited && !usedColors.has(inherited) ? inherited : ''
+    genColors.push(color)
+    if (color) usedColors.add(color)
   }
+  let fallbackIdx = 0
+  for (let i = 0; i < genColors.length; i++) {
+    if (genColors[i]) continue
+    while (usedColors.has(COLOR_PALETTE[fallbackIdx % COLOR_PALETTE.length]) && fallbackIdx < COLOR_PALETTE.length) fallbackIdx++
+    genColors[i] = COLOR_PALETTE[fallbackIdx % COLOR_PALETTE.length]
+    usedColors.add(genColors[i])
+    fallbackIdx++
+  }
+
+  const generators: import('../../types').Generator[] = genEls.map((el, i) => {
+    const idx = parseInt(el.id.split('-')[1], 10)
+    return {
+      name: `g${idx}`,
+      symbol: `\\bar{g}_{${idx}}`,
+      color: genColors[i],
+      apply: (el2: GroupElement) => multiply(el2, elements[idx]),
+      inverse: {} as import('../../types').Generator,
+    }
+  })
 
   const invIndex = new Map<number, number>()
   for (let i = 0; i < elements.length; i++) {

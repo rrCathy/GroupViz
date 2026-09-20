@@ -62,6 +62,29 @@ describe('商群画布：普通节点 + 正规子群凯莱图面板', () => {
     expect(container.querySelectorAll('[data-testid="inset-node"]').length).toBe(4)
   })
 
+  it('悬浮窗默认 360×300，右下角手柄可拖拽缩放', () => {
+    const { container } = render(
+      <SetView group={qg} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,
+    )
+    const win = () => container.querySelector('[data-testid="quotient-inset-window"]')!
+    // 默认尺寸（k=1 的测试环境下 px == SVG 单位）
+    expect(Number(win().getAttribute('width'))).toBe(360)
+    expect(Number(win().getAttribute('height'))).toBe(300)
+    // 拖手柄 +120×+80 → 变大
+    const grip = container.querySelector('[data-testid="quotient-inset-resize"]')!
+    fireEvent.pointerDown(grip, { clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(window, { clientX: 220, clientY: 180 })
+    fireEvent.pointerUp(window)
+    expect(Number(win().getAttribute('width'))).toBe(480)
+    expect(Number(win().getAttribute('height'))).toBe(380)
+    // 缩到下限以下被夹住（240×180）
+    fireEvent.pointerDown(grip, { clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(window, { clientX: -400, clientY: -400 })
+    fireEvent.pointerUp(window)
+    expect(Number(win().getAttribute('width'))).toBe(240)
+    expect(Number(win().getAttribute('height'))).toBe(180)
+  })
+
   it('节点是普通节点：不存在复合节点的大圆（r=72）', () => {
     const { container } = render(
       <SetView group={qg} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,

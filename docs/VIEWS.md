@@ -20,7 +20,7 @@
 商群 `G/N` 的凯莱图与集合视图按下面这套约定画（`GroupCanvas` / `SetView` / 包内 `CayleyView` 同形）：
 
 - **节点 = 普通节点**，标签是陪集记号 `gN`（`eN`、`24N`…），不再把陪集成员塞进大圆画「复合节点」（陪集不是子群，成员小节点在数学上误导，且大圆 r=72 让节点互相拥挤）；
-- **正规子群 N 单独画一份凯莱图**，放在画布右侧的**可收起、可拖动的悬浮窗**（`components/Canvas/QuotientSubgroupInset.tsx`），箭头从**恒等陪集节点（= N 本身）**指过去；窗内小凯莱图的边 = **N 自己的最小生成元**（`findMinimalGenerators`，用户：「只需要展示它自己的生成元作为边就够了」）；收起 = 标题栏按钮缩成小药丸（`N |N|=n ▸`），点药丸原地展开；窗体在 viewBox 坐标系（不在 canvasTransform 组内），缩放平移时尺寸恒定，位置仅会话内有效。数据字段 `cosetMemberLabels` / `cosetInternalLayout` / `cosetInternalEdges`（core 的 `computeQuotientGroup` 写入，各陪集共享同一份内部布局）；
+- **正规子群 N 单独画一份凯莱图**，放在画布右侧的**可收起、可拖动的悬浮窗**（`components/Canvas/QuotientSubgroupInset.tsx`），箭头从**恒等陪集节点（= N 本身）**指过去；窗内小凯莱图的边 = **N 自己的最小生成元**（`findMinimalGenerators`，用户：「只需要展示它自己的生成元作为边就够了」）；收起 = 标题栏按钮缩成小药丸（`N |N|=n ▸`），点药丸原地展开；窗体以**屏幕像素**设计（经 `scale(k)` 落进 SVG，k = viewBox宽/容器宽）⇒ 不随画布 viewBox 缩放变小，**右下角手柄可拖拽缩放**（240×180 ~ 720×600，默认 360×300；小容器按容器再收），拖动/缩放位置仅会话内有效；窗够大时每个小圆点下方显示 KaTeX 元素标签（>12 个元素或节点过小则只留悬停 title）。数据字段 `cosetMemberLabels` / `cosetInternalLayout` / `cosetInternalEdges`（core 的 `computeQuotientGroup` 写入，各陪集共享同一份内部布局）；
 - **商群生成元按结构挑**（`findMinimalGenerators`：阶从大到小 + 贪心扩张）：父群生成元映射到商群里可能全是低阶元 —— S₄ 的 (12)、(1234) 在 S₄/V₄ ≅ S₃ 里**都是对合**，凯莱图画成六边形，永远摆不出同构群的标准双三角；先选 3 阶旋转元再补对合，circular 形状即呈双三角。配色尽量继承父群生成元，撞色时用调色板补位；
 - **让位几何**（`core/viewBox.ts` 的 `quotientInsetGeometry`）：面板贴右、垂直居中，图形主体在左侧带内居中。位置初始化（`context/positionUtils`）与渲染端**必须用同一份几何** —— 否则预置位置会把图居中到整幅画布中央、被面板压住；
 - **形状**：商群符号 `G/N` 不带 D/C/S 前缀，符号链一律不适用 ⇒ 按**结构**给形状（circular 恒有；二面体结构追加 dualRing；循环且阶 > 7 追加 spiral/coil；cone 兜底；3D 给 cone/circular）。注意 app 层 `getCayleyShapeConfig` 必须与 core 的 `getAvailableShapes*` 同口径（曾因平行短路把商群盖成「只有圆形」）；

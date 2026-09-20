@@ -21,11 +21,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   createGroupFromSymbol, buildActionComputation, getAvailableShapes3D, getAvailableShapesForView,
   wordLengthSphereActions, resolveElement,
+  createAutomorphismGroup, getAutomorphismMap,
   type Group, type GroupElement, type Layout3D, type CayleyShape2D,
 } from '@groupviz/core'
 import {
   SetView, CycleView, CayleyView, CosetStripScene, TableView,
   ActionScene, HomomorphismScene, SublatticeScene, Cayley3DScene, SymmetryViewScene,
+  AutomorphismScene,
   SceneWindow,
   I18nProvider,
 } from '@groupviz/react'
@@ -33,6 +35,8 @@ import {
 const VB = { width: 860, height: 520 }
 const CT = { x: 40, y: 40, scale: 1 }
 const CARD_BG = '#0b1220'
+/** 自同构卡左栏凯莱图的视口宽度基准（高度跟随卡片「图高」滑杆） */
+const AUT_VB = { width: 880 }
 
 // ── 群选择（全部经 dist-pkg core 实测可载入） ──
 const GROUP_OPTIONS = [
@@ -636,6 +640,189 @@ function ShellDemoCard({ group }: { group: Group | null }) {
   )
 }
 
+/** `\mathrm{id}` / `\alpha_{12}` → `id` / `α₁₂`（本页不引 KaTeX 渲染管线） */
+function autoLabel(tex: string): string {
+  if (tex === '\\mathrm{id}') return 'id'
+  const m = tex.match(/^\\alpha_\{?(\d+)\}?$/)
+  if (m) return 'α' + m[1].split('').map(d => '₀₁₂₃₄₅₆₇₈₉'[+d]).join('')
+  return tex
+}
+
+// ── 自同构作用预览（第 12 个入包 Scene = 附属窗口功能；同时演示「宿主窗中窗」形态） ──
+// core 侧：createAutomorphismGroup(父群) 得 Aut(G)（|Aut| 与 iso 一并展示）；
+//          getAutomorphismMap(aut) 直读「元素 id → 自同构」表（本卡用来算每个 α 的移动数）。
+// react 侧：AutomorphismScene 吃 group=Aut(G) + 受控 selectedElements（恰一个元素才渲染）。
+// 形态两种：SceneWindow 嵌套预览窗（拖拽/resize/持久化归壳）/ 裸渲（证明内核不绑壳）。
+function AutomorphismCard({ group }: { group: Group | null }) {
+  const aut = useMemo(() => (group ? createAutomorphismGroup(group) : null), [group])
+  const autoById = useMemo(() => getAutomorphismMap(aut), [aut])
+  // 选中记「所属父群 + id」：不同 Aut(G) 的元素 id 命名相同（auto-0…），只比对 id
+  // 会让换父群后的旧选中被同名继承（不报错但语义错）——宿主须自行失效。
+  const [picked, setPicked] = useState<{ sym: string; id: string } | null>(null)
+  const [showMapping, setShowMapping] = useState(true)
+  const [nested, setNested] = useState(true)
+
+  const selectedElements = useMemo(
+    () => (picked && picked.sym === group?.symbol && autoById?.has(picked.id) ? new Set([picked.id]) : EMPTY_SEL),
+    [picked, group, autoById],
+  )
+
+  // 凯莱图点节点 = 同一套选中语义（再点同一个 = 取消；additive/多选忽略——作用预览只吃单选）
+  const handleGraphSelect = useCallback((id: string) => {
+    setPicked(prev => (prev && prev.sym === group?.symbol && prev.id === id ? null : { sym: group?.symbol ?? '', id }))
+  }, [group])
+
+  const scene = <AutomorphismScene group={aut} selectedElements={selectedElements} showMapping={showMapping} />
+
+  // Aut(G) 自身的凯莱图（节点 = 自同构 α，边 = Aut 群生成元）：与 α 作用预览共用同一
+  // 受控选中 —— 在凯莱图里点中的 α 会同步高亮到右侧作用预览。
+  const shapes = useMemo<CayleyShape2D[]>(() => getAvailableShapesForView(aut, 'cayley'), [aut])
+  const [shape, setShape] = useState<CayleyShape2D>('circular')
+  const shapeValue: CayleyShape2D = shapes.includes(shape) ? shape : (shapes[0] ?? 'circular')
+  const [labels, setLabels] = useState(true)
+  const [mtype, setMtype] = useState<'right' | 'left'>('right')
+
+  // ── 两个区域尺寸可单独调：宽度由可拖分隔条分配，高度各自一条滑杆 ──
+  const [leftPct, setLeftPct] = useState(58)
+  const [graphH, setGraphH] = useState(470)
+  const [previewH, setPreviewH] = useState(470)
+  // 「适配容器」：重挂载预览窗，把几何重置为当前容器尺寸（窗口本是可自由拖拽的）
+  const [fitNonce, setFitNonce] = useState(0)
+  const splitHostRef = useRef<HTMLDivElement | null>(null)
+
+  const onSplitDown = useCallback((e: React.MouseEvent) => {
+    const host = splitHostRef.current
+    if (!host) return
+    e.preventDefault()
+    const rect = host.getBoundingClientRect()
+    const move = (ev: MouseEvent) => {
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100
+      setLeftPct(Math.min(78, Math.max(28, pct)))
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }, [])
+
+  return (
+    <section data-testid="pkg-automorphism" style={{ border: '1px solid #1e293b', borderRadius: 10, background: CARD_BG, padding: 10, marginTop: 14 }}>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 6, alignItems: 'baseline' }}>
+        <h3 style={{ margin: 0, fontSize: 12, color: '#7dd3fc' }}>Aut(G) 的凯莱图 + 自同构预览 ← @groupviz/react</h3>
+        <span data-testid="pkg-aut-tag" style={{ fontSize: 10, color: '#64748b' }}>
+          {aut
+            ? `Aut(${group?.symbol}) · |Aut| = ${aut.order}${aut.isoSymbol ? ` ≅ ${aut.isoSymbol}` : ''} · 父群阶 ${group?.order}`
+            : 'Aut(G) 不可用'}
+          {' · '}core：createAutomorphismGroup + getAutomorphismMap
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 8 }}>
+        <Ctl label="Aut 图形状">
+          <Sel value={shapeValue} onChange={setShape} testid="pkg-aut-shape"
+            options={shapes.map((s) => ({ value: s, label: s }))} />
+        </Ctl>
+        <Ctl label="multiplyType">
+          <Seg value={mtype} onChange={setMtype} testid="pkg-aut-mul"
+            options={[{ value: 'right', label: 'a·c' }, { value: 'left', label: 'c·a' }]} />
+        </Ctl>
+        <Chk checked={labels} onChange={setLabels} testid="pkg-aut-labels">凯莱图标签</Chk>
+        <Ctl label="预览形态">
+          <Seg value={nested ? 'nested' : 'bare'} onChange={(v) => setNested(v === 'nested')} testid="pkg-aut-shell"
+            options={[{ value: 'nested', label: '窗中窗（SceneWindow）' }, { value: 'bare', label: '裸渲' }]} />
+        </Ctl>
+        <Chk checked={showMapping} onChange={setShowMapping} testid="pkg-aut-mapping">元素映射表</Chk>
+        <Ctl label="图高">
+          <input type="range" min={300} max={720} step={10} value={graphH} data-testid="pkg-aut-graph-h"
+            onChange={(e) => setGraphH(Number(e.target.value))} style={{ width: 80 }} />
+          <span style={{ fontSize: 10, color: '#64748b' }}>{graphH}</span>
+        </Ctl>
+        <Ctl label="预览高">
+          <input type="range" min={300} max={720} step={10} value={previewH} data-testid="pkg-aut-preview-h"
+            onChange={(e) => setPreviewH(Number(e.target.value))} style={{ width: 80 }} />
+          <span style={{ fontSize: 10, color: '#64748b' }}>{previewH}</span>
+          <button style={DEMO_BTN} data-testid="pkg-aut-fit" onClick={() => setFitNonce(n => n + 1)}>适配容器</button>
+        </Ctl>
+        <span style={{ fontSize: 10, color: '#475569' }}>两栏宽度拖中间分隔条；两个高度各自一条滑杆（预览窗还可直接拖边角 resize）</span>
+      </div>
+      <div ref={splitHostRef} style={{ display: 'flex', alignItems: 'flex-start' }}>
+        {/* 左：Aut(G) 自身的凯莱图（点节点 = 选中该 α，与右栏作用预览联动） */}
+        <div style={{ width: `${leftPct}%`, minWidth: 0 }}>
+          <Frame h={graphH}>
+            <div style={{ position: 'absolute', top: 6, left: 10, fontSize: 11, color: '#64748b', pointerEvents: 'none', zIndex: 1 }}>
+              Aut(G) 自身的凯莱图 —— 节点 = 自同构 α（{aut?.order ?? 0} 个），边 = Aut 群生成元作用 · 点节点即选中（再点取消）
+            </div>
+            {aut
+              ? <CayleyView group={aut} selectedElements={selectedElements} onSelect={handleGraphSelect}
+                  canvasTransform={CT} viewBoxSize={{ width: AUT_VB.width, height: graphH }}
+                  shape2D={shapeValue} multiplyType={mtype} showLabels={labels} />
+              : <EmptyHint />}
+          </Frame>
+        </div>
+
+        {/* 分隔条：拖动分配两栏宽度（左栏 % 状态；高度各自滑杆） */}
+        <div
+          data-testid="pkg-aut-split"
+          onMouseDown={onSplitDown}
+          title="拖动调整两栏宽度"
+          style={{
+            width: 10, flexShrink: 0, alignSelf: 'stretch', cursor: 'col-resize',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#334155', userSelect: 'none', fontSize: 12,
+          }}
+        >
+          ⋮
+        </div>
+
+        {/* 右：α 列表 + 「α 对父群的作用」预览（窗中窗 / 裸渲） */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, height: previewH }}>
+          <aside data-testid="pkg-aut-list"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 3, maxHeight: 96, overflowY: 'auto', border: '1px solid #1e293b', borderRadius: 8, padding: 6, background: '#060b16' }}>
+            {!aut && <EmptyHint />}
+            {aut?.elements.map(el => {
+              const a = autoById?.get(el.id)
+              const moved = a ? [...a.map.entries()].filter(([k, v]) => k !== v).length : 0
+              const active = !!picked && picked.sym === group?.symbol && picked.id === el.id
+              return (
+                <button
+                  key={el.id}
+                  data-testid={`pkg-aut-${el.id}`}
+                  onClick={() => setPicked(active ? null : { sym: group?.symbol ?? '', id: el.id })}
+                  style={{
+                    display: 'inline-flex', gap: 4, alignItems: 'center',
+                    fontSize: 11, padding: '2px 6px', cursor: 'pointer', borderRadius: 4,
+                    border: `1px solid ${active ? '#4ecdc4' : '#1e293b'}`,
+                    background: active ? '#0e7490' : 'transparent', color: active ? '#fff' : '#cbd5e1',
+                  }}
+                >
+                  <span>{autoLabel(el.label)}</span>
+                  <span style={{ opacity: 0.7 }}>{moved}/{group?.order ?? 0}</span>
+                </button>
+              )
+            })}
+          </aside>
+          <div data-testid="pkg-aut-preview-host" style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, border: '1px dashed #334155', borderRadius: 8, overflow: 'hidden', background: '#060b16' }}>
+            {!aut ? <EmptyHint /> : nested ? (
+              <SceneWindow
+                key={`pkg-aut-window-${fitNonce}`}
+                title={`Aut(${group?.symbol ?? ''})`} group={aut} theme="dark"
+                config={{ viewportFixed: false }} capabilities={{ params: false, persist: false }}
+                storageKey="pkg-aut-preview"
+                defaultPosition={{ x: 8, y: 8 }} defaultSize={{ width: 448, height: Math.max(240, previewH - 160) }}
+                // 关闭语义由宿主决定：这里 = 清空选中（内核回空态，窗口保留）
+                onClose={() => setPicked(null)}
+              >
+                {scene}
+              </SceneWindow>
+            ) : scene}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // 页面级 runtime 哨兵：任何未捕获 pageerror/rejection 红字上抛（Playwright 亦可断言）
 function usePageErrors() {
   const [errs, setErrs] = useState<string[]>([])
@@ -685,7 +872,7 @@ export default function TestPagePkgConsume() {
         {/* ── 页头：群切换（同步驱动所有共享群卡片） ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 4 }}>
           <h1 style={{ margin: 0, fontSize: 16, color: '#e2e8f0' }}>🧩 双包消费参数矩阵</h1>
-          <span style={{ fontSize: 11, color: '#64748b' }}>@groupviz/core + @groupviz/react（dist-pkg 产物，非 src）· 10/10 Scene 入包</span>
+          <span style={{ fontSize: 11, color: '#64748b' }}>@groupviz/core + @groupviz/react（dist-pkg 产物，非 src）· 11 视图 Scene + 附属 AutomorphismScene 入包</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
           <select
@@ -731,6 +918,8 @@ export default function TestPagePkgConsume() {
 
         <ShellDemoCard group={group} />
 
+        <AutomorphismCard group={group} />
+
         <p style={{ fontSize: 11, color: '#64748b', marginTop: 16, maxWidth: 1000, lineHeight: 1.7 }}>
           覆盖：columns 极值 / nodeRadius 三档 / 标签开关（Set/Cycle/Cayley/Coset/Homo）/
           shape2D（按群动态枚举）+ multiplyType 左右乘 / table strategy 三档 + 热力图 + 大群告警 /
@@ -740,6 +929,9 @@ export default function TestPagePkgConsume() {
           C₈ 八边形 / A₅ 二十面体（60 阶）验证大群对称演示，Q₈ 用于 Symmetry unsupported overlay。
           cosetType（左右乘）属 ViewWindow 壳层参数——包 Scene 中立，上卡以非正规 ⟨s⟩ 数据演示左右分区差异。
           VCL 示例按钮：边曲率 `edgeCurvature`（0 = 笔直）/ 逐生成元 `lengthScale` / `pathHighlight`（含字长球哈密顿路径）/ `forceDirected`。
+          自同构卡片：core `createAutomorphismGroup` + `getAutomorphismMap`；上半 = **Aut(G) 自身的凯莱图**（CayleyView 吃 Aut 群，形状按 `getAvailableShapesForView` 枚举，
+          同构于 D₃/D₄ 时圆环呈「旋转外环 + 反射内环」双环）；下半 = `AutomorphismScene` 预览 α 对**父群**的作用（受控选中 = Aut 元素 id，与凯莱图联动），
+          预览形态可在「窗中窗（SceneWindow 嵌套）/ 裸渲」间切 —— 壳与内核解耦的实证。
           改动包源码后先 npm run build:pkg。
         </p>
       </div>

@@ -394,6 +394,7 @@ export function Preview({ selected }: { selected: Set<string> }) {
 要点：
 
 - 「选中哪个自同构」就是 Aut(G) 的**元素 id** —— 与其它视图共用同一套受控选中即可（`useSceneState().selectedElements`）。
+- ⚠️ **换父群时要让旧 α 失效**：不同 Aut(G) 的元素 id 命名相同（`auto-0…auto-N`），宿主只比 id 会让旧选中被同名继承（不报错、但展示的是新群里同号的 α）。主应用靠换群清空选中规避（`setCurrentGroup` 内 `setSelectedElements(new Set())`）；`/?test=1` 的消费卡片则把选中记成 `{ 父群符号, id }` 再校验。
 - 想看 α 把每个元素送到哪：`getAutomorphismMap(autG)!.get(elId)!.map`（`Map<父群元素 id, 父群元素 id>`）；`label` 是 α 的 TeX 记号。
 - 父群 G 由 Aut(G) 自带的 `automorphismParentSymbol` 反查重建，宿主不必再传一次。
 

@@ -145,7 +145,7 @@ export function RightPanel() {
     theoremMode,
     theoremPhase,
     setTheoremMode,
-    createQuotientGroupWithHomomorphism,
+    createQuotientGroupFromElements,
     subsets,
     showCosetsFromElements,
     cosetSubsetId,
@@ -816,13 +816,14 @@ export function RightPanel() {
                         <button
                           className="panel-btn"
                           onClick={() => {
-                            const normalSubgroupElIds = sg.elements.map(e => e.id)
-                            const mSubset = subsets.find(s =>
-                              [...s.elementIds].sort().join(',') === normalSubgroupElIds.sort().join(',')
+                            // 直接用该子群的元素建商群。旧实现要先在 subsets 里
+                            // 找到元素完全相同的已保存子集，否则整个回调静默返回
+                            // —— 用户点「创建商群」毫无反应（陪集候选那条 onClick
+                            // 并不建子集）。
+                            createQuotientGroupFromElements(
+                              sg.elements.map(e => e.id),
+                              subgroupLabel,
                             )
-                            if (mSubset) {
-                              createQuotientGroupWithHomomorphism(mSubset.id)
-                            }
                           }}
                           style={{
                             minWidth: '54px', fontSize: '9px', padding: '2px 4px',

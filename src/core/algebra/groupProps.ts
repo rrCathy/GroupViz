@@ -1,5 +1,6 @@
 import type { Group, GroupElement } from '../types/group'
 import type { Layout3D, CayleyShape2D, ViewMode } from '../types/view'
+import { splitDihedralStructure } from './ringOrder'
 
 export function isQuotientGroup(group: Group): boolean {
   return group.symbol.includes('/N')
@@ -9,27 +10,33 @@ export function isAutomorphismGroup(group: Group): boolean {
   return 'automorphismParentSymbol' in group && typeof (group as Group).automorphismParentSymbol === 'string' && (group as Group).automorphismParentSymbol !== ''
 }
 
+/** 结构意义上的循环判定（只看元素，不看符号）：存在 |G| 阶元素 ⇔ 群循环。 */
+export function hasElementOfFullOrder(group: Group): boolean {
+  const n = group.order
+  if (n <= 1) return true
+  if (group.elements.length === 0) return false
+  const id = group.identity
+  for (const el of group.elements) {
+    if (el.id === id.id) continue
+    let cur = id
+    for (let k = 0; k <= n; k++) {
+      cur = group.multiply(cur, el)
+      if (cur.id === id.id) {
+        if (k + 1 === n) return true
+        break
+      }
+    }
+  }
+  return false
+}
+
 export function isGroupCyclic(group: Group): boolean {
   const sym = group.symbol
   // 纯循环符号直接判定（兼容无元素数据的测试群）
   if (/^C_\{\d+\}$/.test(sym) || /^C\d+$/.test(sym)) return true
   // 复合符号（直积/半直积等）：存在 n 阶元素 ⇔ 群循环
   if (sym.startsWith('C') || sym.startsWith('Z_')) {
-    const n = group.order
-    if (n <= 1) return true
-    if (group.elements.length === 0) return false
-    const id = group.identity
-    for (const el of group.elements) {
-      if (el.id === id.id) continue
-      let cur = id
-      for (let k = 0; k <= n; k++) {
-        cur = group.multiply(cur, el)
-        if (cur.id === id.id) {
-          if (k + 1 === n) return true
-          break
-        }
-      }
-    }
+    return hasElementOfFullOrder(group)
   }
   return false
 }
@@ -237,7 +244,9 @@ export function isCyclicFactorKeys(keys: string[]): boolean {
 }
 
 export function getAvailableShapes3D(group: Group): Layout3D[] {
-  if (isQuotientGroup(group)) return []
+  // 商群：符号是 G/N，下面的 D/S/C 前缀链全落空 —— 此前直接返回 []，3D 视图
+  // 一个形状都没有。改给两个不依赖符号的通用形状（cone 是 2D/3D 共用的兜底）。
+  if (isQuotientGroup(group)) return ['cone', 'circular']
   const sym = group.symbol
   const shapes: Layout3D[] = ['cone']
 
@@ -541,11 +550,28 @@ export function getDefaultShape2D(group: Group): CayleyShape2D {
   return 'circular'
 }
 
+/**
+ * 商群可用形状（2D 凯莱）：商群符号是 `G/N`，不带 D/C/S 前缀 —— 符号链一律
+ * 不适用，因此按**结构**给形状（与 Aut 群圆形摆位修复同一口径）。刻意不给
+ * 依赖符号拆因子的形状（grid / torus / cylinder 要按直积符号解析因子，商群
+ * 的 `qcoset-N` id 体系对不上，硬给会摆出一堆重叠点）。
+ */
+function quotientCayleyShapes2D(group: Group): CayleyShape2D[] {
+  const shapes: CayleyShape2D[] = ['circular']
+  // 二面体结构（G/N ≅ Dₘ，m ≥ 3）：circular 会自动走「旋转外环 + 反射内环」
+  // 双环（见 cayleyCircleLayout），也可手动选 dualRing
+  if (splitDihedralStructure(group)) shapes.push('dualRing')
+  // 循环且阶 > 7：与循环群分支同口径（≤7 阶螺旋没有意义）
+  if (hasElementOfFullOrder(group) && group.order > 7) shapes.push('spiral', 'coil')
+  shapes.push('cone')
+  return shapes
+}
+
 export function getAvailableShapesForView(group: Group | null, view: ViewMode): CayleyShape2D[] {
   if (!group) return ['circular']
   if (view === 'cayley') {
     if (isQuotientGroup(group)) {
-      return ['circular']
+      return quotientCayleyShapes2D(group)
     }
     if (isGroupSemidirectProduct(group)) {
       return ['rewiring', 'circular', 'cone']

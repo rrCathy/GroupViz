@@ -1,5 +1,5 @@
 import type { Group, GroupElement, NodePosition } from '../../types'
-import { isC2Cube, isGroupDihedral, isAutomorphismGroup } from '../../types'
+import { isC2Cube, isGroupDihedral, isAutomorphismGroup, isQuotientGroup } from '../../types'
 import {
   ringOrder, detectS3PermSet, S3_PERM_IDS, powerRingOrder,
   splitDihedralElements, splitDihedralStructure, quaternionCosetMap,
@@ -477,14 +477,15 @@ export function cayleyCircleLayout(
     }
   }
 
-  // 自同构群：走「它同构的那个群」的圆形形状——符号是 \operatorname{Aut}(...)，
-  // 不带 D/C 前缀，上面的循环/二面体分支全进不去，此前落到 id 字典序兜底
-  // （auto-10 < auto-2，元素在环上近乎随机摆）。这里按结构识别：
-  //   · 二面体结构（Aut(D₄)≅D₄、Aut(S₃)≅D₃、Aut(C₄×C₂)≅D₄ 型）摆成
+  // 自同构群 / 商群：走「它同构的那个群」的圆形形状——两者符号都不带 D/C 前缀
+  // （Aut(...) 还是符号前缀里有 D 都不成立；商群是 G/N），上面的循环/二面体分支
+  // 全进不去，此前落到 id 字典序兜底（auto-10 < auto-2、qcoset-10 < qcoset-2，
+  // 元素在环上近乎随机摆）。这里按结构识别：
+  //   · 二面体结构（Aut(D₄)≅D₄、Aut(S₃)≅D₃；S₄/V₄≅S₃、D₆/A₆型商群）摆成
   //     旋转外环 + 反射内环 —— 与 registry Dₙ 的 circular 逐角度一致；
-  //   · 其余（Aut(Q₈)≅S₄、Aut(C₃×C₃)≅GL(2,3) 等）按生成元 BFS 幂序摆单环，
-  //     生成元边沿环连贯。
-  if (isAutomorphismGroup(group)) {
+  //   · 其余（Aut(Q₈)≅S₄、Aut(C₃×C₃)≅GL(2,3)、商群 C₆ 等）按生成元 BFS 幂序
+  //     摆单环，生成元边沿环连贯。
+  if (isAutomorphismGroup(group) || isQuotientGroup(group)) {
     const split = splitDihedralStructure(group)
     if (split) {
       const cnt = split.rotations.length

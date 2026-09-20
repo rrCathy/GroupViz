@@ -147,6 +147,7 @@ const s = useSceneState(group?, options?)
 | `nodeRadius` / `gap` / `columns` | `number` | 自动 | 布局微调 |
 | `showLabels` | `boolean` | `true` | 常驻标签总开关 |
 | `largeGroupThreshold` | `number` | `60` | 群阶 > 该值时「仅选中节点显示常驻标签」 |
+| `quotientInsetTitle` | `string` | — | 商群视图右侧「正规子群 N 的凯莱图」面板标题（宿主本地化文案；缺省只画数学记号 `N` 与 `|N| = n`） |
 | `theme` | `'dark' \| 'light'` | — | 不传 = 跟随外层 |
 
 ### 4.2 `CycleView`
@@ -180,6 +181,7 @@ const s = useSceneState(group?, options?)
 | `pathHighlight` | `CayleyPathHighlight \| null` | `null` | 路径高亮（VCL）：**缺省淡化其余边**（`dimOthers`，只留路径醒目）；`showOrder` 序号**悬停该节点时显示** |
 | `forceDirected` | `boolean` | `false` | 动态力导向**开关**（在**当前选定形状**之上把静图"激活"；**拖动一个节点只影响近旁**——1 跳邻居粘性跟随约 20–30%、其余 2–7%，松手轻微回稳；整体重排用 `force.settleSignal`） |
 | `force` | `CayleyForceParams` | — | 力导向微调：`repulsion` / `linkScale` / `gravity` / `damping` / **`stiffness`（刚度 0.4–3）** / `settleSignal`。**参数变化就地生效**（平滑过渡，不重建模拟器） |
+| `quotientInsetTitle` | `string` | — | 同 `SetView`：商群视图右侧「正规子群 N 的凯莱图」面板标题 |
 | `theme` | `'dark' \| 'light'` | — | |
 
 #### `CayleyPathHighlight`（路径高亮）

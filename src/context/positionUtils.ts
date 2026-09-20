@@ -1,6 +1,6 @@
 import type { Group, GroupElement, ViewMode } from '../core/types'
-import { isGroupDirectProduct, type CayleyShape2D } from '../core/types'
-import { getViewBoxSize } from '../core/viewBox'
+import { isGroupDirectProduct, isQuotientGroup, type CayleyShape2D } from '../core/types'
+import { getViewBoxSize, quotientInsetGeometry } from '../core/viewBox'
 import { directProductGridLayout2D, ringOrder, cayleyCircleLayout } from '../core/algebra/forceLayout'
 import { computeShape2DPositions } from '../core/algebra/shapeLayouts'
 
@@ -25,7 +25,16 @@ export function initializeNodePositions(group: Group, view: ViewMode, shape2D?: 
   const positions = new Map<string, { x: number; y: number }>()
   const n = group.elements.length
 
-  const vbs = getViewBoxSize(n, view, force)
+  const full = getViewBoxSize(n, view, force)
+  // 商群（|N| > 1）在 set / cayley 视图里要给右侧「N 的凯莱图」面板让位：
+  // 图形主体在左侧带内居中。**必须与渲染端用同一份几何**，否则预置位置会把
+  // 图居中到整幅画布中央、被面板压住（渲染端见 GroupCanvas / SetView）。
+  const needsInset = isQuotientGroup(group)
+    && (group.identity.cosetMemberLabels?.length ?? 0) > 1
+    && (view === 'cayley' || view === 'set')
+  const vbs = needsInset
+    ? { width: quotientInsetGeometry(full).drawWidth, height: full.height }
+    : full
   const centerX = vbs.width / 2
   const centerY = vbs.height / 2
 

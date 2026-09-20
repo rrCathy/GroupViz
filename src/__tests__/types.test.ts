@@ -144,8 +144,10 @@ describe('isCyclicFactorKeys', () => {
 })
 
 describe('getAvailableShapes3D', () => {
-  it('returns empty for quotient groups', () => {
-    expect(getAvailableShapes3D(mk({ symbol: 'S_{4}/N' }))).toEqual([])
+  it('offers the two symbol-free shapes for quotient groups', () => {
+    // 商群符号是 G/N，D/S/C 前缀链全落空 —— 旧实现直接返回 []（3D 一个形状
+    // 都没有）。2026-09-20 改为给两个不依赖符号的通用形状。
+    expect(getAvailableShapes3D(mk({ symbol: 'S_{4}/N' }))).toEqual(['cone', 'circular'])
   })
 
   it('offers semidirectCylinder/circular for semidirect products', () => {
@@ -504,7 +506,9 @@ describe('getAvailableShapesForView', () => {
   })
 
   it('cayley view per family', () => {
-    expect(getAvailableShapesForView(mk({ symbol: 'S_{4}/N' }), 'cayley')).toEqual(['circular'])
+    // 商群：符号不带前缀 ⇒ 按结构给形状（mk 的群没有元素，故只有恒等的
+    // circular + 兜底 cone；真实商群会按二面体/循环结构追加 dualRing/spiral/coil）
+    expect(getAvailableShapesForView(mk({ symbol: 'S_{4}/N' }), 'cayley')).toEqual(['circular', 'cone'])
     expect(getAvailableShapesForView(mk({ symbol: 'C_{3} \\rtimes_{\\phi} C_{2}', order: 12 }), 'cayley')).toEqual(['rewiring', 'circular', 'cone'])
     expect(getAvailableShapesForView(getSmallGroup(16, 2)!.group, 'cayley')).toEqual(['rewiring', 'circular', 'cone'])
     expect(getAvailableShapesForView(mk({ symbol: 'C_{12}', order: 12 }), 'cayley')).toEqual(['circular', 'spiral', 'coil', 'cone'])

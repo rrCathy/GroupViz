@@ -177,6 +177,8 @@ interface GroupContextActions {
   removeQuotientGroup: (id: string) => void
   loadQuotientGroup: (id: string) => Group | null
   createQuotientGroupWithHomomorphism: (subsetId: string) => QuotientGroupEntry | null
+  /** 直接从正规子群元素建商群（子群列表行内按钮走这条，不要求已保存子集） */
+  createQuotientGroupFromElements: (elementIds: string[], label: string) => QuotientGroupEntry | null
   computeAutomorphismGroup: () => AutomorphismGroupEntry | null
   removeAutomorphismGroup: (id: string) => void
   loadAutomorphismGroup: (id: string) => Group | null
@@ -512,21 +514,30 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     subset.saveSubset()
   }, [symmetry.symmetryShowAction, subset])
 
+  // 商群创建后的同构提示（两条入口共用：子集入口 / 子群列表按元素入口）
+  const announceQuotientIso = useCallback((entry: QuotientGroupEntry): void => {
+    if (!entry.isoSymbol || !core.currentGroup) return
+    core.setHintMessage(t('hint.quotientCreatedIso', {
+      symbol: entry.group.symbol,
+      order: entry.group.order,
+      isoSymbol: entry.isoSymbol,
+    }).replace(entry.group.symbol, `<span class="hint-highlight">${entry.group.symbol}</span>`)
+      .replace(entry.isoSymbol, `<span class="hint-highlight">${entry.isoSymbol}</span>`))
+  }, [core, t])
+
   const createQuotientGroupWithHomomorphism = useCallback((subsetId: string): QuotientGroupEntry | null => {
     const entry = subset.createQuotientGroup(subsetId)
-    if (!entry || !core.currentGroup) return null
-
-    if (entry.isoSymbol) {
-      core.setHintMessage(t('hint.quotientCreatedIso', {
-        symbol: entry.group.symbol,
-        order: entry.group.order,
-        isoSymbol: entry.isoSymbol,
-      }).replace(entry.group.symbol, `<span class="hint-highlight">${entry.group.symbol}</span>`)
-        .replace(entry.isoSymbol, `<span class="hint-highlight">${entry.isoSymbol}</span>`))
-    }
-
+    if (!entry) return null
+    announceQuotientIso(entry)
     return entry
-  }, [subset, core, t])
+  }, [subset, announceQuotientIso])
+
+  const createQuotientGroupFromElements = useCallback((elementIds: string[], label: string): QuotientGroupEntry | null => {
+    const entry = subset.createQuotientGroupFromElements(elementIds, label)
+    if (!entry) return null
+    announceQuotientIso(entry)
+    return entry
+  }, [subset, announceQuotientIso])
 
   const value: GroupContextType = useMemo(() => ({
     currentGroup: core.currentGroup,
@@ -680,6 +691,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     removeQuotientGroup: subset.removeQuotientGroup,
     loadQuotientGroup: subset.loadQuotientGroup,
     createQuotientGroupWithHomomorphism,
+    createQuotientGroupFromElements,
 
     computeAutomorphismGroup: subset.computeAutomorphismGroup,
     removeAutomorphismGroup: subset.removeAutomorphismGroup,
@@ -771,6 +783,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setCurrentView, selectElement, computeInverse, clearCanvas,
     resetNodePositions, runForceLayout, setForceShowLargeGroupForView, saveSubset,
     createQuotientGroupWithHomomorphism,
+    createQuotientGroupFromElements,
     toggleDirectProductMode, toggleSemidirectProductMode,
   ])
 

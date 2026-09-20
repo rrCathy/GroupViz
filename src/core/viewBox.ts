@@ -87,3 +87,33 @@ export function sizeLimitFor(view: ViewMode): number {
 export function isTooLarge(order: number, view: ViewMode, limitOverride?: number): boolean {
   return order > (limitOverride ?? sizeLimitFor(view))
 }
+
+/**
+ * 商群视图「正规子群 N 凯莱图」右侧内嵌面板的几何。
+ *
+ * 商群视图把画布右侧让出一条带作为面板（箭头从恒等陪集节点指过去），图形主体
+ * 在左侧剩余区域居中。**位置初始化（context/positionUtils）与渲染
+ * （CayleyGraphView / SetView）必须用同一份几何** —— 否则预置节点位置会把
+ * 图形居中到整幅画布中央，被面板压住。
+ */
+export interface QuotientInsetGeometry {
+  panel: { x: number; y: number; width: number; height: number }
+  /** 让出面板后图形的可用宽度（调用方用它算圆心 / 网格起点） */
+  drawWidth: number
+}
+
+export function quotientInsetGeometry(viewBoxSize: ViewBoxSize): QuotientInsetGeometry {
+  const panelWidth = Math.max(160, Math.min(320, viewBoxSize.width * 0.24))
+  const panelHeight = Math.max(140, Math.min(300, viewBoxSize.height * 0.32))
+  const margin = 16
+  const gap = 26
+  return {
+    panel: {
+      x: viewBoxSize.width - panelWidth - margin,
+      y: (viewBoxSize.height - panelHeight) / 2,
+      width: panelWidth,
+      height: panelHeight,
+    },
+    drawWidth: Math.max(140, viewBoxSize.width - panelWidth - margin - gap),
+  }
+}

@@ -15,7 +15,7 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`test.projects` 双项目——
-  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，65 文件；`src/__tests__/helpers/*.ts` 为非测试辅助模块，不被收集）
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，68 文件；`src/__tests__/helpers/*.ts` 为非测试辅助模块，不被收集）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
 - **临时探针约定**：性能/复杂度探针放 `src/__tests__/`（node 项目跑纯计算、dom 项目跑组件渲染），**用完必须删除**——残留文件会挡住 `tsc -b`（`npm run build` 一并失败）。探针结果一律 `appendFileSync` 落盘再从文件读，**不要靠 console 输出**（vitest stdout 会被截断）。三层性能极限的实测口径与方法见 [PERF.md](PERF.md) §6。
@@ -26,7 +26,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，65 文件 / 1697 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，68 文件 / 1726 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -95,8 +95,9 @@
 | notationAlias.test.ts | 11 | **群记号别名系统**：同群多写法归一（C_4/C4/c4/Z_4/Z4/C{4}/Z/4Z → `C_{4}`；S_3/S3/s3/Sym(3) → `S_{3}`；`S_3^2`/`S3xS3`/`S_3×S_3` → `S_{3}^{2}`；`F21`/`F_{21}`/`Frobenius(21)`/`C7:C3`/`C7⋊C3` → `C_{7}:C_{3}`；QD16/Dic_3/Klein/K_4/Quaternion(8)…），全部走本地不依赖后端；来源三档（local/named/backend）与 `via` 识别说明；F_n 无解（F_42）与歧义（F_16 两候选）拒绝并给定向提示；Unicode 上下标拒绝（`C₄`/`S₃`/`C_2²`/`C₂²` 给出正确 TeX 建议，**回归：`C_2²` 曾静默变成 `C_{22}`**）；D_n 保持 2n 阶约定；二义写法不误判。反向 `getGroupAliases`：幂⇄直积等价写法、Frobenius 专名反查（`C_{7}:C_{3}` → `F_{21}`）、Klein 等价写法、结果稳定去重 |
 | combinatorics.test.ts | 7 | binomialMod：门面可 import、越界返回 0、C(n,0)=C(n,n)=1、小 n 与朴素 Pascal 一致、C(10,3)=120、Lucas 定理（p ≤ n 情形）、大 n（2000 量级）与 BigInt 精确值一致 |
 | core/cosetStrip.test.ts | 9 | 陪集条带候选与数据（core/algebra/cosetStrip.ts）：listCosetStripSubgroups（代表元/指数/轨道/结构、C₃ 循环快通道、order>60 守卫）、findCosetStripSubgroup（按元素 id 精确恢复、换群失效 null）、cosetDataForSubgroup（由 H 直算左陪集 = H） |
+| quotientFixes.test.ts | 10 | **商群四项修复的回归锁（2026-09-20）**：元素标签 = `gN` 陪集记号（S₄/V₄ 六元素全以 N 结尾、无逗号/`\dots`、两两不同、`cosetMemberLabels` 保留）、`ringOrder` 对 `qcoset-N` 按数字排序（≥10 陪集不被字典序打乱）、商群可用形状（S₄/V₄ ≅ D₃ 给 dualRing、C₁₂/{e} 给 spiral/coil、3D 不再是空集）、`splitDihedralStructure` 结构判定、**app 层 `getCayleyShapeConfig` 与 core 逐值一致（防平行短路回归）** |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，22 文件 / 217 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，25 文件 / 242 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -108,6 +109,7 @@
 | CayleyWindowParams.component.test.tsx | 9 | 凯莱受控窗口（ViewWindow view=cayley）：C₄ 默认渲染、C₁₂ 形状下拉可选列表+默认 circular、参数面板受控回调（shape2D/multiplyType 累积）、edge-action 单元素 checkbox 翻 enabled/None→[]/All→全作用、versioned 持久化（gv-vw- 键 + __gvVersion 信封 + debounce）、坏 schema 回退默认不崩溃、默认持久化键含视图名、缩放滑块无双应用 transform（**面板无 Show labels/LOD 开关，复选框 7 个**） |
 | Cayley3DWindowParams.component.test.tsx | 11 | FGVE 阶段 2 批次二 3D 受控窗口（ViewWindow view=3d，R3F mock 同上）：C₄ 默认渲染（4 球/4 边）、面板控件清单（Layout select=cone/circular 默认 circular、滑杆 2 个=Node size + 生成元 len、复选框 10 个=6 配置+AutoRotate+ShowLabels+FaceFills+1 作用边、All/None、Path highlight 编辑器）、**3D 下窗口 zoom slider 隐藏（内容区无 range）**、受控回灌（layout3D/multiplyType/autoRotate/nodeScale 累积载荷）、edge-action checkbox/All（'3d' 视图路径）/None、**len 滑杆写回 actions[].lengthScale、路径编辑器写回 viewParams.pathHighlight**、versioned 持久化信封 viewParams.multiplyType、坏 schema 回退（layout3D:'bogus'/nodeScale:99 整体拒绝→默认 circular）、持久化键含 \|3d（与 cayley 不碰撞）、**`theme` prop 控制场景 isDark 着色分支（v2.1.0）** |
 | ViewWindowParams.component.test.tsx | 9 | set 视图受控窗口（ViewWindow view=set）参数：nodeRadius/gap/columns/showLabels 同步、锁定（locked 禁拖/zoomLocked 禁缩放/resizable:false 隐藏手柄）、Reset to defaults 恢复、参数面板开关、**嵌入 chrome：showControls=false 隐藏全部标题栏按钮、showZoomSlider=false 隐藏滑杆（ctrl+wheel 仍可用）、hover HUD 就地气泡——悬停节点旁浮出"元素名 + 阶"+ 指向节点的小三角 + 节点青色高亮环，节点靠顶部时翻转到节点下方，离场消失** |
+| QuotientScene.component.test.tsx | 6 | **商群画布新形态（2026-09-20）**：`SetView` 渲染右侧「正规子群 N 的凯莱图」面板（4 个小节点 + 6 条内部边 + 标题 + `|N| = 4`）、节点是普通节点（无 r=72 复合大圆、6 个 r=26）、图形让出右侧带（`quotientInsetGeometry` 面板贴边居中、节点在左带内）、平凡正规子群（N={e}）与非商群都不画面板、**包内 `CayleyView` 同样渲染面板（同一形态）** |
 | CycleTableWindowParams.component.test.tsx | 9 | cycle/table 受控窗口（ViewWindow view=cycle/table）：CycleView 参数面板（showMaximalCycles 勾选/nodeRadius 滑块；无 Show labels——窗口默认隐藏元素标签 foreignObject=0）受控回调、点击元素高亮所在极大循环（fill-opacity 0.18 + ⟨g⟩≅Z_n 标注）、TableView 参数面板（strategy 下拉=子群展示/随机展示/全量展示、cellSize、forceShowLargeGroup 勾选）受控回调、窗口最小尺寸（最小面积撑大）、defaultSize 应用、坏 schema 回退默认 |
 | SublatticeView.component.test.tsx | 13 | FGVE 阶段 2 批次三受控子群格内核（SublatticeScene，i18n/theme mock）：宿主未测得 → fit=1 落 full 档（S₃ 6 节点 + `\|H\|=` 文本 + viewBox `0 0 680 608` 无 1000×600 下限）、transform 只应用一次（`svg > g` 唯一 + `translate(10, 20) scale(2)`）、dots 档 0 text/0 rect/12 circle（命中圆+实色圆）、compact 档每节点一行数字且无 `\|H\|=`、mergeConjugates（S₃ 6→4 节点 + `×3` 徽标；阿贝尔 C₄ 不变且无 `×`；D₄ 节点数下降且现 `×2`）、nodeScale 0.5 世界盒线性收紧、点击回调 (idx,node)→(null,null) 切换、caption（showCaption 才渲染 + hover 出现/离场回落 hint）、series 面板（有 series 才渲染 + showSeriesPanel=false 隐藏）、group=null 与 >60 阶无 lattice 的 .view-empty（后者含 `lattice.backendOnly`） |
 | SublatticeWindowParams.component.test.tsx | 6 | FGVE 阶段 2 批次三子群格受控窗口（ViewWindow view=sublattice）：窗口内渲染 6 节点 + tier=full + caption 存在、参数面板控件清单（Lattice View 标题、Label detail 下拉四值默认 auto、滑杆 1 个=Card size、复选框 8 个=6 配置+Merge conjugates+Series panel）、受控 payload 累积（labelDetail→mergeConjugates→nodeScale→showSeriesPanel 四步 toEqual 全量）、versioned 持久化信封（gv-vw-lat-persist + `__gvVersion:1` + viewParams.mergeConjugates）、坏 schema 回退（labelDetail:'huge'/nodeScale:99/mergeConjugates:'yes' → select 回 auto + 复选框未勾）、默认持久化键含 `\|sublattice`（与 set 不碰撞） |

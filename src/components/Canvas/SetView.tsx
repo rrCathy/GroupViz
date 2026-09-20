@@ -2,8 +2,10 @@ import { useMemo } from 'react'
 import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { texify, renderTex } from '../../utils/texify'
 import type { Group } from '../../core/types'
-import type { InternalEdgeData } from '../../core/types'
+import { isQuotientGroup } from '../../core/types'
 import { INTERACTIVE_LIMIT } from '../../core/guards'
+import { QuotientSubgroupInset } from './QuotientSubgroupInset'
+import { quotientInsetGeometry } from '../../core/viewBox'
 
 export interface SetViewProps {
   group: Group | null
@@ -27,6 +29,8 @@ export interface SetViewProps {
   /** 视图主题作用域（`'dark' | 'light'`）。缺省不注入、跟随外层主题；显式传值时在本子树内
    *  应用 `theme.css` 对应变量块（需宿主已 `import '@groupviz/react/theme.css'`） */
   theme?: SceneTheme
+  /** 商群视图里「正规子群 N 的凯莱图」面板标题（宿主本地化文案；缺省只画记号 N） */
+  quotientInsetTitle?: string
 }
 
 export function SetView(props: SetViewProps) {
@@ -34,167 +38,6 @@ export function SetView(props: SetViewProps) {
     <SceneThemeRoot theme={props.theme}>
       <SetViewBody {...props} />
     </SceneThemeRoot>
-  )
-}
-
-const INNER_NODE_COLORS = [
-  '#ff6b6b','#4ecdc4','#ffd93d','#a78bfa','#f97316','#06b6d4',
-  '#84cc16','#f43f5e','#38bdf8','#a855f7','#14b8a6','#eab308',
-  '#6366f1','#ec4899','#0ea5e9','#22c55e',
-]
-
-function renderCompoundNode(
-  el: { cosetMemberLabels?: string[]; cosetInternalEdges?: InternalEdgeData[]; cosetInternalLayout?: { x: number; y: number }[] },
-  outerR: number,
-  isSelected: boolean,
-  fillColor: string,
-  strokeColor: string,
-  strokeWidth: number,
-  showInternalEdges: boolean = true,
-) {
-  const members = el.cosetMemberLabels!
-  const maxShow = 12
-  const showCount = Math.min(members.length, maxShow)
-  const innerR = Math.min(10, Math.max(4, Math.floor(outerR / (Math.max(3, Math.sqrt(showCount)) * 1.8))))
-  const layoutScale = outerR * 0.72
-
-  const hasLayout = el.cosetInternalLayout && el.cosetInternalLayout.length >= showCount
-  const innerPos = (idx: number) => {
-    if (hasLayout) {
-      const p = el.cosetInternalLayout![idx]
-      return { x: p.x * layoutScale, y: p.y * layoutScale }
-    }
-    const angle = (idx / showCount) * 2 * Math.PI - Math.PI / 2
-    return {
-      x: Math.cos(angle) * (outerR * 0.55),
-      y: Math.sin(angle) * (outerR * 0.55),
-    }
-  }
-
-  const circles = []
-  for (let i = 0; i < showCount; i++) {
-    const pos = innerPos(i)
-    circles.push(
-      <circle
-        key={i}
-        cx={pos.x}
-        cy={pos.y}
-        r={innerR}
-        fill={INNER_NODE_COLORS[i % INNER_NODE_COLORS.length]}
-        stroke="var(--node-stroke)"
-        strokeWidth={0.8}
-      />
-    )
-  }
-
-  const internalEdges = showInternalEdges ? el.cosetInternalEdges : undefined
-  const edgeElements: React.ReactNode[] = []
-  if (internalEdges && internalEdges.length > 0) {
-    for (let i = 0; i < internalEdges.length; i++) {
-      const edge = internalEdges[i]
-      if (edge.fromInnerIdx >= showCount || edge.toInnerIdx >= showCount) continue
-      const from = innerPos(edge.fromInnerIdx)
-      const to = innerPos(edge.toInnerIdx)
-      const dx = to.x - from.x
-      const dy = to.y - from.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < 0.1) continue
-      const ux = dx / dist
-      const uy = dy / dist
-      const sx = from.x + ux * innerR
-      const sy = from.y + uy * innerR
-      const ex = to.x - ux * innerR
-      const ey = to.y - uy * innerR
-      const midX = (sx + ex) / 2
-      const midY = (sy + ey) / 2
-
-      const edgeTitle = edge.actionLabel || edge.actionElementId || ''
-      const titleEl = edgeTitle ? <title>{edgeTitle}</title> : null
-      if (edge.isBidirectional) {
-        edgeElements.push(
-          <g key={`edge-${i}`}>
-            <line
-              x1={sx} y1={sy} x2={ex} y2={ey}
-              stroke={edge.color}
-              strokeWidth={1.5}
-              strokeOpacity={0.75}
-              strokeLinecap="round"
-            >{titleEl}</line>
-            <line
-              x1={sx} y1={sy} x2={ex} y2={ey}
-              stroke="transparent"
-              strokeWidth={8}
-              strokeLinecap="round"
-              style={{ pointerEvents: 'stroke' }}
-            >{titleEl}</line>
-          </g>
-        )
-      } else {
-        const curveOffset = 2.5
-        const nx = -uy * curveOffset
-        const ny = ux * curveOffset
-        const c1x = midX + nx
-        const c1y = midY + ny
-        const arrowSize = 2.5
-        edgeElements.push(
-          <g key={`edge-${i}`}>
-            <path
-              d={`M${sx},${sy} Q${c1x},${c1y} ${ex},${ey}`}
-              stroke={edge.color}
-              strokeWidth={1.5}
-              strokeOpacity={0.75}
-              fill="none"
-            >{titleEl}</path>
-            <path
-              d={`M${sx},${sy} Q${c1x},${c1y} ${ex},${ey}`}
-              stroke="transparent"
-              strokeWidth={8}
-              fill="none"
-              style={{ pointerEvents: 'stroke' }}
-            >{titleEl}</path>
-          </g>
-        )
-        const ax = ex - c1x
-        const ay = ey - c1y
-        const alen = Math.sqrt(ax * ax + ay * ay) || 1
-        const aux = ax / alen
-        const auy = ay / alen
-        edgeElements.push(
-          <polygon
-            key={`arrow-${i}`}
-            points={`${ex},${ey} ${ex - aux * arrowSize + auy * arrowSize * 0.5},${ey - auy * arrowSize - aux * arrowSize * 0.5} ${ex - aux * arrowSize - auy * arrowSize * 0.5},${ey - auy * arrowSize + aux * arrowSize * 0.5}`}
-            fill={edge.color}
-            stroke={edge.color}
-            strokeWidth={0.5}
-          />
-        )
-      }
-    }
-  }
-
-  return (
-    <>
-      <circle
-        r={outerR}
-        fill={fillColor}
-        stroke={strokeColor}
-        strokeWidth={strokeWidth}
-        strokeDasharray={isSelected ? undefined : "4 2"}
-        filter="url(#node-shadow)"
-      />
-      {edgeElements}
-      {circles}
-      {members.length > maxShow && (
-        <text
-          x={0} y={outerR - 2}
-          textAnchor="middle"
-          fill="var(--text-secondary)"
-          fontSize={10}
-        >
-          +{members.length - maxShow}
-        </text>
-      )}
-    </>
   )
 }
 
@@ -216,6 +59,7 @@ function SetViewBody({
   columns: columnsOverride,
   showLabels: showLabelsOverride,
   largeGroupThreshold = INTERACTIVE_LIMIT,
+  quotientInsetTitle,
 }: SetViewProps) {
   type SubsetView = { elementIds: string[]; color: string }
   const subsetDetailMap = useMemo(() => {
@@ -242,19 +86,21 @@ function SetViewBody({
   }
 
   const isLarge = group.order > largeGroupThreshold
-  const hasCompoundNodes = group.elements.some(el => el.cosetMemberLabels && el.cosetMemberLabels.length > 0)
-  const nodeRadius = nodeRadiusOverride ?? (hasCompoundNodes ? 72 : 26)
-  const gap = gapOverride ?? (hasCompoundNodes ? 12 : 8)
+  // 商群：节点半径走常规值（旧的复合节点用 72 才塞得下成员小点），
+  // 正规子群 N 的凯莱图改为右侧独立面板（见 QuotientSubgroupInset）
+  const insetGeom = isQuotientGroup(group) ? quotientInsetGeometry(viewBoxSize) : null
+  const showInset = !!insetGeom && (group.identity.cosetMemberLabels?.length ?? 0) > 1
+  const drawWidth = insetGeom?.drawWidth ?? viewBoxSize.width
+  const nodeRadius = nodeRadiusOverride ?? 26
+  const gap = gapOverride ?? 8
   const cellSize = nodeRadius * 2 + gap
   const cols = columnsOverride
     ? columnsOverride > 0 ? columnsOverride : Math.ceil(Math.sqrt(group.order))
-    : hasCompoundNodes
-      ? Math.min(group.order, Math.max(1, Math.floor(viewBoxSize.width / cellSize)))
-      : Math.ceil(Math.sqrt(group.order))
+    : Math.ceil(Math.sqrt(group.order))
   const rows = group.order / cols
   const totalWidth = cols * cellSize
   const totalHeight = rows * cellSize
-  const startX = Math.max(nodeRadius, (viewBoxSize.width - totalWidth) / 2 + cellSize / 2)
+  const startX = Math.max(nodeRadius, (drawWidth - totalWidth) / 2 + cellSize / 2)
   const startY = Math.max(nodeRadius, (viewBoxSize.height - totalHeight) / 2 + cellSize / 2)
 
   const getPos = (_elId: string, index: number) => {
@@ -264,6 +110,14 @@ function SetViewBody({
       x: startX + col * cellSize,
       y: startY + row * cellSize
     }
+  }
+
+  // 恒等陪集节点（= N）的屏幕位置：指针线从这里拉到右侧面板
+  const identityIndex = group.elements.findIndex(e => e.id === group.identity.id)
+  const identityPos = getPos(group.identity.id, identityIndex < 0 ? 0 : identityIndex)
+  const identityScreen = {
+    x: identityPos.x * canvasTransform.scale + canvasTransform.x,
+    y: identityPos.y * canvasTransform.scale + canvasTransform.y,
   }
 
   // Viewport culling for large groups — skip off-screen nodes
@@ -312,8 +166,6 @@ function SetViewBody({
             strokeWidth = 2.5
           }
           
-          const isCompound = !!(el.cosetMemberLabels && el.cosetMemberLabels.length > 0)
-          
           return (
             <g
               key={el.id}
@@ -326,65 +178,45 @@ function SetViewBody({
               onMouseLeave={() => onHover?.(null, null)}
               style={{ cursor: 'pointer' }}
             >
-              {isCompound ? (
-                renderCompoundNode(el, nodeRadius, isSelected, fillColor, strokeColor, strokeWidth, true)
-              ) : (
-                <>
-                  <circle
-                    r={nodeRadius}
-                    fill={fillColor}
-                    stroke={strokeColor}
-                    strokeWidth={strokeWidth}
-                    filter={isLarge ? undefined : "url(#node-shadow)"}
-                  />
-                  {isInHighlightedCoset && cosetIdx !== undefined && cosetPalette[cosetIdx] && (
-                    <circle
-                      r={nodeRadius}
-                      fill={`${cosetPalette[cosetIdx]}22`}
-                      stroke="none"
-                    />
-                  )}
-                  {parentSubset && (
-                    <circle
-                      r={nodeRadius}
-                      fill={`${parentSubset.color}22`}
-                      stroke="none"
-                    />
-                  )}
-{showLabelsOverride !== false && (!isLarge || isSelected || selectedElements.size === 0) && (
-                     <foreignObject
-                        x={-nodeRadius}
-                        y={-16}
-                        width={nodeRadius * 2}
-                        height={32}
-                        style={{ pointerEvents: 'none', userSelect: 'none' }}
-                      >
-                        <div
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                             width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLarge ? '10px' : '15px'
-                          }}
-                          dangerouslySetInnerHTML={{
-                            __html: labelHtmlCache.get(el.id) ?? ''
-                          }}
-                        />
-                      </foreignObject>
-                    )}
-                </>
-              )}
-              {isInHighlightedCoset && cosetIdx !== undefined && cosetPalette[cosetIdx] && isCompound && (
+              <circle
+                r={nodeRadius}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={strokeWidth}
+                filter={isLarge ? undefined : "url(#node-shadow)"}
+              />
+              {isInHighlightedCoset && cosetIdx !== undefined && cosetPalette[cosetIdx] && (
                 <circle
-                  r={nodeRadius + 2}
+                  r={nodeRadius}
                   fill={`${cosetPalette[cosetIdx]}22`}
                   stroke="none"
                 />
               )}
-              {parentSubset && isCompound && (
+              {parentSubset && (
                 <circle
-                  r={nodeRadius + 2}
+                  r={nodeRadius}
                   fill={`${parentSubset.color}22`}
                   stroke="none"
                 />
+              )}
+              {showLabelsOverride !== false && (!isLarge || isSelected || selectedElements.size === 0) && (
+                <foreignObject
+                  x={-nodeRadius}
+                  y={-16}
+                  width={nodeRadius * 2}
+                  height={32}
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: '100%', height: '100%', color: 'var(--node-text)', fontSize: isLarge ? '10px' : '15px'
+                    }}
+                    dangerouslySetInnerHTML={{
+                      __html: labelHtmlCache.get(el.id) ?? ''
+                    }}
+                  />
+                </foreignObject>
               )}
                 {selfInverseElementId === el.id && (
                  <g>
@@ -402,6 +234,15 @@ function SetViewBody({
           )
         })}
       </g>
+      {showInset && insetGeom && (
+        <QuotientSubgroupInset
+          group={group}
+          anchor={identityScreen}
+          anchorRadius={nodeRadius * canvasTransform.scale}
+          geometry={insetGeom}
+          title={quotientInsetTitle}
+        />
+      )}
     </svg>
   )
 }

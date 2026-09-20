@@ -58,6 +58,7 @@ interface GroupSubsetActions {
   setCosetType: (type: 'left' | 'right') => void
   toggleShowAllCosets: () => void
   createQuotientGroup: (subsetId: string) => QuotientGroupEntry | null
+  createQuotientGroupFromElements: (elementIds: string[], label: string) => QuotientGroupEntry | null
   removeQuotientGroup: (id: string) => void
   loadQuotientGroup: (id: string) => Group | null
   showCosetFromElements: (elementIds: string[], label: string, isNormal: boolean) => string | null
@@ -304,14 +305,17 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
     addOperationHistory(t('op.cosetShow', { label }))
   }, [currentGroup, addOperationHistory, setHintMessage, t])
 
-  const createQuotientGroup = useCallback((subsetId: string): QuotientGroupEntry | null => {
-    if (!currentGroup) return null
-    const subset = subsets.find(s => s.id === subsetId)
-    if (!subset || !subset.isNormalSubgroup) return null
+  // 商群构造本体：只认「正规子群的元素集合」。
+  // 分成两层是为了让**子群列表**里的「创建商群」也能直接可用 —— 那条路径
+  // 手上只有子群元素（没有已保存的子集），旧实现要求 subsets 里存在一条元素
+  // 完全相同的子集，否则整个回调静默返回（按钮点了没反应）。
+  const buildQuotientEntry = useCallback((elementIds: string[], label: string): QuotientGroupEntry | null => {
+    if (!currentGroup || elementIds.length === 0) return null
 
-    const subgroupElements = subset.elementIds
+    const subgroupElements = elementIds
       .map(id => currentGroup.elements.find(e => e.id === id))
       .filter((e): e is import('../../core/types').GroupElement => e !== undefined)
+    if (subgroupElements.length === 0) return null
 
     const normalSubgroup: Subgroup = {
       elements: subgroupElements,
@@ -331,8 +335,8 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
       id: `quotient-${Date.now()}`,
       group: quotientGroup,
       parentSymbol: currentGroup.symbol,
-      normalSubgroupElementIds: subset.elementIds,
-      normalSubgroupLabel: subset.label,
+      normalSubgroupElementIds: [...elementIds],
+      normalSubgroupLabel: label,
       order: quotientGroup.order,
       isoSymbol,
     }
@@ -345,7 +349,17 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
     addOperationHistory(t('op.createQuotient', { parent: currentGroup.symbol, order: quotientGroup.order }))
     setHintMessage(t('hint.quotientCreated', { symbol: quotientGroup.symbol, order: quotientGroup.order }).replace(quotientGroup.symbol, `<span class="hint-highlight">${quotientGroup.symbol}</span>`))
     return entry
-  }, [currentGroup, subsets, addOperationHistory, setHintMessage, t])
+  }, [currentGroup, addOperationHistory, setHintMessage, t])
+
+  const createQuotientGroup = useCallback((subsetId: string): QuotientGroupEntry | null => {
+    const subset = subsets.find(s => s.id === subsetId)
+    if (!subset || !subset.isNormalSubgroup) return null
+    return buildQuotientEntry(subset.elementIds, subset.label)
+  }, [subsets, buildQuotientEntry])
+
+  const createQuotientGroupFromElements = useCallback((elementIds: string[], label: string): QuotientGroupEntry | null => {
+    return buildQuotientEntry(elementIds, label)
+  }, [buildQuotientEntry])
 
   const removeQuotientGroup = useCallback((id: string) => {
     setQuotientGroups(prev => {
@@ -420,7 +434,7 @@ export function GroupSubsetProvider({ children }: { children: ReactNode }) {
     quotientGroups, automorphismGroups,
     saveSubset, removeSubset, clearAllSubsets,
     showCosetsForSubset, showCosetsFromElements, hideCosets, setCosetType, toggleShowAllCosets,
-    createQuotientGroup, removeQuotientGroup, loadQuotientGroup,
+    createQuotientGroup, createQuotientGroupFromElements, removeQuotientGroup, loadQuotientGroup,
     showCosetFromElements,
     computeAutomorphismGroup, removeAutomorphismGroup, loadAutomorphismGroup,
   }

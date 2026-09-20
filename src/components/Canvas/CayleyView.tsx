@@ -8,7 +8,9 @@ import {
 import { getSemidirectProductMeta, semidirectFactorMap, semidirectFixedPoints } from '../../core/algebra/semidirectDecompositions'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
 import { texify, renderTex } from '../../utils/texify'
-import { getDefaultShape2D } from '../../core/types'
+import { getDefaultShape2D, isQuotientGroup } from '../../core/types'
+import { quotientInsetGeometry } from '../../core/viewBox'
+import { QuotientSubgroupInset } from './QuotientSubgroupInset'
 import type { CanvasTransform, CayleyEdgeData, CayleyShape2D, Group, GroupElement, MultiplyType, NodePosition } from '../../core/types'
 import type { CayleyActionParam, CayleyPathHighlight, CayleyForceParams } from '../../core/types/viewConfig'
 import { INTERACTIVE_LIMIT } from '../../core/guards'
@@ -55,6 +57,8 @@ export interface CayleyViewProps {
   forceDirected?: boolean
   /** 力导向微调（forceDirected 为 true 时生效） */
   force?: CayleyForceParams
+  /** 商群视图里「正规子群 N 的凯莱图」面板标题（宿主本地化文案；缺省只画记号 N） */
+  quotientInsetTitle?: string
 }
 
 export function CayleyView(props: CayleyViewProps) {
@@ -176,6 +180,7 @@ function CayleyViewBody({
   pathHighlight = null,
   forceDirected = false,
   force,
+  quotientInsetTitle,
 }: CayleyViewProps) {
   // 惰性初始化的每实例唯一前缀（useState 初始化器每实例只执行一次）
   const [markerPrefix] = useState(() => `cv${++_cayleyViewInst}`)
@@ -219,16 +224,21 @@ function CayleyViewBody({
     [posKey],
   )
 
-  const cx = viewBoxSize.width / 2
+  // 商群：右侧让出一条带画「正规子群 N 的凯莱图」面板，图形主体在左侧带内居中
+  // （与主画布 GroupCanvas / SetView / positionUtils 用同一份几何）
+  const insetGeom = group && isQuotientGroup(group) ? quotientInsetGeometry(viewBoxSize) : null
+  const showInset = !!insetGeom && (group?.identity.cosetMemberLabels?.length ?? 0) > 1
+  const drawWidth = insetGeom?.drawWidth ?? viewBoxSize.width
+  const cx = drawWidth / 2
   const cy = viewBoxSize.height / 2
   // 半径同时受容器宽/高约束：嵌入方给的 viewBox 可能宽扁（如 900×360），
   // 只按宽度取半径会让圆环上下两端节点出画布（见 feedback/issue-circular-radius-overflow.md）
-  const graphRadius = circleLayoutRadius(viewBoxSize.width, viewBoxSize.height, n, nodeRadius)
+  const graphRadius = circleLayoutRadius(drawWidth, viewBoxSize.height, n, nodeRadius)
 
   const gridPositions = useMemo(() => {
     if (!group) return null
-    return computeShape2DPositions(group, shape, viewBoxSize.width, viewBoxSize.height)
-  }, [group, shape, viewBoxSize.width, viewBoxSize.height])
+    return computeShape2DPositions(group, shape, drawWidth, viewBoxSize.height)
+  }, [group, shape, drawWidth, viewBoxSize.height])
 
   const circLayout = useMemo(() => {
     if (!group || n === 0) return new Map<string, NodePosition>()
@@ -794,6 +804,23 @@ function CayleyViewBody({
         {selectionOverlay}
         {pathOverlay}
       </g>
+
+      {showInset && insetGeom && group && (
+        <QuotientSubgroupInset
+          group={group}
+          anchor={(() => {
+            const p = nodePositionsCache.get(group.identity.id)
+            const pos = p ?? { x: cx, y: cy }
+            return {
+              x: pos.x * canvasTransform.scale + canvasTransform.x,
+              y: pos.y * canvasTransform.scale + canvasTransform.y,
+            }
+          })()}
+          anchorRadius={nodeRadius * canvasTransform.scale}
+          geometry={insetGeom}
+          title={quotientInsetTitle}
+        />
+      )}
     </svg>
   )
 }

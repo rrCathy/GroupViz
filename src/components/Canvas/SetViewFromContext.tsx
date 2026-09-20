@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { useGroup } from '../../context/useGroup'
 import { useHover } from '../../context/core/HoverContext'
+import { useTranslation } from '../../i18n/useTranslation'
 import { SetView, type SetViewProps } from './SetView'
 
 /** 从全局 Provider 组装 SetView 所需 props 的适配器（保留原行为）。 */
@@ -19,6 +20,7 @@ export function SetViewFromContext() {
     selectElement,
   } = useGroup()
   const { setHoverElement } = useHover()
+  const { t } = useTranslation()
 
   const subsetMap = useMemo(
     () => (subsets ?? []).map(({ elementIds, color }) => ({ elementIds, color })),
@@ -37,6 +39,7 @@ export function SetViewFromContext() {
     cosetColors,
     onSelect: selectElement,
     onHover: setHoverElement,
+    quotientInsetTitle: t('canvas.quotientSubgroupGraph'),
   }
   return <SetView {...props} />
 }

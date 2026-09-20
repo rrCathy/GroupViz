@@ -1,5 +1,5 @@
 import type { Group, ViewMode, CayleyAction, Layout3D } from '../core/types'
-import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, isQuotientGroup, type CayleyShape2D } from '../core/types'
+import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, type CayleyShape2D } from '../core/types'
 import type { CayleyActionParam } from '../core/types/viewConfig'
 import { wordLengthSphereActions } from '../core/algebra/layouts3D/wordLengthSphereLayout3D'
 import { resolveElementWarn } from '../utils/elementRef'
@@ -49,14 +49,11 @@ export interface CayleyShapeConfig {
 }
 
 export function getCayleyShapeConfig(group: Group): CayleyShapeConfig {
-  if (isQuotientGroup(group)) {
-    return {
-      defaultShape3D: 'cone' as Layout3D,
-      availableShapes3D: [],
-      defaultShape2D: 'circular',
-      availableShapes2D: ['circular'] as CayleyShape2D[],
-    }
-  }
+  // 注意：这里**不要**再写商群短路。2026-09-20 修「商群形状可选太少」时发现
+  // 本函数与 core 的 getAvailableShapes* 是两套口径：core 侧商群早已放开，
+  // 本函数却仍返回 availableShapes2D: ['circular'] / availableShapes3D: []，
+  // 把 core 的结果整个盖掉（UI 形状下拉因此只有一个「圆形」）。
+  // 现在统一走 core：商群按结构给形状（circular + dualRing/spiral/coil + cone）。
   const defaultShape = getDefaultLayout3D(group)
   const shapes3D = getAvailableShapes3D(group)
   const shapes2D = getAvailableShapesForView(group, 'cayley') as CayleyShape2D[]
@@ -154,9 +151,9 @@ export function addAllCayleyActionsHelper(
   })()
 
   if (isQuotientGroup) {
-    // For quotient groups, only expose generator actions so the Cayley graph
-    // shows the quotient structure (edges between cosets), not internal
-    // subgroup edges rendered inside compound nodes.
+    // 商群只暴露生成元作用：凯莱图的边 = 陪集之间的乘法。
+    // （N 自身的凯莱图不画在这些节点里 —— 2026-09-20 起改画到画布右侧的
+    //  独立面板，见 components/Canvas/QuotientSubgroupInset。）
     return group.generators.map((gen, i) => {
       const targetEl = gen.apply(group.identity)
       const elementId = targetEl?.id || group.elements[0].id

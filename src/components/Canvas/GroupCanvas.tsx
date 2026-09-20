@@ -21,172 +21,10 @@ import { computeCayleyActionEdges, cayleyCircleLayout, circleLayoutRadius } from
 import { getSemidirectProductMeta, semidirectFactorMap, semidirectFixedPoints } from '../../core/algebra/semidirectDecompositions'
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
 import { texify, renderTex } from '../../utils/texify'
-import type { CayleyEdgeData, InternalEdgeData } from '../../core/types'
-
-const INNER_NODE_COLORS = [
-  '#ff6b6b','#4ecdc4','#ffd93d','#a78bfa','#f97316','#06b6d4',
-  '#84cc16','#f43f5e','#38bdf8','#a855f7','#14b8a6','#eab308',
-  '#6366f1','#ec4899','#0ea5e9','#22c55e',
-]
-
-function renderCompoundNode(
-  el: { cosetMemberLabels?: string[]; cosetInternalEdges?: InternalEdgeData[]; cosetInternalLayout?: { x: number; y: number }[] },
-  outerR: number,
-  isSelected: boolean,
-  fillColor: string,
-  strokeColor: string,
-  strokeWidth: number,
-  showInternalEdges: boolean = true,
-) {
-  const members = el.cosetMemberLabels!
-  const maxShow = 12
-  const showCount = Math.min(members.length, maxShow)
-  // Inner node radius scales with the compound node but remains readable.
-  const innerR = Math.min(10, Math.max(4, Math.floor(outerR / (Math.max(3, Math.sqrt(showCount)) * 1.8))))
-  const layoutScale = outerR * 0.72
-
-  const hasLayout = el.cosetInternalLayout && el.cosetInternalLayout.length >= showCount
-  const innerPos = (idx: number) => {
-    if (hasLayout) {
-      const p = el.cosetInternalLayout![idx]
-      return { x: p.x * layoutScale, y: p.y * layoutScale }
-    }
-    // Fallback circular layout for the internal Cayley graph.
-    const angle = (idx / showCount) * 2 * Math.PI - Math.PI / 2
-    return {
-      x: Math.cos(angle) * (outerR * 0.55),
-      y: Math.sin(angle) * (outerR * 0.55),
-    }
-  }
-
-  const circles = []
-  for (let i = 0; i < showCount; i++) {
-    const pos = innerPos(i)
-    circles.push(
-      <circle
-        key={i}
-        cx={pos.x}
-        cy={pos.y}
-        r={innerR}
-        fill={INNER_NODE_COLORS[i % INNER_NODE_COLORS.length]}
-        stroke="var(--node-stroke)"
-        strokeWidth={0.8}
-      />
-    )
-  }
-
-  const internalEdges = showInternalEdges ? el.cosetInternalEdges : undefined
-  const edgeElements: React.ReactNode[] = []
-  if (internalEdges && internalEdges.length > 0) {
-    for (let i = 0; i < internalEdges.length; i++) {
-      const edge = internalEdges[i]
-      if (edge.fromInnerIdx >= showCount || edge.toInnerIdx >= showCount) continue
-      const from = innerPos(edge.fromInnerIdx)
-      const to = innerPos(edge.toInnerIdx)
-      const dx = to.x - from.x
-      const dy = to.y - from.y
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist < 0.1) continue
-      const ux = dx / dist
-      const uy = dy / dist
-      const sx = from.x + ux * innerR
-      const sy = from.y + uy * innerR
-      const ex = to.x - ux * innerR
-      const ey = to.y - uy * innerR
-      const midX = (sx + ex) / 2
-      const midY = (sy + ey) / 2
-
-      const edgeTitle = edge.actionLabel || edge.actionElementId || ''
-      const titleEl = edgeTitle ? <title>{edgeTitle}</title> : null
-      if (edge.isBidirectional) {
-        edgeElements.push(
-          <g key={`edge-${i}`}>
-            <line
-              x1={sx} y1={sy} x2={ex} y2={ey}
-              stroke={edge.color}
-              strokeWidth={1.5}
-              strokeOpacity={0.75}
-              strokeLinecap="round"
-            >{titleEl}</line>
-            {/* Transparent thick hover target for easier tooltip discovery */}
-            <line
-              x1={sx} y1={sy} x2={ex} y2={ey}
-              stroke="transparent"
-              strokeWidth={8}
-              strokeLinecap="round"
-              style={{ pointerEvents: 'stroke' }}
-            >{titleEl}</line>
-          </g>
-        )
-      } else {
-        const curveOffset = 2.5
-        const nx = -uy * curveOffset
-        const ny = ux * curveOffset
-        const c1x = midX + nx
-        const c1y = midY + ny
-        const arrowSize = 2.5
-        edgeElements.push(
-          <g key={`edge-${i}`}>
-            <path
-              d={`M${sx},${sy} Q${c1x},${c1y} ${ex},${ey}`}
-              stroke={edge.color}
-              strokeWidth={1.5}
-              strokeOpacity={0.75}
-              fill="none"
-            >{titleEl}</path>
-            {/* Transparent thick hover target for easier tooltip discovery */}
-            <path
-              d={`M${sx},${sy} Q${c1x},${c1y} ${ex},${ey}`}
-              stroke="transparent"
-              strokeWidth={8}
-              fill="none"
-              style={{ pointerEvents: 'stroke' }}
-            >{titleEl}</path>
-          </g>
-        )
-        const ax = ex - c1x
-        const ay = ey - c1y
-        const alen = Math.sqrt(ax * ax + ay * ay) || 1
-        const aux = ax / alen
-        const auy = ay / alen
-        edgeElements.push(
-          <polygon
-            key={`arrow-${i}`}
-            points={`${ex},${ey} ${ex - aux * arrowSize + auy * arrowSize * 0.5},${ey - auy * arrowSize - aux * arrowSize * 0.5} ${ex - aux * arrowSize - auy * arrowSize * 0.5},${ey - auy * arrowSize + aux * arrowSize * 0.5}`}
-            fill={edge.color}
-            stroke={edge.color}
-            strokeWidth={0.5}
-          />
-        )
-      }
-    }
-  }
-
-  return (
-    <>
-      <circle
-        r={outerR}
-        fill={fillColor}
-        stroke={strokeColor}
-        strokeWidth={strokeWidth}
-        strokeDasharray={isSelected ? undefined : "4 2"}
-        filter="url(#node-shadow)"
-      />
-      {edgeElements}
-      {circles}
-      {members.length > maxShow && (
-        <text
-          x={0} y={outerR - 2}
-          textAnchor="middle"
-          fill="var(--text-secondary)"
-          fontSize={10}
-        >
-          +{members.length - maxShow}
-        </text>
-      )}
-    </>
-  )
-}
+import { isQuotientGroup } from '../../core/types'
+import type { CayleyEdgeData } from '../../core/types'
+import { QuotientSubgroupInset } from './QuotientSubgroupInset'
+import { quotientInsetGeometry } from '../../core/viewBox'
 
 interface DragState {
   isDragging: boolean
@@ -542,16 +380,20 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
 
   // Stable computed values so hooks are invoked in the same order every render.
   const n = currentGroup?.order ?? 0
-  const hasCompoundNodes = currentGroup ? currentGroup.elements.some(el => el.cosetMemberLabels && el.cosetMemberLabels.length > 0) : false
-  const nodeRadius = hasCompoundNodes ? 72 : 28
-  const cx = viewBoxSize.width / 2
+  // 商群：节点按常规半径画（旧的复合节点把陪集成员塞进大圆里才需要 72），
+  // 正规子群 N 的凯莱图改画到右侧独立面板（QuotientSubgroupInset）。
+  const insetGeom = currentGroup && isQuotientGroup(currentGroup) ? quotientInsetGeometry(viewBoxSize) : null
+  const showInset = !!insetGeom && (currentGroup?.identity.cosetMemberLabels?.length ?? 0) > 1
+  const drawWidth = insetGeom?.drawWidth ?? viewBoxSize.width
+  const nodeRadius = 28
+  const cx = drawWidth / 2
   const cy = viewBoxSize.height / 2
-  const graphRadius = circleLayoutRadius(viewBoxSize.width, viewBoxSize.height, n, nodeRadius)
+  const graphRadius = circleLayoutRadius(drawWidth, viewBoxSize.height, n, nodeRadius)
 
   const gridPositions = useMemo(() => {
     if (!currentGroup) return null
-    return computeShape2DPositions(currentGroup, cayleyShape2D, viewBoxSize.width, viewBoxSize.height)
-  }, [cayleyShape2D, currentGroup, viewBoxSize.width, viewBoxSize.height])
+    return computeShape2DPositions(currentGroup, cayleyShape2D, drawWidth, viewBoxSize.height)
+  }, [cayleyShape2D, currentGroup, drawWidth, viewBoxSize.height])
 
   const circLayout = useMemo(() => {
     if (!currentGroup || n === 0) return new Map<string, { x: number; y: number }>()
@@ -742,40 +584,34 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
           onMouseLeave={() => setHoverElement(null)}
           style={{ cursor: 'grab' }}
         >
-           {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 ? (
-              // 复合节点（陪集成员栈）：isSelected 硬编码 false 是有意取舍——
-              // 选中态由外层 gold ring overlay（r=nodeRadius+3）表达，不再切换实线/虚线
-              renderCompoundNode(el, nodeRadius, false, fillColor, strokeColor, strokeWidth, true)
-            ) : (
-             <>
+             <circle
+               r={nodeRadius}
+               fill={fillColor}
+               stroke={strokeColor}
+               strokeWidth={strokeWidth}
+               filter={isLargeGraph ? undefined : "url(#node-shadow)"}
+             />
+             {parentSubset && (
                <circle
                  r={nodeRadius}
-                 fill={fillColor}
-                 stroke={strokeColor}
-                 strokeWidth={strokeWidth}
-                 filter={isLargeGraph ? undefined : "url(#node-shadow)"}
+                 fill={`${parentSubset.color}22`}
+                 stroke="none"
                />
-               {parentSubset && (
-                 <circle
-                   r={nodeRadius}
-                   fill={`${parentSubset.color}22`}
-                   stroke="none"
-                 />
-               )}
-               {isInHighlightedCoset && cosetIdx !== undefined && (
-                 <circle
-                   r={nodeRadius}
-                   fill={`${cosetColors[cosetIdx]}22`}
-                   stroke="none"
-                 />
-               )}
-               {(!isLargeGraph || selectedCount === 0) && (
-                 <foreignObject
-                   x={-nodeRadius}
-                   y={-16}
-                   width={nodeRadius * 2}
-                   height={32}
-                   style={{ pointerEvents: 'none', userSelect: 'none' }}
+             )}
+             {isInHighlightedCoset && cosetIdx !== undefined && (
+               <circle
+                 r={nodeRadius}
+                 fill={`${cosetColors[cosetIdx]}22`}
+                 stroke="none"
+               />
+             )}
+             {(!isLargeGraph || selectedCount === 0) && (
+               <foreignObject
+                 x={-nodeRadius}
+                 y={-16}
+                 width={nodeRadius * 2}
+                 height={32}
+                 style={{ pointerEvents: 'none', userSelect: 'none' }}
                  >
                    <div
                       style={{
@@ -788,22 +624,6 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
                    />
                  </foreignObject>
                )}
-             </>
-           )}
-           {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 && isInHighlightedCoset && cosetIdx !== undefined && (
-             <circle
-               r={nodeRadius + 2}
-               fill={`${cosetColors[cosetIdx]}22`}
-               stroke="none"
-             />
-           )}
-           {el.cosetMemberLabels && el.cosetMemberLabels.length > 0 && parentSubset && (
-             <circle
-               r={nodeRadius + 2}
-               fill={`${parentSubset.color}22`}
-               stroke="none"
-             />
-           )}
             {selfInverseElementId === el.id && (
              <g>
                <circle r={nodeRadius + 6} fill="none" stroke="#ffd93d" strokeWidth={2.5} strokeDasharray="6 3" opacity={0.85}>
@@ -854,6 +674,12 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
 
   const enabledActions = cayleyActions.filter(a => a.enabled)
 
+  // 商群：恒等陪集节点（= N）的屏幕坐标 → 右侧内嵌面板的指针线锚点
+  const identityNodePos = currentGroup ? nodePositionsCache.get(currentGroup.identity.id) : undefined
+  const insetAnchor = identityNodePos
+    ? { x: identityNodePos.x * canvasTransform.scale + canvasTransform.x, y: identityNodePos.y * canvasTransform.scale + canvasTransform.y }
+    : { x: cx * canvasTransform.scale + canvasTransform.x, y: cy * canvasTransform.scale + canvasTransform.y }
+
   return (
     <svg viewBox={`0 0 ${viewBoxSize.width} ${viewBoxSize.height}`} className="view-svg" style={{ userSelect: 'none' }}>
       <defs>
@@ -874,6 +700,16 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
         {nodeElements}
         {selectionOverlay}
       </g>
+
+      {showInset && insetGeom && (
+        <QuotientSubgroupInset
+          group={currentGroup}
+          anchor={insetAnchor}
+          anchorRadius={nodeRadius * canvasTransform.scale}
+          geometry={insetGeom}
+          title={t('canvas.quotientSubgroupGraph')}
+        />
+      )}
       
     </svg>
   )

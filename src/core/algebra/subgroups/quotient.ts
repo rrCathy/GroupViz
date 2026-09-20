@@ -76,9 +76,11 @@ export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Gr
   const elements: GroupElement[] = leftCosets.map((coset, i) => {
     const rep = coset[0]
     const memberLabels = coset.map(e => e.label)
-    const label = coset.length <= 4
-      ? memberLabels.join(', ')
-      : `${rep.label}, \\dots`
+    // 商群元素 = 陪集 gN，标签用「代表元 + N」的陪集记号（gH 型）。
+    // 旧实现把成员 label 拼成一串（≤4 个逗号连接、>4 个 "x, \dots"），
+    // S₄/A₄ 这类会得到 "e, (12)(34), \dots" 的巨长标签，凯莱图 / 乘法表 /
+    // 元素属性面板里全部放不下；派生的成员信息仍保留在 cosetMemberLabels。
+    const label = `${rep.label}N`
     return {
       id: `qcoset-${i}`,
       label,

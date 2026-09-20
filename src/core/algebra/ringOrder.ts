@@ -27,6 +27,11 @@ export function ringOrder(keys: string[]): string[] {
     // 字典序会把 auto-10 排到 auto-2 前，≥10 阶的环序直接乱掉。
     return deduped.sort((a, b) => Number(a.slice(5)) - Number(b.slice(5)))
   }
+  if (deduped.every(k => /^qcoset-\d+$/.test(k))) {
+    // 商群元素 id（computeQuotientGroup 的 qcoset-N）：同一个坑 ——
+    // 字典序会把 qcoset-10 排到 qcoset-2 前，商群凯莱图节点在环上乱序。
+    return deduped.sort((a, b) => Number(a.slice(7)) - Number(b.slice(7)))
+  }
   if (deduped.every(k => /^-?\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a) - Number(b))
   }
@@ -51,6 +56,9 @@ export function cayleyRingKeys(keys: string[]): string[] {
   }
   if (deduped.every(k => /^[eg]\d+$/.test(k))) {
     return deduped.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+  }
+  if (deduped.every(k => /^qcoset-\d+$/.test(k))) {
+    return deduped.sort((a, b) => Number(a.slice(7)) - Number(b.slice(7)))
   }
   return deduped.sort()
 }

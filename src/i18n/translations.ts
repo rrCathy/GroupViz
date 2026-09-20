@@ -281,6 +281,7 @@ const zh: TranslationMap = {
 
   /* Canvas Common */
   'canvas.noGroup': '请先选择一个群',
+  'canvas.quotientSubgroupGraph': '正规子群 N 的凯莱图',
   'canvas.noGroupCreate': '请先创建或选择一个群',
   'canvas.orderTooLarge': '群阶较大（|G| = {n}）：静态浏览与出图通常没问题，但拖拽 / 缩放会明显卡顿。仍要显示请点下方按钮',
   'canvas.show': '显示',
@@ -998,6 +999,7 @@ const en: TranslationMap = {
 
   /* Canvas Common */
   'canvas.noGroup': 'Please select a group first',
+  'canvas.quotientSubgroupGraph': 'Cayley graph of N (normal subgroup)',
   'canvas.noGroupCreate': 'Please create or select a group first',
   'canvas.orderTooLarge': 'Large group (|G| = {n}): static browsing and exporting are usually fine, but dragging / zooming will lag. Click below to show anyway',
   'canvas.show': 'Show',

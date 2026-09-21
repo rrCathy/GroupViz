@@ -1,6 +1,8 @@
 import type { Group, GroupElement } from '../../types'
 import { COLOR_PALETTE } from '../../types'
 import { type Subgroup, findMinimalGenerators } from './shared'
+import { findAllNormalSubgroups } from './normalSubgroups'
+import { getGroupCenter } from './conjugacy'
 import { computeCayleyActionEdges, type ForceLayoutEdge } from '../cayleyEdges'
 import { forceLayout } from '../cycleLayouts'
 
@@ -53,9 +55,14 @@ export function computeCosets(group: Group, subgroup: Subgroup): CosetInfo {
 }
 
 export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Group | null {
-  if (!normalSubgroup.isNormal) return null
-
   const cosets = computeCosets(group, normalSubgroup)
+
+  // 双重把关：既看调用方标注，也看**实际左右陪集比对**（cosets.isNormal 是刚算出来的真值）。
+  // 只看 `isNormal` 字段的话，宿主把非正规子群标成 true（`subgroupFromElementIds` 默认
+  // false，手工传 true 很容易标错）时会静默产出左右陪集不一致的「假商群」—— 数学上错的
+  // 图形且无任何报错。宁可返回 null 让宿主显式处理。
+  if (!normalSubgroup.isNormal || !cosets.isNormal) return null
+
   let leftCosets = cosets.leftCosets
 
   // Sort cosets deterministically: identity coset first, then by smallest element ID.
@@ -321,4 +328,56 @@ export function computeQuotientGroup(group: Group, normalSubgroup: Subgroup): Gr
     isAbelian,
     normalSubgroupElementIds: normalSubgroup.elements.map(e => e.id),
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 默认 N 的挑选策略（引擎**不猜**，只提供显式策略；宿主仍可自己指定任意 N）
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type QuotientSubgroupStrategy =
+  /** 最小非平凡正规子群 ⇒ 商群最大（信息量最多；多数群即中心/极小正规子群） */
+  | 'smallest'
+  /** 最大真正规子群 ⇒ 商群最小（常得到单群/简单商，如 S₄/A₄ ≅ C₂） */
+  | 'largest'
+  /** 中心 Z(G)（交换群中心 = 全群 ⇒ 商群平凡，返回 null） */
+  | 'center'
+
+/**
+ * 按策略挑一个可用的正规子群 N，直接喂给 `computeQuotientGroup`。
+ *
+ * 为什么需要它：`computeQuotientGroup` 要求 N 必填且**已正确标注正规性**，而
+ * `subgroupFromElementIds` 装配出的 Subgroup 默认 `isNormal: false`（且不检测），
+ * 宿主自己挑 N 很容易标错。本函数返回的 Subgroup 一定满足 `isNormal: true` 且
+ * 左右陪集一致（由 `findAllNormalSubgroups` 枚举 / 中心计算保证）。
+ *
+ * 边界：平凡情形一律返回 `null`（群阶 ≤ 1 / 无真·正规子群的单群 / 中心平凡或 = 全群）；
+ * 群阶 > 144（`ENUMERATION_LIMIT`）时 `findAllNormalSubgroups` 返回空 ⇒ 同样 `null`
+ * （大群请显式给 N，例如中心或已知的正规子群元素集）。同阶候选按元素 id 序取，
+ * 保证结果确定（不随枚举顺序漂移）。
+ */
+export function suggestQuotientSubgroup(
+  group: Group,
+  strategy: QuotientSubgroupStrategy = 'smallest',
+): Subgroup | null {
+  if (group.order <= 1) return null
+
+  if (strategy === 'center') {
+    const centerElements = getGroupCenter(group)
+    // 平凡中心（{e}）与「中心 = 全群」（交换群）都给不出有意义的商群
+    if (centerElements.length <= 1 || centerElements.length >= group.order) return null
+    return {
+      elements: centerElements,
+      order: centerElements.length,
+      index: group.order / centerElements.length,
+      generators: findMinimalGenerators(centerElements, group),
+      isNormal: true,
+    }
+  }
+
+  const key = (s: Subgroup) => s.elements.map(e => e.id).sort().join(',')
+  const proper = findAllNormalSubgroups(group)
+    .filter(s => s.order > 1 && s.order < group.order)
+    .sort((a, b) => a.order - b.order || (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0))
+  if (proper.length === 0) return null
+  return strategy === 'largest' ? proper[proper.length - 1] : proper[0]
 }

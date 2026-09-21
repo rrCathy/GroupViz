@@ -58,8 +58,15 @@ export function isSubgroupElementSet(
 }
 
 export interface SubgroupFromElementsOptions {
-  /** 正规性标注初值（实际正规性由左右陪集比对给出） */
+  /** 正规性标注初值；**缺省 `false`**（本函数默认不检测正规性，见 `detectNormal`） */
   isNormal?: boolean
+  /**
+   * 自动检测正规性（左右陪集比对，O(|G|·|H|)），结果覆盖 `isNormal`；缺省 `false`。
+   *
+   * 需要正规子群（如建商群 `G/N`）时**务必传 `true`** —— 缺省装配出的 Subgroup 与
+   * 实际的 `isNormal` 无关，直接喂 `computeQuotientGroup` 会拿 `null`。
+   */
+  detectNormal?: boolean
   /** 是否校验乘法封闭（缺省 `true`）；主应用热路径确信入参已是子群，可传 `false` 省一轮闭包 */
   validate?: boolean
   /** 是否计算极小生成集（缺省 `true`）；不消费 `subgroup.generators` 时可传 `false` */
@@ -82,12 +89,18 @@ export function subgroupFromElementIds(
     if (!elements.some(el => el.id === group.identity.id)) return null
     if (closeUnderMultiply(group, elements).length !== elements.length) return null
   }
+  const order = elements.length
+  const index = group.order / order
   return {
     elements,
-    order: elements.length,
-    index: group.order / elements.length,
+    order,
+    index,
     generators: options.computeGenerators === false ? [] : findMinimalGenerators(elements, group),
-    isNormal: options.isNormal ?? false,
+    // detectNormal：用左右陪集比对的实际结果（复用 computeCosets 的唯一真源）；
+    // 否则沿用标注初值（缺省 false）
+    isNormal: options.detectNormal
+      ? computeCosets(group, { elements, order, index, generators: [], isNormal: false }).isNormal
+      : (options.isNormal ?? false),
   }
 }
 

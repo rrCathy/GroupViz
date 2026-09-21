@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import type { GroupElement } from '../core/types'
 import { createGroupFromSymbol } from '../utils/groupFactory'
-import { computeQuotientGroup, findAllSubgroups } from '../core/algebra/subgroups'
+import { computeQuotientGroup, findAllSubgroups, suggestQuotientSubgroup } from '../core/algebra/subgroups'
+import { subgroupFromElementIds } from '../core/algebra/cosetView'
 import { ringOrder, splitDihedralStructure } from '../core/algebra/ringOrder'
 import { findMinimalGenerators, closeUnderMultiply } from '../core/algebra/subgroups/shared'
 import { getAvailableShapesForView, getAvailableShapes3D } from '../core/types'
@@ -193,5 +194,69 @@ describe('商群悬浮窗换算：preserveAspectRatio 等比缩放（2026-09-21 
     const m = computeInsetMetrics(rect, vb, ctm)
     expect(360 * m.k * ctm.a).toBeCloseTo(360, 0)
     expect(300 * m.k * ctm.a).toBeCloseTo(300, 0)
+  })
+})
+
+describe('商群 N 的把关与选取（2026-09-21）', () => {
+  // S₄ 里一个非正规的 2 阶子群（对换生成）—— 用来验「标注不可信」
+  const transposition = findAllSubgroups(s4).find(sg => sg.order === 2 && !sg.isNormal)!
+
+  it('非正规子群即使被标成 isNormal:true 也返回 null（信实际陪集比对，不信标注）', () => {
+    expect(transposition.isNormal).toBe(false)
+    const mislabeled = { ...transposition, isNormal: true }
+    expect(computeQuotientGroup(s4, mislabeled)).toBeNull()
+  })
+
+  it('subgroupFromElementIds 默认不检测正规性；detectNormal:true 才自动比对', () => {
+    const v4Ids = v4.elements.map(e => e.id)
+    const tIds = transposition.elements.map(e => e.id)
+    // 缺省：isNormal = false（与子集实际是否正规无关）
+    expect(subgroupFromElementIds(s4, v4Ids)!.isNormal).toBe(false)
+    // 显式开启检测：V₄ 正规 / 对换子群不正规
+    expect(subgroupFromElementIds(s4, v4Ids, { detectNormal: true })!.isNormal).toBe(true)
+    expect(subgroupFromElementIds(s4, tIds, { detectNormal: true })!.isNormal).toBe(false)
+    // 陷阱显式化：默认装配的 N 直接建商群 → null；开启检测后可用
+    expect(computeQuotientGroup(s4, subgroupFromElementIds(s4, v4Ids)!)).toBeNull()
+    expect(computeQuotientGroup(s4, subgroupFromElementIds(s4, v4Ids, { detectNormal: true })!)!.order).toBe(6)
+  })
+
+  it('suggestQuotientSubgroup：smallest / largest / center 三策略（含平凡边界）', () => {
+    // S₄ 最小非平凡正规子群 = V₄（4 阶）⇒ 商群 6 阶（≅ S₃）
+    const small = suggestQuotientSubgroup(s4, 'smallest')!
+    expect(small.order).toBe(4)
+    expect(computeQuotientGroup(s4, small)!.order).toBe(6)
+    // 最大真正规子群 = A₄（12 阶）⇒ 商群 2 阶（≅ C₂）
+    const large = suggestQuotientSubgroup(s4, 'largest')!
+    expect(large.order).toBe(12)
+    expect(computeQuotientGroup(s4, large)!.order).toBe(2)
+    // S₄ 中心平凡 ⇒ center 无意义
+    expect(suggestQuotientSubgroup(s4, 'center')).toBeNull()
+    // Q₈ 中心 = {±1}（2 阶）⇒ Q₈/Z ≅ V₄
+    const q8 = createGroupFromSymbol('Q_{8}')!
+    const q8c = suggestQuotientSubgroup(q8, 'center')!
+    expect(q8c.order).toBe(2)
+    expect(computeQuotientGroup(q8, q8c)!.order).toBe(4)
+    // 交换群：中心 = 全群 ⇒ null
+    expect(suggestQuotientSubgroup(createGroupFromSymbol('C_{6}')!, 'center')).toBeNull()
+    // 单群（A₅）：无真·正规子群 ⇒ null
+    expect(suggestQuotientSubgroup(createGroupFromSymbol('A_{5}')!)).toBeNull()
+  })
+
+  it('不变量：suggest 给出的每个 N 都能建出商群（策略结果自洽）', () => {
+    const groups = [
+      createGroupFromSymbol('C_{12}')!,
+      createGroupFromSymbol('D_{4}')!,
+      createGroupFromSymbol('Q_{8}')!,
+      s4,
+    ]
+    for (const g of groups) {
+      for (const st of ['smallest', 'largest', 'center'] as const) {
+        const n = suggestQuotientSubgroup(g, st)
+        if (n) {
+          expect(n.isNormal).toBe(true)
+          expect(computeQuotientGroup(g, n)).not.toBeNull()
+        }
+      }
+    }
   })
 })

@@ -33,5 +33,5 @@ export {
   MERGE_MAX_NODES,
 } from './subgroups/conjugacy'
 export type { SubgroupConjugacyOrbit, MergedLatticeNode } from './subgroups/conjugacy'
-export { computeCosets, computeQuotientGroup } from './subgroups/quotient'
-export type { CosetInfo } from './subgroups/quotient'
+export { computeCosets, computeQuotientGroup, suggestQuotientSubgroup } from './subgroups/quotient'
+export type { CosetInfo, QuotientSubgroupStrategy } from './subgroups/quotient'

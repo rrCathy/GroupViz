@@ -446,7 +446,8 @@ import { quotientInsetGeometry } from '@groupviz/core'
 要点：
 
 - **窗体以屏幕像素设计**（默认 360×300，缩放范围 240×180 ~ 720×600），经 `scale(k)` 落进 SVG —— 不随画布 viewBox 缩放变小。`k` 与坐标原点由 `computeInsetMetrics(rect, viewBox, ctm)`（`@groupviz/core`）算：**必须取 CTM 的实际等比缩放**（`preserveAspectRatio="xMidYMid meet"` ⇒ `px/单位 = min(rectW/vbW, rectH/vbH)`，不能用 `viewBox.width/rect.width`——容器宽高比 ≠ viewBox 宽高比时后者会把窗体算小一半以上），且屏幕 px 记账的位置要经 `origin + px × k` 补偿内容居中留白。宿主自绘 SVG 想复用同一套窗（直用本组件）时用同款换算。
-- **商群消费三步**（core → react）：`findAllSubgroups(G)` 挑真·正规子群 N（`isNormal && 1 < order < \|G\|`，单群没有）→ `computeQuotientGroup(G, N)` 得商群 → 商群直接喂 `SetView` / `CayleyView`（传 `quotientInsetTitle`）。
+- **商群消费三步**（core → react）：`suggestQuotientSubgroup(G, strategy?)` 挑 N（缺省 `'smallest'` = 最小非平凡正规子群 ⇒ 商群最大；另有 `'largest'` / `'center'`；群阶 ≤ 1、单群、中心平凡或 = 全群时返回 `null`）→ `computeQuotientGroup(G, N)` 得商群 → 商群直接喂 `SetView` / `CayleyView`（传 `quotientInsetTitle`）。宿主当然也可以自己给 N（任意你真正确认过的正规子群）。
+- **N 的正确性是把关过的**：`computeQuotientGroup` 会**双重校验** —— 既看 `Subgroup.isNormal` 标注，也看实际左右陪集比对（`cosets.isNormal`）；任一为假都返回 `null`。所以把非正规子群误标成 `isNormal: true` 不会悄悄画出左右陪集不一致的假商群。⚠️ 自己装配 Subgroup 时注意：`subgroupFromElementIds()` **默认 `isNormal: false` 且不检测正规性**，需要正规子群时传 `detectNormal: true`（自动比对），否则喂给 `computeQuotientGroup` 必得 `null`。
 - 商群元素标签是**陪集记号 `gN`**（两两不同），生成元按商群自身结构挑（`findMinimalGenerators`：阶从大到小 + 贪心扩张）——S₄/V₄ ≅ S₃ 会先选 3 阶旋转元，circular 形状呈双三角。
 - 窗体事件不穿透画布（拖动/点击不触发平移或取消选中）；位置与尺寸是**会话内状态**，不持久化。
 
@@ -481,7 +482,7 @@ import { I18nProvider, useTranslation } from '@groupviz/react'
 | `elementOrder` | `(group, el) => number` | 元素阶（group-first 公共入口） |
 | `elementOrderDistribution` | `(group) => Map<number, number>` | 阶分布 |
 | `elementOrderDistributionOf` | `(elements, group) => Map<number, number>` | 子集阶分布 |
-| `subgroupFromElementIds` | `(group, refs, opts?) => Subgroup \| null` | 由元素引用装配 Subgroup（默认含封闭校验 + 极小生成集；`validate:false` / `computeGenerators:false` 可省开销） |
+| `subgroupFromElementIds` | `(group, refs, opts?) => Subgroup \| null` | 由元素引用装配 Subgroup（默认含封闭校验 + 极小生成集；`validate:false` / `computeGenerators:false` 可省开销；**`isNormal` 缺省 `false` 且不检测正规性** —— 要拿正规子群请传 `detectNormal: true` 走左右陪集比对） |
 | `isSubgroupElementSet` | `(group, refs) => boolean` | 是否构成子群（含单位元 + 乘法封闭） |
 | `buildCosetViewData` | `(group, subgroupRefs, opts?) => CosetViewData \| null` | **陪集视图一键装配**：`cosetElementMap` / `cosetColors` / `cosetHighlightSet` |
 | `computeCosetElementMap` / `computeCosetColors` / `computeCosetHighlightSet` | 见源码 | 三件套单独入口 |
@@ -494,6 +495,7 @@ import { I18nProvider, useTranslation } from '@groupviz/react'
 | `resolveCayleyPath` | `(group, actions, multiplyType, {elements?, word?, start?, closed?}) => ResolvedCayleyPath \| null` | **路径高亮解析**：元素序列 / 生成元单词 → 顶点序列 + 逐步连边（方向敏感） |
 | `getAutomorphismMap` | `(group) => Map<string, Automorphism> \| null` | Aut(G) 的「元素 id → 自同构」表（非自同构群 / 空输入 → `null`）；`AutomorphismScene` 与外部宿主共用，替代裸读 `_automorphismById` |
 | `computeQuotientGroup` | `(G, N) => Group \| null` | **商群 G/N 构造**：陪集即元素（标签 = `gN` 记号，两两不同），生成元按商群自身结构挑（`findMinimalGenerators`），恒等陪集携带 N 的凯莱数据三件套（`cosetMemberLabels` / `cosetInternalLayout` / `cosetInternalEdges`）；N 非正规返回 `null`。消费流程见 §4.13 |
+| `suggestQuotientSubgroup` | `(G, strategy?) => Subgroup \| null` | **按策略挑一个可用的正规子群 N**（引擎不替宿主猜，只给显式策略）：`'smallest'`（缺省，最小非平凡正规子群 ⇒ 商群最大）/ `'largest'`（最大真正规子群 ⇒ 商群最小）/ `'center'`（Z(G)）。平凡情形（阶 ≤ 1 / 单群 / 中心平凡或 = 全群 / 群阶 > 144 枚举上限）返回 `null`；同阶候选按元素 id 序取，结果确定 |
 | `quotientInsetGeometry` | `(viewBoxSize) => QuotientInsetGeometry` | 商群视图「正规子群 N 凯莱图」悬浮窗的让位几何（默认停靠点 + `drawWidth`）——位置初始化与渲染端必须用同一份 |
 | `computeInsetMetrics` | `(rect, viewBox, ctm) => InsetSvgMetrics` | **SVG→屏幕 px 换算（悬浮窗用）**：`k = 1 / min(ctm.a, ctm.d)`（含 `preserveAspectRatio` 等比缩放；**不要退回 `viewBox.width/rect.width`**，容器宽高比 ≠ viewBox 宽高比时会把窗体算小一半以上）＋ `originX/Y` 补偿内容居中留白。无 CTM（SSR / 未挂载）退化为 `min(rectW/vbW, rectH/vbH)` |
 | `createCayleyForceSim` | `(group, actions, multiplyType, opts) => CayleyForceSim` | **动态力导向增量模拟器**：`step()` 逐帧推进、`pin/unpin` 拖拽钉住（低热度：拖拽只影响近旁）、`reheat()` 升温、**`setOptions(opts)` 就地更新力参数**（保留位置速度 + 温和升温 → 滑杆调节平滑过渡而非重建重排）；逐生成元弹簧静止长度 + `stiffness` 刚度 + `minSeparation` 最小间距硬约束（防纠缠）。⚠️ `pin()` **原地改写** `sim.positions` 里的对象——拖拽起点须自行快照 `{x,y}` |

@@ -117,3 +117,43 @@ export function quotientInsetGeometry(viewBoxSize: ViewBoxSize): QuotientInsetGe
     drawWidth: Math.max(140, viewBoxSize.width - panelWidth - margin - gap),
   }
 }
+
+/** svg 元素度量 → 悬浮窗坐标换算参数（纯函数，导出便于单测锁公式） */
+export interface InsetSvgMetrics {
+  /** SVG 用户单位 / 屏幕 px（等比）——窗体以设计 px 记账，渲染时 ×k 落进 SVG */
+  k: number
+  /** svg 元素左上角在 SVG 用户坐标系中的位置（`xMidYMid meet` 的居中留白由此体现） */
+  originX: number
+  originY: number
+  /** svg 元素屏幕尺寸（px，clamp 位置/尺寸用） */
+  rectW: number
+  rectH: number
+}
+
+/**
+ * 由 svg 元素的 rect / viewBox / CTM 计算窗体换算参数。
+ *
+ * ⚠ **不要退回 `viewBox.width / rect.width`**：浏览器按 `preserveAspectRatio="xMidYMid meet"`
+ * **等比**缩放并居中，实际 px/单位 = `min(rectW/vbW, rectH/vbH)`。容器宽高比 ≠ viewBox
+ * 宽高比时两者差很远（2026-09-21 实测消费页卡片 1532×428 装 860×520 的 viewBox：
+ * 宽度比 0.5614 vs 实际 0.8231），窗体被算小到 46%（360×300 设计 → 屏上 166×139），
+ * 用户观感就是「窗口被限高」。CTM 的 a/d 即浏览器实际缩放，天然含该语义。
+ *
+ * `origin` 补偿内容居中留白：元素左上角（视口 px）→ 用户单位。屏幕 px 记账的拖动位置
+ * 必须经 `origin + px × k` 才落到正确的 SVG 坐标。
+ */
+export function computeInsetMetrics(
+  rect: { left: number; top: number; width: number; height: number },
+  vb: { width: number; height: number },
+  ctm: { a: number; d: number; e: number; f: number } | null,
+): InsetSvgMetrics {
+  const vbW = vb.width || rect.width || 1
+  const vbH = vb.height || rect.height || 1
+  const pxPerUnit = ctm && ctm.a > 0 && ctm.d > 0
+    ? Math.min(ctm.a, ctm.d)
+    : Math.min(rect.width / vbW, rect.height / vbH)
+  const k = pxPerUnit > 0 ? 1 / pxPerUnit : 1
+  const originX = ctm && ctm.a !== 0 ? (rect.left - ctm.e) / ctm.a : 0
+  const originY = ctm && ctm.d !== 0 ? (rect.top - ctm.f) / ctm.d : 0
+  return { k, originX, originY, rectW: rect.width, rectH: rect.height }
+}

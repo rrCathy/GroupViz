@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { texify, renderTex } from '../../utils/texify'
 import type { Group } from '../../core/types'
-import type { QuotientInsetGeometry } from '../../core/viewBox'
+import { computeInsetMetrics, type QuotientInsetGeometry } from '../../core/viewBox'
 
 /**
  * 商群画布的「正规子群 N 独立凯莱图」悬浮窗（可收起、可拖动、**可缩放**）。
@@ -15,7 +15,8 @@ import type { QuotientInsetGeometry } from '../../core/viewBox'
  *
  * **尺寸按屏幕像素恒定**（用户第三轮：「悬浮窗太小了，怎么不能缩放」——旧版
  * 画在 SVG 坐标系里，主画布 viewBox 2000 被容器缩到 ~1/3，320 单位的窗子屏上
- * 只剩 ~100px）。窗体以 px 设计、经 scale(k) 落进 SVG（k = viewBox宽/容器宽），
+ * 只剩 ~100px）。窗体以 px 设计、经 scale(k) 落进 SVG（k = 浏览器实际 px/单位 的倒数，
+ * 含 preserveAspectRatio 等比缩放与居中留白——见下方 measure）。
  * 无论 viewBox 多大，屏上都是 360×300 起步；**右下角手柄可拖拽缩放**
  * （240×180 ~ 720×600，小容器按容器再收），标题栏可拖动，可收起成小药丸。
  *
@@ -72,17 +73,18 @@ export function QuotientSubgroupInset({
   const [size, setSize] = useState(() => ({ ...DEFAULT_WIN }))
   const dragRef = useRef<{ sx: number; sy: number; ox: number; oy: number; ow: number; oh: number; moved: number } | null>(null)
   const resizeRef = useRef<{ sx: number; sy: number; ow: number; oh: number } | null>(null)
-  // SVG 容器度量（k = viewBox宽/容器宽，px → SVG 单位）。
+  // SVG 容器度量（换算见 computeInsetMetrics；含 preserveAspectRatio 等比缩放与居中留白）。
   // ref 不能在渲染期读（react-hooks/refs）：挂到 state，挂载后量一次 + ResizeObserver 跟随容器变化。
-  const [metrics, setMetrics] = useState({ k: 1, rectW: 0, rectH: 0 })
+  const [metrics, setMetrics] = useState({ k: 1, originX: 0, originY: 0, rectW: 0, rectH: 0 })
   useEffect(() => {
     const measure = () => {
       const svg = rootRef.current?.ownerSVGElement
       if (!svg) return
-      const rect = svg.getBoundingClientRect()
-      const vbW = svg.viewBox.baseVal.width || rect.width || 1
-      const next = { k: rect.width > 0 ? vbW / rect.width : 1, rectW: rect.width, rectH: rect.height }
-      setMetrics(prev => (prev.k === next.k && prev.rectW === next.rectW && prev.rectH === next.rectH ? prev : next))
+      const next = computeInsetMetrics(svg.getBoundingClientRect(), svg.viewBox.baseVal, svg.getScreenCTM())
+      setMetrics(prev => (
+        prev.k === next.k && prev.originX === next.originX && prev.originY === next.originY
+        && prev.rectW === next.rectW && prev.rectH === next.rectH ? prev : next
+      ))
     }
     measure()
     const ro = new ResizeObserver(() => measure())
@@ -115,8 +117,14 @@ export function QuotientSubgroupInset({
   const winW = collapsed ? PILL_WIDTH : sizeClamped.w
   const winH = collapsed ? PILL_HEIGHT : sizeClamped.h
 
-  // 默认停靠点 = 让位几何给的右带（SVG 单位）换算成屏幕像素；拖过后用用户位置
-  const posPx = pos ?? { x: geometry.panel.x / k, y: geometry.panel.y / k }
+  // 位置记账：`pos`（拖过后）是**元素内屏幕 px**；未拖过时跟随让位几何给的右带
+  // （`geometry.panel` 是 **SVG 用户单位**，直接用）。
+  // ⚠ 两者单位不同：屏幕 px → SVG 用户坐标必须 `origin + px × k`（origin = 元素左上角在
+  // SVG 坐标系中的位置）——少了 origin 会整体偏移掉居中留白。
+  const posPx = pos ?? {
+    x: (geometry.panel.x - metrics.originX) / k,
+    y: (geometry.panel.y - metrics.originY) / k,
+  }
   const clampPosPx = (p: { x: number; y: number }) => {
     if (metrics.rectW <= 0 || metrics.rectH <= 0) return p
     return {
@@ -125,6 +133,11 @@ export function QuotientSubgroupInset({
     }
   }
   const posClamped = clampPosPx(posPx)
+  /** 窗体左上角在 SVG 用户坐标系中的位置 */
+  const posSvg = {
+    x: metrics.originX + posClamped.x * k,
+    y: metrics.originY + posClamped.y * k,
+  }
 
   const startDrag = (e: React.PointerEvent) => {
     if ((e.target as Element).closest('[data-no-drag]')) return
@@ -198,8 +211,8 @@ export function QuotientSubgroupInset({
   }, [count, nodeR, members])
 
   // 指针线：从恒等陪集节点边缘指向悬浮窗左侧（窗体位置 px → SVG 单位 ×k）
-  const targetX = posClamped.x * k - 8
-  const targetY = (posClamped.y + winH / 2) * k
+  const targetX = posSvg.x - 8
+  const targetY = posSvg.y + (winH / 2) * k
   const dx = targetX - anchor.x
   const dy = targetY - anchor.y
   const dist = Math.hypot(dx, dy) || 1
@@ -309,7 +322,7 @@ export function QuotientSubgroupInset({
 
       {/* 窗体：px 设计 + scale(k) 落进 SVG ⇒ 屏上尺寸恒定 */}
       <g
-        transform={`translate(${posClamped.x * k}, ${posClamped.y * k}) scale(${k})`}
+        transform={`translate(${posSvg.x}, ${posSvg.y}) scale(${k})`}
         onPointerDown={startDrag}
         style={{ cursor: collapsed ? 'pointer' : 'grab' }}
       >

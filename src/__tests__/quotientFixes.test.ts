@@ -7,6 +7,7 @@ import { ringOrder, splitDihedralStructure } from '../core/algebra/ringOrder'
 import { findMinimalGenerators, closeUnderMultiply } from '../core/algebra/subgroups/shared'
 import { getAvailableShapesForView, getAvailableShapes3D } from '../core/types'
 import { getCayleyShapeConfig } from '../context/cayleyActions'
+import { computeInsetMetrics } from '../core/viewBox'
 
 /**
  * 2026-09-20 商群四项缺陷的回归锁（用户报）：
@@ -151,5 +152,46 @@ describe('app 层形状配置与 core 口径一致性（防平行短路回归）
     expect(cfg.availableShapes3D).toEqual(['cone', 'circular'])
     expect(cfg.defaultShape2D).toBe('circular')
     expect(cfg.defaultShape3D).toBe('cone')
+  })
+})
+
+describe('商群悬浮窗换算：preserveAspectRatio 等比缩放（2026-09-21 用户报「窗口好像限高」）', () => {
+  // 夹具 = 真机实测（/?test=1 商群卡：svg 元素 1532×428，viewBox 860×520，
+  // 浏览器 meet 缩放 0.8231）。旧实现用 vbW/rectW = 0.5614，窗体被算小到 46%。
+  const rect = { left: 20, top: 100, width: 1532, height: 428 }
+  const vb = { width: 860, height: 520 }
+  const ctm = { a: 0.8231, d: 0.8231, e: 446.1, f: 334.9 }
+
+  it('k 取 CTM 实际缩放的倒数（min(a,d)），不是 viewBox宽/元素宽', () => {
+    const m = computeInsetMetrics(rect, vb, ctm)
+    expect(m.k).toBeCloseTo(1 / 0.8231, 3)
+    // 旧口径（错误）：只按宽度比 —— 显式锁住「不得回归」
+    expect(m.k).not.toBeCloseTo(vb.width / rect.width, 2)
+  })
+
+  it('origin 补偿内容居中留白：元素左上角落在负的用户坐标', () => {
+    const m = computeInsetMetrics(rect, vb, ctm)
+    expect(m.originX).toBeCloseTo((rect.left - ctm.e) / ctm.a, 3)
+    expect(m.originX).toBeLessThan(0)
+    expect(m.originY).toBeCloseTo((rect.top - ctm.f) / ctm.d, 3)
+  })
+
+  it('无 CTM（未挂载 / SSR）退化：用 min(rectW/vbW, rectH/vbH)，不回退到宽度比', () => {
+    const m = computeInsetMetrics(rect, vb, null)
+    expect(m.k).toBeCloseTo(1 / Math.min(rect.width / vb.width, rect.height / vb.height), 6)
+    expect(m.originX).toBe(0)
+    expect(m.originY).toBe(0)
+  })
+
+  it('容器与 viewBox 同宽高比时与朴素宽度比一致（等价性锚点）', () => {
+    const r = { left: 0, top: 0, width: 1000, height: 604.65 }  // 860:520 等比放大 ≈1000×604.65
+    const m = computeInsetMetrics(r, vb, null)
+    expect(m.k).toBeCloseTo(vb.width / r.width, 2)
+  })
+
+  it('窗体屏上尺寸回到设计值：360 设计 px × k × 浏览器缩放 ≈ 360 屏幕 px', () => {
+    const m = computeInsetMetrics(rect, vb, ctm)
+    expect(360 * m.k * ctm.a).toBeCloseTo(360, 0)
+    expect(300 * m.k * ctm.a).toBeCloseTo(300, 0)
   })
 })

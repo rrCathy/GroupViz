@@ -26,7 +26,7 @@
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，68 文件 / 1728 tests）
+### 3.1 node 项目（src/__tests__/**/*.test.ts，68 文件 / 1733 tests）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -95,7 +95,7 @@
 | notationAlias.test.ts | 11 | **群记号别名系统**：同群多写法归一（C_4/C4/c4/Z_4/Z4/C{4}/Z/4Z → `C_{4}`；S_3/S3/s3/Sym(3) → `S_{3}`；`S_3^2`/`S3xS3`/`S_3×S_3` → `S_{3}^{2}`；`F21`/`F_{21}`/`Frobenius(21)`/`C7:C3`/`C7⋊C3` → `C_{7}:C_{3}`；QD16/Dic_3/Klein/K_4/Quaternion(8)…），全部走本地不依赖后端；来源三档（local/named/backend）与 `via` 识别说明；F_n 无解（F_42）与歧义（F_16 两候选）拒绝并给定向提示；Unicode 上下标拒绝（`C₄`/`S₃`/`C_2²`/`C₂²` 给出正确 TeX 建议，**回归：`C_2²` 曾静默变成 `C_{22}`**）；D_n 保持 2n 阶约定；二义写法不误判。反向 `getGroupAliases`：幂⇄直积等价写法、Frobenius 专名反查（`C_{7}:C_{3}` → `F_{21}`）、Klein 等价写法、结果稳定去重 |
 | combinatorics.test.ts | 7 | binomialMod：门面可 import、越界返回 0、C(n,0)=C(n,n)=1、小 n 与朴素 Pascal 一致、C(10,3)=120、Lucas 定理（p ≤ n 情形）、大 n（2000 量级）与 BigInt 精确值一致 |
 | core/cosetStrip.test.ts | 9 | 陪集条带候选与数据（core/algebra/cosetStrip.ts）：listCosetStripSubgroups（代表元/指数/轨道/结构、C₃ 循环快通道、order>60 守卫）、findCosetStripSubgroup（按元素 id 精确恢复、换群失效 null）、cosetDataForSubgroup（由 H 直算左陪集 = H） |
-| quotientFixes.test.ts | 12 | **商群四项修复的回归锁（2026-09-20）**：元素标签 = `gN` 陪集记号（S₄/V₄ 六元素全以 N 结尾、无逗号/`\dots`、两两不同、`cosetMemberLabels` 保留）、`ringOrder` 对 `qcoset-N` 按数字排序（≥10 陪集不被字典序打乱）、商群可用形状（S₄/V₄ ≅ D₃ 给 dualRing、C₁₂/{e} 给 spiral/coil、3D 不再是空集）、`splitDihedralStructure` 结构判定、**app 层 `getCayleyShapeConfig` 与 core 逐值一致（防平行短路回归）**、**商群生成元按结构挑（S₄/V₄ ⇒ 阶 [3,2]，双三角的前提；继承撞色时调色板补位）**、**N 内部凯莱边 = N 自己的最小生成元（V₄ ⇒ 4 条）** |
+| quotientFixes.test.ts | 17 | **商群四项修复的回归锁（2026-09-20）**：元素标签 = `gN` 陪集记号（S₄/V₄ 六元素全以 N 结尾、无逗号/`\dots`、两两不同、`cosetMemberLabels` 保留）、`ringOrder` 对 `qcoset-N` 按数字排序（≥10 陪集不被字典序打乱）、商群可用形状（S₄/V₄ ≅ D₃ 给 dualRing、C₁₂/{e} 给 spiral/coil、3D 不再是空集）、`splitDihedralStructure` 结构判定、**app 层 `getCayleyShapeConfig` 与 core 逐值一致（防平行短路回归）**、**商群生成元按结构挑（S₄/V₄ ⇒ 阶 [3,2]，双三角的前提；继承撞色时调色板补位）**、**N 内部凯莱边 = N 自己的最小生成元（V₄ ⇒ 4 条）**、**悬浮窗换算 `computeInsetMetrics`（CTM 等比缩放 ≠ 宽度比 / origin 居中留白 / 无 CTM 退化 / 等比容器等价性 / 屏上尺寸回到设计值 —— 5 条锁「窗口被限高」不再回归）** |
 
 ### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，25 文件 / 245 tests）
 

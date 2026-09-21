@@ -384,7 +384,12 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
   // 正规子群 N 的凯莱图改画到右侧独立面板（QuotientSubgroupInset）。
   const insetGeom = currentGroup && isQuotientGroup(currentGroup) ? quotientInsetGeometry(viewBoxSize) : null
   const showInset = !!insetGeom && (currentGroup?.identity.cosetMemberLabels?.length ?? 0) > 1
-  const drawWidth = insetGeom?.drawWidth ?? viewBoxSize.width
+  // ⚠ 让位宽度必须与「真的会画窗」绑定：N = {e}（cosetMemberLabels 只有 1 个）时
+  // showInset 为 false、窗不画，但若仍按 drawWidth 布局，图形会在左侧窄带居中 ——
+  // 右侧留一条空白带给人「窗坏了」的观感（2026-09-21 实测：2000 宽画布节点中心
+  // 819 vs 满幅 1000）。预置位置（context/positionUtils）已按 showInset 同口径判断，
+  // 这里对齐它。
+  const drawWidth = showInset && insetGeom ? insetGeom.drawWidth : viewBoxSize.width
   const nodeRadius = 28
   const cx = drawWidth / 2
   const cy = viewBoxSize.height / 2

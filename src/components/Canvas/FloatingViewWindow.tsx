@@ -424,6 +424,7 @@ function SvgPanZoom({ children }: { children: React.ReactNode }) {
  * 点击一个子群」，指向一个窗口内不存在的交互（2026-09-17 修）。
  * 现在：全局已有陪集数据时原样沿用；没有则自动取首个候选子群（自包含兜底）。 */
 function CosetStripWindowView() {
+  const { t } = useTranslation()
   const {
     currentGroup, selectedElements, selectElement, canvasTransform, viewBoxSize,
     cosetElementMap, cosetColors, cosetHighlightSet, subsets,
@@ -435,6 +436,17 @@ function CosetStripWindowView() {
   )
   const hasGlobal = !!cosetElementMap && cosetElementMap.size > 0
   const noCandidate = !hasGlobal && !fallbackIds
+  // 空态分两种成因，说清楚用户才知道下一步能做什么（旧实现一律吐英文
+  // `Local subgroup enumeration is limited to groups of order ≤ 144`，中文界面
+  // 下既是外文、对 C₂ 这类素数阶群又是误导——它们并非「太大枚举不了」，
+  // 而是根本没有非平凡真子群）：
+  //   · 群阶 > ENUMERATION_LIMIT → 本地枚举超限；
+  //   · 否则 → 该群没有非平凡真子群（单群 / 素数阶群）。
+  const noCosetsText = !noCandidate
+    ? undefined
+    : currentGroup && currentGroup.order > ENUMERATION_LIMIT
+      ? t('canvas.cosetStripOverEnumerationLimit', { max: String(ENUMERATION_LIMIT) })
+      : t('canvas.cosetStripNoProperSubgroup')
   return (
     <CosetStripScene
       group={currentGroup}
@@ -448,7 +460,7 @@ function CosetStripWindowView() {
       subsets={subsets}
       showLabels={true}
       showSubgroupCayley={true}
-      noCosetsText={noCandidate ? COSETSTRIP_NO_LOCAL_SUBGROUPS : undefined}
+      noCosetsText={noCosetsText}
       onSelect={selectElement}
       onHover={setHoverElement}
     />
@@ -488,7 +500,14 @@ function renderViewContent(view: ViewMode) {
   }
 }
 
-/** 候选子群为空时的说明。阈值取自 guards（曾硬编码 60，与 ENUMERATION_LIMIT=144 脱节） */
+/**
+ * 候选子群为空时的说明。阈值取自 guards（曾硬编码 60，与 ENUMERATION_LIMIT=144 脱节）。
+ *
+ * ⚠ 仅用于**窗口参数面板**（该面板整体是英文文案）。主画布语境（`CosetStripWindowView`，
+ * 画布中央的提示）走 i18n：`canvas.cosetStripOverEnumerationLimit` /
+ * `canvas.cosetStripNoProperSubgroup` —— 中文界面下不能出现这句英文，且「无非平凡
+ * 真子群」与「枚举超限」是两种成因，不能共用一句（2026-09-21 修）。
+ */
 const COSETSTRIP_NO_LOCAL_SUBGROUPS = `Local subgroup enumeration is limited to groups of order ≤ ${ENUMERATION_LIMIT}`
 
 /** TeX 结构符号 → unicode（供 <select> 选项纯文本展示）：C_{2}\\times C_{2} → C₂×C₂、D_{4} → D₄ */

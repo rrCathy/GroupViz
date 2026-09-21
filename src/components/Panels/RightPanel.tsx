@@ -812,7 +812,13 @@ export function RightPanel() {
                   </div>
                   {!inCosetStripMode && (
                     <div className="sg-actions" style={{ display: 'flex', gap: '4px' }} onClick={(e) => e.stopPropagation()}>
-                      {sg.isNormal && (
+                      {/*
+                        「创建商群」只在 1 < |H| < |G| 时给：平凡子群 {e} 的商群是
+                        G/{e} ≅ G（画布与原群一模一样，且 N 没有凯莱图可画，右侧
+                        悬浮窗不会出现），点了只会得到「像坏了一样」的结果；
+                        |H| = |G| 的商群平凡，同理。
+                      */}
+                      {sg.isNormal && sg.order > 1 && sg.order < (currentGroup?.order ?? Infinity) && (
                         <button
                           className="panel-btn"
                           onClick={() => {

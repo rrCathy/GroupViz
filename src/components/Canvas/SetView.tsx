@@ -90,7 +90,8 @@ function SetViewBody({
   // 正规子群 N 的凯莱图改为右侧独立面板（见 QuotientSubgroupInset）
   const insetGeom = isQuotientGroup(group) ? quotientInsetGeometry(viewBoxSize) : null
   const showInset = !!insetGeom && (group.identity.cosetMemberLabels?.length ?? 0) > 1
-  const drawWidth = insetGeom?.drawWidth ?? viewBoxSize.width
+  // 让位宽度只在真出窗时生效（N = {e} 时窗不画，见 GroupCanvas 同名注释）
+  const drawWidth = showInset && insetGeom ? insetGeom.drawWidth : viewBoxSize.width
   const nodeRadius = nodeRadiusOverride ?? 26
   const gap = gapOverride ?? 8
   const cellSize = nodeRadius * 2 + gap

@@ -228,7 +228,8 @@ function CayleyViewBody({
   // （与主画布 GroupCanvas / SetView / positionUtils 用同一份几何）
   const insetGeom = group && isQuotientGroup(group) ? quotientInsetGeometry(viewBoxSize) : null
   const showInset = !!insetGeom && (group?.identity.cosetMemberLabels?.length ?? 0) > 1
-  const drawWidth = insetGeom?.drawWidth ?? viewBoxSize.width
+  // 让位宽度只在真出窗时生效（N = {e} 时窗不画，见 GroupCanvas 同名注释）
+  const drawWidth = showInset && insetGeom ? insetGeom.drawWidth : viewBoxSize.width
   const cx = drawWidth / 2
   const cy = viewBoxSize.height / 2
   // 半径同时受容器宽/高约束：嵌入方给的 viewBox 可能宽扁（如 900×360），

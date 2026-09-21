@@ -4,7 +4,7 @@ import { Html, Line, OrbitControls } from '@react-three/drei'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useTheme } from '../../theme/useTheme'
 import type { Group, GroupElement } from '../../core/types'
-import { layoutSylowFiber, type SylowFiberNode } from '../../core/algebra/layoutSylowFiber'
+import { layoutSylowFiber, type SylowFiberLayout, type SylowFiberNode } from '../../core/algebra/layoutSylowFiber'
 import { renderTex, texify } from '../../utils/texify'
 
 /** 节点球半径。层内节点间距约 1.3（layoutSylowFiber 的 nodeSpacing），
@@ -103,33 +103,36 @@ const FiberNode = memo(function FiberNode({
 })
 
 interface BodyProps {
-  group: Group
-  prime: number
+  /**
+   * 已算好的纤维化布局。**必须由外层传入**：`layoutSylowFiber` 在 S₅ 的 p=2 上要
+   * ~200ms（findSylowSubgroups 枚举 15 个 8 阶子群 + 逐层找共轭元），此前外层
+   * （相机自适应要 boundsRadius）与 Body 各算一遍 ⇒ 每次切到 3D / 换 p 白跑一倍
+   * 计算量（2026-09-21 实测后收敛为单次）。
+   */
+  layout: SylowFiberLayout
   selectedElements: Set<string>
   onSelectElement: (id: string, additive: boolean) => void
   theme: 'dark' | 'light'
   nodeScale: number
-  mode: 'auto' | 'cylinder' | 'torus'
   autoRotate: boolean
 }
 
 function SylowTorusBody({
-  group, prime, selectedElements, onSelectElement, theme, nodeScale, mode, autoRotate,
+  layout, selectedElements, onSelectElement, theme, nodeScale, autoRotate,
 }: BodyProps) {
   const [hovered, setHovered] = useState<GroupElement | null>(null)
-  const layout = useMemo(() => layoutSylowFiber(group, prime, { mode }), [group, prime, mode])
 
   const nodeOf = useMemo(() => {
     const m = new Map<string, SylowFiberNode>()
-    for (const n of layout?.nodes ?? []) m.set(n.key, n)
+    for (const n of layout.nodes) m.set(n.key, n)
     return m
   }, [layout])
 
   /** 把一批边摊平成 segments（每两个点一段），从而每条线只占一个 drawcall */
   const segmentPoints = useMemo(() => {
-    const collect = (pick: (e: NonNullable<typeof layout>['edges'][number]) => boolean): Triple[] => {
+    const collect = (pick: (e: SylowFiberLayout['edges'][number]) => boolean): Triple[] => {
       const out: Triple[] = []
-      for (const e of layout?.edges ?? []) {
+      for (const e of layout.edges) {
         if (!pick(e)) continue
         const a = nodeOf.get(e.a)
         const b = nodeOf.get(e.b)
@@ -151,7 +154,7 @@ function SylowTorusBody({
   /** 每层的截面圆导轨 */
   const ringGuidePoints = useMemo(() => {
     const out: Triple[] = []
-    for (const l of layout?.layers ?? []) {
+    for (const l of layout.layers) {
       const rx = Math.cos(l.theta)
       const rz = Math.sin(l.theta)
       const at = (phi: number): Triple => [
@@ -165,8 +168,6 @@ function SylowTorusBody({
     }
     return out
   }, [layout])
-
-  if (!layout) return null
 
   const isDark = theme === 'dark'
   const rings: ReactNode[] = layout.nodes.map(n => (
@@ -291,13 +292,11 @@ export function SylowTorusScene(props: SylowTorusSceneProps) {
       >
         <color attach="background" args={[bgColor]} />
         <SylowTorusBody
-          group={group}
-          prime={prime}
+          layout={layout}
           selectedElements={selectedElements ?? new Set<string>()}
           onSelectElement={onSelectElement ?? (() => {})}
           theme={theme}
           nodeScale={nodeScale}
-          mode={mode}
           autoRotate={autoRotate}
         />
       </Canvas>

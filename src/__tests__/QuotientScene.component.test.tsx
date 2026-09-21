@@ -110,13 +110,43 @@ describe('商群画布：普通节点 + 正规子群凯莱图面板', () => {
     expect(Math.max(...xs)).toBeLessThan(geom.panel.x)
   })
 
-  it('平凡正规子群（N = {e}）不画面板（商群 ≅ G，面板无信息量）', () => {
+  it('平凡正规子群（N = {e}）不画面板，且图形按满幅居中（不为不存在的窗让位）', () => {
     const trivial = findAllSubgroups(s4).find(sg => sg.order === 1)!
     const q = computeQuotientGroup(s4, trivial)!
     const { container } = render(
       <SetView group={q} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,
     )
     expect(container.querySelector('[data-testid="quotient-subgroup-inset"]')).toBeNull()
+
+    // 让位宽度必须与「真的会画窗」绑定（2026-09-21 修）：N = {e} 时窗不画，网格就该
+    // 以整幅 viewBox 居中。修前 drawWidth 无条件取 insetGeom.drawWidth，图形被排到
+    // 左侧窄带里 —— 右侧留一条没有任何内容的空白带（真机实测 2000 宽画布：节点
+    // x 均值 819 vs 满幅中心 1000）。
+    const bandCenter = quotientInsetGeometry(vb).drawWidth / 2
+    const xs = [...container.querySelectorAll('circle[r="26"]')].map(n =>
+      Number(n.getAttribute('cx') ?? n.parentElement?.getAttribute('transform')?.match(/translate\((-?[\d.]+)/)?.[1] ?? NaN),
+    )
+    const meanX = xs.reduce((a, b) => a + b, 0) / xs.length
+    // 容差 8 而非 2：末行不满（24 = 5+5+5+5+4）会让重心比几何中心略偏左（实测 395）。
+    // 关键是它与「让位后的左带中心」（283）相差 > 100 单位，两者不会混淆。
+    expect(Math.abs(meanX - vb.width / 2)).toBeLessThan(8)
+    expect(Math.abs(meanX - bandCenter)).toBeGreaterThan(vb.width * 0.05)
+  })
+
+  it('包内 CayleyView 同口径：N = {e} 时同样不让位', () => {
+    const trivial = findAllSubgroups(s4).find(sg => sg.order === 1)!
+    const q = computeQuotientGroup(s4, trivial)!
+    const { container } = render(
+      <CayleyView group={q} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb} />,
+    )
+    expect(container.querySelector('[data-testid="quotient-subgroup-inset"]')).toBeNull()
+    const xs = [...container.querySelectorAll('g[transform^="translate"]')]
+      .filter(g => !(g.getAttribute('transform') ?? '').includes('scale'))
+      .map(g => Number(g.getAttribute('transform')!.match(/translate\((-?[\d.]+)/)?.[1] ?? NaN))
+      .filter(Number.isFinite)
+    expect(xs.length).toBe(24) // S₄/{e} ≅ S₄
+    const meanX = xs.reduce((a, b) => a + b, 0) / xs.length
+    expect(Math.abs(meanX - vb.width / 2)).toBeLessThan(8)
   })
 
   it('非商群不画面板', () => {

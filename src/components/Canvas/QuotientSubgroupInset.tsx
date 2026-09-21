@@ -42,7 +42,7 @@ const DEFAULT_WIN = { w: 360, h: 300 }
 const MIN_WIN = { w: 240, h: 180 }
 const MAX_WIN = { w: 720, h: 600 }
 
-interface QuotientSubgroupInsetProps {
+export interface QuotientSubgroupInsetProps {
   /** 商群（元素携带 cosetMemberLabels / cosetInternalLayout / cosetInternalEdges） */
   group: Group
   /** 恒等陪集节点在 **viewBox 坐标**中的位置（调用方按 canvasTransform 换算） */

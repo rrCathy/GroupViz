@@ -22,6 +22,7 @@ import {
   createGroupFromSymbol, buildActionComputation, getAvailableShapes3D, getAvailableShapesForView,
   wordLengthSphereActions, resolveElement,
   createAutomorphismGroup, getAutomorphismMap,
+  computeQuotientGroup, findAllSubgroups,
   type Group, type GroupElement, type Layout3D, type CayleyShape2D,
 } from '@groupviz/core'
 import {
@@ -823,6 +824,43 @@ function AutomorphismCard({ group }: { group: Group | null }) {
   )
 }
 
+// ── 商群画布（core 建商群 → react 双视图消费；商群画布形态随 2026-09-20 批次入包） ──
+// core 侧：findAllSubgroups 找一个真·正规子群 N（非平凡、非全群；单群如 A₅ 没有）
+//          → computeQuotientGroup(G, N) 得 G/N：元素标签 = gN 陪集记号、生成元按
+//          自身结构挑、N 的凯莱数据（成员/内部布局/内部边）挂在恒等陪集元素上。
+// react 侧：SetView / CayleyView 直接吃商群 —— 元素带 cosetMemberLabels 即画
+//          「正规子群 N 的凯莱图」悬浮窗（屏幕像素恒定尺寸，可拖动/收起/缩放），
+//          quotientInsetTitle 传宿主本地化标题。
+function QuotientCard({ group }: { group: Group | null }) {
+  const [view, setView] = useState<'cayley' | 'set'>('cayley')
+  const { sub, qg } = useMemo(() => {
+    if (!group) return { sub: null as null | ReturnType<typeof findAllSubgroups>[number], qg: null as Group | null }
+    const N = findAllSubgroups(group).find(s => s.isNormal && s.order > 1 && s.order < group.order) ?? null
+    return { sub: N, qg: N ? computeQuotientGroup(group, N) : null }
+  }, [group])
+  return (
+    <Card testid="pkg-quotient" title="商群 G/N ← @groupviz/react" tag="陪集节点 · N 悬浮窗（拖动/收起/缩放）"
+      controls={<>
+        <Ctl label="视图"><Seg value={view} onChange={setView} options={[{ value: 'cayley', label: '凯莱' }, { value: 'set', label: '集合' }]} testid="pkg-quotient-view" /></Ctl>
+        <span data-testid="pkg-quotient-tag" style={{ fontSize: 10, color: '#64748b' }}>
+          {group
+            ? (qg && sub ? `${qg.symbol} · 阶 ${qg.order}（N 阶 ${sub.order}）` : '无真·正规子群（单群），建不了商群')
+            : ''}
+        </span>
+      </>}>
+      {group && qg
+        ? <Frame h={430}>
+            {view === 'cayley'
+              ? <CayleyView group={qg} selectedElements={EMPTY_SEL} canvasTransform={CT} viewBoxSize={VB}
+                  quotientInsetTitle="正规子群 N 的凯莱图" />
+              : <SetView group={qg} selectedElements={EMPTY_SEL} canvasTransform={CT} viewBoxSize={VB}
+                  quotientInsetTitle="正规子群 N 的凯莱图" />}
+          </Frame>
+        : <EmptyHint />}
+    </Card>
+  )
+}
+
 // 页面级 runtime 哨兵：任何未捕获 pageerror/rejection 红字上抛（Playwright 亦可断言）
 function usePageErrors() {
   const [errs, setErrs] = useState<string[]>([])
@@ -920,6 +958,8 @@ export default function TestPagePkgConsume() {
 
         <AutomorphismCard group={group} />
 
+        <QuotientCard group={group} />
+
         <p style={{ fontSize: 11, color: '#64748b', marginTop: 16, maxWidth: 1000, lineHeight: 1.7 }}>
           覆盖：columns 极值 / nodeRadius 三档 / 标签开关（Set/Cycle/Cayley/Coset/Homo）/
           shape2D（按群动态枚举）+ multiplyType 左右乘 / table strategy 三档 + 热力图 + 大群告警 /
@@ -932,6 +972,9 @@ export default function TestPagePkgConsume() {
           自同构卡片：core `createAutomorphismGroup` + `getAutomorphismMap`；上半 = **Aut(G) 自身的凯莱图**（CayleyView 吃 Aut 群，形状按 `getAvailableShapesForView` 枚举，
           同构于 D₃/D₄ 时圆环呈「旋转外环 + 反射内环」双环）；下半 = `AutomorphismScene` 预览 α 对**父群**的作用（受控选中 = Aut 元素 id，与凯莱图联动），
           预览形态可在「窗中窗（SceneWindow 嵌套）/ 裸渲」间切 —— 壳与内核解耦的实证。
+          商群卡片：core `findAllSubgroups` 挑真·正规子群 + `computeQuotientGroup` 建商群 →
+          SetView/CayleyView 直接消费（陪集节点 `gN` 标签 + 「正规子群 N 的凯莱图」悬浮窗），
+          凯莱/集合两视图切换；单群（如 A₅）无真·正规子群时显示占位提示。
           改动包源码后先 npm run build:pkg。
         </p>
       </div>

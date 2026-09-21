@@ -142,3 +142,13 @@ describe('商群画布：普通节点 + 正规子群凯莱图面板', () => {
     expect(inset!.querySelectorAll('[data-testid="inset-edge"]').length).toBeGreaterThan(0)
   })
 })
+
+describe('商群入包：@groupviz/react 门面导出', () => {
+  it('QuotientSubgroupInset 组件与 props 类型随门面导出（宿主可直用悬浮窗）', async () => {
+    const pkg = await import('../package/react')
+    expect(typeof pkg.QuotientSubgroupInset).toBe('function')
+    // 顺带锁住视图 prop 仍在（消费端建商群 → 传标题即出窗的完整链路）
+    expect(pkg.SetView).toBeTruthy()
+    expect(pkg.CayleyView).toBeTruthy()
+  })
+})

@@ -25,6 +25,7 @@
 - **让位几何**（`core/viewBox.ts` 的 `quotientInsetGeometry`）：面板贴右、垂直居中，图形主体在左侧带内居中。位置初始化（`context/positionUtils`）与渲染端**必须用同一份几何** —— 否则预置位置会把图居中到整幅画布中央、被面板压住；
 - **形状**：商群符号 `G/N` 不带 D/C/S 前缀，符号链一律不适用 ⇒ 按**结构**给形状（circular 恒有；二面体结构追加 dualRing；循环且阶 > 7 追加 spiral/coil；cone 兜底；3D 给 cone/circular）。注意 app 层 `getCayleyShapeConfig` 必须与 core 的 `getAvailableShapes*` 同口径（曾因平行短路把商群盖成「只有圆形」）；
 - **布局**：`cayleyCircleLayout` 对商群与自同构群同一口径 —— 二面体结构摆旋转外环 + 反射内环双环，其余按生成元 BFS 幂序，不走 id 字典序（`ringOrder` 的 `qcoset-N` 数字序兜底）。
+- **入包（2026-09-21）**：core 的 `computeQuotientGroup` / `quotientInsetGeometry` 经 `@groupviz/core` 门面分发；react 门面导出 `QuotientSubgroupInset`（附属组件，`SetView`/`CayleyView` 内置出窗，宿主直用场景见 `docs/API.md` §4.13）；`/?test=1` 包消费矩阵有商群卡（core 建商群 → 双视图消费）。
 
 ## 3. 圆圈图 (CycleView.tsx)
 

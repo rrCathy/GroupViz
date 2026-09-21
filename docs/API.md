@@ -4,7 +4,7 @@
 > 面向主应用开发者 / 内嵌者；仓库内部实现细节见 [docs/VIEWS.md](VIEWS.md) · [docs/GROUPS.md](GROUPS.md) · [docs/CAYLEY.md](CAYLEY.md)。
 >
 > 口径：**Scene 是纯受控渲染内核**（不读应用级 context）；状态、hover 气泡、主题开关全部由宿主经 props 注入。
-> `@groupviz/react` 收录 **12 个 Scene**：11 个视图 Scene + 附属窗口功能 `AutomorphismScene`（tree / prestable 未 props 化，不入包 —— 二者与无限群方向相关，改由拓展包轨道承接）。
+> `@groupviz/react` 收录 **12 个 Scene**：11 个视图 Scene + 附属窗口功能 `AutomorphismScene`（tree / prestable 未 props 化，不入包 —— 二者与无限群方向相关，改由拓展包轨道承接）。另有附属组件 `QuotientSubgroupInset`（商群视图的「正规子群 N 凯莱图」悬浮窗，§4.13）。
 
 ---
 
@@ -147,7 +147,7 @@ const s = useSceneState(group?, options?)
 | `nodeRadius` / `gap` / `columns` | `number` | 自动 | 布局微调 |
 | `showLabels` | `boolean` | `true` | 常驻标签总开关 |
 | `largeGroupThreshold` | `number` | `60` | 群阶 > 该值时「仅选中节点显示常驻标签」 |
-| `quotientInsetTitle` | `string` | — | 商群视图右侧「正规子群 N 的凯莱图」面板标题（宿主本地化文案；缺省只画数学记号 `N` 与 `|N| = n`） |
+| `quotientInsetTitle` | `string` | — | 商群视图右侧「正规子群 N 的凯莱图」悬浮窗标题（宿主本地化文案；缺省只画数学记号 `N` 与 `|N| = n`）；商群消费流程见 §4.13 |
 | `theme` | `'dark' \| 'light'` | — | 不传 = 跟随外层 |
 
 ### 4.2 `CycleView`
@@ -181,7 +181,7 @@ const s = useSceneState(group?, options?)
 | `pathHighlight` | `CayleyPathHighlight \| null` | `null` | 路径高亮（VCL）：**缺省淡化其余边**（`dimOthers`，只留路径醒目）；`showOrder` 序号**悬停该节点时显示** |
 | `forceDirected` | `boolean` | `false` | 动态力导向**开关**（在**当前选定形状**之上把静图"激活"；**拖动一个节点只影响近旁**——1 跳邻居粘性跟随约 20–30%、其余 2–7%，松手轻微回稳；整体重排用 `force.settleSignal`） |
 | `force` | `CayleyForceParams` | — | 力导向微调：`repulsion` / `linkScale` / `gravity` / `damping` / **`stiffness`（刚度 0.4–3）** / `settleSignal`。**参数变化就地生效**（平滑过渡，不重建模拟器） |
-| `quotientInsetTitle` | `string` | — | 同 `SetView`：商群视图右侧「正规子群 N 的凯莱图」面板标题 |
+| `quotientInsetTitle` | `string` | — | 同 `SetView`：商群视图右侧「正规子群 N 的凯莱图」悬浮窗标题（商群消费流程见 §4.13） |
 | `theme` | `'dark' \| 'light'` | — | |
 
 #### `CayleyPathHighlight`（路径高亮）
@@ -415,6 +415,43 @@ export function Preview({ selected }: { selected: Set<string> }) {
 
 ---
 
+### 4.13 `QuotientSubgroupInset`（附属组件，商群消费）
+
+**非 Scene、不进 Scene 计数**：商群 `G/N` 视图的「正规子群 N 的凯莱图」悬浮窗（可拖动 / 收起成药丸 / 右下角手柄缩放）。`SetView` 与 `CayleyView` **已内置**——`group` 是商群（元素带 `cosetMemberLabels`）且传了 `quotientInsetTitle` 就自动出窗，多数宿主**不需要直用本组件**；直用场景 = 宿主自绘凯莱图想复用同一窗体。
+
+```tsx
+import { QuotientSubgroupInset } from '@groupviz/react'
+import { quotientInsetGeometry } from '@groupviz/core'
+
+<svg viewBox="0 0 2000 1500">
+  {/* ...宿主自绘的商群凯莱图... */}
+  <QuotientSubgroupInset
+    group={quotientGroup}          // computeQuotientGroup(G, N) 的返回值
+    anchor={{ x: idX, y: idY }}    // 恒等陪集节点位置（viewBox 坐标，指针线起点）
+    anchorRadius={nodeRadius}      // 节点半径（viewBox 单位）
+    geometry={quotientInsetGeometry({ width: 2000, height: 1500 })}
+    title="正规子群 N 的凯莱图"     // 宿主本地化标题；缺省只画记号 N
+  />
+</svg>
+```
+
+| prop | 类型 | 缺省 | 说明 |
+|---|---|---|---|
+| `group` | `Group` | — | **商群**（`computeQuotientGroup` 的返回值；恒等元素携带 `cosetMemberLabels` / `cosetInternalLayout` / `cosetInternalEdges` 三件套） |
+| `anchor` | `{ x, y }` | — | 恒等陪集节点位置（**viewBox 坐标**；窗体画出从它指向自己的虚线指针） |
+| `anchorRadius` | `number` | `0` | 锚点节点半径（viewBox 单位），用于把指针线起点推到节点边缘 |
+| `geometry` | `QuotientInsetGeometry` | — | `quotientInsetGeometry(viewBoxSize)` 的返回值（默认停靠点） |
+| `title` | `string` | — | 标题文案（宿主本地化；缺省只画数学记号 `N` 与 `\|N\| = n`） |
+
+要点：
+
+- **窗体以屏幕像素设计**（默认 360×300，缩放范围 240×180 ~ 720×600），经 `scale(k)` 落进 SVG —— 不随画布 viewBox 缩放变小。
+- **商群消费三步**（core → react）：`findAllSubgroups(G)` 挑真·正规子群 N（`isNormal && 1 < order < \|G\|`，单群没有）→ `computeQuotientGroup(G, N)` 得商群 → 商群直接喂 `SetView` / `CayleyView`（传 `quotientInsetTitle`）。
+- 商群元素标签是**陪集记号 `gN`**（两两不同），生成元按商群自身结构挑（`findMinimalGenerators`：阶从大到小 + 贪心扩张）——S₄/V₄ ≅ S₃ 会先选 3 阶旋转元，circular 形状呈双三角。
+- 窗体事件不穿透画布（拖动/点击不触发平移或取消选中）；位置与尺寸是**会话内状态**，不持久化。
+
+---
+
 ## 6. i18n
 
 ```tsx
@@ -456,6 +493,8 @@ import { I18nProvider, useTranslation } from '@groupviz/react'
 | `isIdentityScale` | `(scales: Map<string,number>) => boolean` | 倍率是否全为 1（渲染层判断是否需要跑松弛） |
 | `resolveCayleyPath` | `(group, actions, multiplyType, {elements?, word?, start?, closed?}) => ResolvedCayleyPath \| null` | **路径高亮解析**：元素序列 / 生成元单词 → 顶点序列 + 逐步连边（方向敏感） |
 | `getAutomorphismMap` | `(group) => Map<string, Automorphism> \| null` | Aut(G) 的「元素 id → 自同构」表（非自同构群 / 空输入 → `null`）；`AutomorphismScene` 与外部宿主共用，替代裸读 `_automorphismById` |
+| `computeQuotientGroup` | `(G, N) => Group \| null` | **商群 G/N 构造**：陪集即元素（标签 = `gN` 记号，两两不同），生成元按商群自身结构挑（`findMinimalGenerators`），恒等陪集携带 N 的凯莱数据三件套（`cosetMemberLabels` / `cosetInternalLayout` / `cosetInternalEdges`）；N 非正规返回 `null`。消费流程见 §4.13 |
+| `quotientInsetGeometry` | `(viewBoxSize) => QuotientInsetGeometry` | 商群视图「正规子群 N 凯莱图」悬浮窗的让位几何（默认停靠点 + `drawWidth`）——位置初始化与渲染端必须用同一份 |
 | `createCayleyForceSim` | `(group, actions, multiplyType, opts) => CayleyForceSim` | **动态力导向增量模拟器**：`step()` 逐帧推进、`pin/unpin` 拖拽钉住（低热度：拖拽只影响近旁）、`reheat()` 升温、**`setOptions(opts)` 就地更新力参数**（保留位置速度 + 温和升温 → 滑杆调节平滑过渡而非重建重排）；逐生成元弹簧静止长度 + `stiffness` 刚度 + `minSeparation` 最小间距硬约束（防纠缠）。⚠️ `pin()` **原地改写** `sim.positions` 里的对象——拖拽起点须自行快照 `{x,y}` |
 
 **字长球形状（S₄ / S₅，随包分发）** —— 相邻对换生成集按字长分层摆成**实心球**（S₄ 7 层 / S₅ 11 层；S₅ 为纬度分层 + 正根胞格向量初值 + 边距松弛，视图侧自动套一层半透明球壳）：

@@ -38,6 +38,13 @@ export type { SylowTorusSceneProps } from '../components/Canvas/SylowTorusScene'
 export { AutomorphismScene } from '../components/Canvas/AutomorphismScene'
 export type { AutomorphismSceneProps } from '../components/Canvas/AutomorphismScene'
 
+// ── 附属组件（非 Scene，不进 Scene 计数） ──────────────────────────────────────
+// QuotientSubgroupInset：商群视图右侧「正规子群 N 的凯莱图」悬浮窗（可拖动/收起/缩放）。
+// SetView / CayleyView 已内置（传 quotientInsetTitle 即出窗）；直用场景 = 宿主
+// 自绘凯莱图想复用同一窗体。配套几何 core 的 quotientInsetGeometry（viewBox.ts）。
+export { QuotientSubgroupInset } from '../components/Canvas/QuotientSubgroupInset'
+export type { QuotientSubgroupInsetProps } from '../components/Canvas/QuotientSubgroupInset'
+
 export { SceneWindow } from '../components/Canvas/SceneWindow'
 export type { SceneWindowProps, SceneWindowConfig, SceneWindowCaps, SceneWindowTheme } from '../components/Canvas/SceneWindow'
 

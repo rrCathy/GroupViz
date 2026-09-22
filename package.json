@@ -15,6 +15,7 @@
         "consume:types": "node scripts/pkg/consume-types.mjs",
         "consume:browser": "node scripts/pkg/browser-smoke.mjs",
         "lint": "eslint .",
+        "prepare": "git config core.hooksPath .githooks",
         "preview": "vite preview",
         "test": "vitest run",
         "test:watch": "vitest",

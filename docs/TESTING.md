@@ -7,7 +7,7 @@
 | `npm run test` | 运行全部测试（vitest run，node + dom 双项目） |
 | `npm run test:dom` | 仅运行 DOM 项目（组件/集成测试，happy-dom） |
 | `npm run test:watch` | 监听模式 |
-| `npm run test:coverage` | 覆盖率报告（v8，include: `src/core/**`、`src/utils/**`，reporters text + html → `coverage/`） |
+| `npm run test:coverage` | 覆盖率报告（v8，include: `src/core/**`、`src/utils/**`、`src/context/**`、`src/components/**`，reporters text + html → `coverage/`） |
 | `npm run typecheck` | TypeScript 全量类型检查（tsc -b，零输出 = 通过） |
 | `npm run test:e2e` | Playwright E2E（e2e/ 目录，自动拉起 dev server localhost:5173） |
 | `npx vitest run <file>` | 运行单个测试文件 |
@@ -15,18 +15,20 @@
 ## 2. 配置
 
 - **vitest.config.ts**：`test.projects` 双项目——
-  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，68 文件；`src/__tests__/helpers/*.ts` 为非测试辅助模块，不被收集）
+  - **node**：`environment: 'node'`、include `src/__tests__/**/*.test.ts`（纯计算逻辑，~70 文件；`src/__tests__/helpers/*.ts` 为非测试辅助模块，不被收集）
   - **dom**：`environment: 'happy-dom'`、include `src/__tests__/**/*.component.test.tsx` 与 `*.integration.test.tsx`、setupFiles `src/test/setup.ts`（jest-dom matchers + ResizeObserver/matchMedia stub）
   - 两项目共享 `globals: true`；临时探针文件必须用上述 dom 后缀才会被拾取
 - **临时探针约定**：性能/复杂度探针放 `src/__tests__/`（node 项目跑纯计算、dom 项目跑组件渲染），**用完必须删除**——残留文件会挡住 `tsc -b`（`npm run build` 一并失败）。探针结果一律 `appendFileSync` 落盘再从文件读，**不要靠 console 输出**（vitest stdout 会被截断）。三层性能极限的实测口径与方法见 [PERF.md](PERF.md) §6。
-- **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**']`、`reporter: ['text', 'html']`、`thresholds: { statements: 85, branches: 70, functions: 85, lines: 85 }`（基线 Stmts 58.74% → 现 89.79% stmts，lines 92.59%，branches 79.58%、funcs 93.19%；v2.1.0 实测）
+- **coverage**（顶层，对双项目生效）：`provider: 'v8'`、`include: ['src/core/**', 'src/utils/**', 'src/context/**', 'src/components/**']`、`reporter: ['text', 'html']`、**分层阈值**（per-glob，口径含子目录）：core/utils ≥ 85/70、context 防倒退线（~36/22/29/38）、components 防倒退线（~2/0/3/2）——低阈值不代表质量达标，作用是删测试或新代码裸奔时直接红；补测试后同步上调（2026-09-22 实测基线，见 vitest.config.ts）
 - **playwright.config.ts**：testDir `./e2e`、fullyParallel:false + workers:1（会话/localStorage 隔离靠串行）、viewport 1440×900、locale zh-CN、chromium 单浏览器、retries CI?2:0、trace on-first-retry、webServer `npm run dev -- --strictPort`（reuseExistingServer 本地复用）、`toHaveScreenshot { maxDiffPixelRatio: 0.02, animations: 'disabled' }`
 - TypeScript 测试源码（.ts/.tsx），import 项目内部模块直接使用（ESM；不要用 `require()`）；tsx 文件走 tsconfig jsx react-jsx
 - lint 忽略 `coverage/` 产物（eslint.config.js `globalIgnores(['dist', 'coverage'])`，`.gitignore` 含 `coverage`/`test-results`/`playwright-report`）
 
 ## 3. 测试文件清单
 
-### 3.1 node 项目（src/__tests__/**/*.test.ts，68 文件 / 1737 tests）
+> **快照说明**：本节清单与逐文件 test 数是历史快照，**不随每次提交更新**；精确文件数/测试数以 `npm run test` 实时输出与 `ls src/__tests__` 为准。文件数与 tests 总量一律写量级（~），不写精确值。
+
+### 3.1 node 项目（src/__tests__/**/*.test.ts，~70 文件）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -97,7 +99,7 @@
 | core/cosetStrip.test.ts | 9 | 陪集条带候选与数据（core/algebra/cosetStrip.ts）：listCosetStripSubgroups（代表元/指数/轨道/结构、C₃ 循环快通道、order>60 守卫）、findCosetStripSubgroup（按元素 id 精确恢复、换群失效 null）、cosetDataForSubgroup（由 H 直算左陪集 = H） |
 | quotientFixes.test.ts | 21 | **商群四项修复的回归锁（2026-09-20）**：元素标签 = `gN` 陪集记号（S₄/V₄ 六元素全以 N 结尾、无逗号/`\dots`、两两不同、`cosetMemberLabels` 保留）、`ringOrder` 对 `qcoset-N` 按数字排序（≥10 陪集不被字典序打乱）、商群可用形状（S₄/V₄ ≅ D₃ 给 dualRing、C₁₂/{e} 给 spiral/coil、3D 不再是空集）、`splitDihedralStructure` 结构判定、**app 层 `getCayleyShapeConfig` 与 core 逐值一致（防平行短路回归）**、**商群生成元按结构挑（S₄/V₄ ⇒ 阶 [3,2]，双三角的前提；继承撞色时调色板补位）**、**N 内部凯莱边 = N 自己的最小生成元（V₄ ⇒ 4 条）**、**悬浮窗换算 `computeInsetMetrics`（CTM 等比缩放 ≠ 宽度比 / origin 居中留白 / 无 CTM 退化 / 等比容器等价性 / 屏上尺寸回到设计值 —— 5 条锁「窗口被限高」不再回归）**、**商群 N 的把关与选取（非正规误标 `isNormal:true` 仍返回 null / `detectNormal` 开关 / `suggestQuotientSubgroup` 三策略含平凡边界 / 「suggest 结果必能建出商群」不变量 —— 4 条）** |
 
-### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，25 文件 / 246 tests）
+### 3.2 dom 项目（src/__tests__/**/*.component.test.tsx + *.integration.test.tsx，~25 文件）
 
 | 文件 | 数量 | 覆盖范围 |
 |------|-----|---------|
@@ -125,7 +127,7 @@
 | CosetStripWindowParams.component.test.tsx | 7 | FGVE 阶段 2 批次四陪集条带受控窗口（ViewWindow view=cosetstrip）：S₃ 默认 H=C₃ → [G:H]=2 两条带 × 6 节点且窗口缺省无标签/无凯莱圈、A₄ 首选 H=V₄ → 3 条带 + 子群下拉含共轭合并候选（V₄/C₃/C₂）、切换 H（C₃→C₂）条带 2→3 且受控载荷正确、hover 节点就地气泡（窗口缺省无标签，读元素靠气泡）、版本化持久化信封含 subgroup、坏 schema（cosetType 非法 / subgroup 非真子群键）回退默认 H、默认持久化键含视图名（cosetstrip 与 set 不碰撞） |
 | SylowScene.component.test.tsx | 12 | FGVE 阶段 2 批次八 sylow props 化（SylowScene，受控内核）：受控面——节点点击回 `onSelect(id, multi)`（ctrl/⌘ 置 multi）、缺省不传 onSelect/onHover 交互不抛错、`selectedElements` 命中节点走金色描边（`#ffd93d`）且仅命中者、进入/离开节点回调给元素与 null；主题与空态——缺省不注入 `data-theme`、`theme="light"` 注入作用域且内含 `svg.view-svg`、`group=null` 出真实中文空态（非裸 key）；三布局模式（由右侧 chip 点击切换，S₃ = 3 个 Sylow 2-子群）——缺省 circle（无条带无共轭箭头、统计行 `n_p=3`）、点 chip → coset（底部 `\|G\|=6 = 2·3` 的 Lagrange 行）、再 ctrl 点第二个 → two（`marker-end=url(#sylow-conj-arrow)` 共轭箭头 + P/Q 边 marker 就位）、再点同一 chip → 取消回 circle、工具栏 `p = 2 / p = 3` 切换后统计行随之变（Sylow 3-子群仅 1 个）；列表折叠 ▸/◀ 往返 |
 
-### 3.3 E2E（e2e/*.spec.ts，Playwright chromium，13 tests）
+### 3.3 E2E（e2e/*.spec.ts，Playwright chromium）
 
 | 文件 | 数量 | 覆盖路径 |
 |------|-----|---------|

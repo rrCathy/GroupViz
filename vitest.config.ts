@@ -4,13 +4,19 @@ export default defineConfig({
   test: {
     coverage: {
       provider: 'v8',
-      include: ['src/core/**', 'src/utils/**'],
+      // 全量四层纳入统计。阈值按 2026-09-22 实测基线分层（per-glob 口径含子目录，
+      // 比 text 报告的顶层目录行更严）：
+      //   core ~96 / utils ~87 / context ~36 / components ~2（% stmts，全目录）
+      // context/components 的低阈值是「防倒退线」——不代表质量达标，
+      // 作用是任何人删测试或新代码完全裸奔时 coverage 直接红；
+      // 后续补测试后应同步上调。
+      include: ['src/core/**', 'src/utils/**', 'src/context/**', 'src/components/**'],
       reporter: ['text', 'html'],
       thresholds: {
-        statements: 85,
-        branches: 70,
-        functions: 85,
-        lines: 85,
+        'src/core/**': { statements: 85, branches: 70, functions: 85, lines: 85 },
+        'src/utils/**': { statements: 85, branches: 70, functions: 85, lines: 85 },
+        'src/context/**': { statements: 34, branches: 22, functions: 29, lines: 36 },
+        'src/components/**': { statements: 2, branches: 0, functions: 3, lines: 2 },
       },
     },
     projects: [

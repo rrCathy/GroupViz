@@ -29,7 +29,7 @@
 
 **What makes it special:**
 - ✨ 13 visualization modes: Cayley graphs (2D/3D), multiplication tables, subgroup lattices, symmetry views, coset strips, orbit & Sylow views, and more
-- 🎨 18 3D shape templates & 14 2D layouts, auto-assigned from group properties
+- 🎨 20 3D shape templates & 14 2D layouts, auto-assigned from group properties
 - 🏗️ A full group construction system: direct & semidirect products, automorphism groups, quotient groups, homomorphisms, and presentations (⟨S|R⟩)
 - 🔄 Multi-view floating windows, dark/light themes, and 2D/3D **animated GIF** export
 - 🌍 Bilingual (English / 中文) interface, with session save & restore

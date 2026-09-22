@@ -17,7 +17,7 @@
 
 四条定案：
 
-1. **peerDependencies 硬约束**：拓展包对引擎只能用 `peerDeps`，绝不 `dependencies` 打包自己的 core——全应用必须只有一份 `@groupviz/core`，否则 Group 对象、类型判定、theme 跨实例断裂。`@groupviz/react` 自己就是这个模式（peerDeps core `^2.3.0`），拓展包照抄。
+1. **peerDependencies 硬约束**：拓展包对引擎只能用 `peerDeps`，绝不 `dependencies` 打包自己的 core——全应用必须只有一份 `@groupviz/core`，否则 Group 对象、类型判定、theme 跨实例断裂。`@groupviz/react` 自己就是这个模式（peerDeps core `^2.4.0`），拓展包照抄。
 2. **Group 开放接口是基石**：`Group` 是开放 interface（`src/core/types/group.ts`，必填 `name/symbol/order/elements/generators/multiply/inverse/identity/isAbelian`）。拓展包可**自带群实现**（矩阵群、点群、快速置换群），实现该接口即被引擎 13 视图零改动消费。
 3. **形态分三档，当前只做前两档**：① 组件型（导出视图组件，吃 Scene props / `useSceneState` / `theme` / `parseGroupNotation`）——现在就能做；② 数据型（导出群构造器、特征标数据、descriptor）——现在就能做；③ 插件型（`registerLayout`/`registerView` 注入引擎内部分发）——**引擎暂无 register API、exports 也只有根入口，不做预设计**；等 2~3 个拓展包出现共同需求再开孔。
 4. **版本与仓库**：peerDeps 写 `"^当前引擎 minor"`，跟随引擎小版本；引擎发 major 时各包适配后发版。仓库形态为**独立 npm 仓库**（依赖的是已发布的双包，无需主仓库源码）；主仓库不拆 monorepo（与 [ROADMAP.md](ROADMAP.md) §2.5 一致）。
@@ -111,7 +111,7 @@
 ## 7. 通用工程规范
 
 - **接口兼容门禁**：拓展包群实现必须 `implements` core 导出的 `Group` 类型，并复用 `publish:smoke` 思路做消费冒烟（真实 npm 安装 + SSR + 双 resolution 类型检查），防 core 升级接口漂移。
-- **package.json 骨架**：`peerDependencies: { "@groupviz/core": "^2.3.0", "@groupviz/react": "^2.3.0", "react": "^19.0.0" }`，`sideEffects: false`（CSS 文件除外）；版本号策略独立（`pkgVersion` 模式，成对同版约定不跨包）。
+- **package.json 骨架**：`peerDependencies: { "@groupviz/core": "^2.4.0", "@groupviz/react": "^2.4.0", "react": "^19.0.0" }`，`sideEffects: false`（CSS 文件除外）；版本号策略独立（`pkgVersion` 模式，成对同版约定不跨包）。
 - **性能豁免为零**：[PERF.md](PERF.md) 的边界（不做 Canvas/WebGL 重写、不做 Worker、不做虚拟列表）对拓展包同等生效。
 - **视觉精致度预期**：引擎布局对 registry 群的特判（Dₙ 双环、循环群环序等）不覆盖拓展包群，走 fallback 布局——功能可用，精致度打折属可接受边界。
 - **文档**：各包自带 README + 最小消费示例；主仓库 [AGENTS.md](../AGENTS.md) §2 收录导航行。

@@ -141,7 +141,7 @@ GroupViz/
 ### 里程碑速览(截至 v2.1.0,2026-09-10)
 
 - 🔄 **当前进行**:FGVE 引擎化收尾——**阶段 2 视图 props 化已收官(11/13,2026-09-16 sylow 入包)**;余 action 窗口 sylow/coset、CI 消费冒烟接入、exports 子路径;tree/prestable 两个无限群方向视图移交拓展包轨道(见 [docs/PLAN_EXTENSION_PACKS.md](docs/PLAN_EXTENSION_PACKS.md) §9);VCL 挂账(下一批次) —— 见 [docs/ROADMAP.md](docs/ROADMAP.md) §2。
-- ✅ **已完成**:近期功能夯实期(2026-08-23 收官)+ FGVE 阶段 2 视图 props 化(**11/13 收官**——2026-09-16 补 sylow 入包,余 tree/prestable 移交拓展包轨道)+ 阶段 3 双包 @groupviz/core / @groupviz/react **v2.0.0 npm 发布**(2026-09-09,发布门禁 publish:smoke)+ **v2.1.0 消费端卡点优化**(2026-09-10:元素引用按 label/id 解析、`useSceneState`/`SceneThemeRoot`/`SceneHoverBubble`、`theme` 统一、阈值可覆盖、`docs/API.md` 入包、i18n 免 Provider 兜底)。全量逐次记录见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+- ✅ **已完成**:近期功能夯实期(2026-08-23 收官)+ FGVE 阶段 2 视图 props 化(**11/13 收官**——2026-09-16 补 sylow 入包,余 tree/prestable 移交拓展包轨道)+ 阶段 3 双包 @groupviz/core / @groupviz/react **v2.0.0 npm 发布**(2026-09-09,发布门禁 publish:smoke)+ **v2.1.0 消费端卡点优化**(2026-09-10:元素引用按 label/id 解析、`useSceneState`/`SceneThemeRoot`/`SceneHoverBubble`、`theme` 统一、阈值可覆盖、`docs/API.md` 入包、i18n 免 Provider 兜底)+ **v2.4.0 npm 发布准备**(2026-09-22:自 2.3.0 起累积 Sylow 共轭纤维化 3D、自同构附属 Scene、商群入包(QuotientSubgroupInset + suggestQuotientSubgroup/detectNormal)、S₄ `torusHex` 环面镶嵌 ⇒ minor;版本号五处同步 + README 形状数 18→20 修正)。全量逐次记录见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 6. 运行命令
 

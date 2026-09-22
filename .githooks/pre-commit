@@ -9,11 +9,15 @@
 
 set -e
 
-STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM -- '*.ts' '*.tsx' | tr '\n' '\0')
+# 用临时文件中转：sh 的命令替换会丢弃 null 字节，多文件会粘连，
+# 故 -z 输出必须落盘再喂 xargs -0
+LIST=$(mktemp)
+trap 'rm -f "$LIST"' EXIT
+git diff --cached --name-only --diff-filter=ACM -z -- '*.ts' '*.tsx' > "$LIST"
 
-if [ -n "$STAGED_TS" ]; then
+if [ -s "$LIST" ]; then
   echo "[pre-commit] eslint 暂存的 TS 文件..."
-  printf '%s' "$STAGED_TS" | xargs -0 ./node_modules/.bin/eslint
+  xargs -0 ./node_modules/.bin/eslint < "$LIST"
 fi
 
 echo "[pre-commit] tsc -b 类型检查..."

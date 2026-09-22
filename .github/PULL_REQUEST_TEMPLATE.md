@@ -18,7 +18,7 @@
 ## Verification checklist
 
 - [ ] `npm run lint` — no errors
-- [ ] `npm run test` — all tests green (39 files, 1206 tests)
+- [ ] `npm run test` — all tests green (~95 files / ~2000 tests, node + dom)
 - [ ] `npm run test:coverage` — above thresholds (stmts/lines ≥ 85, functions ≥ 85, branches ≥ 70)
 - [ ] `npm run build` — production build passes
 - [ ] New pure-logic code covered by unit tests (core/algebra, core/groups)

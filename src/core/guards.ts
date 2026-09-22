@@ -15,7 +15,7 @@
  * |---|---|---|
  * | `INTERACTIVE_LIMIT` | 120 | 交互线：L2 成本 ÷ 16.7ms 帧预算。120 阶缩放 44–60 fps |
  * | `ENUMERATION_LIMIT` | 144 | 子群枚举 2 秒线：D72(144)=1.81s，168 阶 3.45s 超预算 |
- * | `STATIC_LIMIT` | 480 | 仅静态展示/出图（cycle 的 L1 上限；图形类静态 5.9 万节点仍 48 fps） |
+ * | `STATIC_LIMIT` | 240 | 图形类「过大」警告线：静态/出图可用、拖拽明显卡（更高阶由 limitOverride 放开） |
  * | `RENDER_3D_LIMIT` | 720 | 3D 是 canvas、DOM 恒定 71–85 节点，S₆(720) 缩放 20–43 fps |
  *
  * 「交互会卡」与「静态可看」是两条独立的线（docs/PERF.md §4），不要混用。

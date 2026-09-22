@@ -23,6 +23,7 @@
 
 | 文档 | 内容 |
 |------|------|
+| [TECHNICAL.md](TECHNICAL.md) | **技术总览 + 文档地图**（本仓文档体系入口）：项目定位与当前状态数字、技术栈、架构分层与依赖方向、关键设计决策（四条阈值线 / 群记号规则 / 窗口双形态）、目录结构、质量与发布门禁、docs 文档地图 |
 | [docs/TUTORIAL.md](docs/TUTORIAL.md) | 新手教程（中英双份：TUTORIAL.md / TUTORIAL_zh-CN.md）：快速上手三栏工作台、13 视图实操、群构建/同态/作用/Sylow、导出与多视图、控制速查、学习路径 |
 | [docs/GROUPS.md](docs/GROUPS.md) | 群实现：核心类型、群族表、直积/半直积/自同构、小群注册表、群工厂、代数函数、数学参考 |
 | [docs/CAYLEY.md](docs/CAYLEY.md) | Cayley 图系统：边计算、2D/3D 渲染、20 种 3D 形状模板、14 种 2D 形状布局 |

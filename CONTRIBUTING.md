@@ -33,9 +33,9 @@ If this is your first time inside the codebase, this is the recommended path:
 
 ```
 src/
-├── __tests__/        39 test files, 1206 tests (Vitest)
+├── __tests__/        ~95 test files / ~2000 tests (Vitest, node + dom projects)
 ├── components/
-│   ├── Canvas/       One component per view (SetView … PresentationTableView)
+│   ├── Canvas/       One component per view (SetView … PresentationTableView) + floatingView/ (window internals)
 │   ├── Panels/       Left-panel building blocks + constants (view modes, group families)
 │   ├── Tex.tsx       KaTeX rendering helper
 │   └── WelcomePage.tsx
@@ -43,10 +43,11 @@ src/
 │   ├── types.ts      Core types, palette, view-mode union (13 modes)
 │   ├── groups/       Group implementations (cyclic/dihedral/symmetric/…/small-group registry)
 │   ├── algebra/      Pure math: subgroups, cosets, homomorphisms, automorphisms,
-│   │                 cayleyEdges, actions, layouts (force/ring/3D/…), series, presentations
-│   ├── polyhedra.ts / elementRotation.ts / viewBox.ts
-├── context/          State: layered Providers + actions modules, aggregated via useGroup()
+│   │                 cayleyEdges, actions, layouts (force/ring/3D/…), series, presentations, notation
+│   ├── polyhedra.ts / elementRotation.ts / viewBox.ts / guards.ts
+├── context/          State: 12 layered domain Providers + actions modules, aggregated via useGroup()
 ├── utils/            texify, export (SVG/PNG/GIF), api, hybridCompute, groupFactory
+├── i18n/ theme/ hooks/ types/ package/  translations, theme tokens, shared hooks, engine-consume page
 ├── backend/          FastAPI service (order > 144 computation), pytest suite
 └── docs/             Technical documentation (see below)
 ```
@@ -56,11 +57,13 @@ src/
 Prerequisites: Node.js ≥ 18 (CI uses 22), npm ≥ 9. Python 3.12 only if you run the backend.
 
 ```bash
-npm install            # installs deps; postinstall fetches Playwright chromium
+npm install            # deps + Playwright chromium + pre-commit hook (prepare → core.hooksPath)
 npm run dev            # dev server → http://localhost:5173/
-npm run test           # all tests (vitest run)
-npm run test:coverage  # coverage (v8) with CI-enforced thresholds
+npm run test           # all tests (node + dom projects)
+npm run test:e2e       # Playwright e2e (chromium)
+npm run test:coverage  # coverage (v8) with per-glob layered thresholds
 npm run lint           # ESLint (typescript-eslint + react-hooks + react-refresh)
+npm run typecheck      # tsc -b
 npm run build          # tsc -b && vite build
 ```
 
@@ -85,7 +88,8 @@ npm run export
 3. **Develop** — follow the conventions below. Pure math must live in `core/` (algorithms) so unit tests can reach it; React components stay thin.
 4. **Self-test** — every change: `npm run lint` + `npm run test` (+ `npm run build` for type errors). Write or update tests for the code you touched.
 5. **Browser-verify** UI paths with Playwright: switch the affected views, exercise the new interaction, and watch `console` for warnings/errors (snapshots can be saved under the Playwright output directory).
-6. **Sync docs** — documentation is a first-class artifact in this repo. Any fact change (test counts, group families, view modes, new features) must be reflected in `docs/*.md` + README + AGENTS.md (grep the whole repo for the number, e.g. `1205` → `1206`). Add a row to `docs/CHANGELOG.md` for the session.
+6. **Sync docs** — documentation is a first-class artifact in this repo. Any fact change (group families, view modes, shape templates, new features) must be reflected in the owning `docs/*.md` file + README + AGENTS.md. **Counts are written as magnitudes** (`~95 files / ~2000 tests`) — never as exact numbers; the authoritative value is `npm run test` output at run time. Add a row to `docs/CHANGELOG.md` for the session.
+   *Tip*: the same fact must not be maintained in two files — the owning doc is authoritative, everything else links to it (`TECHNICAL.md` §7 maps them).
 7. **Commit** — use Conventional Commits: `<type>(<scope>): <topic>` (type: `feat` / `fix` / `chore` / `docs` / `test`; scope: `core` / `canvas` / `pkg` / `feedback` / `docs`, optional when repo-wide), with bullet points for fixes/additions/verification results. One logical change per commit.
 8. **Push & PR** — fill the PR template; CI runs lint/test/build + coverage thresholds + backend pytest automatically.
 
@@ -95,13 +99,13 @@ npm run export
 - **Math notation**: KaTeX everywhere (`texify()` + `<Tex>` / `renderTex()`), never raw Unicode superscripts for displayed math.
 - **State**: follow the Provider layering in [`docs/STATE.md`](docs/STATE.md); new state belongs in the matching domain Provider and is exposed via `useGroup()`.
 - **Styling**: global CSS custom properties (dark/light themes via tokens like `--accent-*`, `--btn-on-accent`); no Tailwind/CSS framework. Theme-dependent colors must use tokens, never hardcoded hex on accent buttons.
-- **Performance guards**: thresholds follow the three measured lines in `docs/PERF.md` (constants in `src/core/guards.ts`): interactive 120 / enumeration 144 / static 480; backend prefetch cache still triggers at order > 60; Cayley edge throttling; automorphism enumeration bail-out (> 30000 combos).
+- **Performance guards**: thresholds follow the measured lines in `docs/PERF.md` (constants in `src/core/guards.ts`): `INTERACTIVE_LIMIT` 120 / `ENUMERATION_LIMIT` 144 / `STATIC_LIMIT` 240 / `RENDER_3D_LIMIT` 720. Never write bare magic numbers in new code. Backend prefetch cache triggers at order > 60; Cayley edge throttling; automorphism enumeration bail-out (> 30000 combos).
 
 ## Testing conventions
 
-- Framework: Vitest (`globals: true`, node environment), 39 files / 1206 tests — the count is asserted in docs, keep it in sync.
-- `src/core/**` and `src/utils/**` are coverage-instrumented; **CI enforces thresholds**: statements/lines/functions ≥ 85%, branches ≥ 70% (see `vitest.config.ts`). Pure computation (algebra, groups) gets priority for new tests.
-- `tableGroups.audit.test.ts` lazily audits all 66 GAP-imported table groups (279 tests) — it exists to catch silent layout fallbacks, run it for any layout change.
+- Framework: Vitest, two projects (node + happy-dom), ~95 files / ~2000 tests. **Counts are magnitudes and never asserted exactly** — the live number comes from `npm run test`.
+- Coverage is instrumented across all four layers (`core` / `utils` / `context` / `components`) with **per-glob layered thresholds** in `vitest.config.ts`: `core`/`utils` are hard lines (≥ 85/70), `context`/`components` are anti-regression floors — raise them as tests are added. Pure computation (algebra, groups) gets priority for new tests.
+- `tableGroups.audit.test.ts` lazily audits all 66 GAP-imported table groups — it exists to catch silent layout fallbacks, run it for any layout change.
 - `i18n.test.ts` asserts zh/en key parity — any new `t()` key needs both languages.
 
 ## Documentation conventions
@@ -114,8 +118,8 @@ npm run export
 
 Consistency checks before finishing any doc change:
 
-- Test count: grep for `1206` in README/AGENTS/docs after changing test files.
-- Version: `package.json` ↔ `welcome.version` in `src/i18n/translations.ts` (zh + en) must match.
+- Counts: keep them as magnitudes everywhere (never exact); the authoritative value is `npm run test`.
+- Version: `package.json` ↔ `welcome.version` in `src/i18n/translations.ts` (zh + en) must match. A real release additionally syncs `package-lock.json` (3 spots), `docs/PLAN_EXTENSION_PACKS.md` peerDeps and derived numbers — see `TECHNICAL.md` §6 / skill `gv-release-gates`.
 - Windows tooling: PowerShell `Get/Set-Content` defaults to ANSI and corrupts UTF-8 Chinese text — use `[System.IO.File]` .NET APIs or a UTF-8 (no BOM) editor.
 - New contributions shouldn't bump the version unless a release is intended.
 
@@ -133,12 +137,14 @@ Issue templates, the PR template, and this protocol all point back at the same r
 1. **Scan** — static baseline (`lint` + `test` + `build` green), then Playwright over core paths (view switching, construction panels, session restore, exports) watching console errors; spot-check BOM, hardcoded versions, i18n key parity, doc-count grep.
 2. **Fix** — repair with regression tests; red-line changes pause for human review.
 3. **Sync** — update AGENTS.md / README / docs to match code facts.
-4. **Push** — commit with a Conventional Commits message and push; `main` deploys Pages, tags `v*` publish a release.
+4. **Push** — commit with a Conventional Commits message and push; `main` deploys Pages.
+5. **Publish (engine packages, when a release is intended)** — `npm run build:pkg` → `npm run publish:smoke` (9 gates) → `npm publish` (**core first** — react's peerDeps depend on it) → post-publish acceptance: `consume:compare` / `consume:registry` / `consume:types` / `consume:browser`. Run `npm whoami` first — the local `_authToken` can go stale.
 
 ## Pull request checklist
 
 - [ ] PR template filled in, including the risk self-assessment
 - [ ] lint / test / build green; coverage above thresholds
+- [ ] pre-commit hook passed (staged TS eslint + `tsc -b`, wired by `npm install`)
 - [ ] i18n keys zh + en
 - [ ] docs & counts synced
 - [ ] commit message follows repo style

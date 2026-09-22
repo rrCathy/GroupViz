@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { compute3DPositions } from '../core/algebra/layout3D'
 import { getSmallGroup, getSmallGroupBySymbol, getAllSmallGroups } from '../core/groups/SmallGroups'
+import { createGroupFromSymbol } from '../core/groups/groupFactory'
 import type { Group } from '../core/types'
 
 /** 注册表群按 order + symbol 子串定位（FACTORIES 顺序与 GAP 编号不完全一致） */
@@ -27,6 +28,21 @@ describe('compute3DPositions', () => {
     for (const p of pos) {
       expect(p).toBeDefined()
       expect(Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2])).toBe(true)
+    }
+  })
+
+  it('S₄ polyhedron layouts place all 24 elements at pairwise-distinct positions', () => {
+    // 回归：rhombicuboctahedron 的落位表曾有一项重复（[-0.5,1,-0.5] 出现两次、
+    // 缺 [-0.5,1,0.5]），两个元素重合 ⇒ 图上"少一个点"。数组长度类断言抓不到重合，
+    // 必须直接断言两两不同；此处一并罩住 S₄ 全部具名多面体形状。
+    const group = createGroupFromSymbol('S_{4}')
+    expect(group).toBeTruthy()
+    const shapes = ['truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3', 'torusHex'] as const
+    for (const shape of shapes) {
+      const pos = compute3DPositions(group!, shape)
+      expect(pos).toHaveLength(24)
+      const distinct = new Set(pos.map(p => p.map(v => v.toFixed(4)).join(',')))
+      expect(distinct.size, `${shape}: positions must be pairwise distinct`).toBe(24)
     }
   })
 

@@ -10,7 +10,9 @@ import {
   computeCayleyActionEdges, isIdentityScale, relaxEdgeLengths3D, resolveCayleyPath,
 } from '../../core/algebra/forceLayout'
 import type { Vec3 } from '../../core/algebra/layouts3D/shared'
-import { compute3DPositions } from '../../core/algebra/layout3D'
+import { compute3DPositions, LAYOUT_3D_RADIUS } from '../../core/algebra/layout3D'
+import { torusHexGeometry, torusHexMinDelta } from '../../core/algebra/layouts3D/torusHexLayout3D'
+import type { TorusHexGeometry } from '../../core/algebra/layouts3D/torusHexLayout3D'
 import { wordLengthColor } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
 import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
@@ -121,6 +123,8 @@ interface EdgeLineProps {
   showArrow?: boolean
   /** 贴球面弧边（wordLengthSphere 布局）：边沿球面拱起而非直弦穿球 */
   curved?: boolean
+  /** 贴环面曲面的弧边采样点（torusHex 布局）：给出时优先按曲面弧渲染 */
+  arcPoints?: THREE.Vector3[]
   /** 淡化（字长球布局的环边/非树边）：减细减淡，凸显主干场线 */
   dimmed?: boolean
 }
@@ -231,6 +235,95 @@ const GeodesicEdge = memo(function GeodesicEdge({ start, end, color, isHighlight
   )
 })
 
+/**
+ * 贴环面曲面的弧边（torusHex 专用）：沿平面坐标在周期格中的最短位移采样曲面，
+ * 让 36 条凯莱边落成 {6,3} 镶嵌的边（直弦会穿进管体、六边形读不出来）。
+ * 采样点由调用方按 core 的 torusHexGeometry 给出（场景绝对坐标）。
+ */
+const SurfaceArcEdge = memo(function SurfaceArcEdge({ points, color, isHighlighted, dimmed }: {
+  points: THREE.Vector3[]
+  color: string
+  isHighlighted: boolean
+  dimmed?: boolean
+}) {
+  const geometry = useMemo(() => {
+    if (points.length < 2) return null
+    const curve = new THREE.CatmullRomCurve3(points)
+    const thickness = isHighlighted ? 0.075 : dimmed ? 0.014 : 0.03
+    return new THREE.TubeGeometry(curve, Math.min(64, points.length * 4), thickness, 6, false)
+  }, [points, isHighlighted, dimmed])
+
+  useEffect(() => () => geometry?.dispose(), [geometry])
+
+  const matRef = useRef<THREE.MeshStandardMaterial>(null)
+  useEffect(() => {
+    const m = matRef.current
+    if (m && typeof m.needsUpdate !== 'undefined') m.needsUpdate = true
+  }, [dimmed])
+
+  if (!geometry) return null
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial
+        ref={matRef}
+        color={color}
+        emissive={color}
+        emissiveIntensity={isHighlighted ? 0.75 : dimmed ? 0.06 : 0.4}
+        roughness={0.35}
+        metalness={0.1}
+        transparent
+        opacity={isHighlighted ? 1 : dimmed ? 0.15 : 0.95}
+      />
+    </mesh>
+  )
+})
+
+/**
+ * 椭圆截面环面壳（torusHex 专用）：three 的 TorusGeometry 只支持正圆管截面，
+ * 而本形状把管截面径向压扁（密度更均匀，见 core/torusHexLayout3D 的说明）。
+ */
+const TorusHexShell = memo(function TorusHexShell({ geometry, dark }: { geometry: TorusHexGeometry; dark: boolean }) {
+  const geo = useMemo(() => {
+    const NU = 96, NV = 48
+    const position: number[] = []
+    const index: number[] = []
+    for (let i = 0; i <= NU; i++) {
+      for (let j = 0; j <= NV; j++) {
+        const p = geometry.surfacePointAB(i / NU, j / NV, 0)
+        position.push(p[0], p[1], p[2])
+      }
+    }
+    for (let i = 0; i < NU; i++) {
+      for (let j = 0; j < NV; j++) {
+        const a = i * (NV + 1) + j
+        const b = (i + 1) * (NV + 1) + j
+        index.push(a, b, a + 1, b, b + 1, a + 1)
+      }
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(position, 3))
+    g.setIndex(index)
+    g.computeVertexNormals()
+    return g
+  }, [geometry])
+
+  useEffect(() => () => geo.dispose(), [geo])
+
+  return (
+    <mesh geometry={geo} renderOrder={-1}>
+      <meshStandardMaterial
+        color={dark ? '#6f9bff' : '#4f7fd6'}
+        transparent
+        opacity={0.08}
+        depthWrite={false}
+        roughness={0.9}
+        metalness={0}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  )
+})
+
 // 直线边箭头锥：仅小群渲染（避免大群 draw call 爆炸）；与 2D 约定一致，双向边不画箭头
 const ArrowCone = memo(function ArrowCone({ position, direction, color, isHighlighted, dimmed }: {
   position: THREE.Vector3
@@ -266,7 +359,7 @@ const ArrowCone = memo(function ArrowCone({ position, direction, color, isHighli
   )
 })
 
-const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSelfLoop, isBidirectional, showArrow, curved, dimmed }: EdgeLineProps) {
+const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSelfLoop, isBidirectional, showArrow, curved, arcPoints, dimmed }: EdgeLineProps) {
   if (isSelfLoop) {
     return (
       <group position={start}>
@@ -280,6 +373,11 @@ const EdgeLine = memo(function EdgeLine({ start, end, color, isHighlighted, isSe
         </mesh>
       </group>
     )
+  }
+
+  // 贴环面曲面弧边：torusHex 布局（全为无向边，不画箭头）
+  if (arcPoints && arcPoints.length >= 2) {
+    return <SurfaceArcEdge points={arcPoints} color={color} isHighlighted={isHighlighted} dimmed={dimmed} />
   }
 
   // 贴球面弧边：字长球等球面布局专用（全为无向边，不画箭头）
@@ -719,6 +817,81 @@ function Cayley3DSceneBody({
     return m
   }, [group])
 
+  // ── 环面全六边形镶嵌（torusHex）：环面壳 + 12 片六边形面片 + 贴曲面弧边 ──
+  // 曲面几何取自 core（唯一真源），尺度必须与 compute3DPositions 同用 LAYOUT_3D_RADIUS，
+  // 否则节点会浮在曲面外/内。
+  const torusHex = useMemo(
+    () => (layout3D === 'torusHex' ? torusHexGeometry(group, LAYOUT_3D_RADIUS) : null),
+    [group, layout3D],
+  )
+
+  const torusHexPatches = useMemo(() => {
+    if (!torusHex) return [] as { key: string; geometry: THREE.BufferGeometry; color: string; elementIds: string[] }[]
+    const { planar, surfacePoint, surfaceNormal } = torusHex
+    const out: { key: string; geometry: THREE.BufferGeometry; color: string; elementIds: string[] }[] = []
+    torusHex.hexagons.forEach((hex, hi) => {
+      const first = planar.get(hex[0])
+      if (!first) return
+      // 解包：其余 5 个顶点取相对首顶点的最近周期像，保证六边形在平面上连通
+      const pts: [number, number][] = hex.map(id => {
+        const p = planar.get(id)
+        if (!p) return [first[0], first[1]] as [number, number]
+        const d = torusHexMinDelta(first, p)
+        return [first[0] + d[0], first[1] + d[1]] as [number, number]
+      })
+      const center: [number, number] = [
+        pts.reduce((s, p) => s + p[0], 0) / pts.length,
+        pts.reduce((s, p) => s + p[1], 0) / pts.length,
+      ]
+      const pos: number[] = []
+      const nor: number[] = []
+      const mid = (a: [number, number], b: [number, number]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+      // 重心细分（深度 3）让面片贴着曲面弯，而不是一块平板切进管体
+      const tri = (a: [number, number], b: [number, number], c: [number, number], depth: number) => {
+        if (depth === 0) {
+          for (const p of [a, b, c]) {
+            const q = surfacePoint(p[0], p[1], 0.012)
+            const n = surfaceNormal(p[0], p[1])
+            pos.push(q[0], q[1], q[2])
+            nor.push(n[0], n[1], n[2])
+          }
+          return
+        }
+        const m1 = mid(a, b), m2 = mid(b, c), m3 = mid(c, a)
+        tri(a, m1, m3, depth - 1)
+        tri(m1, b, m2, depth - 1)
+        tri(m3, m2, c, depth - 1)
+        tri(m1, m2, m3, depth - 1)
+      }
+      for (let t = 0; t < 6; t++) tri(center, pts[t], pts[(t + 1) % 6], 3)
+      const geo = new THREE.BufferGeometry()
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3))
+      const color = `hsl(${Math.round((hi / torusHex.hexagons.length) * 360)}, 72%, 55%)`
+      out.push({ key: `torushex-face-${hi}`, geometry: geo, color, elementIds: hex })
+    })
+    return out
+  }, [torusHex])
+
+  useEffect(() => {
+    return () => {
+      for (const p of torusHexPatches) p.geometry.dispose()
+    }
+  }, [torusHexPatches])
+
+  // 悬停/选中元素所属的 3 个六边形 → 高亮，其余压暗；无悬停时 12 片统一半透明常显
+  const activeTorusHex = useMemo(() => {
+    const s = new Set<string>()
+    if (!torusHex) return s
+    const add = (id: string | null | undefined) => {
+      if (!id) return
+      for (const i of torusHex.hexagonsOf.get(id) ?? []) s.add(`torushex-face-${i}`)
+    }
+    add(effectiveHover?.id)
+    for (const id of selectedElements) add(id)
+    return s
+  }, [torusHex, effectiveHover, selectedElements])
+
   const faceOpacity = faceFill?.enabled === false ? 0 : (faceFill?.opacity ?? 0.45)
   // 子群陪集面：几何上成面的陪集 → 半透明凸多边形 mesh（fan 三角化，双面渲染）
   const faceMeshes = useMemo(() => {
@@ -806,6 +979,26 @@ function Cayley3DSceneBody({
     }
     return m
   }, [cayleyEdges, positions, group, isLargeGroup, visibleElementIds, elementLookup])
+
+  // 环面弧边采样表（torusHex）：按「元素对 → 曲面采样点」缓存，避免每次悬停重建 TubeGeometry
+  const torusHexArcs = useMemo(() => {
+    const m = new Map<string, THREE.Vector3[]>()
+    if (!torusHex) return m
+    for (const edge of edgeDataMap.values()) {
+      const p = torusHex.planar.get(edge.fromId)
+      const q = torusHex.planar.get(edge.toId)
+      if (!p || !q) continue
+      const d = torusHexMinDelta(p, q)
+      const segs = 12
+      const pts: THREE.Vector3[] = []
+      for (let t = 0; t <= segs; t++) {
+        const s = torusHex.surfacePoint(p[0] + (d[0] * t) / segs, p[1] + (d[1] * t) / segs, 0)
+        pts.push(new THREE.Vector3(s[0], s[1], s[2]))
+      }
+      m.set(`${edge.fromId}|${edge.toId}`, pts)
+    }
+    return m
+  }, [torusHex, edgeDataMap])
 
   // ── 路径高亮（VCL）：与 2D 同一套解析（resolveCayleyPath）；3D 线段用 drei Line（像素宽）、
   //    节点环用半透明球壳、序号徽标用 Html ──
@@ -958,6 +1151,9 @@ function Cayley3DSceneBody({
         </mesh>
       )}
 
+      {/* 环面壳（torusHex）：给出"这是一个环面"的整体参照，depthWrite=false 不遮挡内部边/面 */}
+      {torusHex && <TorusHexShell geometry={torusHex} dark={theme === 'dark'} />}
+
       <Html fullscreen position={[0, 0, 0]} style={{ pointerEvents: 'none' }} wrapperClass="gv-html-fullscreen">
         <div style={{
           position: 'absolute', top: 10, right: 10,
@@ -1030,6 +1226,27 @@ function Cayley3DSceneBody({
         </mesh>
       ))}
 
+      {/* 12 片六边形面片（torusHex）：常显半透明；悬停/选中时所属的 3 片点亮、其余压暗 */}
+      {torusHexPatches.map(p => {
+        const active = activeTorusHex.has(p.key)
+        const dimmed = activeTorusHex.size > 0 && !active
+        return (
+          <mesh key={p.key} geometry={p.geometry} renderOrder={-2}>
+            <meshStandardMaterial
+              color={p.color}
+              emissive={p.color}
+              emissiveIntensity={active ? 0.85 : 0.12}
+              transparent
+              opacity={active ? 0.78 : dimmed ? 0.06 : 0.26}
+              depthWrite={false}
+              roughness={0.75}
+              metalness={0}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        )
+      })}
+
       {Array.from(edgeDataMap.values()).map((edge) => {
         const fromEl = elementLookup.get(edge.fromId)
         const toEl = elementLookup.get(edge.toId)
@@ -1040,6 +1257,7 @@ function Cayley3DSceneBody({
         )
         // 路径高亮时：非路径边淡化（只留路径上的边醒目）
         const dimmed = !!pathEdgeKeys && !pathEdgeKeys.has(`${edge.fromId}|${edge.toId}|${edge.gen.name}`)
+        const arcPoints = torusHexArcs.get(`${edge.fromId}|${edge.toId}`)
         return (
           <EdgeLine
             key={`edge-${edge.fromIdx}-${edge.toIdx}`}
@@ -1049,8 +1267,9 @@ function Cayley3DSceneBody({
             isHighlighted={isHighlighted}
             isSelfLoop={edge.isSelfLoop}
             isBidirectional={edge.isBidirectional}
-            showArrow={!isLargeGroup}
+            showArrow={!isLargeGroup && !arcPoints}
             curved={false}
+            arcPoints={arcPoints}
             dimmed={dimmed}
           />
         )

@@ -302,6 +302,9 @@ export function getAvailableShapes3D(group: Group): Layout3D[] {
     shapes.push('circular', 'truncatedCube', 'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3')
     // 字长球：相邻对换生成集按字长分层的同心球壳（Sₙ one-line 置换群可用）
     shapes.push('wordLengthSphere')
+    // 星形对换 {(12),(13),(14)} 的凯莱图 = 星图 ST₄，24 顶点 36 边 12 六边形的
+    // 环面全六边形镶嵌（周期格 60° 菱形，见 layouts3D/torusHexLayout3D）
+    shapes.push('torusHex')
   } else if (sym === 'S_{5}' || sym === 'S5' || sym === 'S₅') {
     // S₅（120 阶）：除圆环外提供字长球（相邻对换 (12)(23)(34)(45)，字长=逆序数）
     shapes.push('circular', 'wordLengthSphere')

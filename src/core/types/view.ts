@@ -6,7 +6,7 @@ export const LAYOUTS_3D = [
   'cone', 'circular', 'dihedral', 'cylinder', 'torus', 'tetrahedron', 'cube', 'hexagon',
   'cuboctahedron', 'lattice', 'semidirectCylinder', 'truncatedTetrahedron', 'truncatedCube',
   'rhombicuboctahedron', 'truncatedOctahedron2', 'truncatedOctahedron3', 'truncatedIcosahedron',
-  'truncatedDodecahedron', 'hypercube', 'wordLengthSphere',
+  'truncatedDodecahedron', 'hypercube', 'wordLengthSphere', 'torusHex',
 ] as const
 
 export type Layout3D = typeof LAYOUTS_3D[number]

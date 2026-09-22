@@ -16,10 +16,17 @@ import {
   truncatedDodecahedronLayout3D,
 } from './layouts3D/archimedeanLayouts3D'
 import { wordLengthSphereLayout3D } from './layouts3D/wordLengthSphereLayout3D'
+import { torusHexLayout3D } from './layouts3D/torusHexLayout3D'
+
+/**
+ * 3D 布局的统一尺度：所有 *Layout3D 都以它为半径参数。
+ * 曲面类布局（torusHex 等）在场景里取几何时必须用同一值，否则节点与曲面错位。
+ */
+export const LAYOUT_3D_RADIUS = 5
 
 export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
   const n = group.order
-  const radius = 5
+  const radius = LAYOUT_3D_RADIUS
   const positions: Vec3[] = new Array(n)
 
   let placed: Vec3[] | null = null
@@ -44,6 +51,7 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
     case 'truncatedIcosahedron': placed = truncatedIcosahedronLayout3D(group, radius); break
     case 'truncatedDodecahedron': placed = truncatedDodecahedronLayout3D(group, radius); break
     case 'wordLengthSphere': placed = wordLengthSphereLayout3D(group, radius); break
+    case 'torusHex': placed = torusHexLayout3D(group, radius); break
     default:
       for (let i = 0; i < n; i++) positions[i] = fibonacciSphere(n, radius)[i]
       break

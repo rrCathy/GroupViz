@@ -2,6 +2,7 @@ import type { Group, ViewMode, CayleyAction, Layout3D } from '../core/types'
 import { COLOR_PALETTE, getDefaultLayout3D, getAvailableShapes3D, getDefaultShape2D, getAvailableShapesForView, type CayleyShape2D } from '../core/types'
 import type { CayleyActionParam } from '../core/types/viewConfig'
 import { wordLengthSphereActions } from '../core/algebra/layouts3D/wordLengthSphereLayout3D'
+import { TORUS_HEX_STAR_GENERATORS } from '../core/algebra/layouts3D/torusHexLayout3D'
 import { resolveElementWarn } from '../utils/elementRef'
 
 export function getInitialCayleyActions(group: Group): CayleyAction[] {
@@ -74,6 +75,12 @@ export function getSpecialCayleyActions(group: Group, shape: Layout3D): CayleyAc
   const sym = group.symbol
 
   if (sym === 'S_{4}') {
+    if (shape === 'torusHex') {
+      // 环面全六边形镶嵌：作用边必须是星形对换 {(12),(13),(14)}（唯一真源在 core）
+      return TORUS_HEX_STAR_GENERATORS.map((elementId, i) => ({
+        elementId, enabled: true, color: COLOR_PALETTE[i % COLOR_PALETTE.length],
+      }))
+    }
     if (shape === 'rhombicuboctahedron') {
       return [
         { elementId: '4,1,2,3', enabled: true, color: COLOR_PALETTE[0] },
@@ -138,6 +145,7 @@ export function addAllCayleyActionsHelper(
       return new Set(wordLengthSphereActions(group)?.map(a => a.elementId) ?? [])
     }
     if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') {
+      if (cayleyShape3D === 'torusHex') return new Set(TORUS_HEX_STAR_GENERATORS)
       if (cayleyShape3D === 'rhombicuboctahedron') return new Set(['4,1,2,3', '3,1,2,4'])
       if (cayleyShape3D === 'truncatedOctahedron2') return new Set(['2,3,4,1', '2,1,3,4'])
       if (cayleyShape3D === 'truncatedCube') return new Set(['1,4,2,3', '2,1,3,4'])

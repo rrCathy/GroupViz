@@ -9,6 +9,7 @@ import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
 import type { SeriesType } from '../../core/algebra/series'
 import { getSymmetryType } from '../../core/symmetryType'
 import { wordLengthSphereActions } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
+import { TORUS_HEX_STAR_GENERATORS } from '../../core/algebra/layouts3D/torusHexLayout3D'
 
 export function ViewPanel() {
   const {
@@ -71,6 +72,7 @@ export function ViewPanel() {
     }
     const sym = currentGroup.symbol
     if (sym === 'S_{4}' || sym === 'S4' || sym === 'S₄') {
+      if (cayleyShape3D === 'torusHex') return [...TORUS_HEX_STAR_GENERATORS]
       if (cayleyShape3D === 'rhombicuboctahedron') return ['4,1,2,3', '3,1,2,4']
       if (cayleyShape3D === 'truncatedOctahedron2') return ['2,3,4,1', '2,1,3,4']
       if (cayleyShape3D === 'truncatedCube') return ['1,4,2,3', '2,1,3,4']

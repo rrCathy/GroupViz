@@ -314,6 +314,8 @@ const s = useSceneState(group?, options?)
 
 **字长球（`layout3D: 'wordLengthSphere'`，S₄/S₅）**：必须把 `actions` 传成**相邻对换生成集**（core 的 `wordLengthSphereActions(group)`），否则缺省生成元不是相邻对换、字长分层不成立。用法与导出一览见 §7 末「字长球形状」。
 
+**环面全六边形镶嵌（`layout3D: 'torusHex'`，S₄）**：必须把 `actions` 传成**星形对换 `(12)(13)(14)`**（core 的 `TORUS_HEX_STAR_GENERATORS`）——这三个生成元的凯莱图（= 星图 ST₄，24 顶点 36 边）才有"12 个六边形面、每顶点属 3 面"的环面镶嵌；换成相邻对换得到的是截角八面体（8 六边形 + 6 正方形）而不是环面。消费端也可直接用 `torusHexGeometry(group, radius)` 拿曲面参数化 `surfacePoint` / `surfaceNormal`（画自定义装饰时用）。
+
 ### 4.10 `SublatticeScene`
 
 | prop | 类型 | 缺省 | 说明 |
@@ -509,6 +511,16 @@ import { I18nProvider, useTranslation } from '@groupviz/react'
 | `wordLengthOf` | `(el) => number \| null` | 元素字长（相邻对换集下 = one-line 置换的**逆序数**） |
 | `wordLengthColor` | `(group, el) => string \| null` | 字长色阶（205° 青蓝 → 330° 品红），同层同色 |
 | `findAdjacentTranspositionGenerators` | `(group) => GroupElement[] \| null` | one-line 置换群的 n−1 个相邻对换（纯结构检测，Sₙ 结构不符返回 `null`） |
+
+**环面全六边形镶嵌形状（S₄，随包分发）** —— 星形对换 (12)(13)(14) 的凯莱图 = 星图 ST₄（24 顶点 / 36 边 / girth 6），在环面上铺成 **12 个六边形面**（三个 S₃ 子群的 12 个右陪集）；周期格是 60° 菱形 ⟨(3√3,3),(0,6)⟩。视图侧自动套半透明环面壳 + 12 片贴曲面面片 + 沿曲面弧边，悬停/选中元素时点亮其所属的 3 片：
+
+| 导出 | 签名 | 说明 |
+|---|---|---|
+| `TORUS_HEX_STAR_GENERATORS` | `readonly string[]` | **该形状的标准作用边** = 星形对换 id `['2,1,3,4','3,2,1,4','4,2,3,1']`（视图侧 `getSpecialCayleyActions` 也用它，单一真源） |
+| `torusHexLayout3D` | `(group, radius) => Vec3[] \| null` | 布局本体（`compute3DPositions(group,'torusHex')` 内部调用）；非一行记法置换的 S₄ 返回 `null`（回退球面） |
+| `torusHexGeometry` | `(group, radius) => TorusHexGeometry \| null` | 曲面几何：`bigR` / `tubeR` / `planar`（元素 id → 平面坐标）/ `hexagons`（12 × 6 元素 id 环序）/ `hexagonsOf` / `surfacePoint(x,y,off)` / `surfaceNormal(x,y)` |
+| `torusHexPlanarCoords` / `torusHexHexagons` | `(group) => Map<string,[number,number]> \| null` / `string[][] \| null` | 落位与面（结构校验不通过返回 `null`） |
+| `torusHexMinDelta` | `(from, to) => [number, number]` | 环面上的最短平面位移（mod 周期格），画弧边/面片解包用 |
 
 ```tsx
 import { createGroupFromSymbol, getAvailableShapes3D, wordLengthSphereActions } from '@groupviz/core'

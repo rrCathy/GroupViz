@@ -182,6 +182,16 @@ const s = useSceneState(group?, options?)
 | `forceDirected` | `boolean` | `false` | 动态力导向**开关**（在**当前选定形状**之上把静图"激活"；**拖动一个节点只影响近旁**——1 跳邻居粘性跟随约 20–30%、其余 2–7%，松手轻微回稳；整体重排用 `force.settleSignal`） |
 | `force` | `CayleyForceParams` | — | 力导向微调：`repulsion` / `linkScale` / `gravity` / `damping` / **`stiffness`（刚度 0.4–3）** / `settleSignal`。**参数变化就地生效**（平滑过渡，不重建模拟器） |
 | `quotientInsetTitle` | `string` | — | 同 `SetView`：商群视图右侧「正规子群 N 的凯莱图」悬浮窗标题（商群消费流程见 §4.13） |
+| `nodeColorMode` | `'none' \| 'conjugacy'` | `'none'` | **VCL F1** 节点着色：按共轭类分色（core `conjugacyClassIndexMap`）。交换群退化为单元素类（每元素各一色），数学事实非 bug |
+| `showOrderBadge` | `boolean` | `false` | **VCL F2** 节点角标标元素阶（core `elementOrderMap`） |
+| `highlightGenerated` | `boolean` | `false` | **VCL F3** 选中元素 → 高亮其循环子群 ⟨g⟩（成员外圈 + 组内边加粗，联动 selection） |
+| `markCenter` | `boolean` | `false` | **VCL F4** 中心 Z(G) 成员画双实线环（交换群 = 全体，正是「群交换」的正确读数；core `centerElementIds`） |
+| `markNormalSubgroup` | `boolean` | `false` | **VCL F4** 最小非平凡正规子群 N 成员画虚线外环（与商群悬浮窗默认取的 N 同群；单群/大群无标记；core `smallestNormalSubgroupIds`） |
+| `printPalette` | `boolean` | `false` | **VCL E3** 打印/黑白/色盲友好：全体生成元同色，靠线型（实/虚交替）与线宽区分；逐生成元 `dash` 可显式覆盖 |
+| `edgeWidthScale` | `number` | `1` | **VCL E4** 边线宽总倍率（0.4–3，与逐生成元 `lengthScale` 正交：后者管长度） |
+| `showArrows` | `boolean` | `true` | **VCL E4** 是否画方向箭头（关掉 = 纯线，适合路径图/黑白打印） |
+| `showLegend` | `boolean` | `false` | **VCL E2** 生成元图例（色块 + 记号 + 线型预览；点击色块行切换该生成元边显隐） |
+| `actions[].dash` | `boolean` | `false` | **VCL E3** 该生成元边用虚线 |
 | `theme` | `'dark' \| 'light'` | — | |
 
 #### `CayleyPathHighlight`（路径高亮）
@@ -307,6 +317,11 @@ const s = useSceneState(group?, options?)
 | `locked` | `boolean` | `false` | |
 | `subsetHighlights` | `{elementIds,color}[]` | — | |
 | `faceFill` | `Cayley3DFaceFillParams` | — | 子群陪集面填充 |
+| `shell` | `boolean` | `true` | **VCL B1** 字长球半透明球壳（仅 `layout3D:'wordLengthSphere'` 生效；`false` 关掉只剩节点云，便于叠加纬度环/截图去壳） |
+| `layerRings` | `boolean` | `false` | **VCL B2** 字长球纬度层环（每字长层一圈参考纬线，强化分层读数；默认关——凯莱图里多余线条易被读成边） |
+| `relayoutNonce` | `number` | `0` | **VCL B3** 「重新优化布局」触发器：自增即再松弛 N 轮（不改形状语义，只让边长/边距更均匀；同 nonce 结果一致） |
+| `nodeColorMode` | `'none' \| 'conjugacy'` | `'none'` | **VCL F1** 节点着色：按共轭类分色（覆盖默认逐元素彩虹 / 字长色阶）；core `conjugacyClassIndexMap` |
+| `showOrderBadge` | `boolean` | `false` | **VCL F2** 节点标签下挂元素阶徽标（core `elementOrderMap`） |
 | `pathHighlight` | `CayleyPathHighlight \| null` | `null` | **路径高亮（VCL）**：元素序列 / 生成元单词（core `resolveCayleyPath` 解析，与 2D 同语义）；drei `Line` 线段 + 节点环 + 逐步点亮；**缺省淡化其余边**（`dimOthers`）、`showOrder` 序号**悬停该节点时显示** |
 | `hoveredElementId` | `string \| null` | `null` | 受控悬停（与 2D 对称）：命中元素按悬停态渲染（放大 + 标签 + 路径序号），供图例/侧栏联动 |
 | `theme` | `'dark' \| 'light'` | `'dark'` | |

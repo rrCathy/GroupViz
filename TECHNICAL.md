@@ -81,9 +81,14 @@ package 产物  dist-pkg/@groupviz/core（纯算法，唯一依赖 zod）+ @grou
    | `STATIC_LIMIT` | 240 | 图形类「过大」警告线：静态/出图可用、拖拽卡 |
    | `RENDER_3D_LIMIT` | 720 | 3D 视图上限（DOM 恒定，1 个 canvas） |
 
-4. **窗口双形态并存**：老式 context 壳（`FloatingViewWindow`，独立 canvasTransform 与 z 序）与
+4. **窗口双形态并存（正融合，见 PLAN_WINDOW_FRAMEWORK.md）**：老式 context 壳（`FloatingViewWindow`，独立 canvasTransform 与 nodePositions）与
    受控内核（`ViewWindow`，config/viewParams 可受控）；实体在 `Canvas/floatingView/`
-   （7 hook + 2 子组件 + 支撑模块），对外仅 3 个符号（`ViewWindow` / `FloatingViewWindow` / `ViewParams`）。
+   （8 hook + 2 子组件 + 支撑模块），对外仅 3 个符号（`ViewWindow` / `FloatingViewWindow` / `ViewParams`）。
+   **窗口几何已先统一**（W-1，2026-09-25）：两套壳共用 `useWindowDragResize` + `geometry.clampResize`
+   与同一个 z 计数器，故老式壳也有 8 向 resize 手柄；**内容与面板正在统一**（W-3）：应用浮窗的
+   `set`/`cayley` 已改走内核 `ViewContent` 并挂上 `ViewParamsPanel`（⚙ 按 `KERNEL_VIEWS` 门控，未迁
+   视图不给入口，否则是死控件），其余 11 视图仍走 `lazyViews.renderViewContent` 自绘件（W-4 续迁）。
+   仍在分叉的是**状态归属**：老式壳共享主画布选中与生成元，内核全窗口本地。
 5. **商群 / 自同构 / 半直积是一等群构造**（与 Sₙ/Cₙ 同级）——有独立的创建入口、持久化与视图。
 6. **文档单一权威**：`docs/CHANGELOG.md` = 已完成历史的唯一权威；`docs/ROADMAP.md` = 只列
    未做事项与边界决策；`docs/API.md` = 引擎消费契约。同一事实不在两处维护。
@@ -164,12 +169,13 @@ GroupViz/
 | [docs/PERF.md](docs/PERF.md) | 性能基准：三层极限实测、瓶颈判别实验、阈值线由来 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | **已完成历史的唯一权威**（逐次开发记录） |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | **只列未做事项与边界决策** |
-| [docs/PLAN_VIEW_CONTROL_LAYER.md](docs/PLAN_VIEW_CONTROL_LAYER.md) | 视图控制层（VCL）规划 |
+| [docs/PLAN_WINDOW_FRAMEWORK.md](docs/PLAN_WINDOW_FRAMEWORK.md) | 视图窗口框架融合方案（老式壳 / FGVE 内核 / 包侧壳 三壳合一） |
+| [docs/PLAN_VIEW_CONTROL_LAYER.md](docs/PLAN_VIEW_CONTROL_LAYER.md) | 视图控制层（VCL）：§3 能力清单 + §4 施工方案 |
 | [docs/PLAN_EXTENSION_PACKS.md](docs/PLAN_EXTENSION_PACKS.md) | 拓展包规划（对称群族 / 表示论 / 伽罗瓦） |
 | [feedback/README.md](feedback/README.md) | 引擎缺陷反馈收件箱（本地、不入库）与处理 SOP |
 
 ## 8. 待办入口
 
 - 未做事项与边界决策：[docs/ROADMAP.md](docs/ROADMAP.md)
-- 中期方向：特征标表、GAP 后端完善、视图控制层（VCL）扩展
+- 中期方向：特征标表、GAP 后端完善、视图控制层（VCL）扩展（进行中：Phase 0 三件地基 = Decorations / FigurePreset / 注册表面板，见 ROADMAP §2.7）
 - 远期：拓展包（对称群族与点群 / 表示论深化 / 伽罗瓦对应）与 GVL 教学实验室

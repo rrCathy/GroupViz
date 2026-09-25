@@ -90,6 +90,41 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 - 虚拟列表 / 窗口化 —— 绘制量不是瓶颈，只增加状态复杂度。
 - 继续按群阶加硬编码特判 —— 现有特判已多，性能阈值不再进这个列表。
 
+### 2.7 视图控制层（VCL）—— 🔄 进行中
+
+> 定位与全量规划见 [PLAN_VIEW_CONTROL_LAYER.md](PLAN_VIEW_CONTROL_LAYER.md)（§1 定位与边界 · §2 四子系统 · §3 能力清单（唯一真源，含 Tier A/B/C 池）· §4 Phase 0 施工方案 · §5 决策记录 · §6 参考实现吸收台账）。目标 B「个性化编排一张教学/博客插图」，介于 FGVE 引擎化与 GVL 之间。
+
+**已完成**（2026-09-11 ~ 09-12 两批 + 2026-09-23 第三批，仅 FGVE 窗口 + 包 props 路径）：
+
+- 边几何：2D `edgeCurvature`（0=笔直）、逐生成元 `lengthScale`（2D/3D 各一套松弛）、动态力导向开关。
+- 路径高亮：`pathHighlight`（2D/3D 共用 `core.resolveCayleyPath`，含 `dimOthers`/动画/悬停序号）。
+- 语义装饰 F 组：共轭类着色、阶徽标、⟨g⟩ 闭包高亮、中心/正规子群标记（2D+3D）。
+- 边样式与图例 E 组：`showLegend`、`printPalette`+逐生成元虚线、`edgeWidthScale`、`showArrows`。
+- 3D B 组：`shell` 字长球壳、`layerRings` 纬度环、`relayoutNonce` 重新优化布局。
+
+**下一批（Phase 0 三件地基，2026-09-24 用户拍板开工）**：`Decorations` 协议（图上注释）· `FigurePreset` + `useFigurePreset`（插图级预设）· 注册表驱动 ⚙ 面板。分刀顺序与验收见 PLAN §4.5。
+
+**边界（2026-09-24 定）**：
+
+- **主画布不接 VCL 控件**（原「甲组 A1/A2」取消）：主画布定位 = 新视图/新形状的**先行试验田**，不承担插图编排职责；VCL 只在 FGVE 窗口 + 包 props 路径生效。
+- **2D 面/陪集填充否决**：2D 图已承载节点/标签/多层边/路径高亮/语义装饰外圈，再加面填充只会更乱；陪集语义由商群悬浮窗 + 3D `faceFill` 承载。
+- **池中待议**（用户「其他到时候再说」）：caption/尺寸预设/TikZ、hover 字段清单、揭示模式、标签方案切换、布局位置入预设、分层选择器、图质量读数、预设库/深链、导出烘焙、Steps 分镜、多窗口联动选中。
+
+### 2.8 视图窗口框架（三壳合一）—— 📋 方案待批
+
+> 方案见 [PLAN_WINDOW_FRAMEWORK.md](PLAN_WINDOW_FRAMEWORK.md)。起因（2026-09-24 用户）：「把主画布里的悬浮多窗和 FGVE 里的窗口处理一下，要么切割，要么融合，**我倾向于融合**，弄一个通用框架，两边都能调用。」
+
+- **现状**：三套壳并存——应用老式壳 `FloatingViewWindow`（context 壳，**无 ⚙ 面板、无持久化**）、FGVE 受控内核 `ViewWindow`（全套 ⚙ + 注释 + 持久化，只在 `?test=2` 与包消费端可见）、包消费端壳 `SceneWindow`（caps 裁剪，零 context）。⇒ 今天 VCL 的全部控件在**应用里点不到**（PLAN_VIEW_CONTROL_LAYER §4.2）。
+- **已交付**：
+  - **W-0（2026-09-24）窗口内导出**——`ViewWindow` 标题栏 ⤓ 按钮（2D → 自包含 SVG，含注释与 KaTeX 样式；3D/对称性 → PNG）；序列化抽为零依赖模块 `utils/exportSvg.ts`（`export.ts` 改为 re-export）。真机验收：导出 `图-2-凯莱图.svg` 含注释图层，脱离本项目独立渲染正常。
+  - **W-1（2026-09-25）窗口几何统一**——老式壳改用共享 `useWindowDragResize` + `clampResize` + 同一 z 计数器，拿到 **8 向 resize**；顺带修掉共享 hook「rAF 吞最后一帧 ⇒ 松手不到位」的真 bug；补老式壳行为基线测试 9 条（此前零覆盖）。
+  - **W-2（2026-09-25）窗口几何持久化**——老式壳接入 `useViewWindowPersist`（键 `gv-vw-fv-<view>`；不用 `fv-${Date.now()}` 因为每次都变），真机验收「拖到 (350,240)/590×460 → 刷新重开逐位还原」。
+  - **W-2b（2026-09-25）重置入口**——`ViewPanel` 多视图区加「重置窗口位置」按钮（此前 `resetAllViewWindows()` 全仓无调用方、用户点不到），真机验收「拖到 (360,250) → 点重置 → 回 (140,110)」。
+  - **W-3（2026-09-25）内容与面板统一（set/cayley）**——应用浮窗改走内核 `ViewContent` 并挂上 `ViewParamsPanel`（⚙ 按视图门控，未迁视图不给入口），`ViewContent` 增 `appWindowLabels`（应用浮窗保持常驻标签）；**应用浮窗第一次能改参数、能加注释**。真机验收：调半径 28→40 画面变、阶徽标 0→12 段文本、注释叠层 1 条、与 `?test=2` 内核窗口**归一化节点布局指纹逐字符相同**（节点 12/边 20 一致）。
+  - **W-4（2026-09-25）余下 6 个视图迁完**——`KERNEL_VIEWS` 扩到 **8 个**（set/cayley/cycle/table/3d/symmetry/sublattice/cosetstrip）；真机扫场：8 个视图内容与 ⚙ 面板段头全对、`sylow` 按门控无 ⚙、**9 视图 0 JS 错误**；顺带修掉"ne 角手柄吃掉标题栏 ×/⚙ 点击"的交互 bug（两套壳同改）。仍未迁：`sylow`（`ViewContent` 尚无该分支）、`tree`/`prestable`（无限群方向视图，交拓展包轨道）、`action`/`homomorphism`（应用多视图入口打不开）。
+  - **W-5（2026-09-25）收口**——删掉 `lazyViews` 里已死的 8 个分支与 `CayleyGraphViewLocal`/`TableZoomable`/`CosetStripWindowView` 三件自绘/包装件（**505 → 136 行**），只留 sylow/tree/prestable/action/homomorphism；真机 9 视图扫场与收口前**逐项相同**，对外消费方零改动。至此"两套壳"只剩**状态归属**差异（应用浮窗共享主画布选中与生成元，内核全窗口本地）。
+- **待批**：三个语义取舍（浮窗**选中 / 生成元**是否继续与主画布联动——现两套壳行为相反）+ 后续分刀（W-3 内容分发与 ⚙ 面板**同时**迁 → W-4 余下视图 → W-5 删旧件 → 可选 W-6 包侧 `SceneWindow`）。
+
 ## 3. 远期：GVL 教学实验室（2027-04 → 2027-12）
 
 **GVL**（Group Visualization Lab）：面向大学抽象代数课程的教学产品形态，消费 FGVE 双包（§3.8）。
@@ -144,4 +179,6 @@ GVL 阶段消费 FGVE 双包（宿主即 GVL 自身 / 学校课程页面）；�
 | 2026-09-10 | **消费端 API 加固定案（v2.1.0）**：以外部博客嵌入实测卡点为输入，确立「**元素引用类 props 一律接受 label/id/value 并在内部解析**」（未命中 warn 一次 + 忽略，不抛错）、「**主题统一为 `theme?: 'dark' \| 'light'`**（经 `SceneThemeRoot` 注入 `data-theme`，未传=零变化）」、「相机门控改 `lockCameraOnAction` 默认 **false**（默认不再锁死）」三条约定；全部改动**附加式**（未传=旧行为）故走 2.x minor；发布门禁强化为 react→core 具名导出一致性 + 消费端钉死宿主已解析 react/three 版本 |
 | 2026-09-16 | **阶段 2 视图 props 化收官（11/13）**：sylow 入包（第 11 个 Scene `SylowScene`，三布局模式 circle/coset/two + `--sylow-*` 主题变量走 CSS 变量，故主画布壳零行为变化）；**tree / prestable 不再 props 化**，移交拓展包轨道——理由是与无限群方向绑定、当前无消费需求（见 §2.2 与 [PLAN_EXTENSION_PACKS.md](PLAN_EXTENSION_PACKS.md) §9）。VCL 仍挂账，待 sylow 之后另行推进 |
 | 2026-09-19 | **附属窗口功能入包形态定案**：13 视图之外的「自同构作用预览」props 化为 `AutomorphismScene`（`@groupviz/react` 第 12 个 Scene）。形态 = **内容内核 + 宿主 `SceneWindow` 嵌套预览窗**（用户当日定：「在 view window 里面嵌套一个窗口就行」）——内核零 context / 零 `window`、不含窗口 chrome，窗口能力（拖拽 / resize / 持久化 / 关闭）由通用壳提供，主应用浮层与包消费端共用同一份实现。后续同类附属窗口功能循此形态 |
+| 2026-09-24 | **VCL 两条边界 + Phase 0 开工**：① **主画布不接 VCL 控件**——用户定「主画布一般是我搞新视图、新形状时拿来先行测试用的」，故主画布是先行试验田、不承担插图编排，VCL 只在 FGVE 窗口 + 包 props 生效；② **2D 面/陪集填充否决**——用户定「2D 已经够乱了，还要面填充，那更乱了」，陪集语义留给商群悬浮窗 + 3D `faceFill`；③ 下一批 = Phase 0 三件地基（`Decorations` / `FigurePreset` / 注册表驱动面板），方案见 [PLAN_VIEW_CONTROL_LAYER.md](PLAN_VIEW_CONTROL_LAYER.md) §4（VCL 由挂账转进行中，ROADMAP 落位 §2.7）。同日该 PLAN 文档重构：§8 发散池 + §9 实施状态合并为 **§3 能力清单唯一真源**（带状态列），已完成历史交回 CHANGELOG |
+| 2026-09-24 | **窗口内导出获批 + 窗口框架融合立项**：① 导出按「给 FGVE 窗口加导出按钮」实施（用户原话「就按你的」）——`ViewWindow` 标题栏 ⤓，2D 出自包含 SVG（含注释 + KaTeX 样式内联 + 字体 CDN 改写）、3D/对称性出 PNG；序列化抽 `utils/exportSvg.ts` 零依赖模块。② 用户定「主画布悬浮多窗与 FGVE 窗口**融合**成通用框架，两边都能调用」（否决切割），方案落 [PLAN_WINDOW_FRAMEWORK.md](PLAN_WINDOW_FRAMEWORK.md) + ROADMAP §2.8，待批三个语义取舍 |
 

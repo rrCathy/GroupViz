@@ -37,7 +37,7 @@
 - **矩阵群构造器**：F_q 域运算（q = p^k，域元素表）→ GL(n,q)、SL(n,q)、PSL(n,q)、AGL(1,q)。矩阵乘法 O(n³)，天然绕开 core 置换群 `findPermIndex` 的 O(n!) 痛点（[ROADMAP.md](ROADMAP.md) §2.6 已列修复，修复前矩阵族不受影响）。
 - **三维点群（皇冠，优先做）**：32 晶体学点群（Schönflies 记号，天然 3×3 正交矩阵实现）+ stereogram 极射赤面投影视图 + 多面体对称作用（直接衔接引擎 `polyhedra.ts` 现成的立方体/四面体/二十面体顶点与 3D 管线）。阶数多数 ≤48、最大 I_h=120，**全部落在交互天花板内，性能最安全**。本模块即欢迎页预告 DLC（点群）的**提前兑现**（[ROADMAP.md](ROADMAP.md) §3.7 原排 GVL 远期）。
 - **大阶置换群**：快速 Sₙ 实现（`elements` id 建 Map 索引，multiply O(1)，对应 core §2.6 `findPermIndex` 修复思路）解锁 S₆–S₈ 静态可用。**孵化器模式**：实现先在拓展包 A/B 验证，成熟后下沉 core 发 minor。
-- **族专属视图**：字长球（参考 [PLAN_VIEW_CONTROL_LAYER.md](PLAN_VIEW_CONTROL_LAYER.md) §10 S₅ 单文件实现）、共轭类几何。
+- **族专属视图**：字长球（参考 [PLAN_VIEW_CONTROL_LAYER.md](PLAN_VIEW_CONTROL_LAYER.md) §6 参考实现吸收台账 · S₅ 单文件实现）、共轭类几何。
 
 ### 3.2 性能对照（天花板见 [PERF.md](PERF.md)：交互 120–240 阶 / 子群枚举 144 阶）
 

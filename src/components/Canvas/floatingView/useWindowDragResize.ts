@@ -50,30 +50,51 @@ export function useWindowDragResize({
 
   // Window drag/resize — rAF-throttled so it stays smooth even on slow frames.
   const windowMoveRaf = useRef<number>(0)
+  // 最近一次鼠标位置：松手时用它补上被节流吞掉的那一帧（见 onUp）
+  const lastMove = useRef<{ x: number; y: number } | null>(null)
   useEffect(() => {
+    const applyMove = (clientX: number, clientY: number) => {
+      const dx = clientX - dragRef.current.sx
+      const dy = clientY - dragRef.current.sy
+      if (resizing) {
+        const rdx = clientX - resizeRef.current.sx
+        const rdy = clientY - resizeRef.current.sy
+        setGeometry(clampResize(resizing, resizeRef.current.geo, rdx, rdy, tableMinSize ?? undefined))
+      } else if (dragging) {
+        setGeometry(prev => ({
+          ...prev,
+          position: {
+            x: Math.max(0, dragRef.current.px + dx),
+            y: Math.max(0, dragRef.current.py + dy),
+          }
+        }))
+      }
+    }
+
     const onMove = (e: MouseEvent) => {
       if (!dragging && !resizing) return
+      lastMove.current = { x: e.clientX, y: e.clientY }
       if (windowMoveRaf.current) return
       windowMoveRaf.current = requestAnimationFrame(() => {
         windowMoveRaf.current = 0
-        const dx = e.clientX - dragRef.current.sx
-        const dy = e.clientY - dragRef.current.sy
-        if (resizing) {
-          const rdx = e.clientX - resizeRef.current.sx
-          const rdy = e.clientY - resizeRef.current.sy
-          setGeometry(clampResize(resizing, resizeRef.current.geo, rdx, rdy, tableMinSize ?? undefined))
-        } else if (dragging) {
-          setGeometry(prev => ({
-            ...prev,
-            position: {
-              x: Math.max(0, dragRef.current.px + dx),
-              y: Math.max(0, dragRef.current.py + dy),
-            }
-          }))
-        }
+        const p = lastMove.current
+        if (p) applyMove(p.x, p.y)
       })
     }
-    const onUp = () => { setDragging(false); setResizing(null) }
+    const onUp = () => {
+      // 松手前先把挂起的那一帧补上：mousemove 与 mouseup 可能落在**同一帧**
+      //（快速拖拽 / 脚本化拖拽），直接清状态会让 cleanup 取消 rAF,
+      // 窗口停在上一次渲染的位置——用户看到"松手没到位"。
+      if (windowMoveRaf.current) {
+        cancelAnimationFrame(windowMoveRaf.current)
+        windowMoveRaf.current = 0
+        const p = lastMove.current
+        if (p) applyMove(p.x, p.y)
+      }
+      lastMove.current = null
+      setDragging(false)
+      setResizing(null)
+    }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {

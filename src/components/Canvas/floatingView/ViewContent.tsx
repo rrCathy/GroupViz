@@ -2,11 +2,13 @@
 // 受控窗口的 renderContent：按 view 分发到各视图内核（Scene 直挂 / 组件传 props）。
 import type { Group, Homomorphism, ViewMode, GroupElement, CanvasTransform, GroupActionComputation, GroupActionKind } from '../../../core/types'
 import type { ViewWindowConfig, SetViewParams, CayleyViewParams, Cayley3DViewParams, CycleViewParams, TableViewParams, SublatticeViewParams, CosetStripViewParams, SymmetryViewParams, HomomorphismViewParams, ActionViewParams } from '../../../core/types/viewConfig'
+import type { Decorations } from '../../../core/types/decorations'
 import type { CosetStripSubgroupOption } from '../../../core/algebra/cosetStrip'
 import { getDefaultShape2D } from '../../../core/types'
 import { verifyHomomorphism } from '../../../core/algebra/homomorphisms'
 import { arrowListAdd, arrowListBind, arrowListRemove, arrowListReplaceGen } from '../../../core/algebra/actions'
 import { computeCosetElementMap, computeCosetColors } from '../../../context/cosetActions'
+import { normalizeCayleyActions, toggleCayleyActionReducer } from '../../../context/cayleyActions'
 import { SetView, type SetViewProps } from '../SetView'
 import { CycleView } from '../CycleView'
 import { TableView } from '../TableView'
@@ -52,6 +54,13 @@ export interface ViewContentProps {
   setActionSel: React.Dispatch<React.SetStateAction<number | null>>
   setActionHoverId: React.Dispatch<React.SetStateAction<string | null>>
   updateViewParams: (p: import('./types').ViewParamsPatch) => void
+  /** VCL Decorations（DEC-2）：图上注释；缺省空集 */
+  decorations?: Decorations
+  /**
+   * 主应用浮窗（老式壳）路径：这些视图显示常驻节点标签。
+   * 缺省 false = FGVE 内核/博客插图口径（隐藏标签、读元素靠悬停气泡）。目前只有 cayley 有这条分叉。
+   */
+  appWindowLabels?: boolean
 }
 
 export function ViewContent({
@@ -60,7 +69,7 @@ export function ViewContent({
   csElementMap, csColors, csHighlight, csSubgroup, csOpts, cosetStripVp,
   actionComputation, actionKind, actionVp, actionEdit, actionSel, actionHoverId,
   handleSelect, handleHover, setSymHintText, setTableLayoutSize,
-  setActionEdit, setActionSel, setActionHoverId, updateViewParams,
+  setActionEdit, setActionSel, setActionHoverId, updateViewParams, decorations, appWindowLabels = false,
 }: ViewContentProps) {
     if (view === 'homomorphism') {
       if (!homomorphism) {
@@ -99,7 +108,7 @@ export function ViewContent({
           multiplyType={cvp.multiplyType}
           actions={cvp.actions}
           nodeRadius={cvp.nodeRadius}
-          showLabels={false}
+          showLabels={appWindowLabels}
           locked={config.locked}
           onSelect={handleSelect}
           onHover={handleHover}
@@ -108,6 +117,21 @@ export function ViewContent({
           pathHighlight={cvp.pathHighlight ?? null}
           forceDirected={cvp.forceDirected}
           force={cvp.force}
+          // ── VCL E/F 组（2D 凯莱图）──
+          edgeWidthScale={cvp.edgeWidthScale}
+          showArrows={cvp.showArrows}
+          printPalette={cvp.printPalette}
+          showLegend={cvp.showLegend}
+          onToggleAction={id => updateViewParams({
+            actions: toggleCayleyActionReducer(normalizeCayleyActions(group, cvp.actions), id),
+          })}
+          nodeColorMode={cvp.nodeColorMode}
+          showOrderBadge={cvp.showOrderBadge}
+          highlightGenerated={cvp.highlightGenerated}
+          markCenter={cvp.markCenter}
+          markNormalSubgroup={cvp.markNormalSubgroup}
+          // ── VCL Decorations（DEC-2）：注释叠层 ──
+          decorations={decorations ?? null}
         />
       )
     }
@@ -130,6 +154,12 @@ export function ViewContent({
           locked={config.locked}
           faceFill={p3.faceFill}
           pathHighlight={p3.pathHighlight ?? null}
+          // ── VCL B/F 组（3D 凯莱图）──
+          shell={p3.shell}
+          layerRings={p3.layerRings}
+          relayoutNonce={p3.relayoutNonce}
+          nodeColorMode={p3.nodeColorMode}
+          showOrderBadge={p3.showOrderBadge}
         />
       )
     }
@@ -145,7 +175,7 @@ export function ViewContent({
           viewBoxSize={vbSize}
           showMaximalCycles={cyvp.showMaximalCycles}
           nodeRadius={cyvp.nodeRadius}
-          showLabels={false}
+          showLabels={appWindowLabels}
           showCycleLabels={cyvp.showCycleLabels}
           locked={config.locked}
           onSelect={handleSelect}
@@ -222,7 +252,7 @@ export function ViewContent({
           cosetElementMap={csElementMap}
           cosetColors={csColors}
           cosetHighlightSet={csHighlight}
-          showLabels={cosetStripVp.showLabels ?? false}
+          showLabels={cosetStripVp.showLabels ?? appWindowLabels}
           showSubgroupCayley={cosetStripVp.showSubgroupCayley ?? false}
           noCosetsText={csOpts.length === 0 ? COSETSTRIP_NO_LOCAL_SUBGROUPS : undefined}
           onSelect={handleSelect}

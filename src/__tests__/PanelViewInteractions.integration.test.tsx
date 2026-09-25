@@ -6,6 +6,7 @@ import { GroupProvider, GroupContext } from '../context/GroupContext'
 import { shouldKeepSelectionOnViewChange } from '../context/core/GroupCoreContext'
 import { createGroupFromSymbol } from '../core/groups/groupFactory'
 import { RightPanel } from '../components/Panels/RightPanel'
+import { LeftPanel } from '../components/Panels/LeftPanel'
 import type { ViewMode } from '../core/types'
 
 const ELEMENT_VIEWS: ViewMode[] = ['set', 'cayley', 'cycle', 'table', '3d']
@@ -160,5 +161,52 @@ describe('RightPanel 子群列表与视图切换', () => {
       expect(order).toMatch(/^\d+$/)
       expect(info.length, `|H|=${order} 的列表项：${info}`).toBeLessThan(60)
     }
+  })
+})
+
+describe('多视图窗口位置重置入口（resetAllViewWindows 的触发点）', () => {
+  beforeEach(() => localStorage.clear())
+
+  // ViewPanel 挂在 LeftPanel（不是 RightPanel），所以这个 describe 单独挂左侧面板
+  const setupLeft = () => {
+    const r = render(
+      <I18nProvider>
+        <GroupProvider>
+          <Harness />
+          <LeftPanel />
+        </GroupProvider>
+      </I18nProvider>,
+    )
+    fireEvent.click(screen.getByTestId('load'))
+    return r
+  }
+
+  const multiViewCheckbox = () => Array.from(document.querySelectorAll('label.panel-checkbox'))
+    .find(l => /多视图|Multi/.test(l.textContent ?? ''))?.querySelector('input') as HTMLInputElement | null
+
+  it('未开多视图模式时不存在该按钮', () => {
+    setupLeft()
+    expect(screen.queryByTestId('reset-window-positions')).toBeNull()
+  })
+
+  it('开多视图后出现：无浮窗时禁用，开窗后启用；点击清空 gv-vw-* 存档', () => {
+    setupLeft()
+    fireEvent.click(multiViewCheckbox()!)
+    const btn = screen.getByTestId('reset-window-positions')
+    expectNotRawKey(btn, '重置窗口位置')
+    // 一个浮窗都没有 → 无事可重置
+    expect((btn as HTMLButtonElement).disabled).toBe(true)
+
+    fireEvent.click(document.querySelector('.multi-view-list .panel-btn') as HTMLElement)
+    expect((screen.getByTestId('reset-window-positions') as HTMLButtonElement).disabled).toBe(false)
+
+    // 播下一个已存档的窗口几何，点击后应被清掉
+    localStorage.setItem('gv-vw-fv-cayley', JSON.stringify({ __gvVersion: 1, data: { position: { x: 350, y: 240 } } }))
+    localStorage.setItem('gv-other-key', 'keep-me')
+    fireEvent.click(screen.getByTestId('reset-window-positions'))
+
+    expect(localStorage.getItem('gv-vw-fv-cayley')).toBeNull()
+    // 只清 gv-vw- 前缀，别把别的持久化一起端了
+    expect(localStorage.getItem('gv-other-key')).toBe('keep-me')
   })
 })

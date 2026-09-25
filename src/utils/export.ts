@@ -6,47 +6,10 @@ import { getCayley3DControls } from './cayley3dControls'
 import { triggerDownload } from './download'
 export { triggerDownload }
 
-function collectStyleText(): string {
-  let css = ''
-  for (const sheet of document.styleSheets) {
-    try {
-      for (const rule of sheet.cssRules) {
-        css += rule.cssText + '\n'
-      }
-    } catch {
-      continue
-    }
-  }
-  // Rewrite dev-server KaTeX font paths to a CDN so exported SVG renders
-  // math correctly outside the local dev server.
-  return css.replace(
-    /url\(["']?\/node_modules\/katex\/dist\/fonts\/([^"')]+)["']?\)/g,
-    'url("https://cdn.jsdelivr.net/npm/katex@0.16.45/dist/fonts/$1")',
-  )
-}
-
-function serializeSvg(svgEl: SVGElement): Blob {
-  const clone = svgEl.cloneNode(true) as SVGElement
-
-  const styleText = collectStyleText()
-  if (styleText) {
-    const style = document.createElementNS('http://www.w3.org/2000/svg', 'style')
-    style.textContent = styleText
-    clone.insertBefore(style, clone.firstChild)
-  }
-
-  const viewBox = svgEl.getAttribute('viewBox') || ''
-  const vbParts = viewBox.split(/\s+/).map(Number)
-  const width = vbParts[2] || svgEl.clientWidth || 800
-  const height = vbParts[3] || svgEl.clientHeight || 600
-
-  clone.setAttribute('width', String(width))
-  clone.setAttribute('height', String(height))
-
-  const serializer = new XMLSerializer()
-  const svgString = serializer.serializeToString(clone)
-  return new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
-}
+// collectStyleText / serializeSvg 已抽至零依赖模块 utils/exportSvg.ts（同一动机：窗口壳/内核
+// 导出当前 SVG 时不该拉进本模块的 gifenc 依赖），此处 re-export 保持既有 import 兼容。
+import { collectStyleText, serializeSvg } from './exportSvg'
+export { collectStyleText, serializeSvg }
 
 export function exportView(viewMode: ViewMode, filename: string) {
   const viewport = document.querySelector('.canvas-viewport')

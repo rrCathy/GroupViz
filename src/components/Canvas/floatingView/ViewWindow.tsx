@@ -9,6 +9,8 @@ import type { GroupElement } from '../../../core/types'
 import type { SymmetryViewParams } from '../../../core/types/viewConfig'
 import { getSymmetryType } from '../../../core/symmetryType'
 import { removeStoredKey } from '../../../utils/persistence'
+import { emptyDecorations } from '../../../core/types/decorations'
+import { exportFileName, exportSvgElement, exportCanvasElement } from '../../../utils/exportSvg'
 import { VIEWWINDOW_RESET_EVENT } from '../../../utils/resetViewWindows'
 import { texify, renderTex } from '../../../utils/texify'
 import { PARAMS_W, PARAMS_GAP, RESIZE_DIRS, resizeHandleStyle } from './geometry'
@@ -60,6 +62,7 @@ export function ViewWindow({
   const {
     persistKey, geometry, setGeometry, config, viewParams,
     setConfigState, setViewParamsState, updateConfig, updateViewParams,
+    decorations, updateDecorations, setDecorations,
   } = useViewWindowPersist({
     view, group, homomorphism, storageKey, configProp, onConfigChange,
     viewParamsProp, onViewParamsChange, defaultPosition, defaultSize,
@@ -92,10 +95,12 @@ export function ViewWindow({
     else setConfigState({})
     if (onViewParamsChange) onViewParamsChange({})
     else setViewParamsState({})
+    // VCL Decorations（DEC-2）：注释也随 reset 清空（与参数同一口径）
+    setDecorations(emptyDecorations())
     resetCt()
     // setGeometry/setConfigState/setViewParamsState 为 hook 透出的 useState setter（引用稳定），
     // eslint 无法识别稳定性故显式列入依赖，不改变重跑时机
-  }, [persistKey, defaultPosition, defaultSize, tableMinSize, onConfigChange, onViewParamsChange, resetCt, setGeometry, setConfigState, setViewParamsState])
+  }, [persistKey, defaultPosition, defaultSize, tableMinSize, onConfigChange, onViewParamsChange, resetCt, setGeometry, setConfigState, setViewParamsState, setDecorations])
 
   // Global "reset all windows" broadcast: every ViewWindow resets itself.
   useEffect(() => {
@@ -103,6 +108,19 @@ export function ViewWindow({
     window.addEventListener(VIEWWINDOW_RESET_EVENT, onResetAll)
     return () => window.removeEventListener(VIEWWINDOW_RESET_EVENT, onResetAll)
   }, [resetAll])
+
+  // ── 窗口内导出（VCL：注释/编排的最后一段闭环）──
+  // 2D 视图 → SVG（复用 exportSvg：全量样式内联 + KaTeX 字体改写 CDN，注释/节点标签掉不了排版）；
+  // 3D / 对称性 → canvas 栅格 PNG（HTML 覆盖层天然不参与，见 PLAN §4.6）。
+  // 只认**本窗口**自己的 viewport，与主画布导出出口（.canvas-viewport）互不干扰。
+  const isCanvasView = view === '3d' || view === 'symmetry'
+  const handleExport = useCallback(() => {
+    const host = viewportRef.current
+    if (!host) return
+    const name = exportFileName(title ?? group?.symbol ?? view, view, isCanvasView ? 'png' : 'svg')
+    if (isCanvasView) exportCanvasElement(host.querySelector('canvas'), name)
+    else exportSvgElement(host.querySelector('svg'), name)
+  }, [viewportRef, title, group, view, isCanvasView])
 
   // selection for set/cayley views（窗口本地会话态，独立于主应用选中）
   const [sel, setSel] = useState<Set<string>>(new Set())
@@ -219,9 +237,10 @@ export function ViewWindow({
             {title ?? (group ? group.symbol : (view === 'homomorphism' && homomorphism ? (homomorphism.name || `${homomorphism.source.symbol} → ${homomorphism.target.symbol}`) : 'View'))}
             {infoText && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-dim)', marginLeft: 8 }}>{infoText}</span>}
           </span>
-          {/* 博客插图等专注阅读场景可 config.showControls=false 整组隐藏 */}
+          {/* 博客插图等专注阅读场景可 config.showControls=false 整组隐藏。
+              按钮组 zIndex 11 > resize 手柄的 10：否则 ne 角手柄会压住最右的 ⚙/× 按钮。 */}
           {showControls && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, position: 'relative', zIndex: 11 }}>
               <button title="Lock move" style={tglBtn(!!config.locked, '#f97316')}
                 onClick={() => updateConfig({ locked: !config.locked })}>{config.locked ? '📌' : '📍'}</button>
               <button title="Lock zoom" style={tglBtn(!!config.zoomLocked, '#38bdf8')}
@@ -235,6 +254,8 @@ export function ViewWindow({
                   // 打开面板时窗口置顶，避免外置面板被更高层的相邻窗口盖住
                   if (next) bringFront()
                 }}>⚙</button>
+              <button title={isCanvasView ? 'Export PNG' : 'Export SVG'} data-testid="window-export" style={BTN_STYLE}
+                onClick={handleExport}>⤓</button>
               <button title="Close" style={BTN_STYLE}
                 onClick={onClose}
                 onMouseEnter={e => (e.currentTarget.style.color = '#f44')}
@@ -269,6 +290,7 @@ export function ViewWindow({
               setSymHintText={setSymHintText} setTableLayoutSize={setTableLayoutSize}
               setActionEdit={setActionEdit} setActionSel={setActionSel} setActionHoverId={setActionHoverId}
               updateViewParams={updateViewParams}
+              decorations={decorations}
             />
 
             {/* zoom slider overlay (avoids wheel/page-scroll conflict)；
@@ -421,6 +443,7 @@ export function ViewWindow({
           p3d={p3d} shapes3d={shapes3d} layout3dValue={layout3dValue}
           cayley3dActionsList={cayley3dActionsList} cayley3dEnabledCount={cayley3dEnabledCount}
           setCayley3DActionLength={setCayley3DActionLength}
+          decorations={decorations} onDecorationsChange={updateDecorations} selectedIds={sel}
           faceSubgroupCands={faceSubgroupCands} faceSelSubgroup={faceSelSubgroup}
           faceOn={faceOn} patchFaceFill={patchFaceFill}
           tableVp={tableVp} sublatticeParams={sublatticeParams}

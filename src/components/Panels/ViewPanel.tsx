@@ -3,6 +3,7 @@ import { useGroup } from '../../context/useGroup'
 import { buildViewModes } from './constants'
 import { renderTex, texify } from '../../utils/texify'
 import { exportView, exportSymmetryAsGif, exportCayley3DGif, cayley3DExportPlan } from '../../utils/export'
+import { resetAllViewWindows } from '../../utils/resetViewWindows'
 import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
@@ -19,6 +20,7 @@ export function ViewPanel() {
     multiViewMode,
     toggleMultiViewMode,
     openFloatingView,
+    floatingViews,
     showMaximalCycles,
     setShowMaximalCycles,
     showHeatmap,
@@ -114,19 +116,33 @@ export function ViewPanel() {
         <span>{t('panel.multiView')}</span>
       </label>
       {multiViewMode && (
-        <div className="multi-view-list">
-          {VIEW_MODES.map(mode => (
-            <button
-              key={mode.value}
-              className="panel-btn"
-              onClick={() => openFloatingView(mode.value)}
-              disabled={!currentGroup}
-              style={{ fontSize: '12px', padding: '3px 8px' }}
-            >
-              {t('panel.floatView', { label: mode.label })}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="multi-view-list">
+            {VIEW_MODES.map(mode => (
+              <button
+                key={mode.value}
+                className="panel-btn"
+                onClick={() => openFloatingView(mode.value)}
+                disabled={!currentGroup}
+                style={{ fontSize: '12px', padding: '3px 8px' }}
+              >
+                {t('panel.floatView', { label: mode.label })}
+              </button>
+            ))}
+          </div>
+          {/* 重置窗口位置：清 gv-vw-* 存档并广播 gv-vw-reset-all（两套壳都挂监听）。
+              没有它，resetAllViewWindows() 在应用里就没有触发点。 */}
+          <button
+            className="panel-btn"
+            data-testid="reset-window-positions"
+            title={t('panel.resetWindowPos')}
+            onClick={() => resetAllViewWindows()}
+            disabled={floatingViews.length === 0}
+            style={{ fontSize: '12px', padding: '3px 8px', marginTop: 4, width: '100%' }}
+          >
+            {t('panel.resetWindowPos')}
+          </button>
+        </>
       )}
 
       {/* Contextual settings based on current view */}

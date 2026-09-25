@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ViewWindow } from '../components/Canvas/FloatingViewWindow'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
@@ -144,6 +144,63 @@ describe('ViewWindow params panel (external overlay)', () => {
 
       fireEvent.mouseLeave(node)
       expect(win.querySelector('[data-testid="hover-hud"]')).toBeNull()
+    })
+  })
+
+  describe('window export (VCL 闭环：注释/编排出图)', () => {
+    beforeEach(() => localStorage.clear())
+    afterEach(() => vi.unstubAllGlobals())
+
+    const stubUrl = () => {
+      const created: string[] = []
+      vi.stubGlobal('URL', class extends URL {
+        static createObjectURL = vi.fn((b: Blob) => { created.push(b.type); return 'blob:fake' })
+        static revokeObjectURL = vi.fn()
+      })
+      return created
+    }
+
+    it('2D view exports its OWN svg as .svg (button title + download triggered)', () => {
+      const created = stubUrl()
+      const clickSpy = vi.fn()
+      HTMLAnchorElement.prototype.click = clickSpy
+      const { container } = render(
+        <ViewWindow view="cayley" group={c4} title="C₄ 凯莱图" storageKey="vw-test-export-svg"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }} />,
+      )
+      const win = container.firstElementChild as HTMLElement
+      const btn = screen.getByTestId('window-export')
+      expect(btn.getAttribute('title')).toBe('Export SVG')
+      fireEvent.click(btn)
+      expect(created).toEqual(['image/svg+xml;charset=utf-8'])
+      expect(clickSpy).toHaveBeenCalledTimes(1)
+      // 导出的是本窗口自己的画布 SVG（viewport 内的那个），不是主画布
+      expect(win.querySelector('svg')).not.toBeNull()
+    })
+
+    it('3D view exports the canvas as .png (title switches to PNG)', () => {
+      const created = stubUrl()
+      const { container } = render(
+        <ViewWindow view="3d" group={c4} title="C₄ 3D" storageKey="vw-test-export-3d"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }} />,
+      )
+      const btn = screen.getByTestId('window-export')
+      expect(btn.getAttribute('title')).toBe('Export PNG')
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement
+      Object.defineProperty(canvas, 'toBlob', {
+        value: (cb: BlobCallback) => cb(new Blob(['x'], { type: 'image/png' })),
+      })
+      fireEvent.click(btn)
+      expect(created).toEqual(['image/png'])
+    })
+
+    it('is hidden together with the rest of the chrome when showControls=false (blog figure)', () => {
+      render(
+        <ViewWindow view="cayley" group={c4} title="图 2" storageKey="vw-test-export-nocontrols"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }}
+          config={{ showControls: false }} />,
+      )
+      expect(screen.queryByTestId('window-export')).toBeNull()
     })
   })
 })

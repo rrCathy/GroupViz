@@ -3,6 +3,7 @@ import {
   viewWindowConfigSchema,
   setViewParamsSchema,
   cayleyViewParamsSchema,
+  cayley3DViewParamsSchema,
   sublatticeViewParamsSchema,
   viewWindowPersistDataSchema,
 } from '../../core/types/viewConfig'
@@ -43,6 +44,62 @@ describe('cayleyViewParamsSchema', () => {
     expect(cayleyViewParamsSchema.safeParse({ actions: [{ enabled: true }] }).success).toBe(false)
     const tooMany = Array.from({ length: 241 }, (_, i) => ({ elementId: `e${i}` }))
     expect(cayleyViewParamsSchema.safeParse({ actions: tooMany }).success).toBe(false)
+  })
+})
+
+describe('cayleyViewParamsSchema · VCL F1–F4 / E2–E4 / dash (round-trip)', () => {
+  const full2D = {
+    shape2D: 'circular',
+    actions: [{ elementId: 'e1', enabled: true, dash: true }],
+    nodeColorMode: 'conjugacy',
+    showOrderBadge: true,
+    highlightGenerated: true,
+    markCenter: true,
+    markNormalSubgroup: true,
+    printPalette: true,
+    edgeWidthScale: 1.5,
+    showArrows: false,
+    showLegend: true,
+    edgeCurvature: 0,
+  }
+  it('accepts the full VCL 2D param set and preserves values (round-trip)', () => {
+    const res = cayleyViewParamsSchema.safeParse(full2D)
+    expect(res.success).toBe(true)
+    expect(res.data).toMatchObject(full2D)
+  })
+  it('rejects an unknown nodeColorMode', () => {
+    expect(cayleyViewParamsSchema.safeParse({ nodeColorMode: 'rainbow' }).success).toBe(false)
+  })
+  it('rejects edgeWidthScale outside [0.4, 3]', () => {
+    expect(cayleyViewParamsSchema.safeParse({ edgeWidthScale: 0.1 }).success).toBe(false)
+    expect(cayleyViewParamsSchema.safeParse({ edgeWidthScale: 5 }).success).toBe(false)
+  })
+  it('rejects a dash flag on an action missing elementId', () => {
+    expect(cayleyViewParamsSchema.safeParse({ actions: [{ dash: true }] }).success).toBe(false)
+  })
+})
+
+describe('cayley3DViewParamsSchema · VCL B1–B3 / F (round-trip)', () => {
+  const full3D = {
+    layout3D: 'wordLengthSphere',
+    shell: false,
+    layerRings: true,
+    relayoutNonce: 2,
+    nodeColorMode: 'conjugacy',
+    showOrderBadge: true,
+  }
+  it('accepts the VCL B/F 3D param set and preserves values (round-trip)', () => {
+    const res = cayley3DViewParamsSchema.safeParse(full3D)
+    expect(res.success).toBe(true)
+    expect(res.data).toMatchObject(full3D)
+  })
+  it('rejects relayoutNonce outside [0, 64] or non-integer', () => {
+    expect(cayley3DViewParamsSchema.safeParse({ relayoutNonce: -1 }).success).toBe(false)
+    expect(cayley3DViewParamsSchema.safeParse({ relayoutNonce: 1.5 }).success).toBe(false)
+    expect(cayley3DViewParamsSchema.safeParse({ relayoutNonce: 100 }).success).toBe(false)
+  })
+  it('rejects an unknown nodeColorMode in 3D', () => {
+    expect(cayley3DViewParamsSchema.safeParse({ nodeColorMode: 'rainbow' }).success).toBe(false)
   })
 })
 

@@ -75,15 +75,23 @@ describe('ViewWindow · cayley3d view', () => {
     expect(Array.from(select.options).map(o => o.value)).toEqual(['cone', 'circular'])
     expect(select.value).toBe('circular')
     // 滑杆 = Node size + 每启用作用边一条 len（C₄ 生成元 e1）；透明度滑杆仅在选中面子群后出现
-    // 复选框 = 6 窗口配置 + Auto rotate + Show labels + Face fills + 1 条作用边（Path highlight 未设值时无复选框）
+    // 复选框 = 6 窗口配置 + Auto rotate + Show labels + Face fills + 1 条作用边 + VCL（球壳/纬度环/阶徽标）= 13
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(2)
-    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(10)
+    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(13)
     expect(screen.getByText('Auto rotate')).toBeInTheDocument()
     expect(screen.getByText('Show labels')).toBeInTheDocument()
     expect(screen.getByText('Path highlight')).toBeInTheDocument()
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
+    // VCL B 组（球壳/纬度环/重新优化）+ F 组（共轭类着色/阶→球径）
+    expect(screen.getByText('Sphere render')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley3d-shell')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley3d-lat-rings')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley3d-relayout')).toBeInTheDocument()
+    expect(screen.getByText('Node marks')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley3d-color-conj')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley3d-order-badge')).toBeInTheDocument()
   })
 
   it('A₄: picking the C₃ subgroup lists its 4 coset faces with per-face colour + opacity', () => {

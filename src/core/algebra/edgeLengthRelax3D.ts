@@ -32,6 +32,14 @@ export interface RelaxEdgeLengths3DOptions {
   springStrength?: number
   /** 斥力强度（相对参考尺度 ref² 的倍率）；缺省 0.0025（d = 0.25·ref 处推力 ≈ 0.04，与 2D 版同量级） */
   repulsion?: number
+  /**
+   * 即使 `lengthScales` 全为 1 也执行松弛（缺省 false）。
+   *
+   * 缺省契约是「倍率全 1 ⇒ 原样返回」（保证不传 lengthScale 的既有插图逐位不变）。
+   * VCL 的「重新优化布局」需要的是**不带长度约束的均匀化**（各边朝其生成元的平均
+   * 基础边长靠拢、近距边对斥开），此时全 1 正是想要的目标长度 ⇒ 显式开这个开关。
+   */
+  force?: boolean
 }
 
 const EPS = 1e-3
@@ -43,7 +51,7 @@ export function relaxEdgeLengths3D(
 ): Map<string, Vec3> {
   const { lengthScales } = options
   if (base.size === 0) return base
-  if (isIdentityScale(lengthScales)) return base
+  if (!options.force && isIdentityScale(lengthScales)) return base
 
   const ids = [...base.keys()]
   const pos = new Map<string, Vec3>()

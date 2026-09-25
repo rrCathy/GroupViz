@@ -14,6 +14,11 @@ import { BTN_STYLE, segBtn, MINI_BTN } from './styles'
 import { CayleyPathEditor } from './CayleyPathEditor'
 import { COSETSTRIP_NO_LOCAL_SUBGROUPS, csOptionLabel } from './lazyViews'
 import type { ActionEditState, ViewParamsPatch } from './types'
+import { useState } from 'react'
+import {
+  addAnnotation, removeAnnotation, upsertAnnotation,
+  type Decorations, type DecorationAnchor, type DecorationAnchorType, type Annotation,
+} from '../../../core/types/decorations'
 
 export interface ViewParamsPanelProps {
   viewWindowTheme: string
@@ -65,6 +70,11 @@ export interface ViewParamsPanelProps {
   symShowAction: boolean
   symActiveId: string | null
   setSymReplay: React.Dispatch<React.SetStateAction<number>>
+  /** VCL Decorations（DEC-2）：当前窗口的注释集 */
+  decorations: Decorations
+  onDecorationsChange: (d: Decorations) => void
+  /** 窗口本地选中的元素 id（注释编辑器「用选中元素作锚点」用） */
+  selectedIds: Set<string>
 }
 
 export function ViewParamsPanel({
@@ -76,6 +86,7 @@ export function ViewParamsPanel({
   faceSubgroupCands, faceSelSubgroup, faceOn, patchFaceFill,
   tableVp, sublatticeParams, csOpts, csSubgroup, csType, cosetStripVp,
   symType, symCanDual, symVp, symShowAction, symActiveId, setSymReplay,
+  decorations, onDecorationsChange, selectedIds,
 }: ViewParamsPanelProps) {
   return (
     <div
@@ -242,6 +253,42 @@ export function ViewParamsPanel({
               onChange={e => updateViewParams({ nodeRadius: Number(e.target.value) })} style={{ width: '100%' }} />
             <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyVp.nodeRadius ?? 28}px</span>
           </div>
+          {/* VCL F 组：节点语义装饰（全部缺省关 = 现有观感不变） */}
+          <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Node marks</div>
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ marginBottom: 2 }}>Node color</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button data-testid="cayley-color-none" style={segBtn((cayleyVp.nodeColorMode ?? 'none') === 'none')}
+                  onClick={() => updateViewParams({ nodeColorMode: 'none' })}>Theme</button>
+                <button data-testid="cayley-color-conj" style={segBtn(cayleyVp.nodeColorMode === 'conjugacy')}
+                  onClick={() => updateViewParams({ nodeColorMode: 'conjugacy' })}>Conjugacy</button>
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <input type="checkbox" data-testid="cayley-order-badge" checked={!!cayleyVp.showOrderBadge}
+                onChange={e => updateViewParams({ showOrderBadge: e.target.checked })} />
+              Order badge
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+              title="选中元素时高亮它生成的循环子群 ⟨g⟩：成员加外圈、子群内部的边加粗">
+              <input type="checkbox" data-testid="cayley-gen-highlight" checked={!!cayleyVp.highlightGenerated}
+                onChange={e => updateViewParams({ highlightGenerated: e.target.checked })} />
+              Highlight ⟨g⟩ of selection
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+              title="中心 Z(G) 双环。交换群的 Z(G) = 全群 ⇒ 全体双环，正是「这个群交换」的正确读数">
+              <input type="checkbox" data-testid="cayley-mark-center" checked={!!cayleyVp.markCenter}
+                onChange={e => updateViewParams({ markCenter: e.target.checked })} />
+              Mark center Z(G)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              title="最小非平凡正规子群 N 的成员画虚线外圈——与商群悬浮窗默认取的 N 是同一个；单群/大群无此标记">
+              <input type="checkbox" data-testid="cayley-mark-normal" checked={!!cayleyVp.markNormalSubgroup}
+                onChange={e => updateViewParams({ markNormalSubgroup: e.target.checked })} />
+              Mark smallest normal N
+            </label>
+          </div>
           <div style={{ marginBottom: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
               <span>Edge curvature</span>
@@ -257,6 +304,36 @@ export function ViewParamsPanel({
               <button style={segBtn((cayleyVp.edgeCurvature ?? 1) === 1)}
                 onClick={() => updateViewParams({ edgeCurvature: 1 })}>Curved</button>
             </div>
+          </div>
+          {/* VCL E 组：边样式与图例 */}
+          <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Edge style</div>
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span title="边线宽总倍率（与逐生成元 len 正交：后者管长度，这里管粗细）">Edge width</span>
+                <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{cayleyVp.edgeWidthScale ?? 1}×</span>
+              </div>
+              <input type="range" min={0.4} max={3} step={0.1} value={cayleyVp.edgeWidthScale ?? 1}
+                onChange={e => updateViewParams({ edgeWidthScale: Number(e.target.value) })} style={{ width: '100%' }} />
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+              title="关掉 = 纯线（路径图/黑白打印更干净；双向边本来就不画箭头）">
+              <input type="checkbox" data-testid="cayley-arrows" checked={cayleyVp.showArrows !== false}
+                onChange={e => updateViewParams({ showArrows: e.target.checked })} />
+              Direction arrows
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+              title="打印/黑白/色盲友好：全体生成元同色，靠线型（实/虚交替）与线宽区分">
+              <input type="checkbox" data-testid="cayley-print-palette" checked={!!cayleyVp.printPalette}
+                onChange={e => updateViewParams({ printPalette: e.target.checked })} />
+              Print / mono palette
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              title="图例列出每个生成元（色块 + 记号）；点击行即切换该生成元边的显隐">
+              <input type="checkbox" data-testid="cayley-legend" checked={!!cayleyVp.showLegend}
+                onChange={e => updateViewParams({ showLegend: e.target.checked })} />
+              Generator legend
+            </label>
           </div>
           <CayleyPathEditor
             value={cayleyVp.pathHighlight ?? null}
@@ -351,6 +428,17 @@ export function ViewParamsPanel({
                           onChange={e => setCayleyActionLength(a.elementId, Number(e.target.value))}
                           style={{ flex: 1, minWidth: 0 }} />
                         <span style={{ fontSize: 10, color: 'var(--text-dim)', width: 28, textAlign: 'right' }}>{scale}×</span>
+                        <button
+                          data-testid={`cayley-dash-${a.elementId}`}
+                          title="这条生成元的边用虚线（黑白/打印场景靠线型区分）"
+                          onClick={() => updateViewParams({
+                            actions: cayleyActionsList.map(x => x.elementId === a.elementId ? { ...x, dash: !x.dash } : x),
+                          })}
+                          style={{
+                            ...MINI_BTN, flexShrink: 0, padding: '0 4px', lineHeight: '14px',
+                            color: a.dash ? 'var(--accent-teal)' : 'var(--text-dim)',
+                          }}
+                        >{a.dash ? '· · ·' : '——'}</button>
                       </div>
                     )}
                   </div>
@@ -402,6 +490,49 @@ export function ViewParamsPanel({
               onChange={e => updateViewParams({ showLabels: e.target.checked })} />
             Show labels
           </label>
+          {/* VCL B 组：字长球渲染开关 + 布局重排（非字长球布局下 shell/layerRings 无效，仍列出以便预设复用） */}
+          <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Sphere render</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+              title="字长球的半透明球壳（仅 wordLengthSphere 布局）；关掉只剩节点云">
+              <input type="checkbox" data-testid="cayley3d-shell" checked={p3d.shell !== false}
+                onChange={e => updateViewParams({ shell: e.target.checked })} />
+              Sphere shell
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+              title="每个字长层画一圈参考纬线，强化分层读数（默认关：凯莱图里多余线条容易被读成边）">
+              <input type="checkbox" data-testid="cayley3d-lat-rings" checked={!!p3d.layerRings}
+                onChange={e => updateViewParams({ layerRings: e.target.checked })} />
+              Latitude rings
+            </label>
+            <button
+              data-testid="cayley3d-relayout"
+              style={MINI_BTN}
+              title="再松弛 160 轮：让边长与边距更均匀（从基础布局确定性重跑，不改形状语义）"
+              onClick={() => updateViewParams({ relayoutNonce: (p3d.relayoutNonce ?? 0) + 1 })}
+            >
+              ⟳ Re-optimize layout{(p3d.relayoutNonce ?? 0) > 0 ? ` (${p3d.relayoutNonce}×)` : ''}
+            </button>
+          </div>
+          {/* VCL F 组：3D 节点语义装饰 */}
+          <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Node marks</div>
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ marginBottom: 2 }}>Node color</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button data-testid="cayley3d-color-none" style={segBtn((p3d.nodeColorMode ?? 'none') === 'none')}
+                  onClick={() => updateViewParams({ nodeColorMode: 'none' })}>Theme</button>
+                <button data-testid="cayley3d-color-conj" style={segBtn(p3d.nodeColorMode === 'conjugacy')}
+                  onClick={() => updateViewParams({ nodeColorMode: 'conjugacy' })}>Conjugacy</button>
+              </div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              title="阶高者球径更大（对数压缩，最大 +35%），精确阶数显示在悬停标签下">
+              <input type="checkbox" data-testid="cayley3d-order-badge" checked={!!p3d.showOrderBadge}
+                onChange={e => updateViewParams({ showOrderBadge: e.target.checked })} />
+              Order → size
+            </label>
+          </div>
           <div style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
             <CayleyPathEditor
               value={p3d.pathHighlight ?? null}
@@ -514,6 +645,17 @@ export function ViewParamsPanel({
             </div>
           </div>
         </>
+      )}
+
+      {/* VCL Decorations（DEC-2）：注释编辑器。**只在 2D 凯莱图**提供——3D 注释的渲染与
+          导出（canvas 栅格不烘焙 HTML 覆盖层）留到「导出烘焙」方案定了再做，见 PLAN §4.1 */}
+      {view === 'cayley' && (
+        <AnnotationEditor
+          group={group}
+          decorations={decorations}
+          onChange={onDecorationsChange}
+          selectedIds={selectedIds}
+        />
       )}
 
       {view === 'cycle' && (
@@ -806,6 +948,217 @@ export function ViewParamsPanel({
           onClick={resetAll}
         >↺ Reset to defaults</button>
       </div>
+    </div>
+  )
+}
+
+// ── VCL Decorations（DEC-2）：注释编辑器 ──
+// 锚点 = **节点 / 边 / 整图**（都是相对位置，见 core/types/decorations.ts）：
+//   节点 → 跟随该元素实时坐标；边 → 两端中点；整图 → 视图坐标（缺省 24,24）。
+// 元素引用接受 `id` / `label` / `value` / 循环记号（与 `pathHighlight` 同一套解析），
+// 所以「(12)」「2,1,3」都能命中；解析不出的条目渲染端静默跳过（换群后残留自然消失）。
+// 文本走 TeX（texify → renderTex，与节点标签同一条渲染路）。
+const ANN_ROW_BTN = {
+  ...MINI_BTN, fontSize: 11, lineHeight: 1, padding: '2px 5px',
+} as const
+
+function AnnotationEditor({
+  group, decorations, onChange, selectedIds,
+}: {
+  group: Group | null
+  decorations: Decorations
+  onChange: (d: Decorations) => void
+  selectedIds: Set<string>
+}) {
+  const [anchorType, setAnchorType] = useState<DecorationAnchorType>('node')
+  const [ref, setRef] = useState('')
+  const [actionRef, setActionRef] = useState('')
+  const [text, setText] = useState('')
+  const [leader, setLeader] = useState(false)
+  const [color, setColor] = useState('#ffd93d')
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  // 窗口里选中的第一个元素（「Use selected」一键填引用）
+  const firstSelected = group
+    ? group.elements.find(el => selectedIds.has(el.id)) ?? null
+    : null
+
+  const resetForm = () => {
+    setText(''); setLeader(false); setEditingId(null)
+  }
+
+  const commit = () => {
+    const t = text.trim()
+    // 节点/边锚点必须给出元素引用，否则渲染端解析不出位置（会变成一条看不见的注释）
+    if (!t || (anchorType !== 'figure' && !ref.trim())) return
+    const anchor: DecorationAnchor =
+      anchorType === 'figure' ? { type: 'figure' }
+        : anchorType === 'edge'
+          ? { type: 'edge', ...(ref.trim() ? { ref: ref.trim() } : {}), ...(actionRef.trim() ? { actionRef: actionRef.trim() } : {}) }
+          : { type: 'node', ...(ref.trim() ? { ref: ref.trim() } : {}) }
+    const annotation: Annotation = {
+      id: editingId ?? `ann-${Date.now().toString(36)}`,
+      anchor,
+      text: t,
+      ...(leader ? { leader: true } : {}),
+      color,
+    }
+    onChange(editingId ? upsertAnnotation(decorations, annotation) : addAnnotation(decorations, annotation))
+    resetForm()
+  }
+
+  const startEdit = (a: Annotation) => {
+    setEditingId(a.id)
+    setAnchorType(a.anchor.type as DecorationAnchorType)
+    setRef(a.anchor.ref ?? '')
+    setActionRef(a.anchor.actionRef ?? '')
+    setText(a.text)
+    setLeader(!!a.leader)
+    setColor(a.color ?? '#ffd93d')
+  }
+
+  const anchorLabel = (a: Annotation) => {
+    if (a.anchor.type === 'figure') return 'figure'
+    if (a.anchor.type === 'edge') return `${a.anchor.ref ?? '?'} → ${a.anchor.actionRef ?? '?'}`
+    return a.anchor.ref ?? '?'
+  }
+
+  return (
+    <div
+      data-testid="annotation-editor"
+      style={{ marginTop: 12, borderTop: '1px solid var(--border-primary)', paddingTop: 8 }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>Annotations</div>
+
+      <div style={{ marginBottom: 6 }}>
+        <div style={{ marginBottom: 2 }}>Anchor</div>
+        <select
+          data-testid="annotation-anchor-type"
+          value={anchorType}
+          onChange={e => setAnchorType(e.target.value as DecorationAnchorType)}
+          style={{ width: '100%' }}
+        >
+          <option value="node">node (element)</option>
+          <option value="edge">edge (element + action)</option>
+          <option value="figure">figure (whole figure)</option>
+        </select>
+      </div>
+
+      {anchorType !== 'figure' && (
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ marginBottom: 2 }}>{anchorType === 'edge' ? 'From element' : 'Element'}</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <input
+              type="text"
+              data-testid="annotation-ref"
+              value={ref}
+              placeholder="(12) / 2,1,3"
+              onChange={e => setRef(e.target.value)}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            {firstSelected && (
+              <button
+                type="button"
+                data-testid="annotation-use-selected"
+                title={`Use selected element ${firstSelected.label}`}
+                style={ANN_ROW_BTN}
+                onClick={() => setRef(firstSelected.label)}
+              >↑ sel</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {anchorType === 'edge' && (
+        <div style={{ marginBottom: 6 }}>
+          <div style={{ marginBottom: 2 }}>Action element</div>
+          <input
+            type="text"
+            data-testid="annotation-action-ref"
+            value={actionRef}
+            placeholder="(23) / 3,1,2"
+            onChange={e => setActionRef(e.target.value)}
+            style={{ width: '100%' }}
+          />
+        </div>
+      )}
+
+      <div style={{ marginBottom: 6 }}>
+        <div style={{ marginBottom: 2 }}>Text (TeX)</div>
+        <input
+          type="text"
+          data-testid="annotation-text"
+          value={text}
+          placeholder="(12)^2=e"
+          onChange={e => setText(e.target.value)}
+          style={{ width: '100%' }}
+        />
+      </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <input
+          type="checkbox"
+          data-testid="annotation-leader"
+          checked={leader}
+          onChange={e => setLeader(e.target.checked)}
+        />
+        Leader line
+      </label>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span>Color</span>
+        <input
+          type="color"
+          data-testid="annotation-color"
+          value={color}
+          onChange={e => setColor(e.target.value)}
+          style={{ width: 32, height: 20, padding: 0, border: '1px solid var(--border-primary)' }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button
+          type="button"
+          data-testid="annotation-add"
+          style={{ ...BTN_STYLE, fontSize: 11, padding: '4px 8px', flex: 1 }}
+          onClick={commit}
+          disabled={!text.trim() || (anchorType !== 'figure' && !ref.trim())}
+        >{editingId ? '✓ Update annotation' : '+ Add annotation'}</button>
+        {editingId && (
+          <button type="button" style={ANN_ROW_BTN} onClick={resetForm}>Cancel</button>
+        )}
+      </div>
+
+      {decorations.annotations.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {decorations.annotations.map(a => (
+            <div
+              key={a.id}
+              data-testid={`annotation-row-${a.id}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}
+            >
+              <span
+                title={`${anchorLabel(a)} · ${a.text}`}
+                style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >{anchorLabel(a)} · {a.text}</span>
+              <button
+                type="button"
+                data-testid={`annotation-edit-${a.id}`}
+                title="Edit"
+                style={ANN_ROW_BTN}
+                onClick={() => startEdit(a)}
+              >✎</button>
+              <button
+                type="button"
+                data-testid={`annotation-delete-${a.id}`}
+                title="Delete"
+                style={ANN_ROW_BTN}
+                onClick={() => onChange(removeAnnotation(decorations, a.id))}
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

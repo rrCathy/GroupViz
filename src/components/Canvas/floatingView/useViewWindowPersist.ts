@@ -6,6 +6,7 @@ import type { Group, Homomorphism, ViewMode } from '../../../core/types'
 import type { ViewWindowConfig } from '../../../core/types/viewConfig'
 import { setViewParamsSchema, cayleyViewParamsSchema, cayley3DViewParamsSchema, cycleViewParamsSchema, tableViewParamsSchema, sublatticeViewParamsSchema, cosetStripViewParamsSchema, symmetryViewParamsSchema, homomorphismViewParamsSchema, actionViewParamsSchema } from '../../../core/types/viewConfig'
 import { loadVwPersist, saveVwPersist } from './persist'
+import { emptyDecorations, readDecorations, type Decorations } from '../../../core/types/decorations'
 import type { VwGeometry } from './geometry'
 import type { ViewParams, ViewParamsPatch } from './types'
 
@@ -66,16 +67,30 @@ export function useViewWindowPersist({
   // 而冻结，任何参数点击都无效。
   const config = (configProp && onConfigChange) ? configProp : configState
   const viewParams = (viewParamsProp && onViewParamsChange) ? viewParamsProp : viewParamsState
-  // Persist on geometry + config + viewParams change
+
+  // ── VCL Decorations（DEC-2）：窗口本地态 + 随窗口持久化 ──
+  // 读入端容错（坏存档 / 旧版本无该字段 → 空集，不抛错）；换群时由 ViewWindow 重置
+  const [decorations, setDecorations] = useState<Decorations>(
+    () => (persisted ? readDecorations(persisted.decorations) : emptyDecorations())
+  )
+  const updateDecorations = useCallback((next: Decorations) => {
+    setDecorations(next)
+  }, [])
+
+  // Persist on geometry + config + viewParams + decorations change
   const persistTimer = useRef<ReturnType<typeof setTimeout>>(null as unknown as ReturnType<typeof setTimeout>)
   useEffect(() => {
     if (!persistKey) return
     if (persistTimer.current) clearTimeout(persistTimer.current)
     persistTimer.current = setTimeout(() => {
-      saveVwPersist(persistKey, { position: geometry.position, size: geometry.size, config, viewParams: viewParams as Record<string, unknown> })
+      saveVwPersist(persistKey, {
+        position: geometry.position, size: geometry.size, config,
+        viewParams: viewParams as Record<string, unknown>,
+        decorations,
+      })
     }, 300)
     return () => { if (persistTimer.current) clearTimeout(persistTimer.current) }
-  }, [geometry, config, viewParams, persistKey])
+  }, [geometry, config, viewParams, decorations, persistKey])
 
   const updateConfig = useCallback((p: Partial<ViewWindowConfig>) => {
     // 与「有效值」合并（受控时 prop 优先）：受控模式下内部 state 不更新，
@@ -95,5 +110,6 @@ export function useViewWindowPersist({
   return {
     persistKey, geometry, setGeometry, config, viewParams,
     setConfigState, setViewParamsState, updateConfig, updateViewParams,
+    decorations, updateDecorations, setDecorations,
   }
 }

@@ -63,7 +63,19 @@ export interface CayleyActionParam {
   /** 该作用元素的边长倍率；缺省 1（原始布局）。0.3–3。
    *  固定几何布局经「长度约束松弛」后处理，力导向布局作为弹簧静止长度倍率 */
   lengthScale?: number
+  /** 该作用元素的边用虚线；缺省 false。
+   *  黑白/打印场景靠线型区分生成元（`printPalette` 会按序号自动交替虚实，此项可显式覆盖） */
+  dash?: boolean
 }
+
+/**
+ * 节点语义着色方案（VCL F1）。
+ *
+ * - `none`：主题默认填充（`--node-fill`），与原观感逐位一致
+ * - `conjugacy`：按共轭类分色（`core.conjugacyClassIndexMap`）。
+ *   **交换群的共轭类全是单元素类** ⇒ 每元素各占一色，这是数学事实而非退化。
+ */
+export type CayleyNodeColorMode = 'none' | 'conjugacy'
 
 /** 凯莱图路径高亮（VCL）：元素序列 或 生成元单词，二选一 */
 export interface CayleyPathHighlight {
@@ -150,6 +162,28 @@ export interface CayleyViewParams {
   forceDirected?: boolean
   /** 力导向微调（`forceDirected === true` 时生效） */
   force?: CayleyForceParams
+  // ── VCL F 组：节点语义装饰（缺省全部 = 不改变现有观感） ──
+  /** 节点着色方案；缺省 'none'（主题默认填充）。见 CayleyNodeColorMode */
+  nodeColorMode?: CayleyNodeColorMode
+  /** 在节点右上角标出元素阶（讲 Lagrange / 循环结构时一眼可读）；缺省 false */
+  showOrderBadge?: boolean
+  /** 高亮**选中元素**生成的循环子群 ⟨g⟩（节点外圈 + 组内边）；缺省 false。
+   *  与 selection 联动，无需额外参数——点哪个元素就亮哪条循环 */
+  highlightGenerated?: boolean
+  /** 中心 Z(G) 元素画双环（交换群 = 全体，正是「这个群交换」的正确读数）；缺省 false */
+  markCenter?: boolean
+  /** 最小非平凡正规子群 N（与商群悬浮窗默认取的 N 同一个）成员画虚线外圈；缺省 false。
+   *  单群 / 大群（> 144 阶）无可用 N ⇒ 不画，不报错 */
+  markNormalSubgroup?: boolean
+  // ── VCL E 组：边样式与图例 ──
+  /** 打印 / 黑白 / 色盲友好配色：全体生成元同色，靠线型（实/虚）与线宽区分；缺省 false */
+  printPalette?: boolean
+  /** 边线宽总倍率 0.4–3；缺省 1（与逐生成元 lengthScale 正交，后者管长度） */
+  edgeWidthScale?: number
+  /** 是否画方向箭头；缺省 true（关掉 = 纯线，适合路径图与黑白打印） */
+  showArrows?: boolean
+  /** 显示生成元图例（色块 + 记号，**点击色块切换该生成元边的显隐**）；缺省 false */
+  showLegend?: boolean
 }
 
 export const cayleyViewParamsSchema = z.object({
@@ -162,6 +196,7 @@ export const cayleyViewParamsSchema = z.object({
         enabled: z.boolean().optional(),
         color: z.string().optional(),
         lengthScale: z.number().min(0.2).max(3).optional(),
+        dash: z.boolean().optional(),
       }),
     )
     .max(240)
@@ -172,6 +207,15 @@ export const cayleyViewParamsSchema = z.object({
   pathHighlight: cayleyPathHighlightSchema.nullable().optional(),
   forceDirected: z.boolean().optional(),
   force: cayleyForceParamsSchema.optional(),
+  nodeColorMode: z.enum(['none', 'conjugacy']).optional(),
+  showOrderBadge: z.boolean().optional(),
+  highlightGenerated: z.boolean().optional(),
+  markCenter: z.boolean().optional(),
+  markNormalSubgroup: z.boolean().optional(),
+  printPalette: z.boolean().optional(),
+  edgeWidthScale: z.number().min(0.4).max(3).optional(),
+  showArrows: z.boolean().optional(),
+  showLegend: z.boolean().optional(),
 })
 
 export interface Cayley3DFaceFillParams {
@@ -202,6 +246,21 @@ export interface Cayley3DViewParams {
   faceFill?: Cayley3DFaceFillParams
   /** 路径高亮（VCL）；null/缺省 = 不高亮。与 2D 同一套解析（core.resolveCayleyPath）与视觉语义 */
   pathHighlight?: CayleyPathHighlight | null
+  // ── VCL B 组：字长球渲染开关与布局重排 ──
+  /** 显示字长球的半透明球壳（只有 `layout3D === 'wordLengthSphere'` 生效）；缺省 **true**（保持现状） */
+  shell?: boolean
+  /** 显示纬度层环（字长球专用：每个字长层画一圈参考纬线，强化分层读数）；缺省 false。
+   *  默认关是有意的——凯莱图里多余线条容易被读成边（见核心布局模块的文件头约定） */
+  layerRings?: boolean
+  /** 「重新优化布局」触发器：自增即再松弛 N 轮（不改形状语义，只让边长/边距更均匀）。
+   *  缺省 0（不触发，逐位不变）。位置仍由基础布局确定性推出，同 nonce 结果一致 */
+  relayoutNonce?: number
+  // ── VCL F 组：节点语义装饰（与 2D 同名同义） ──
+  /** 节点着色方案；缺省 'none'（逐元素彩虹配色 / 字长球用字长色阶）。
+   *  'conjugacy' 时覆盖上述默认配色（按共轭类分色） */
+  nodeColorMode?: CayleyNodeColorMode
+  /** 在节点标签下挂元素阶徽标；缺省 false */
+  showOrderBadge?: boolean
 }
 
 export const cayley3DViewParamsSchema = z.object({
@@ -214,6 +273,7 @@ export const cayley3DViewParamsSchema = z.object({
         enabled: z.boolean().optional(),
         color: z.string().optional(),
         lengthScale: z.number().min(0.2).max(3).optional(),
+        dash: z.boolean().optional(),
       }),
     )
     .max(240)
@@ -222,6 +282,11 @@ export const cayley3DViewParamsSchema = z.object({
   autoRotate: z.boolean().optional(),
   showLabels: z.boolean().optional(),
   pathHighlight: cayleyPathHighlightSchema.nullable().optional(),
+  shell: z.boolean().optional(),
+  layerRings: z.boolean().optional(),
+  relayoutNonce: z.number().int().min(0).max(64).optional(),
+  nodeColorMode: z.enum(['none', 'conjugacy']).optional(),
+  showOrderBadge: z.boolean().optional(),
   faceFill: z
     .object({
       enabled: z.boolean().optional(),

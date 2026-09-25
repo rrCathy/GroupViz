@@ -13,13 +13,16 @@ import type { Vec3 } from '../../core/algebra/layouts3D/shared'
 import { compute3DPositions, LAYOUT_3D_RADIUS } from '../../core/algebra/layout3D'
 import { torusHexGeometry, torusHexMinDelta } from '../../core/algebra/layouts3D/torusHexLayout3D'
 import type { TorusHexGeometry } from '../../core/algebra/layouts3D/torusHexLayout3D'
-import { wordLengthColor } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
+import { wordLengthColor, wordLengthOf } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
+import {
+  conjugacyClassIndexMap, conjugacyClassCount, conjugacyClassColor, elementOrderMap,
+} from '../../core/algebra/nodeSemantics'
 import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
 import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
 import { normalizeCayleyActions } from '../../context/cayleyActions'
 import type {
-  CayleyActionParam, Cayley3DFaceFillParams, CayleyPathHighlight,
+  CayleyActionParam, Cayley3DFaceFillParams, CayleyPathHighlight, CayleyNodeColorMode,
 } from '../../core/types/viewConfig'
 import { subgroupFaces, buildUndirectedEdgeKeys, FACE_COLOR_PALETTE } from '../../core/algebra/faces3D'
 
@@ -44,6 +47,13 @@ function getElementColor(idx: number, total: number, isAbelian: boolean): string
   return `hsl(${hue}, 65%, 55%)`
 }
 
+/** 「重新优化布局」的松弛轮数：基准 = core 默认 160；每按一次 +160，最多累计到 5×160 */
+const RELAX_BASE_ITERS = 160
+const RELAX_STEP_ITERS = 160
+const RELAX_MAX_STEPS = 4
+/** VCL F2 阶→球径的最大放大量（对数压缩后叠加在 nodeScale 上） */
+const ORDER_SCALE_SPAN = 0.35
+
 interface NodeSphereProps {
   position: THREE.Vector3
   label: string
@@ -56,15 +66,21 @@ interface NodeSphereProps {
   showLabel: boolean
   /** 深色主题（label 阴影深浅）。由 Scene 层从 theme prop / ThemeContext 统一解析后传入（FGVE 入包：子组件不再读 context） */
   isDark: boolean
+  /** VCL F2：元素阶编码的球径倍率（1 = 不编码）。3D 里数字角标随距离/旋转不可读，
+   *  故改用**球径**做「阶高者更大」的一眼编码，精确值由悬停标签补充 */
+  orderScale?: number
+  /** VCL F2：悬停/选中标签旁附上的元素阶（仅在标签可见时出现，零常驻开销） */
+  orderBadge?: number
   onSelectElement: (id: string, additive: boolean) => void
   onPointerEnter: (el: GroupElement) => void
   onPointerLeave: (el: GroupElement | null) => void
 }
 
-const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected, isHovered, subsetColor, element, nodeScale, showLabel, isDark, onSelectElement, onPointerEnter, onPointerLeave }: NodeSphereProps) {
+const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected, isHovered, subsetColor, element, nodeScale, showLabel, isDark, orderScale = 1, orderBadge, onSelectElement, onPointerEnter, onPointerLeave }: NodeSphereProps) {
   const texLabel = useMemo(() => renderTex(texify(label)), [label])
   const primary = isSelected || isHovered
   const seg = primary ? 24 : 12
+  const scale = nodeScale * orderScale
 
   return (
     <group position={position}>
@@ -76,7 +92,7 @@ const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected
         onPointerEnter={() => onPointerEnter(element)}
         onPointerLeave={() => onPointerLeave(null)}
       >
-        <sphereGeometry args={[primary ? 0.55 * nodeScale : 0.42 * nodeScale, seg, seg]} />
+        <sphereGeometry args={[primary ? 0.55 * scale : 0.42 * scale, seg, seg]} />
         <meshStandardMaterial
           color={primary ? color : subsetColor || color}
           emissive={primary ? color : subsetColor || color}
@@ -87,13 +103,13 @@ const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected
       </mesh>
       {subsetColor && !isSelected && (
         <mesh>
-          <sphereGeometry args={[0.55 * nodeScale, 32, 32]} />
+          <sphereGeometry args={[0.55 * scale, 32, 32]} />
           <meshBasicMaterial color={subsetColor} transparent opacity={0.25} />
         </mesh>
       )}
       {isSelected && (
         <mesh>
-          <sphereGeometry args={[0.62 * nodeScale, 32, 32]} />
+          <sphereGeometry args={[0.62 * scale, 32, 32]} />
           <meshBasicMaterial color="#ffd93d" transparent opacity={0.3} />
         </mesh>
       )}
@@ -107,6 +123,14 @@ const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected
             }}
             dangerouslySetInnerHTML={{ __html: texLabel }}
           />
+          {orderBadge !== undefined && (
+            <div
+              style={{
+                color: 'var(--text-dim)', fontSize: 9, textAlign: 'center', whiteSpace: 'nowrap',
+                textShadow: isDark ? '0 0 6px rgba(0,0,0,0.8)' : '0 0 4px rgba(255,255,255,0.9)',
+              }}
+            >ord {orderBadge}</div>
+          )}
         </Html>
       )}
     </group>
@@ -441,6 +465,18 @@ export interface Cayley3DSceneProps {
   /** 受控悬停元素 id（与 2D `CayleyView.hoveredElementId` 对称）：命中该元素时按悬停态渲染
    *  （放大节点 + 标签 + 路径序号徽标），供外部联动（如图例/侧栏悬停）。缺省 null = 只用内部指针悬停 */
   hoveredElementId?: string | null
+  // ── VCL B 组 ──
+  /** 字长球半透明球壳开关（其余布局无效）；缺省 true（保持现状） */
+  shell?: boolean
+  /** 字长球纬度层环（每个字长层一圈参考纬线）；缺省 false */
+  layerRings?: boolean
+  /** 「重新优化布局」触发器：自增即再松弛 N 轮；缺省 0（零行为变化） */
+  relayoutNonce?: number
+  // ── VCL F 组 ──
+  /** 节点着色方案；缺省 'none'（逐元素彩虹 / 字长球字长色阶）；'conjugacy' = 按共轭类分色 */
+  nodeColorMode?: CayleyNodeColorMode
+  /** 元素阶编码：球径随阶增大 + 悬停标签附阶数；缺省 false */
+  showOrderBadge?: boolean
 }
 
 function Cayley3DSceneBody({
@@ -459,6 +495,11 @@ function Cayley3DSceneBody({
   faceFill,
   pathHighlight = null,
   hoveredElementId = null,
+  shell = true,
+  layerRings = false,
+  relayoutNonce = 0,
+  nodeColorMode = 'none',
+  showOrderBadge = false,
 }: Cayley3DSceneProps & { group: Group }) {
   const { t } = useTranslation()
   const { gl, camera, scene } = useThree()
@@ -479,6 +520,21 @@ function Cayley3DSceneBody({
     [group, hoveredElementId],
   )
   const effectiveHover = controlledHover ?? hoverElement
+
+  // ── VCL F 组：节点语义装饰（按需计算，关掉时零开销） ──
+  const conjClassIdx = useMemo(
+    () => (nodeColorMode === 'conjugacy' ? conjugacyClassIndexMap(group) : null),
+    [group, nodeColorMode],
+  )
+  const conjClassN = useMemo(
+    () => (nodeColorMode === 'conjugacy' ? conjugacyClassCount(group) : 0),
+    [group, nodeColorMode],
+  )
+  const orderMap = useMemo(() => (showOrderBadge ? elementOrderMap(group) : null), [group, showOrderBadge])
+  const maxOrder = useMemo(
+    () => (orderMap ? Math.max(1, ...orderMap.values()) : 1),
+    [orderMap],
+  )
 
   // 自定义轨道状态（替代 drei OrbitControls）：theta/phi 球坐标，phi 无界（可无限翻越上下极点，无 makeSafe 钳制）
   const orbit = useRef({
@@ -549,10 +605,17 @@ function Cayley3DSceneBody({
     return m
   }, [actions])
 
+  // 「重新优化布局」（VCL B3）：nonce 自增 ⇒ 再松弛 N 轮。
+  // 从基础布局确定性重跑（非增量累积）⇒ 同一个 nonce 永远得到同一个布局，可随预设持久化。
+  const relaxIters = RELAX_BASE_ITERS + Math.min(relayoutNonce, RELAX_MAX_STEPS) * RELAX_STEP_ITERS
+
   const positions = useMemo(() => {
     const base = compute3DPositions(group, layout3D)
-    // 逐生成元边长（VCL）：在基础布局之上跑长度约束松弛；倍率全 1 时原样返回（零行为变化）
-    const scaled: Vec3[] = isIdentityScale(lengthScaleMap)
+    // 逐生成元边长（VCL）：在基础布局之上跑长度约束松弛。
+    // 触发条件有二：倍率非全 1（长度约束），或「重新优化布局」被按过（无约束均匀化）。
+    // 两者都不成立时**原样返回**基础布局（逐位不变）。
+    const needRelax = !isIdentityScale(lengthScaleMap) || relayoutNonce > 0
+    const scaled: Vec3[] = !needRelax
       ? base
       : (() => {
           const byId = new Map<string, Vec3>()
@@ -560,11 +623,16 @@ function Cayley3DSceneBody({
             const p = base[i]
             if (p) byId.set(el.id, p)
           })
-          const relaxed = relaxEdgeLengths3D(byId, cayleyEdges, { lengthScales: lengthScaleMap })
+          const relaxed = relaxEdgeLengths3D(byId, cayleyEdges, {
+            lengthScales: lengthScaleMap,
+            iterations: relaxIters,
+            // 倍率全 1 时 relax 默认短路返回；「重新优化」要的正是无约束均匀化 ⇒ 显式开
+            force: relayoutNonce > 0 ? true : undefined,
+          })
           return group.elements.map((el, i) => relaxed.get(el.id) ?? base[i])
         })()
     return scaled.map(p => new THREE.Vector3(p[0], p[1], p[2]))
-  }, [group, layout3D, cayleyEdges, lengthScaleMap])
+  }, [group, layout3D, cayleyEdges, lengthScaleMap, relaxIters, relayoutNonce])
 
   // 外接球：节点云质心为球心，最大距离为半径（含节点球/自环余量），复位与初始视角均基于它
   const bounds = useMemo(() => {
@@ -585,6 +653,35 @@ function Cayley3DSceneBody({
     for (const p of positions) r = Math.max(r, p.distanceTo(bounds.center))
     return r
   }, [layout3D, positions, bounds])
+
+  // VCL B2：字长球纬度层环 —— 按**实际位置**反推每层的纬度高度与最大水平半径
+  // （而不是照名义公式画：松弛会把 y 挤进纬度带、把外圈节点吸到球面，用真实数据才贴合节点）。
+  // 极点层（e / w₀）水平半径 ≈ 0，成一圈缩成一点 ⇒ 跳过。
+  const latitudeRings = useMemo(() => {
+    if (!layerRings || layout3D !== 'wordLengthSphere' || positions.length === 0) return []
+    const byLayer = new Map<number, number[]>()
+    group.elements.forEach((el, i) => {
+      const k = wordLengthOf(el)
+      if (k === null) return
+      const arr = byLayer.get(k)
+      if (arr) arr.push(i)
+      else byLayer.set(k, [i])
+    })
+    const out: { radius: number; y: number }[] = []
+    for (const [k, idxs] of [...byLayer.entries()].sort((a, b) => a[0] - b[0])) {
+      if (k === 0) continue
+      let ySum = 0
+      let rMax = 0
+      for (const i of idxs) {
+        const p = positions[i]
+        ySum += p.y
+        rMax = Math.max(rMax, Math.hypot(p.x - bounds.center.x, p.z - bounds.center.z))
+      }
+      if (rMax < 0.35) continue
+      out.push({ radius: rMax, y: ySum / idxs.length })
+    }
+    return out
+  }, [layerRings, layout3D, positions, group, bounds])
 
   // 默认视角（复位目标）：外接球直径 ≈ 视口高度 2/3（d = 1.5R/tan(fov/2)），相机远在球外（d ≈ 3.2R > R）。
   // minRadius = 球外（视角不可进入外接球）；maxRadius = 适配距离 3 倍
@@ -1136,8 +1233,9 @@ function Cayley3DSceneBody({
       <pointLight position={[0, 0, 0]} intensity={0.3} color="#ffffff" />
 
       {/* 字长球：半透明球壳——给出"球"的整体轮廓，depthWrite=false 不遮挡内部节点/边
-          （受光材质才有球面明暗渐变，纯 basic 材质会退化成一块均匀色圆盘） */}
-      {shellRadius > 0 && (
+          （受光材质才有球面明暗渐变，纯 basic 材质会退化成一块均匀色圆盘）。
+          VCL B1：`shell=false` 可关（关掉后只剩节点云，便于叠加纬度环或截图去壳） */}
+      {shellRadius > 0 && shell && (
         <mesh renderOrder={-1}>
           <sphereGeometry args={[shellRadius, 48, 32]} />
           <meshStandardMaterial
@@ -1150,6 +1248,25 @@ function Cayley3DSceneBody({
           />
         </mesh>
       )}
+
+      {/* VCL B2：纬度层环（每个字长层一圈水平细环）。默认关：凯莱图里多余线条容易被读成边 */}
+      {latitudeRings.map((ring, i) => (
+        <mesh
+          key={`lat-ring-${i}`}
+          position={[bounds.center.x, ring.y, bounds.center.z]}
+          rotation={[Math.PI / 2, 0, 0]}
+          renderOrder={-1}
+        >
+          <ringGeometry args={[ring.radius * 0.995, ring.radius, 96]} />
+          <meshBasicMaterial
+            color={theme === 'dark' ? '#8fb4ff' : '#3f6fc6'}
+            transparent
+            opacity={0.3}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
 
       {/* 环面壳（torusHex）：给出"这是一个环面"的整体参照，depthWrite=false 不遮挡内部边/面 */}
       {torusHex && <TorusHexShell geometry={torusHex} dark={theme === 'dark'} />}
@@ -1282,17 +1399,29 @@ function Cayley3DSceneBody({
         if (isLargeGroup && !visibleElementIds.has(el.id)) return null
         const isSelected = selectedElements.has(el.id)
         const parentSubset = subsetOf.get(el.id)
+        const ord = orderMap?.get(el.id)
+        // VCL F2：阶 → 球径（对数压缩）。3D 里数字角标随距离/旋转不可读，用球径做一眼编码，
+        // 精确值由悬停标签的 ord 行补上。ord ≤ 1（单位元）不放大。
+        const orderScale = ord !== undefined && ord > 1 && maxOrder > 1
+          ? 1 + ORDER_SCALE_SPAN * (Math.log(ord) / Math.log(maxOrder))
+          : 1
+        // VCL F1：共轭类着色优先于默认配色（字长球的字长色阶 / 逐元素彩虹）
+        const color = conjClassIdx
+          ? conjugacyClassColor(conjClassIdx.get(el.id) ?? 0, conjClassN)
+          : (layout3D === 'wordLengthSphere' ? wordLengthColor(group, el) : null) ?? getElementColor(i, group.order, group.isAbelian)
         return (
           <NodeSphere
             key={el.id}
             position={pos}
             label={el.label}
-            color={(layout3D === 'wordLengthSphere' ? wordLengthColor(group, el) : null) ?? getElementColor(i, group.order, group.isAbelian)}
+            color={color}
             isSelected={isSelected}
             isHovered={effectiveHover?.id === el.id}
             subsetColor={parentSubset ? parentSubset.color : null}
             element={el}
             nodeScale={nodeScale}
+            orderScale={orderScale}
+            orderBadge={orderMap && ord !== undefined ? ord : undefined}
             showLabel={showLabels}
             isDark={theme === 'dark'}
             onSelectElement={selectElement}

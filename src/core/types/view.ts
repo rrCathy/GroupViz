@@ -49,6 +49,8 @@ export interface CayleyAction {
   /** 该作用元素对应边的长度倍率（1 = 原始布局；见 VCL 逐生成元边长）。
    *  固定几何布局经 relaxEdgeLengths 后处理，力导向布局作为弹簧静止长度倍率 */
   lengthScale?: number
+  /** 该作用元素的边用虚线（VCL E 组：黑白/打印场景靠线型区分生成元）；缺省 false */
+  dash?: boolean
 }
 
 export interface CayleyEdgeData {

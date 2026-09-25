@@ -1,6 +1,7 @@
 // ── ViewWindow 几何/配置/参数持久化（自 FloatingViewWindow.tsx 拆出，纯搬家）──
 import { z } from 'zod'
 import { loadVersionedJson, saveVersionedJson } from '../../../utils/persistence'
+import { decorationsSchemaV1 } from '../../../core/types/decorations'
 
 const VW_PERSIST_SCHEMA = z.object({
   position: z.object({ x: z.number(), y: z.number() }),
@@ -16,6 +17,8 @@ const VW_PERSIST_SCHEMA = z.object({
     actionLocked: z.boolean().optional(),
   }),
   viewParams: z.record(z.string(), z.unknown()),
+  /** VCL Decorations（DEC-2）：图上注释，随窗口持久化；缺省 = 无（旧存档兼容） */
+  decorations: decorationsSchemaV1.optional(),
 })
 
 export function loadVwPersist(key: string) {

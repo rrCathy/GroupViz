@@ -225,12 +225,55 @@ describe('relaxEdgeLengths3D', () => {
     expect(after).toBeLessThan(4)
   })
 
-  it('does not mutate the base map', () => {
+  it('force: true runs even when every scale is 1 (the "re-optimize layout" contract)', () => {
+    const C6 = createCyclicGroup(6)
+    // 各向异性拉伸 → 边长长短相间，松弛才有事可做（正六边形本身已均匀，弹簧合力为 0）
+    const base = new Map<string, Vec3>()
+    for (const [id, p] of ring3D(6)) base.set(id, [p[0] * 2, p[1], p[2]])
+    const edges = computeCayleyActionEdges(C6, [makeAction('e1')], 'right')
+
+    // 缺省契约：全 1 ⇒ 原样返回（既有插图逐位不变）
+    expect(relaxEdgeLengths3D(base, edges, { lengthScales: new Map([['e1', 1]]) })).toBe(base)
+
+    const forced = relaxEdgeLengths3D(base, edges, { lengthScales: new Map([['e1', 1]]), force: true })
+    expect(forced).not.toBe(base)
+    let maxMove = 0
+    for (const [id, p] of forced) {
+      const q = base.get(id)!
+      maxMove = Math.max(maxMove, Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]))
+    }
+    expect(maxMove).toBeGreaterThan(0.05)
+
+    // 边长更均匀：标准差下降
+    const spread = (m: Map<string, Vec3>) => {
+      const lens = edges.map(e => {
+        const a = m.get(e.fromId)!
+        const b = m.get(e.toId)!
+        return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+      })
+      const mean = lens.reduce((s, v) => s + v, 0) / lens.length
+      return Math.sqrt(lens.reduce((s, v) => s + (v - mean) ** 2, 0) / lens.length)
+    }
+    expect(spread(forced)).toBeLessThan(spread(base) * 0.98)
+  })
+
+  it('iteration count actually changes the outcome (relayoutNonce is not a no-op)', () => {
+    const C6 = createCyclicGroup(6)
+    const base = new Map<string, Vec3>()
+    for (const [id, p] of ring3D(6)) base.set(id, [p[0] * 2, p[1], p[2]])
+    const edges = computeCayleyActionEdges(C6, [makeAction('e1')], 'right')
+    const opts = { lengthScales: new Map([['e1', 1]]), force: true }
+    const short = relaxEdgeLengths3D(base, edges, { ...opts, iterations: 160 })
+    const long = relaxEdgeLengths3D(base, edges, { ...opts, iterations: 480 })
+    expect([...long.values()]).not.toEqual([...short.values()])
+  })
+
+  it('does not mutate the base map (even with force)', () => {
     const C6 = createCyclicGroup(6)
     const base = ring3D(6)
     const snapshot = new Map([...base].map(([k, v]) => [k, [...v] as Vec3]))
     const edges = computeCayleyActionEdges(C6, [makeAction('e1')], 'right')
-    relaxEdgeLengths3D(base, edges, { lengthScales: new Map([['e1', 1.8]]) })
+    relaxEdgeLengths3D(base, edges, { lengthScales: new Map([['e1', 1]]), force: true })
     for (const [k, v] of snapshot) {
       expect(base.get(k)).toEqual(v)
     }

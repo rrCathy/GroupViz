@@ -37,6 +37,7 @@ export function normalizeCayleyActions(group: Group, actions?: CayleyActionParam
       enabled: a.enabled !== false,
       color: a.color ?? COLOR_PALETTE[out.length % COLOR_PALETTE.length],
       lengthScale: a.lengthScale,
+      dash: a.dash,
     })
   }
   return out

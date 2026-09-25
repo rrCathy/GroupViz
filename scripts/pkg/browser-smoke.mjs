@@ -1,6 +1,7 @@
 /**
- * 线上包浏览器实测 —— 真实 Chromium 里点 TestPage 的四个 VCL 示例，验证
- * SSR 证明不了的交互（力导向拖拽、路径高亮、3D 字长球、直边）。
+ * 线上包浏览器实测 —— 真实 Chromium 里打开 /?test=1（VCL 控件消费矩阵），
+ * 验证 SSR/组件测试覆盖不到的真渲染：共轭类着色的节点 fill、F4 标记环、
+ * F3 ⟨g⟩ 高亮、E3 单色边、E4 箭头开关、E2 图例、3D 画布。
  *
  * 前置：npm run dev（5173）。用 playwright-core + 本机 ms-playwright Chromium。
  * 用法：node scripts/pkg/browser-smoke.mjs
@@ -14,8 +15,9 @@ function findChromium() {
   const la = process.env.LOCALAPPDATA || ''
   const cands = [
     process.env.GV_CHROME,
-    `${la}\\ms-playwright\\chromium-1234\\chrome-win\\chrome.exe`,
     `${la}\\ms-playwright\\chromium-1124\\chrome-win\\chrome.exe`,
+    `${la}\\ms-playwright\\chromium-1234\\chrome-win\\chrome.exe`,
+    `${la}\\ms-playwright\\chromium-1234\\chrome-win64\\chrome.exe`,
     `${la}\\Google\\Chrome\\Application\\chrome.exe`,
   ].filter(Boolean)
   return cands.find(p => existsSync(p))
@@ -30,15 +32,56 @@ const check = (label, ok, detail = '') => {
   else { failures++; say(`  FAIL  ${label}${detail ? ' — ' + detail : ''}`) }
 }
 
-/**
- * 读 CayleyView 里「节点组」的位置：节点是 <g transform="translate(x, y)"><circle r=..></g>。
- * 返回 { pos, transform } —— transform 为包裹组的 CT（translate(40,40) scale(1)）。
- * 注意：节点组本身也是 <g transform^="translate">，靠 circle 半径 + 只取**直接子节点**
- * 过滤，避免把节点组当成包裹组。
- */
+/** 卡片里真正的视图 svg（带 viewBox 的那个） */
+const viewSvg = (card) => card.locator('svg[viewBox]').first()
+
+/** 节点圆 fill 列表（只取靠 circle 半径 ≥15 过滤出的节点组，避免把标记环/角标当节点） */
+async function nodeFills(card) {
+  return viewSvg(card).evaluate(svg => {
+    const root = svg.querySelector(':scope > g[transform]')
+    const out = []
+    for (const g of root?.children ?? []) {
+      if (g.tagName !== 'g') continue
+      const c = g.querySelector('circle')
+      if (!c) continue
+      if (parseFloat(c.getAttribute('r') ?? '0') < 15) continue
+      out.push(c.getAttribute('fill'))
+    }
+    return out
+  })
+}
+
+/** 带 stroke-dasharray 的圆数（F4 正规子群虚线环） */
+async function dashedRingCount(card) {
+  return viewSvg(card).evaluate(svg => svg.querySelectorAll('circle[stroke-dasharray]').length)
+}
+
+/** 指定描边色的圆数（F3 ⟨g⟩ 环 = #4ecdc4 → rgb(78, 205, 196)） */
+async function ringCount(card, color) {
+  return viewSvg(card).evaluate((svg, col) => {
+    const norm = (v) => (v || '').replace(/\s+/g, '')
+    return [...svg.querySelectorAll('circle')].filter(c => norm(c.getAttribute('stroke')) === norm(col)).length
+  }, color)
+}
+
+/** 边 path（含 Q 的曲线）的 stroke + 是否有箭头 */
+async function edgeInfo(card) {
+  return viewSvg(card).evaluate(svg => {
+    const root = svg.querySelector(':scope > g[transform]')
+    const paths = [...(root?.children ?? [])].filter(el => el.tagName === 'path')
+      .filter(p => (p.getAttribute('d') || '').includes('Q'))
+    return paths.map(p => ({ stroke: p.getAttribute('stroke'), marker: p.hasAttribute('marker-end') }))
+  })
+}
+
+async function hasLegend(card) {
+  return viewSvg(card).evaluate(svg =>
+    [...svg.querySelectorAll('text')].some(t => (t.textContent || '').trim() === 'Generators'))
+}
+
+/** 读 CayleyView 节点位置（用于点选 F3） */
 async function readCayleyLayout(card) {
-  // 卡片里可能有多个 svg（控件区的图标等），真正的视图 svg 是带 viewBox 的那个
-  return card.locator('svg[viewBox]').first().evaluate(svg => {
+  return viewSvg(card).evaluate(svg => {
     const root = svg.querySelector(':scope > g[transform]')
     const tm = (root?.getAttribute('transform') || '').match(
       /translate\(\s*(-?[\d.]+)[ ,]+(-?[\d.]+)\)\s*scale\(\s*(-?[\d.]+)/)
@@ -47,11 +90,9 @@ async function readCayleyLayout(card) {
       .filter(el => el.tagName === 'g')
       .map(g => {
         const c = g.querySelector('circle')
-        if (!c) return null
-        if (parseFloat(c.getAttribute('r') ?? '0') < 15) return null
+        if (!c || parseFloat(c.getAttribute('r') ?? '0') < 15) return null
         const m = (g.getAttribute('transform') || '').match(/translate\(\s*(-?[\d.]+)[ ,]+(-?[\d.]+)/)
-        if (!m) return null
-        return { x: parseFloat(m[1]), y: parseFloat(m[2]) }
+        return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : null
       })
       .filter(Boolean)
     const vbAttr = svg.getAttribute('viewBox') || '0 0 860 520'
@@ -60,10 +101,6 @@ async function readCayleyLayout(card) {
   })
 }
 
-/**
- * viewBox 用户单位 → 浏览器视口坐标。svg 默认 preserveAspectRatio="xMidYMid meet"：
- * 等比缩放 + 居中，两侧留白。算错会让鼠标落在空处（拖拽测不到）。
- */
 function userToScreen(svgBox, viewBox, transform, p) {
   const scale = Math.min(svgBox.width / viewBox.w, svgBox.height / viewBox.h)
   const padX = (svgBox.width - viewBox.w * scale) / 2
@@ -80,7 +117,7 @@ if (!exe) {
   process.exit(1)
 }
 const browser = await chromium.launch({ executablePath: exe })
-const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
+const page = await browser.newPage({ viewport: { width: 1600, height: 1100 } })
 const errors = []
 page.on('pageerror', e => errors.push('pageerror: ' + e.message))
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()) })
@@ -89,123 +126,113 @@ try {
   await page.goto(URL, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(3000)
 
-  // ---------- 0 ----------
-  const demoBtns = await page.locator('[data-testid="pkg-vcl-demos"] button').count()
-  check('VCL 示例按钮组', demoBtns === 4, `${demoBtns} 个`)
-  const groupLabel0 = await page.locator('[data-testid="pkg-group-label"]').innerText()
-  check('群已载入', !groupLabel0.includes('未载入'), groupLabel0.trim())
-
-  // ---------- 1. D7 力导向：拖拽跟手 ----------
-  await page.locator('[data-testid="pkg-demo-d7-force"]').click()
-  await page.waitForTimeout(2500)
-  const d7Label = await page.locator('[data-testid="pkg-group-label"]').innerText()
-  check('D7 力导向示例已切群', /D/.test(d7Label), d7Label.trim())
-
-  const card = page.locator('[data-testid="pkg-cayley"]')
-  const layout0 = await readCayleyLayout(card)
-  const pos0 = layout0.pos
-  check('D7 画布渲染节点', pos0.length > 0, `${pos0.length} 个节点`)
-
-  if (pos0.length > 0) {
-    const svgBox = await card.locator('svg[viewBox]').first().boundingBox()
-    const { viewBox, transform } = layout0
-    // 选「离画布中心最远」的节点拖：中心节点容易被邻居压住，命中率低
-    const center = { x: viewBox.w / 2, y: viewBox.h / 2 }
-    const t = pos0.reduce((best, p) =>
-      Math.hypot(p.x - center.x, p.y - center.y) > Math.hypot(best.x - center.x, best.y - center.y) ? p : best,
-      pos0[0])
-    const tIdx = pos0.indexOf(t)
-    const s = userToScreen(svgBox, viewBox, transform, t)
-
-    const DX = 120, DY = 60
-    await page.mouse.move(s.x, s.y)
-    await page.mouse.down()
-    for (let i = 1; i <= 12; i++) {
-      await page.mouse.move(s.x + (DX * i) / 12, s.y + (DY * i) / 12)
-      await page.waitForTimeout(16)
-    }
-    await page.waitForTimeout(150)
-    const during = (await readCayleyLayout(card)).pos
-    await page.mouse.up()
-    await page.waitForTimeout(1500)
-    const after = (await readCayleyLayout(card)).pos
-
-    const gotX = during[tIdx].x - t.x
-    const gotY = during[tIdx].y - t.y
-    // 量纲换算：鼠标位移是 CSS px，节点位移是 viewBox 用户单位。
-    // viewBox 860×520 装进 488×295 的 svg 时 fit=0.568（1 用户单位 = 0.568 px），
-    // 反过来 1 px = 1/fit = 1.76 用户单位。引擎内部 scaleX = vb/rect 已是这个方向，
-    // 所以期望位移 = 鼠标 px / fit（不是 × fit —— 之前写反了，才会算出 3.10 的假比例）。
-    const fit = Math.min(svgBox.width / viewBox.w, svgBox.height / viewBox.h)
-    const expect = Math.hypot(DX, DY) / fit
-    const ratio = Math.hypot(gotX, gotY) / expect
-    say(`       [drag] svgBox=${svgBox.width.toFixed(1)}x${svgBox.height.toFixed(1)} vb=${viewBox.w}x${viewBox.h} fit=${fit.toFixed(3)} scale=${transform.scale}`)
-    check('拖拽跟手（位移比 0.6–1.4）', ratio > 0.6 && ratio < 1.4,
-      `鼠标 ${DX},${DY}px(→${expect.toFixed(0)} 用户单位) → 节点 ${gotX.toFixed(0)},${gotY.toFixed(0)}（比 ${ratio.toFixed(2)}）`)
-
-    // 漂移阈值统一换算成用户单位（30px 屏幕 ≈ 30/fit 用户单位）
-    const drift = Math.hypot(after[tIdx].x - during[tIdx].x, after[tIdx].y - during[tIdx].y)
-    check('松手后基本停住（漂移 < 30px）', drift < 30 / fit,
-      `漂移 ${drift.toFixed(1)} 用户单位（≈${(drift * fit).toFixed(1)}px）`)
-
-    // 局部性：远端节点不应被大幅拖动（< 40% 拖拽量）
-    const farIdx = pos0.map((p, i) => ({ i, d: Math.hypot(p.x - t.x, p.y - t.y) }))
-      .sort((a, b) => b.d - a.d)[0].i
-    const farDisp = Math.hypot(after[farIdx].x - pos0[farIdx].x, after[farIdx].y - pos0[farIdx].y)
-    check('局部性：最远节点位移 < 40% 拖拽量', farDisp < expect * 0.4,
-      `最远节点 ${farDisp.toFixed(1)} 用户单位 / 拖拽 ${expect.toFixed(0)} 用户单位`)
+  // ---------- 0. 页头 + 三卡存在 ----------
+  const groupLabel = await page.locator('[data-testid="pkg-group-label"]').innerText()
+  check('群已载入（默认 S₄）', !groupLabel.includes('未载入') && /24/.test(groupLabel), groupLabel.trim())
+  for (const id of ['pkg-cayley-f', 'pkg-cayley-e', 'pkg-cayley3d-f']) {
+    check(`卡片存在 ${id}`, await page.locator(`[data-testid="${id}"]`).count() === 1)
   }
-  await page.screenshot({ path: 'browser-d7-force.png' })
 
-  // ---------- 2. S4 字长球 + 哈密顿路径 ----------
-  await page.locator('[data-testid="pkg-demo-s4-ham"]').click()
-  await page.waitForTimeout(4000)
-  const s4Label = await page.locator('[data-testid="pkg-group-label"]').innerText()
-  check('S4 字长球示例已切群', /S/.test(s4Label) && /24/.test(s4Label), s4Label.trim())
-  const canvases = await page.locator('canvas').count()
+  // ---------- 1. F1 共轭类着色 ----------
+  const cardF = page.locator('[data-testid="pkg-cayley-f"]')
+  const fills = await nodeFills(cardF)
+  const hsl = new Set(fills.filter(f => /^hsl\(/.test(f || '')))
+  check('F1 共轭类着色：节点 fill 为 hsl 且 ≥3 种（S₄ 有 5 类）', hsl.size >= 3,
+    `${fills.length} 节点 / ${hsl.size} 种 hsl 色`)
+
+  // 切回 Theme 应恢复主题填充
+  await page.locator('[data-testid="pkg-cf-color"] button', { hasText: 'Theme' }).click()
+  await page.waitForTimeout(300)
+  const themeFills = new Set((await nodeFills(cardF)).filter(f => /^hsl\(/.test(f || '')))
+  check('F1 关闭后无 hsl 填充', themeFills.size === 0, `${themeFills.size} 种 hsl`)
+  await page.locator('[data-testid="pkg-cf-color"] button', { hasText: 'Conjugacy' }).click()
+  await page.waitForTimeout(200)
+
+  // ---------- 2. F4 正规子群虚线环 ----------
+  const dash0 = await dashedRingCount(cardF)
+  await page.locator('[data-testid="pkg-cf-normal"] input').click()
+  await page.waitForTimeout(300)
+  const dash1 = await dashedRingCount(cardF)
+  check('F4 markNormalSubgroup：S₄ 最小正规子群 V₄ → +4 虚线环', dash1 - dash0 === 4,
+    `${dash0} → ${dash1}（+${dash1 - dash0}）`)
+
+  // F4 中心：S₄ 中心 = {e} → +2 圆（双环）
+  const circlesBefore = await viewSvg(cardF).evaluate(svg => svg.querySelectorAll('circle').length)
+  await page.locator('[data-testid="pkg-cf-center"] input').click()
+  await page.waitForTimeout(300)
+  const circlesAfter = await viewSvg(cardF).evaluate(svg => svg.querySelectorAll('circle').length)
+  check('F4 markCenter：S₄ 中心 {e} → +2 圆', circlesAfter - circlesBefore === 2,
+    `${circlesBefore} → ${circlesAfter}（+${circlesAfter - circlesBefore}）`)
+
+  // ---------- 3. F3 ⟨g⟩ 高亮（点节点选中） ----------
+  const layout = await readCayleyLayout(cardF)
+  if (layout.pos.length > 0) {
+    const svgBox = await viewSvg(cardF).boundingBox()
+    const center = { x: layout.viewBox.w / 2, y: layout.viewBox.h / 2 }
+    const t = layout.pos.reduce((best, p) =>
+      Math.hypot(p.x - center.x, p.y - center.y) > Math.hypot(best.x - center.x, best.y - center.y) ? p : best, layout.pos[0])
+    const s = userToScreen(svgBox, layout.viewBox, layout.transform, t)
+    await page.mouse.click(s.x, s.y)
+    // 移开鼠标消除 hover 环，只留 ⟨g⟩ 环
+    await page.mouse.move(svgBox.x + 5, svgBox.y + 5)
+    await page.waitForTimeout(400)
+    // SVG 表现属性不归一化：getAttribute('stroke') 返回字面量（#4ecdc4 / #ffd93d）
+    const selected = await ringCount(cardF, '#ffd93d')
+    const gen = await ringCount(cardF, '#4ecdc4')
+    check('F3 highlightGenerated：点选节点（金环）+ ⟨g⟩ 青环', selected >= 1 && gen >= 1,
+      `选中金环 ${selected} / ⟨g⟩ 青环 ${gen}`)
+  } else {
+    check('F3 highlightGenerated：找到节点', false, '无节点可点')
+  }
+
+  // ---------- 4. E3 printPalette 单色边 ----------
+  const cardE = page.locator('[data-testid="pkg-cayley-e"]')
+  const e0 = await edgeInfo(cardE)
+  const distinct0 = new Set(e0.map(e => e.stroke))
+  await page.locator('[data-testid="pkg-ce-print"] input').click()
+  await page.waitForTimeout(300)
+  const e1 = await edgeInfo(cardE)
+  const distinct1 = new Set(e1.map(e => e.stroke))
+  check('E3 printPalette：边由多色收敛为单色', e0.length > 0 && distinct0.size > 1 && distinct1.size === 1,
+    `${e0.length} 边 · ${distinct0.size} 色 → ${distinct1.size} 色（${[...distinct1][0]}）`)
+
+  // E2 图例默认开
+  check('E2 showLegend：图例 overlay 存在（text=Generators）', await hasLegend(cardE))
+
+  // E4 箭头开关
+  const arrowsOn = e1.some(e => e.marker)
+  await page.locator('[data-testid="pkg-ce-arrows"] input').click()
+  await page.waitForTimeout(250)
+  const e2 = await edgeInfo(cardE)
+  const arrowsOff = e2.every(e => !e.marker)
+  check('E4 showArrows：默认有箭头、关掉后无 marker-end', arrowsOn && arrowsOff,
+    `on=${arrowsOn} / off=${arrowsOff}`)
+
+  await page.screenshot({ path: 'browser-vcl-2d.png' })
+
+  // ---------- 5. 3D（B 组 + F 组） ----------
+  const card3d = page.locator('[data-testid="pkg-cayley3d-f"]')
+  const canvases = await card3d.locator('canvas').count()
   check('3D 画布存在', canvases > 0, `${canvases} 个 canvas`)
-  const hamTitle = await page.locator('[data-testid="pkg-3d-hamiltonian"]').getAttribute('title').catch(() => '')
-  check('哈密顿路径按钮已算出路', /覆盖全部 24/.test(hamTitle || ''), hamTitle || '(无 title)')
-  const pathVal = await page.locator('[data-testid="pkg-3d-path"]').inputValue().catch(() => '')
-  check('哈密顿 word 已填入路径框', pathVal.trim().length > 0, pathVal.slice(0, 50))
-  await page.screenshot({ path: 'browser-s4-wordlength.png' })
+  // B1 shell / B2 rings / B3 relayout：切换不报错（几何在 WebGL，不做像素断言）
+  await page.locator('[data-testid="pkg-c3-shell"] input').click()
+  await page.locator('[data-testid="pkg-c3-rings"] input').click()
+  await page.locator('[data-testid="pkg-c3-relayout"]').click()
+  await page.locator('[data-testid="pkg-c3-color"] button', { hasText: 'Theme' }).click()
+  await page.waitForTimeout(1200)
+  check('B1/B2/B3 与 F1 控件切换后无 error', errors.length === 0, errors.slice(0, 2).join(' | ') || 'clean')
 
-  // ---------- 3. S3 直边 ----------
-  await page.locator('[data-testid="pkg-demo-s3-curve"]').click()
-  await page.waitForTimeout(2000)
-  const s3Label = await page.locator('[data-testid="pkg-group-label"]').innerText()
-  check('S3 示例已切群', /S/.test(s3Label) && /6/.test(s3Label), s3Label.trim())
-  const curv = await page.locator('[data-testid="pkg-cayley-curvature"]').inputValue()
-  check('曲率滑杆为 0（Straight）', Number(curv) === 0, `curvature=${curv}`)
-  // 边恒为 <path>（引擎不产出 <line>）；笔直 = Q 控制点落在弦中点（共线）。
-  // 注意排除 <defs> 里的箭头 marker 子路径（d="M0,0 L0,6 L9,3 z"）。
-  const cardS3 = page.locator('[data-testid="pkg-cayley"]')
-  const edgeGeom = await cardS3.locator('svg[viewBox]').first().evaluate(svg => {
-    const root = svg.querySelector(':scope > g[transform]')
-    const paths = [...(root?.children ?? [])].filter(el => el.tagName === 'path')
-    return paths.map(p => p.getAttribute('d') || '').filter(d => d.includes('Q'))
-  })
-  let maxDev = 0
-  for (const d of edgeGeom) {
-    const m = d.match(/^M\s*(-?[\d.]+)\s+(-?[\d.]+)\s+Q\s*(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/)
-    if (!m) continue
-    const [, x0, y0, cx1, cy1, x1, y1] = m.map(Number)
-    maxDev = Math.max(maxDev, Math.hypot(cx1 - (x0 + x1) / 2, cy1 - (y0 + y1) / 2))
+  // S₄ 多面体形状：必须套用「形状专属」生成元集（否则边横跨整个多面体 → 乱）
+  for (const shp of ['truncatedCube', 'torusHex']) {
+    await page.locator('[data-testid="pkg-c3-layout"]').selectOption(shp)
+    await page.waitForTimeout(800)
+    const t = await card3d.innerText()
+    check(`S₄ ${shp} 套用形状专属作用边`, /形状专属/.test(t),
+      (t.match(/作用边 = [^：\n]+/) || [''])[0].trim().slice(0, 40))
   }
-  check('S3 笔直模式边共线（控制点在中点，偏差 < 0.5）', edgeGeom.length > 0 && maxDev < 0.5,
-    `${edgeGeom.length} 条 Q 边 / 最大控制点偏差 ${maxDev.toFixed(3)}`)
-  await page.screenshot({ path: 'browser-s3-straight.png' })
+  await page.screenshot({ path: 'browser-vcl-3d.png' })
 
-  // ---------- 4. A4 逐生成元边长 ----------
-  await page.locator('[data-testid="pkg-demo-a4-len"]').click()
-  await page.waitForTimeout(4000)
-  const a4Label = await page.locator('[data-testid="pkg-group-label"]').innerText()
-  check('A4 示例已切群', /A/.test(a4Label) && /12/.test(a4Label), a4Label.trim())
-  const len0 = await page.locator('[data-testid="pkg-3d-len-0"]').inputValue().catch(() => '')
-  check('逐生成元 len 滑杆已设非 1', Number(len0) !== 1, `len0=${len0}`)
-  await page.screenshot({ path: 'browser-a4-len.png' })
-
-  // ---------- 5. 页面自检 ----------
+  // ---------- 6. 页面自检 ----------
   const errPanel = await page.locator('[data-testid="pkg-errors"]').innerText()
   check('页面 runtime error 面板 ✓', /无未捕获/.test(errPanel), errPanel.trim().slice(0, 60))
   check('全程无 JS 错误', errors.length === 0, errors.slice(0, 3).join(' | ') || 'clean')

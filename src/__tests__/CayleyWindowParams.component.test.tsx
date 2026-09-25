@@ -41,17 +41,37 @@ describe('ViewWindow · cayley view', () => {
     // C₁₂（>7 阶循环群）可用形状：circular/spiral/coil/cone，默认 circular
     expect(Array.from(select.options).map(o => o.value)).toEqual(['circular', 'spiral', 'coil', 'cone'])
     expect(select.value).toBe('circular')
-    // 滑杆 = 节点半径 + 边曲率 + 逐生成元边长（C₁₂ 默认 1 条作用边）→ 3
-    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(3)
-    // 复选框 = 6 窗口配置（锁移动/锁缩放/信息/固定/控件/滑杆）+ 1 条作用边 + Live force-directed
-    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(8)
+    // 滑杆 = 节点半径 + 边曲率 + 逐生成元边长（C₁₂ 默认 1 条作用边）+ 边线宽（VCL E4）→ 4
+    expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(4)
+    // 复选框 = 6 窗口配置 + 1 条作用边 + Live force-directed + VCL 新增（箭头/打印/图例/阶徽标/⟨g⟩高亮/中心/正规子群）
+    //          + DEC-2 注释（Leader line）= 16
+    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(16)
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
-    // VCL 新增控件（边几何 / 路径高亮 / 动态力导向）
+    // VCL 新增控件：边几何 / 路径高亮 / 动态力导向 / E 组边样式 / F 组语义装饰
     expect(screen.getByText('Edge curvature')).toBeInTheDocument()
+    expect(screen.getByText('Edge width')).toBeInTheDocument()            // VCL E4 边线宽
     expect(screen.getByText('Path highlight')).toBeInTheDocument()
     expect(screen.getByText('Live force-directed')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley-arrows')).toBeInTheDocument()      // VCL E3 箭头开关
+    expect(screen.getByTestId('cayley-print-palette')).toBeInTheDocument() // VCL E3 打印/单色
+    expect(screen.getByTestId('cayley-legend')).toBeInTheDocument()      // VCL E2 图例
+    expect(screen.getByTestId('cayley-order-badge')).toBeInTheDocument() // VCL F2 阶徽标
+    expect(screen.getByTestId('cayley-gen-highlight')).toBeInTheDocument() // VCL F3 ⟨g⟩高亮
+    expect(screen.getByTestId('cayley-mark-center')).toBeInTheDocument() // VCL F4 中心 Z(G)
+    expect(screen.getByTestId('cayley-mark-normal')).toBeInTheDocument() // VCL F4 正规子群
+    expect(screen.getByTestId('cayley-color-conj')).toBeInTheDocument()  // VCL F1 共轭类着色
+    // VCL DEC-2 注释编辑器（锚点 = 节点 / 边 / 整图；文本 TeX）
+    expect(screen.getByTestId('annotation-editor')).toBeInTheDocument()
+    expect(screen.getByTestId('annotation-anchor-type')).toBeInTheDocument()
+    expect(screen.getByTestId('annotation-ref')).toBeInTheDocument()
+    expect(screen.getByTestId('annotation-text')).toBeInTheDocument()
+    expect(screen.getByTestId('annotation-add')).toBeInTheDocument()
+    expect(screen.getByTestId('annotation-leader')).toBeInTheDocument()
+    expect(screen.getByTestId('annotation-color')).toBeInTheDocument()
+    // 锚点默认 node（边锚点才出现 Action element 输入）
+    expect(screen.queryByTestId('annotation-action-ref')).not.toBeInTheDocument()
   })
 
   it('edge-curvature / path-highlight / force-directed controls write back params', () => {
@@ -75,6 +95,39 @@ describe('ViewWindow · cayley view', () => {
     const input = screen.getByPlaceholderText(/refs, e\.g\./)
     fireEvent.change(input, { target: { value: 'e0 e1 e2' } })
     expect(onChange.mock.lastCall?.[0]).toMatchObject({ pathHighlight: { elements: ['e0', 'e1', 'e2'] } })
+  })
+
+  it('adds / switches anchor / deletes an annotation through the panel and draws it on the canvas (DEC-2)', () => {
+    const { container } = render(
+      <ViewWindow view="cayley" group={c4} title="C₄ 凯莱" storageKey="cay-decor"
+        defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }} />,
+    )
+    const win = container.firstElementChild as HTMLElement
+    const panel = openPanel()
+
+    // 初始：无注释叠层（缺省零行为变化）
+    expect(win.querySelector('[data-testid="cayley-annotations"]')).toBeNull()
+
+    // 节点锚点 + TeX 文本 → 添加
+    const ref = c4.elements[1].label
+    fireEvent.change(screen.getByTestId('annotation-ref'), { target: { value: ref } })
+    fireEvent.change(screen.getByTestId('annotation-text'), { target: { value: 'a^2=e' } })
+    fireEvent.click(screen.getByTestId('annotation-add'))
+
+    // 面板列表出现该条 + 画布出现注释叠层（1 条 foreignObject 文本）
+    expect(panel.querySelector('[data-testid^="annotation-row-"]')).not.toBeNull()
+    const overlay = win.querySelector('[data-testid="cayley-annotations"]') as SVGGElement | null
+    expect(overlay).not.toBeNull()
+    expect(overlay!.querySelectorAll('foreignObject')).toHaveLength(1)
+
+    // 切到边锚点 → 出现 Action element 输入
+    fireEvent.change(screen.getByTestId('annotation-anchor-type'), { target: { value: 'edge' } })
+    expect(screen.getByTestId('annotation-action-ref')).toBeInTheDocument()
+
+    // 删除 → 列表与叠层同时清空
+    fireEvent.click(panel.querySelector('[data-testid^="annotation-delete-"]') as HTMLElement)
+    expect(panel.querySelector('[data-testid^="annotation-row-"]')).toBeNull()
+    expect(win.querySelector('[data-testid="cayley-annotations"]')).toBeNull()
   })
 
   it('fires onViewParamsChange when shape or multiply changes (controlled mode)', () => {

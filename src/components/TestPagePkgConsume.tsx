@@ -1,18 +1,22 @@
 /**
  * TestPagePkgConsume — /?test=1 页面主体（TestPage 懒加载）。
  *
- * 2026-09-23 清空改写：本页改为**本次开发内容的消费矩阵** —— VCL
- * B1–B3（3D 球壳/纬度环/重排）+ F1–F4（共轭类着色/阶徽标/⟨g⟩ 高亮/中心·正规子群标记）
- * + E2–E4（自动图例/打印单色+虚线/边线宽+箭头）。
+ * 2026-09-23 清空改写为「VCL 控件消费矩阵」；2026-09-28 扩为**全量矩阵**：
+ *   批次一（09-11 / 09-12）边几何 edgeCurvature + actions[].lengthScale ·
+ *                          路径高亮 pathHighlight · 动态力导向 forceDirected
+ *   批次二（09-23）        F1/F3/F4 节点语义 · E2–E4 边样式与图例 · B1–B3 3D 开关
+ *   批次三（09-24，Phase 0）Decorations 注释（node / edge / figure 三锚点）
+ * 批次一的三张卡在 09-23 重写时曾被整页替换掉，本次补回 —— 否则这几项
+ * 在包消费端（dist-pkg 产物）长期没有验证入口。
  *
  * 全部 Scene 直接吃 **dist-pkg 产物**（vite alias @groupviz/core·@groupviz/react →
  * dist-pkg），日常打开 ?test=1 即对这批新控件做参数级回归。改动 src/core / Scene /
  * src/package 后需先 `npm run build:pkg` 再刷新本页。
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   createGroupFromSymbol, getAvailableShapes3D, wordLengthSphereActions, TORUS_HEX_STAR_GENERATORS,
-  type Group, type Layout3D,
+  type Annotation, type Decorations, type Group, type Layout3D,
 } from '@groupviz/core'
 import { CayleyView, Cayley3DScene, I18nProvider } from '@groupviz/react'
 
@@ -115,11 +119,28 @@ function Ctl({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Card({ testid, title, tag, controls, children }: { testid: string; title: string; tag?: string; controls?: ReactNode; children: ReactNode }) {
+/** 滑杆（带数值读数）；testpage 里各卡大量复用 */
+function Rng({ label, value, min, max, step, onChange, testid, width = 96 }: {
+  label: string; value: number; min: number; max: number; step: number
+  onChange: (v: number) => void; testid: string; width?: number
+}) {
+  return (
+    <Ctl label={label}>
+      <input type="range" min={min} max={max} step={step} value={value} data-testid={testid}
+        onChange={(e) => onChange(Number(e.target.value))} style={{ width }} />
+      <span style={{ fontSize: 10, color: '#64748b' }}>{value}</span>
+    </Ctl>
+  )
+}
+
+function Card({ testid, title, tag, batch, controls, children }: {
+  testid: string; title: string; tag?: string; batch?: string; controls?: ReactNode; children: ReactNode
+}) {
   return (
     <section data-testid={testid} style={{ border: '1px solid #1e293b', borderRadius: 10, background: CARD_BG, padding: 10, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0, fontSize: 12, color: '#7dd3fc' }}>{title}</h3>
+        {batch && <span style={{ fontSize: 10, color: '#c084fc' }}>{batch}</span>}
         {tag && <span style={{ fontSize: 10, color: '#64748b' }}>{tag}</span>}
       </div>
       {controls && <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>{controls}</div>}
@@ -145,6 +166,8 @@ const MINI: React.CSSProperties = {
   border: '1px solid #334155', background: '#1e293b', color: '#cbd5e1',
 }
 
+const HINT: React.CSSProperties = { fontSize: 10, color: '#475569', marginBottom: 4, lineHeight: 1.7 }
+
 /** 生成元作用元素（elementId + 标签）：2D/3D 的 actions 源 */
 function useGenRefs(group: Group | null) {
   return useMemo(() => {
@@ -161,10 +184,236 @@ function useGenRefs(group: Group | null) {
   }, [group])
 }
 
-// ── 卡片 1：2D 语义装饰（F1–F4） ──
+// ══════════════════════════════════════════════════════════════════════════
+// 批次一（09-11 / 09-12）：边几何 · 路径高亮 · 动态力导向
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── 卡 1：2D 边几何（edgeCurvature 弯曲度 + 逐生成元 lengthScale） ──
+function CayleyGeometryCard({ group }: { group: Group | null }) {
+  const genRefs = useGenRefs(group)
+  const [curvature, setCurvature] = useState(1)
+  const [scales, setScales] = useState<Record<string, number>>({})
+
+  const actions = useMemo(
+    () => genRefs.map(g => ({ elementId: g.elementId, lengthScale: scales[g.elementId] ?? 1 })),
+    [genRefs, scales],
+  )
+  const scaledCount = genRefs.filter(g => (scales[g.elementId] ?? 1) !== 1).length
+
+  return (
+    <Card testid="pkg-cayley-geo" title="CayleyView · 2D 边几何（弯曲度 + 逐生成元边长）"
+      batch="批次一 · 09-11" tag={`edgeCurvature=${curvature} · 改过长度的生成元 ${scaledCount} 条`}
+      controls={<>
+        <Rng label="edgeCurvature" value={curvature} min={0} max={2} step={0.1} onChange={setCurvature} testid="pkg-cg-curv" />
+        <Ctl label="逐生成元边长">
+          {genRefs.length === 0
+            ? <span style={{ fontSize: 10, color: '#475569' }}>（换群后出现）</span>
+            : genRefs.map(g => (
+              <span key={g.elementId} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8' }}>{g.label}</span>
+                <input type="range" min={0.3} max={3} step={0.1} value={scales[g.elementId] ?? 1}
+                  data-testid={`pkg-cg-len-${g.elementId}`}
+                  onChange={(e) => setScales(prev => ({ ...prev, [g.elementId]: Number(e.target.value) }))}
+                  style={{ width: 70 }} />
+                <span style={{ fontSize: 10, color: '#64748b' }}>{(scales[g.elementId] ?? 1).toFixed(1)}×</span>
+              </span>
+            ))}
+        </Ctl>
+        <button style={MINI} data-testid="pkg-cg-reset" onClick={() => { setCurvature(1); setScales({}) }}>复位</button>
+      </>}>
+      <div style={HINT}>
+        <b>edgeCurvature</b>：0 = 笔直（平行边自动左右分摊，不重叠）· 1 = 缺省自适应弧 · 2 = 更弯。
+        <b>lengthScale</b>：对固定几何布局走「长度约束松弛」，只改该生成元的边长、不动其余 —— 拖到 3× 看那个方向的边被拉长。
+      </div>
+      {group
+        ? <Frame h={400}><CayleyView group={group} selectedElements={EMPTY_SEL}
+            canvasTransform={CT} viewBoxSize={VB} showLabels
+            actions={actions} edgeCurvature={curvature} /></Frame>
+        : <EmptyHint />}
+    </Card>
+  )
+}
+
+// ── 卡 2：2D 路径高亮（pathHighlight · 生成元单词模式） ──
+function CayleyPathCard({ group }: { group: Group | null }) {
+  const genRefs = useGenRefs(group)
+  const [steps, setSteps] = useState(4)
+  const [animate, setAnimate] = useState(false)
+  const [showOrder, setShowOrder] = useState(true)
+  const [dimOthers, setDimOthers] = useState(true)
+  const [width, setWidth] = useState(5)
+
+  // 从单位元出发按生成元轮转走 steps 步 —— 每一步都是已启用作用边，必然可解析
+  const path = useMemo(() => {
+    if (genRefs.length === 0) return null
+    const word = Array.from({ length: steps }, (_, i) => genRefs[i % genRefs.length].elementId)
+    return { word, animate, showOrder, dimOthers, width }
+  }, [genRefs, steps, animate, showOrder, dimOthers, width])
+
+  const wordText = path ? path.word.map(id => genRefs.find(g => g.elementId === id)?.label ?? id).join(' · ') : '—'
+
+  return (
+    <Card testid="pkg-cayley-path" title="CayleyView · 2D 路径高亮" batch="批次一 · 09-11"
+      tag={`word=[${wordText}] · ${dimOthers ? '其余边淡化' : '其余边原样'}`}
+      controls={<>
+        <Rng label="步数" value={steps} min={1} max={10} step={1} onChange={setSteps} testid="pkg-cp-steps" />
+        <Rng label="线宽 width" value={width} min={1} max={12} step={1} onChange={setWidth} testid="pkg-cp-width" width={70} />
+        <Chk checked={showOrder} onChange={setShowOrder} testid="pkg-cp-order">经过次序</Chk>
+        <Chk checked={dimOthers} onChange={setDimOthers} testid="pkg-cp-dim">淡化其余边</Chk>
+        <Chk checked={animate} onChange={setAnimate} testid="pkg-cp-anim">逐步点亮</Chk>
+      </>}>
+      <div style={HINT}>
+        生成元单词模式：从单位元出发连续作用 <code>word</code> 里的元素。高亮 = 金色线段 + 节点环；<b>经过次序</b>开启后
+        <b>悬停该节点</b>才显示 ①②③（不常显，避免遮挡）。
+      </div>
+      {group
+        ? <Frame h={400}><CayleyView group={group} selectedElements={EMPTY_SEL}
+            canvasTransform={CT} viewBoxSize={VB} showLabels pathHighlight={path} /></Frame>
+        : <EmptyHint />}
+    </Card>
+  )
+}
+
+// ── 卡 3：2D 动态力导向（forceDirected 开关 + 微调） ──
+function CayleyForceCard({ group }: { group: Group | null }) {
+  const [on, setOn] = useState(false)
+  const [repulsion, setRepulsion] = useState(1)
+  const [linkScale, setLinkScale] = useState(1)
+  const [gravity, setGravity] = useState(1)
+  const [stiffness, setStiffness] = useState(1)
+  const [damping, setDamping] = useState(0.75)
+  const [settle, setSettle] = useState(0)
+
+  const force = useMemo(
+    () => ({ repulsion, linkScale, gravity, stiffness, damping, settleSignal: settle }),
+    [repulsion, linkScale, gravity, stiffness, damping, settle],
+  )
+
+  return (
+    <Card testid="pkg-cayley-force" title="CayleyView · 2D 动态力导向" batch="批次一 · 09-11 / 09-12"
+      tag={`${on ? '已开启' : '关（静态形状）'}${settle > 0 ? ` · 已 Re-settle ${settle}×` : ''}`}
+      controls={<>
+        <Chk checked={on} onChange={setOn} testid="pkg-cf2-on">开启力导向</Chk>
+        <button style={MINI} data-testid="pkg-cf2-settle" onClick={() => setSettle(n => n + 1)}
+          title="回到给定形状：清除拖拽塑性记忆 + 重新投影到力平衡态">⟳ Re-settle</button>
+        <Rng label="repulsion" value={repulsion} min={0.2} max={3} step={0.1} onChange={setRepulsion} testid="pkg-cf2-rep" width={70} />
+        <Rng label="linkScale" value={linkScale} min={0.2} max={3} step={0.1} onChange={setLinkScale} testid="pkg-cf2-link" width={70} />
+        <Rng label="gravity" value={gravity} min={0} max={3} step={0.1} onChange={setGravity} testid="pkg-cf2-grav" width={70} />
+        <Rng label="stiffness" value={stiffness} min={0.4} max={3} step={0.1} onChange={setStiffness} testid="pkg-cf2-stiff" width={70} />
+        <Rng label="damping" value={damping} min={0.5} max={0.95} step={0.01} onChange={setDamping} testid="pkg-cf2-damp" width={70} />
+      </>}>
+      <div style={HINT}>
+        在<b>当前选定形状之上</b>启用的开关（不是一种新形状）：初始位置取静态布局，一次性投影到力平衡态。
+        <b>缺省参数下 per-edge rest 的平衡态 ≈ 静态布局本身 ⇒ 开启后画面几乎不动（设计如此，不是失效）</b>，
+        把 <b>repulsion / gravity / linkScale</b> 拖开才看得见重排。开启后<b>可拖拽节点探索新形状</b>
+        （塑性记忆，拖到哪记到哪），点 <b>⟳ Re-settle</b> 一键回到给定形状。参数就地更新，不重建模拟器。
+      </div>
+      {group
+        ? <Frame h={400}><CayleyView group={group} selectedElements={EMPTY_SEL}
+            canvasTransform={CT} viewBoxSize={VB} showLabels forceDirected={on} force={force} /></Frame>
+        : <EmptyHint />}
+    </Card>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 批次三（09-24 · Phase 0）：Decorations 注释
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── 卡 4：2D 注释叠层（node / edge / figure 三锚点） ──
+function CayleyDecorationsCard({ group }: { group: Group | null }) {
+  const genRefs = useGenRefs(group)
+  const [showNode, setShowNode] = useState(true)
+  const [showEdge, setShowEdge] = useState(true)
+  const [showFigure, setShowFigure] = useState(true)
+  const [leader, setLeader] = useState(true)
+  const [broken, setBroken] = useState(false)
+  const [text, setText] = useState('g^{2}=e')
+  const [sel, setSel] = useState<Set<string>>(EMPTY_SEL)
+  const [userNotes, setUserNotes] = useState<Annotation[]>([])
+  const seq = useRef(0)
+
+  const onSelect = (id: string) => setSel(prev => (prev.has(id) ? new Set() : new Set([id])))
+  const selId = useMemo(() => [...sel][0] ?? null, [sel])
+
+  // 三条预设 = 三种锚点各一（引用都在群内真实存在 ⇒ 必然解析得出）
+  const preset = useMemo<Annotation[]>(() => {
+    if (!group) return []
+    const e = group.identity.id
+    return [
+      { id: 'dec-node', anchor: { type: 'node', ref: e }, text: 'e', color: '#7dd3fc' },
+      { id: 'dec-edge', anchor: { type: 'edge', ref: e, actionRef: genRefs[0]?.elementId }, text: 'a', color: '#f472b6' },
+      { id: 'dec-figure', anchor: { type: 'figure' }, text: `|G| = ${group.order}`, color: '#fbbf24' },
+    ]
+  }, [group, genRefs])
+
+  const annotations = useMemo<Annotation[]>(() => {
+    const shown = preset.filter(a =>
+      a.anchor.type === 'node' ? showNode : a.anchor.type === 'edge' ? showEdge : showFigure)
+    // 失效引用：元素不在群内 ⇒ 渲染端应静默跳过（不画、不报错）
+    const injected: Annotation[] = broken
+      ? [{ id: 'dec-broken', anchor: { type: 'node', ref: '__not_in_group__' }, text: 'x', color: '#f87171' }]
+      : []
+    return [...shown, ...injected, ...userNotes].map(a => ({ ...a, leader: a.anchor.type !== 'figure' && leader }))
+  }, [preset, showNode, showEdge, showFigure, broken, userNotes, leader])
+
+  const decorations = useMemo<Decorations>(
+    () => ({ schemaVersion: '1', annotations }),
+    [annotations],
+  )
+
+  const addNote = () => {
+    if (!selId || !text.trim()) return
+    seq.current += 1
+    setUserNotes(prev => [...prev, {
+      id: `dec-user-${seq.current}`,
+      anchor: { type: 'node', ref: selId },
+      text: text.trim(),
+      color: '#4ade80',
+    }])
+  }
+
+  return (
+    <Card testid="pkg-cayley-dec" title="CayleyView · 2D 注释叠层（Decorations）" batch="批次三 · 09-24 Phase 0"
+      tag={`${annotations.length} 条注释${leader ? ' · 引导线开' : ''}${broken ? ' · 含 1 条失效引用' : ''}`}
+      controls={<>
+        <Chk checked={showNode} onChange={setShowNode} testid="pkg-cd-node">node 锚点</Chk>
+        <Chk checked={showEdge} onChange={setShowEdge} testid="pkg-cd-edge">edge 锚点</Chk>
+        <Chk checked={showFigure} onChange={setShowFigure} testid="pkg-cd-figure">figure 锚点</Chk>
+        <Chk checked={leader} onChange={setLeader} testid="pkg-cd-leader">引导线</Chk>
+        <Chk checked={broken} onChange={setBroken} testid="pkg-cd-broken">注入失效引用</Chk>
+      </>}>
+      <div style={HINT}>
+        <b>node</b> 挂在元素节点上（默认偏移 -22px）—— <b>拖动那个标着 e 的节点，注释跟着走</b>，力导向重排也一样。
+        <b>edge</b> 取「ref 起点 + actionRef 作用元素」两端中点（粉色 <code>a</code> 挂在 e 出发的第一条作用边上）。
+        <b>figure</b> 走视图坐标系左上角（24,24），不跟元素走。失效引用静默跳过、不报错。
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: '#64748b' }}>选中 {selId ? '1 个' : '0 个'}元素</span>
+        <input data-testid="pkg-cd-text" value={text} onChange={(e) => setText(e.target.value)}
+          placeholder="TeX 文本（如 g^{2}=e）"
+          style={{ fontSize: 11, padding: '2px 6px', width: 160, background: '#0f172a', color: '#e2e8f0', border: '1px solid #334155', borderRadius: 4 }} />
+        <button style={MINI} data-testid="pkg-cd-add" onClick={addNote} disabled={!selId || !text.trim()}
+          title={selId ? '把注释挂到当前选中元素' : '先在图上点一个节点'}>+ 添加（挂到选中元素）</button>
+        {userNotes.length > 0 && (
+          <button style={MINI} data-testid="pkg-cd-clear" onClick={() => setUserNotes([])}>清空手动注释（{userNotes.length}）</button>
+        )}
+      </div>
+      {group
+        ? <Frame h={430}><CayleyView group={group} selectedElements={sel} onSelect={onSelect}
+            canvasTransform={CT} viewBoxSize={VB} showLabels decorations={decorations} /></Frame>
+        : <EmptyHint />}
+    </Card>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 批次二（09-23）：节点语义 · 边样式与图例 · 3D 开关
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── 卡 5：2D 语义装饰（F1–F4） ──
 function CayleySemanticCard({ group }: { group: Group | null }) {
   const [colorMode, setColorMode] = useState<'none' | 'conjugacy'>('conjugacy')
-  const [orderBadge, setOrderBadge] = useState(true)
   const [genHighlight, setGenHighlight] = useState(true)
   const [markCenter, setMarkCenter] = useState(false)
   const [markNormal, setMarkNormal] = useState(false)
@@ -175,31 +424,31 @@ function CayleySemanticCard({ group }: { group: Group | null }) {
 
   const selCount = sel.size
   return (
-    <Card testid="pkg-cayley-f" title="CayleyView · 2D 语义装饰（F1–F4）"
-      tag={`nodeColorMode=${colorMode} · 阶徽标 ${orderBadge ? 'on' : 'off'} · 选中 ${selCount} 个元素${genHighlight && selCount > 0 ? '（⟨g⟩ 已高亮）' : ''}`}
+    <Card testid="pkg-cayley-f" title="CayleyView · 2D 语义装饰（F1/F3/F4）" batch="批次二 · 09-23"
+      tag={`nodeColorMode=${colorMode} · 选中 ${selCount} 个元素${genHighlight && selCount > 0 ? '（⟨g⟩ 已高亮）' : ''}`}
       controls={<>
         <Ctl label="nodeColor"><Seg value={colorMode} onChange={setColorMode} testid="pkg-cf-color"
           options={[{ value: 'none', label: 'Theme' }, { value: 'conjugacy', label: 'Conjugacy' }]} /></Ctl>
-        <Chk checked={orderBadge} onChange={setOrderBadge} testid="pkg-cf-order">F2 阶徽标</Chk>
         <Chk checked={genHighlight} onChange={setGenHighlight} testid="pkg-cf-gen">F3 ⟨g⟩ 高亮</Chk>
         <Chk checked={markCenter} onChange={setMarkCenter} testid="pkg-cf-center">F4 中心 Z(G)</Chk>
         <Chk checked={markNormal} onChange={setMarkNormal} testid="pkg-cf-normal">F4 正规子群 N</Chk>
         <Chk checked={labels} onChange={setLabels} testid="pkg-cf-labels">标签</Chk>
       </>}>
-      <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>
-        F1 共轭类一键着色（交换群退化为单元素类）· F2 阶徽标 · F3 点节点选中后高亮其 ⟨g⟩ · F4 中心双环 / 最小正规子群虚线环
+      <div style={HINT}>
+        F1 共轭类一键着色（交换群退化为单元素类）· F3 点节点选中后高亮其 ⟨g⟩ · F4 中心双环 / 最小正规子群虚线环。
+        元素阶请在节点上悬停查看（就地气泡）。
       </div>
       {group
         ? <Frame h={430}><CayleyView group={group} selectedElements={sel} onSelect={onSelect}
             canvasTransform={CT} viewBoxSize={VB} showLabels={labels}
-            nodeColorMode={colorMode} showOrderBadge={orderBadge} highlightGenerated={genHighlight}
+            nodeColorMode={colorMode} highlightGenerated={genHighlight}
             markCenter={markCenter} markNormalSubgroup={markNormal} /></Frame>
         : <EmptyHint />}
     </Card>
   )
 }
 
-// ── 卡片 2：2D 边样式与图例（E2–E4） ──
+// ── 卡 6：2D 边样式与图例（E2–E4） ──
 function CayleyEdgeCard({ group }: { group: Group | null }) {
   const genRefs = useGenRefs(group)
   const [printPalette, setPrintPalette] = useState(false)
@@ -229,7 +478,7 @@ function CayleyEdgeCard({ group }: { group: Group | null }) {
   const dashCount = dashSet.size
 
   return (
-    <Card testid="pkg-cayley-e" title="CayleyView · 2D 边样式与图例（E2–E4）"
+    <Card testid="pkg-cayley-e" title="CayleyView · 2D 边样式与图例（E2–E4）" batch="批次二 · 09-23"
       tag={`printPalette=${printPalette ? 'on' : 'off'} · 线宽 ${width.toFixed(1)}× · 箭头 ${arrows ? 'on' : 'off'} · 虚线 ${dashCount} 条`}
       controls={<>
         <Chk checked={printPalette} onChange={setPrintPalette} testid="pkg-ce-print">E3 打印/单色</Chk>
@@ -252,7 +501,7 @@ function CayleyEdgeCard({ group }: { group: Group | null }) {
             ))}
         </Ctl>
       </>}>
-      <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>
+      <div style={HINT}>
         E2 生成元图例（点色块行 = 切换该生成元边显隐）· E3 printPalette 全体同色+线型区分 / 逐生成元虚线 · E4 边线宽 / 箭头开关
       </div>
       {group
@@ -265,7 +514,7 @@ function CayleyEdgeCard({ group }: { group: Group | null }) {
   )
 }
 
-// ── 卡片 3：3D 渲染开关 + 语义（B1–B3 / F1–F2） ──
+// ── 卡 7：3D 渲染开关 + 语义（B1–B3 / F1） ──
 function Cayley3DVclCard({ group }: { group: Group | null }) {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [layout, setLayout] = useState<Layout3D | null>(null)
@@ -273,7 +522,6 @@ function Cayley3DVclCard({ group }: { group: Group | null }) {
   const [layerRings, setLayerRings] = useState(false)
   const [relayout, setRelayout] = useState(0)
   const [colorMode, setColorMode] = useState<'none' | 'conjugacy'>('conjugacy')
-  const [orderBadge, setOrderBadge] = useState(false)
 
   const genRefs = useGenRefs(group)
   const shapes3d = useMemo<Layout3D[]>(() => (group ? getAvailableShapes3D(group) : []), [group])
@@ -298,7 +546,7 @@ function Cayley3DVclCard({ group }: { group: Group | null }) {
   )
 
   return (
-    <Card testid="pkg-cayley3d-f" title="Cayley3DScene · B 组渲染开关 + F 组语义"
+    <Card testid="pkg-cayley3d-f" title="Cayley3DScene · B 组渲染开关 + F 组语义" batch="批次二 · 09-23 / 09-12"
       tag={`layout3D=${layoutValue} · 边=${actionSource} · shell=${shell ? 'on' : 'off'} · 纬度环 ${layerRings ? 'on' : 'off'} · relayout ${relayout}× · nodeColor=${colorMode}`}
       controls={<>
         <Ctl label="theme"><Seg value={theme} onChange={setTheme} testid="pkg-c3-theme"
@@ -311,11 +559,10 @@ function Cayley3DVclCard({ group }: { group: Group | null }) {
           title="自增即再松弛 N 轮（不改形状语义）">B3 ⟳ 重新优化{relayout > 0 ? ` (${relayout}×)` : ''}</button>
         <Ctl label="nodeColor"><Seg value={colorMode} onChange={setColorMode} testid="pkg-c3-color"
           options={[{ value: 'none', label: 'Theme' }, { value: 'conjugacy', label: 'Conjugacy' }]} /></Ctl>
-        <Chk checked={orderBadge} onChange={setOrderBadge} testid="pkg-c3-order">F2 阶→球径</Chk>
       </>}>
-      <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>
+      <div style={HINT}>
         B1 球壳开关 / B2 纬度层环 / B3 重新优化布局 —— 三者仅 `wordLengthSphere` 布局生效（当前{isWordLength ? '已' : '未'}选中）。
-        F1 共轭类着色覆盖默认配色 · F2 阶→球径 + 悬停标签附阶数。
+        F1 共轭类着色覆盖默认配色 · 悬停/选中节点时标签下附元素阶（常驻无阶编码）。
         <br />作用边 = <b>{actionSource}</b>：S₄/A₅ 的多面体形状（truncatedCube / rhombicuboctahedron / truncatedOctahedron3 / torusHex / 字长球）各有专属生成元集，
         <b>不套用会让边横跨整个多面体</b>（与主应用 `getSpecialCayleyActions` 同源）。
       </div>
@@ -324,7 +571,7 @@ function Cayley3DVclCard({ group }: { group: Group | null }) {
             <Cayley3DScene group={group} selectedElements={EMPTY_SEL} theme={theme}
               actions={actions} layout3D={layoutValue}
               shell={shell} layerRings={layerRings} relayoutNonce={relayout}
-              nodeColorMode={colorMode} showOrderBadge={orderBadge} />
+              nodeColorMode={colorMode} />
           </Frame>
         : <EmptyHint />}
     </Card>
@@ -356,11 +603,11 @@ export default function TestPagePkgConsume() {
     <I18nProvider>
       <div data-testid="pkg-page" data-theme="dark"
         style={{ minHeight: '100vh', background: '#0f172a', color: '#e2e8f0', padding: '18px 22px 60px', fontFamily: 'system-ui, sans-serif' }}>
-        {/* ── 页头：群切换（同步驱动三张卡片，切群即重挂载清空卡片本地态） ── */}
+        {/* ── 页头：群切换（同步驱动全部卡片，切群即重挂载清空卡片本地态） ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 4 }}>
-          <h1 style={{ margin: 0, fontSize: 16, color: '#e2e8f0' }}>🧩 VCL 控件消费矩阵（2026-09-23）</h1>
+          <h1 style={{ margin: 0, fontSize: 16, color: '#e2e8f0' }}>🧩 VCL 全量消费矩阵</h1>
           <span style={{ fontSize: 11, color: '#64748b' }}>
-            @groupviz/core + @groupviz/react（dist-pkg 产物，非 src）· B1–B3 / F1–F4 / E2–E4
+            @groupviz/core + @groupviz/react（dist-pkg 产物，非 src）
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -377,7 +624,7 @@ export default function TestPagePkgConsume() {
             {group ? `${group.symbol} · |G|=${group.order} · ${group.name ?? ''}` : `群未载入（${symbol}）`}
           </span>
           <span style={{ fontSize: 10, color: '#475569' }}>
-            （切群 = 三卡以新群重挂载，卡片本地控件态复位）
+            （切群 = 全部卡片以新群重挂载，卡片本地控件态复位）
           </span>
         </div>
         <div data-testid="pkg-errors" style={{ fontSize: 11, marginBottom: 12 }}>
@@ -386,22 +633,35 @@ export default function TestPagePkgConsume() {
             : <span style={{ color: '#f87171', display: 'block' }}>✗ {errors.join(' | ')}</span>}
         </div>
 
-        {/* ── 本次开发的控件矩阵 ── */}
+        {/* ── VCL 全量能力矩阵（按交付批次分组） ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(430px, 1fr))', gap: 12, alignItems: 'start' }}>
+          <CayleyGeometryCard key={`geo-${symbol}`} group={group} />
+          <CayleyPathCard key={`path-${symbol}`} group={group} />
+          <CayleyForceCard key={`force-${symbol}`} group={group} />
+          <CayleyDecorationsCard key={`dec-${symbol}`} group={group} />
           <CayleySemanticCard key={`f-${symbol}`} group={group} />
           <CayleyEdgeCard key={`e-${symbol}`} group={group} />
           <Cayley3DVclCard key={`3d-${symbol}`} group={group} />
         </div>
 
-        <p style={{ fontSize: 11, color: '#64748b', marginTop: 16, maxWidth: 1000, lineHeight: 1.7 }}>
-          覆盖本次开发：<b>F1</b> 共轭类一键着色 <code>nodeColorMode='conjugacy'</code>（交换群 C₆/V₄ 退化为单元素类，数学事实非 bug）·
-          <b>F2</b> 元素阶徽标 <code>showOrderBadge</code>（2D 角标 / 3D 阶→球径）·
+        <p style={{ fontSize: 11, color: '#64748b', marginTop: 16, maxWidth: 1100, lineHeight: 1.8 }}>
+          <b style={{ color: '#94a3b8' }}>批次一（09-11 / 09-12）</b>：
+          <code>edgeCurvature</code> 边弯曲（0 = 笔直）· <code>actions[].lengthScale</code> 逐生成元边长 ·
+          <code>pathHighlight</code> 路径高亮（生成元单词 / 元素序列，2D + 3D 同源）·
+          <code>forceDirected</code> + <code>force</code> 动态力导向（塑性记忆 + Re-settle）。<br />
+          <b style={{ color: '#94a3b8' }}>批次二（09-23）</b>：
+          <b>F1</b> 共轭类一键着色 <code>nodeColorMode='conjugacy'</code>（交换群 C₆/V₄ 退化为单元素类，数学事实非 bug）·
           <b>F3</b> <code>highlightGenerated</code> 点节点选中 → ⟨g⟩ 循环子群外圈 + 组内边加粗（联动 selection）·
           <b>F4</b> <code>markCenter</code> 中心双环 / <code>markNormalSubgroup</code> 最小正规子群虚线环（A₅ 单群无 N ⇒ 不画）·
           <b>E2</b> <code>showLegend</code> 生成元图例（点行切显隐）·
           <b>E3</b> <code>printPalette</code> 打印单色 + <code>actions[].dash</code> 逐生成元虚线 ·
           <b>E4</b> <code>edgeWidthScale</code> 线宽 / <code>showArrows</code> 箭头 ·
-          <b>B1/B2/B3</b> <code>shell</code> / <code>layerRings</code> / <code>relayoutNonce</code>（仅字长球布局；S₄ 默认字长球）。
+          <b>B1/B2/B3</b> <code>shell</code> / <code>layerRings</code> / <code>relayoutNonce</code>（仅字长球布局；S₄ 默认字长球）。<br />
+          <b style={{ color: '#94a3b8' }}>批次三（09-24 · Phase 0）</b>：
+          <code>Decorations</code> 注释叠层 —— 锚点三类 <code>node</code> / <code>edge</code> / <code>figure</code>（相对位置，
+          节点/边锚点跟随拖拽与力导向重排）+ 引导线 + KaTeX 文本；引用失效静默跳过。
+          <b style={{ color: '#f59e0b' }}>窗口侧</b>（⚙ 面板 / 注释编辑器 / 窗口内导出 ⤓）不在本页 ——
+          <code>ViewWindow</code> 不向包门面导出，需在应用内「多视图模式 → + 凯莱图」或 <code>?test=2</code> 验证。
           改动包源码后先 <code>npm run build:pkg</code>。
         </p>
       </div>

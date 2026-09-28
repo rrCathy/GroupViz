@@ -197,7 +197,6 @@ test.describe('torusHex — 环面两个自转（绕大圆 / 绕管子）', () =
     await settle(page)
     const backOff = median(await frameIntervals(page, 1000))
 
-    // eslint-disable-next-line no-console
     console.log('[torus-spin] 帧间隔中位数 ms：关=%s 大圆=%s 管子=%s 再关=%s',
       off.toFixed(1), ringMs.toFixed(1), tubeMs.toFixed(1), backOff.toFixed(1))
     // 大圆自转走命令式转 group（零重渲染）；管子自转每帧重算曲面点。两者都不该把帧间隔拉爆

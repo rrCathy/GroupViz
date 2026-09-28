@@ -158,6 +158,14 @@ describe('SceneHoverBubble', () => {
     expect(bubble.textContent).toContain('阶')
   })
 
+  it('锚点贴近容器上沿 → 气泡翻到节点下方（窗口内容区是 overflow:hidden）', () => {
+    const el = s3.elements.find(e => e.label !== 'e')!
+    render(<SceneHoverBubble element={el} anchor={{ x: 40, y: 20 }} group={s3} />)
+    const box = screen.getByTestId('scene-hover-bubble')
+    expect(box.style.transform).toBe('translate(-50%, 0)')  // 不再上移自身高度
+    expect(box.style.top).toBe('34px')                      // 20 −(−14) = 锚点下方 14px
+  })
+
   it('元素缺失或锚点缺失 → 不渲染（避免角落挂一个无主气泡）', () => {
     const a = render(<SceneHoverBubble element={null} anchor={{ x: 1, y: 1 }} />)
     expect(a.container.querySelector('[data-testid="scene-hover-bubble"]')).toBeNull()

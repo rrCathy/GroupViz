@@ -9,9 +9,10 @@ import { getSemidirectProductMeta, semidirectFactorMap, semidirectFixedPoints } 
 import { computeShape2DPositions } from '../../core/algebra/shapeLayouts'
 import {
   conjugacyClassIndexMap, conjugacyClassCount, conjugacyClassColor,
-  cyclicSubgroupElements, centerElementIds, smallestNormalSubgroupIds, elementOrderMap,
+  cyclicSubgroupElements, centerElementIds, smallestNormalSubgroupIds,
 } from '../../core/algebra/nodeSemantics'
 import { texify, renderTex } from '../../utils/texify'
+import { hoverAnchorFromEvent } from '../../utils/hoverAnchor'
 import { resolveElement } from '../../core/algebra/elementRef'
 import { resolveAnnotationAnchor, type AnchorLookup, type Decorations } from '../../core/types/decorations'
 import { getDefaultShape2D, isQuotientGroup } from '../../core/types'
@@ -42,8 +43,9 @@ export interface CayleyViewProps {
   locked?: boolean
   onSelect?: (elId: string, additive: boolean) => void
   /**
-   * 悬停回调：第一个参数是元素，第二个是节点在 viewport 内的屏幕锚点
-   * （viewBox 坐标经 canvasTransform 映射，供上层渲染"就地气泡"tooltip）。
+   * 悬停回调：第一个参数是元素，第二个是**容器内像素坐标**锚点（鼠标位置换算而来，
+   * 见 `utils/hoverAnchor.ts`），供上层渲染"就地气泡"tooltip 时直接当 left/top 用。
+   * 拿不到容器尺寸（未布局 / jsdom）时为 null。
    */
   onHover?: (el: GroupElement | null, anchor?: { x: number; y: number } | null) => void
   /** 当前悬停元素 id；用于在该节点外圈绘制高亮环（让"悬停→信息"在视觉上立得住） */
@@ -68,8 +70,6 @@ export interface CayleyViewProps {
   // ── VCL F 组：节点语义装饰 ──
   /** 节点着色方案；缺省 'none'（主题默认填充） */
   nodeColorMode?: CayleyNodeColorMode
-  /** 节点右上角元素阶徽标；缺省 false */
-  showOrderBadge?: boolean
   /** 高亮选中元素生成的循环子群 ⟨g⟩（节点外圈 + 组内边）；缺省 false */
   highlightGenerated?: boolean
   /** 中心 Z(G) 双环标记；缺省 false */
@@ -265,7 +265,6 @@ function CayleyViewBody({
   force,
   quotientInsetTitle,
   nodeColorMode = 'none',
-  showOrderBadge = false,
   highlightGenerated = false,
   markCenter = false,
   markNormalSubgroup = false,
@@ -412,11 +411,6 @@ function CayleyViewBody({
   const conjClassN = useMemo(
     () => (group && nodeColorMode === 'conjugacy' ? conjugacyClassCount(group) : 0),
     [group, nodeColorMode],
-  )
-  // 元素阶：徽标用；⟨g⟩ 高亮还要拿它算循环长度
-  const orderMap = useMemo(
-    () => (group && (showOrderBadge || highlightGenerated) ? elementOrderMap(group) : null),
-    [group, showOrderBadge, highlightGenerated],
   )
   const centerIds = useMemo(
     () => (group && markCenter ? centerElementIds(group) : null),
@@ -829,8 +823,6 @@ function CayleyViewBody({
       const isCentral = !!centerIds?.has(el.id)
       const isNormalMember = !!normalIds?.has(el.id)
       const isGenerated = !!generatedIds?.has(el.id)
-      const order = orderMap?.get(el.id)
-      const badgeR = Math.max(7, nodeRadius * 0.3)
 
       return (
         <g
@@ -927,7 +919,7 @@ function CayleyViewBody({
             window.addEventListener('mousemove', handleMove)
             window.addEventListener('mouseup', handleUp)
           }}
-          onMouseEnter={() => onHover?.(el, { x: sx, y: sy })}
+          onMouseEnter={e => onHover?.(el, hoverAnchorFromEvent(e))}
           onMouseLeave={() => onHover?.(null, null)}
           style={{ cursor: 'grab' }}
         >
@@ -968,17 +960,6 @@ function CayleyViewBody({
               style={{ filter: 'drop-shadow(0 0 4px rgba(78,205,196,0.7))' }}
             />
           )}
-          {/* VCL F2：元素阶徽标（大群退化模式不画——那里连标签都省了，画满角标只会糊） */}
-          {showOrderBadge && order !== undefined && !isLargeGraph && (
-            <g transform={`translate(${nodeRadius * 0.72}, ${-nodeRadius * 0.72})`}>
-              <circle r={badgeR} fill="var(--node-stroke)" />
-              <text
-                x={0} y={badgeR * 0.36}
-                textAnchor="middle" fontSize={badgeR * 1.15} fontWeight={700}
-                fill="var(--node-fill)" style={{ userSelect: 'none' }}
-              >{order}</text>
-            </g>
-          )}
           {showLabelsProp !== false && (!isLargeGraph || selectedCount === 0) && (
             <foreignObject
               x={-nodeRadius}
@@ -1011,7 +992,7 @@ function CayleyViewBody({
     markerPrefix, showLabelsProp, setDragPositionsEntry, locked, hoveredElementId, forceActive,
     setForcePositions,
     // VCL F 组：语义装饰数据
-    conjClassIdx, conjClassN, centerIds, normalIds, generatedIds, orderMap, showOrderBadge,
+    conjClassIdx, conjClassN, centerIds, normalIds, generatedIds,
   ])
 
   // 选中金圈 overlay（大群时附带选中节点标签），绘制于节点之上

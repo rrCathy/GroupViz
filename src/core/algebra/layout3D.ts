@@ -24,7 +24,18 @@ import { torusHexLayout3D } from './layouts3D/torusHexLayout3D'
  */
 export const LAYOUT_3D_RADIUS = 5
 
-export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
+export interface Layout3DOptions {
+  /**
+   * torusHex 专用：沿管子（经向）的相位（弧度）—— 图沿每根管的截面绕行（环面 = S¹×S¹，
+   * 两个因子各有一种旋转；这是**经向**那个）。其余布局忽略。缺省 0 ⇒ 逐位不变。
+   *
+   * 另一支（大圆/纬向）**不进布局**：它在三维里等价于整块内容绕 `TORUS_HEX_RING_AXIS`
+   * 刚体旋转，由场景转一个 group 完成，几何不必重算（见 torusHexLayout3D 的头部说明）。
+   */
+  tubePhase?: number
+}
+
+export function compute3DPositions(group: Group, layout: Layout3D, opts?: Layout3DOptions): Vec3[] {
   const n = group.order
   const radius = LAYOUT_3D_RADIUS
   const positions: Vec3[] = new Array(n)
@@ -51,7 +62,7 @@ export function compute3DPositions(group: Group, layout: Layout3D): Vec3[] {
     case 'truncatedIcosahedron': placed = truncatedIcosahedronLayout3D(group, radius); break
     case 'truncatedDodecahedron': placed = truncatedDodecahedronLayout3D(group, radius); break
     case 'wordLengthSphere': placed = wordLengthSphereLayout3D(group, radius); break
-    case 'torusHex': placed = torusHexLayout3D(group, radius); break
+    case 'torusHex': placed = torusHexLayout3D(group, radius, opts?.tubePhase ?? 0); break
     default:
       for (let i = 0; i < n; i++) positions[i] = fibonacciSphere(n, radius)[i]
       break

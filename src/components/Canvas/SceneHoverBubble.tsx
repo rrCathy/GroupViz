@@ -10,7 +10,8 @@ import type { Group, GroupElement } from '../../core/types'
  * 不写死颜色；未引入 `theme.css` 时由内联兜底色保证可读。
  *
  * 定位：`anchor` 是元素在容器内的屏幕坐标（Scene 的 `onHover` 第二参），
- * 气泡默认浮在锚点正上方居中。`anchor` 为空（如表格视图不提供锚点）时不渲染。
+ * 气泡默认浮在锚点正上方居中；锚点贴容器上沿（`y < 60`）时自动翻到节点下方。
+ * `anchor` 为空（如表格视图不提供锚点）时不渲染。
  */
 export interface SceneHoverBubbleProps {
   element: GroupElement | null
@@ -35,12 +36,15 @@ export function SceneHoverBubble({
   const dx = offset?.x ?? 0
   const dy = offset?.y ?? -14
   const order = group ? elementOrder(group, element) : null
+  // 锚点贴近容器上沿时（气泡会被裁掉上半个）翻到节点下方。
+  // 窗口内容区普遍是 overflow:hidden，节点在画面顶部时这一步是「气泡还能不能读」的分界
+  const flipBelow = anchor.y < 60
 
   const box: CSSProperties = {
     position: 'absolute',
     left: anchor.x + dx,
-    top: anchor.y + dy,
-    transform: 'translate(-50%, -100%)',
+    top: anchor.y + (flipBelow ? -dy : dy),
+    transform: flipBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
     pointerEvents: 'none',
     zIndex: 20,
     padding: '5px 9px',

@@ -75,23 +75,29 @@ describe('ViewWindow · cayley3d view', () => {
     expect(Array.from(select.options).map(o => o.value)).toEqual(['cone', 'circular'])
     expect(select.value).toBe('circular')
     // 滑杆 = Node size + 每启用作用边一条 len（C₄ 生成元 e1）；透明度滑杆仅在选中面子群后出现
-    // 复选框 = 6 窗口配置 + Auto rotate + Show labels + Face fills + 1 条作用边 + VCL（球壳/纬度环/阶徽标）= 13
+    // 复选框 = 6 窗口配置 + Auto rotate + Show labels + Face fills + 1 条作用边
+    //        + VCL（球壳/纬度环）+ 环面自转（大圆/管子）= 14
+    // （「阶→球径」已废弃：元素阶统一只在悬停标签里读）
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(2)
-    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(13)
+    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(14)
     expect(screen.getByText('Auto rotate')).toBeInTheDocument()
     expect(screen.getByText('Show labels')).toBeInTheDocument()
     expect(screen.getByText('Path highlight')).toBeInTheDocument()
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
-    // VCL B 组（球壳/纬度环/重新优化）+ F 组（共轭类着色/阶→球径）
+    // VCL B 组（球壳/纬度环/重新优化）+ F 组（共轭类着色；阶不再有编码开关）
     expect(screen.getByText('Sphere render')).toBeInTheDocument()
     expect(screen.getByTestId('cayley3d-shell')).toBeInTheDocument()
     expect(screen.getByTestId('cayley3d-lat-rings')).toBeInTheDocument()
     expect(screen.getByTestId('cayley3d-relayout')).toBeInTheDocument()
+    // 环面自转（S¹×S¹ 两个因子）：torusHex 专用，面板仍列出以便预设复用
+    expect(screen.getByText('Torus spin')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley3d-spin-ring')).toBeInTheDocument()
+    expect(screen.getByTestId('cayley3d-spin-tube')).toBeInTheDocument()
     expect(screen.getByText('Node marks')).toBeInTheDocument()
     expect(screen.getByTestId('cayley3d-color-conj')).toBeInTheDocument()
-    expect(screen.getByTestId('cayley3d-order-badge')).toBeInTheDocument()
+    expect(screen.queryByTestId('cayley3d-order-badge')).toBeNull()
   })
 
   it('A₄: picking the C₃ subgroup lists its 4 coset faces with per-face colour + opacity', () => {
@@ -153,6 +159,34 @@ describe('ViewWindow · cayley3d view', () => {
 
     fireEvent.change(panel.querySelector('input[type="range"]')!, { target: { value: '1.5' } })
     expect(received.at(-1)).toEqual({ layout3D: 'cone', multiplyType: 'left', autoRotate: true, nodeScale: 1.5 })
+  })
+
+  it('torus spin checkboxes write spinBigCircle / spinTube into viewParams (controlled round-trip)', () => {
+    const received: Array<Record<string, unknown>> = []
+    function Controlled() {
+      const [p, setP] = useState<Cayley3DViewParams>({})
+      const handleChange = (next: ViewParams) => {
+        received.push({ ...next })
+        setP(next as Cayley3DViewParams)
+      }
+      return (
+        <ViewWindow view="3d" group={c4} title="C₄ 3D" storageKey="d3-spin"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 300 }}
+          viewParams={p} onViewParamsChange={handleChange} />
+      )
+    }
+    render(<Controlled />)
+    openPanel()
+    // 环面 = S¹×S¹：两个因子各一个开关（torusHex 布局才有效，面板照常列出）
+    fireEvent.click(screen.getByTestId('cayley3d-spin-ring'))
+    expect(received.at(-1)).toEqual({ spinBigCircle: true })
+
+    fireEvent.click(screen.getByTestId('cayley3d-spin-tube'))
+    expect(received.at(-1)).toEqual({ spinBigCircle: true, spinTube: true })
+
+    // 再点一次 → 取消（写回 false，不是删字段）
+    fireEvent.click(screen.getByTestId('cayley3d-spin-tube'))
+    expect(received.at(-1)).toEqual({ spinBigCircle: true, spinTube: false })
   })
 
   it('edge-action checkbox and All/None buttons update params.actions', () => {

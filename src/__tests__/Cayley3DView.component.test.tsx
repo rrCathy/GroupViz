@@ -1,12 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { render } from '@testing-library/react'
+import { render, act, fireEvent } from '@testing-library/react'
 import { Cayley3DScene } from '../components/Canvas/Cayley3DScene'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
+import { createGroupFromSymbol } from '../core/groups/groupFactory'
 import { getDefaultLayout3D } from '../core/types'
 
-// happy-dom 无 WebGL：Canvas 渲染为容器 div、useThree 提供最小 stub、useFrame no-op、Html 透传 children。
+// 环面自转的相位推进由 useFrame 驱动（测试里没有真帧循环）⇒ 把回调收集下来手动喂 delta；
+// compute3DPositions 包一层记录 layout 拿到的选项（tubePhase），验证「开关 → 帧 → 布局」整条管线
+const h = vi.hoisted(() => ({
+  frames: [] as Array<(state: unknown, delta: number) => void>,
+  layoutOpts: [] as Array<{ tubePhase?: number } | undefined>,
+}))
+
+// happy-dom 无 WebGL：Canvas 渲染为容器 div、useThree 提供最小 stub、useFrame 收集回调、Html 透传 children。
 // three 的纯数学（Vector3/Quaternion）保持真实实现。
 vi.mock('@react-three/fiber', () => ({
   Canvas: (props: { children?: ReactNode }) => <div data-testid="r3f-canvas">{props.children}</div>,
@@ -14,12 +22,30 @@ vi.mock('@react-three/fiber', () => ({
     gl: { domElement: document.createElement('canvas') },
     camera: {
       fov: 50, near: 0.1, far: 400, aspect: 1,
-      position: { set() {} }, up: { set() {} }, lookAt() {},
+      // copy/addScaledVector 需可链式（applyCameraFromOrbit 写成 position.copy(...).addScaledVector(...)）
+      position: { set() { return this }, copy() { return this }, addScaledVector() { return this } },
+      quaternion: { copy() { return this } },
+      up: { set() {} }, lookAt() {},
     },
     scene: {},
   }),
-  useFrame: () => {},
+  useFrame: (cb: (state: unknown, delta: number) => void) => { h.frames.push(cb) },
 }))
+vi.mock('../core/algebra/layout3D', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../core/algebra/layout3D')>()
+  const real = actual.compute3DPositions
+  return {
+    ...actual,
+    compute3DPositions: (
+      g: Parameters<typeof real>[0],
+      l: Parameters<typeof real>[1],
+      o?: Parameters<typeof real>[2],
+    ) => {
+      h.layoutOpts.push(o)
+      return real(g, l, o)
+    },
+  }
+})
 vi.mock('@react-three/drei', () => ({
   Html: (props: { children?: ReactNode; wrapperClass?: string }) => (
     <div className={props.wrapperClass}>{props.children}</div>
@@ -126,6 +152,15 @@ describe('Cayley3DScene · controlled 3D cayley view', () => {
     expect(leftLens).not.toEqual(rightLens)
   })
 
+  it('球径只由 nodeScale 决定——元素阶不再参与编码（F2「阶→球径」已撤下）', () => {
+    // C₄：阶为 1 / 2 / 4，跨度足够。旧实现在这里会产出多种半径（对数放大最大 +35%）
+    const { container } = render(<Cayley3DScene group={c4} selectedElements={new Set()} />)
+    const radii = tagAll(container, 'sphereGeometry').map(g => geomArg(g))
+    expect(radii).toHaveLength(4)
+    expect(new Set(radii).size).toBe(1)
+    expect(radii[0]).toBeCloseTo(0.42, 5)
+  })
+
   it('scales node spheres by nodeScale', () => {
     const plain = render(<Cayley3DScene group={c4} selectedElements={new Set()} />)
     const baseRadius = geomArg(tagAll(plain.container, 'sphereGeometry')[0])
@@ -144,6 +179,81 @@ describe('Cayley3DScene · controlled 3D cayley view', () => {
 
     const on = render(<Cayley3DScene group={c4} selectedElements={new Set()} autoRotate />)
     expect(on.container.textContent).toContain('❚❚')
+  })
+
+  // ── 环面 = S¹×S¹ 的两个自转（torusHex 专用） ──
+  const s4star = () => createGroupFromSymbol('S_{4}')!
+
+  it('环面自转按钮只在 torusHex 布局出现（S₄ 星图；其它布局/其它群不出现）', () => {
+    const torus = render(<Cayley3DScene group={s4star()} selectedElements={new Set()} layout3D="torusHex" />)
+    const ring = torus.container.querySelector('[data-testid="cayley3d-spin-ring"]')
+    const tube = torus.container.querySelector('[data-testid="cayley3d-spin-tube"]')
+    expect(ring).not.toBeNull()
+    expect(tube).not.toBeNull()
+    // 默认关：不高亮（与 ▶ 同一套 active 样式）
+    expect(ring!.getAttribute('style')).not.toContain('accent-teal')
+    torus.unmount()
+
+    for (const layout of ['cone', 'wordLengthSphere'] as const) {
+      const other = render(<Cayley3DScene group={s4star()} selectedElements={new Set()} layout3D={layout} />)
+      expect(other.container.querySelector('[data-testid="cayley3d-spin-ring"]')).toBeNull()
+      expect(other.container.querySelector('[data-testid="cayley3d-spin-tube"]')).toBeNull()
+      other.unmount()
+    }
+
+    const c4Torus = render(<Cayley3DScene group={c4} selectedElements={new Set()} layout3D="torusHex" />)
+    expect(c4Torus.container.querySelector('[data-testid="cayley3d-spin-ring"]')).toBeNull()
+  })
+
+  it('点击自转按钮翻转高亮（缺省受控 prop 时按钮本地态生效）；受控 prop 优先', () => {
+    const local = render(<Cayley3DScene group={s4star()} selectedElements={new Set()} layout3D="torusHex" />)
+    const ringBtn = local.container.querySelector('[data-testid="cayley3d-spin-ring"]') as HTMLElement
+    fireEvent.click(ringBtn)
+    expect(ringBtn.getAttribute('style')).toContain('accent-teal')
+    fireEvent.click(ringBtn)
+    expect(ringBtn.getAttribute('style')).not.toContain('accent-teal')
+    local.unmount()
+
+    const controlled = render(
+      <Cayley3DScene group={s4star()} selectedElements={new Set()} layout3D="torusHex" spinBigCircle />,
+    )
+    const btn = controlled.container.querySelector('[data-testid="cayley3d-spin-ring"]') as HTMLElement
+    expect(btn.getAttribute('style')).toContain('accent-teal')
+    fireEvent.click(btn) // 本地态翻转，但 prop 说了算 ⇒ 仍高亮
+    expect(btn.getAttribute('style')).toContain('accent-teal')
+  })
+
+  // 环面自转的相位推进由 useFrame 驱动（mock 里没有真帧循环）⇒ 手动喂 delta。
+  // 注意：R3F 的 useFrame 每次渲染只订阅一次（回调经 ref 更新）；mock 朴素地每次渲染都 push，
+  // 所以这里只喂「最新那个」回调，才与真实运行等价（否则一次 act 会被旧闭包重复推进）。
+  const stepFrame = (delta: number) => {
+    const cb = h.frames.at(-1)
+    act(() => { cb?.({}, delta) })
+  }
+
+  it('绕管子自转：每帧把相位推进给 3D 布局（useFrame → tubePhase 真实管线）', () => {
+    h.frames.length = 0
+    h.layoutOpts.length = 0
+    render(<Cayley3DScene group={s4star()} selectedElements={new Set()} layout3D="torusHex" spinTube />)
+    // 起始相位 0（画面 = 设计的镶嵌，逐位不变）
+    expect(h.layoutOpts.at(-1)?.tubePhase).toBe(0)
+
+    stepFrame(0.5)
+    // 0.5s × 2π/8s ≈ 0.3927 弧度
+    expect(h.layoutOpts.at(-1)?.tubePhase).toBeCloseTo((0.5 * 2 * Math.PI) / 8, 3)
+
+    stepFrame(0.5)
+    expect(h.layoutOpts.at(-1)?.tubePhase).toBeCloseTo((1.0 * 2 * Math.PI) / 8, 3)
+  })
+
+  it('两个自转都关时相位冻结（帧循环不改布局选项）', () => {
+    h.frames.length = 0
+    h.layoutOpts.length = 0
+    render(<Cayley3DScene group={s4star()} selectedElements={new Set()} layout3D="torusHex" />)
+    const before = h.layoutOpts.length
+    act(() => { for (const cb of [...h.frames]) cb({}, 0.5) })
+    expect(h.layoutOpts.at(-1)?.tubePhase).toBe(0)
+    expect(h.layoutOpts.length).toBe(before) // 没有 setState ⇒ 不触发重渲染
   })
 
   it('shows hover/selected labels only when showLabels is not false', () => {

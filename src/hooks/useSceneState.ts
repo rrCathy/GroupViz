@@ -355,8 +355,8 @@ export function useSceneState(group?: Group | null, options: SceneStateOptions =
       setHoverAnchor(null)
       return
     }
-    // Scene 给的 anchor 已是 viewport 内屏幕坐标则直接用；否则按 viewBox 坐标换算。
-    // 约定：Scene 传的是屏幕坐标（见 CayleyView 文档），此处直接透传。
+    // 约定：Scene 传的 anchor 已是**容器内像素坐标**（`utils/hoverAnchor.ts` 由鼠标位置换算），
+    // 这里透传给 `SceneHoverBubble` 当 left/top 用。Scene 未提供（表格视图等）则 anchor 为 null。
     setHoverAnchor(anchor)
   }, [])
 

@@ -70,8 +70,9 @@
 
 > **真源 = `src/core/types/viewConfig.ts`**（含默认值与 JSDoc），此处只列名字；消费端 API 说明见 [API.md](API.md) §4.9 / §4.10。
 
-- **2D `CayleyViewParams`**：VCL 新增 `edgeCurvature` · `actions[].lengthScale` · `actions[].dash` · `pathHighlight` · `forceDirected` + `force` · `nodeColorMode` · `showOrderBadge` · `highlightGenerated` · `markCenter` · `markNormalSubgroup` · `printPalette` · `edgeWidthScale` · `showArrows` · `showLegend`；既有 `shape2D` / `multiplyType` / `actions` / `nodeRadius` / `showLabels`。
-- **3D `Cayley3DViewParams`**：VCL 新增 `actions[].lengthScale` · `pathHighlight` · `shell` · `layerRings` · `relayoutNonce` · `nodeColorMode` · `showOrderBadge`；既有 `faceFill`（VCL 之前即有的雏形）、`layout3D` / `nodeScale`。
+- **2D `CayleyViewParams`**：VCL 新增 `edgeCurvature` · `actions[].lengthScale` · `actions[].dash` · `pathHighlight` · `forceDirected` + `force` · `nodeColorMode` · `highlightGenerated` · `markCenter` · `markNormalSubgroup` · `printPalette` · `edgeWidthScale` · `showArrows` · `showLegend`；既有 `shape2D` / `multiplyType` / `actions` / `nodeRadius` / `showLabels`。
+- **3D `Cayley3DViewParams`**：VCL 新增 `actions[].lengthScale` · `pathHighlight` · `shell` · `layerRings` · `relayoutNonce` · `nodeColorMode`；既有 `faceFill`（VCL 之前即有的雏形）、`layout3D` / `nodeScale`。
+- ~~`showOrderBadge`~~（F2 阶徽标 / 阶→球径）：**2026-09-26 撤下**，原因与替代见 §3.4。
 
 ---
 
@@ -83,7 +84,7 @@
 
 ### 3.1 ✅ 已交付
 
-> 全部**只在 FGVE 窗口 + 包 props 路径**（主画布不接，见 §1.3）；逐次提交、测试计数与真机数据见 CHANGELOG（2026-09-11 / 09-12 / 09-23 三批）。
+> 全部**只在 FGVE 窗口 + 包 props 路径**（主画布不接，见 §1.3）；逐次提交、测试计数与真机数据见 CHANGELOG（2026-09-11 / 09-12 / 09-23 / 09-27 四批）。
 
 | 能力 | 落点 | 范围 |
 |------|------|------|
@@ -95,13 +96,13 @@
 | 节点可调大小 | `nodeRadius` / `nodeScale`（VCL 之前既有） | 2D + 3D |
 | 3D 子群陪集面着色 | `faceFill` + `core/algebra/faces3D.ts`（VCL 之前既有；Scene 与 ⚙ 面板共用同一份候选数据） | 3D |
 | 共轭类一键着色（F1） | `nodeColorMode: 'conjugacy'` + `core.nodeSemantics.conjugacyClassIndexMap` | 2D + 3D |
-| 元素阶徽标（F2） | `showOrderBadge` + `core.elementOrderMap`（3D 端为「阶→球径」） | 2D + 3D |
 | ⟨g⟩ 闭包高亮（F3） | `highlightGenerated`（联动 selection，无需额外参数） | 2D |
 | 中心 / 最小正规子群标记（F4） | `markCenter`（双实线环）/ `markNormalSubgroup`（虚线外环） | 2D |
 | 自动图例（E2） | `showLegend`（色块 + 记号 + 线型预览，点击行切该生成元边显隐）+ `onToggleAction` | 2D |
 | 打印 / 单色 + 虚线（E3） | `printPalette`（全体同色，靠线型/线宽区分）+ `actions[].dash` | 2D |
 | 边样式细化（E4） | `edgeWidthScale`（与 lengthScale 正交）/ `showArrows` | 2D |
 | 3D 球壳 / 纬度环 / 重新优化布局（B1–B3） | `shell` / `layerRings`（仅字长球；缺省关）/ `relayoutNonce` | 3D |
+| 环面两因子自转（S¹×S¹，2026-09-27） | `spinBigCircle`（绕**大圆**/纬向 = 内容绕环面回转轴刚体旋转，useFrame 命令式转 group ⇒ 零重渲染）+ `spinTube`（绕**管子**/经向 = `compute3DPositions(group, layout, { tubePhase })` 每帧重算曲面点）。仅 `torusHex`；视口 ◯/◎ 按钮 + ⚙ 面板双入口，同速（8s/圈）且周期 2π 无缝 | 3D（torusHex） |
 | **窗口内导出（SVG/PNG）** | `ViewWindow` 标题栏 ⤓：2D → **自包含 SVG**（全量样式内联 + KaTeX 字体改写 CDN，注释与节点标签掉不了排版）；3D/对称性 → canvas PNG。序列化在零依赖模块 `utils/exportSvg.ts`（`export.ts` re-export） | 全部视图（W-0，2026-09-24） |
 
 ### 3.2 🔄 本批（Phase 0 三件地基）
@@ -116,11 +117,11 @@
 |------|------|------|
 | 标题/副标题/图注 caption | FP | 「图 3.2：S₄ 的 Cayley 图」，导出时烘焙 |
 | 标签方案切换 | VP | 循环记号 / 幂记号（Cₙ 显 gⁱ）/ 自定义别名，逐图可切 |
-| hover 气泡内容自定义 | UI | 教师定义悬停显示什么（阶 / 共轭类 / 自定义文本）——需要**字段清单模型**而非硬编码文案，配套 core 补 `reducedWordCount`（沿字长 DAG 的 DP 计数，暂无） |
+| hover 气泡内容自定义 | UI | 教师定义悬停显示什么（阶 / 共轭类 / 自定义文本）——需要**字段清单模型**而非硬编码文案，配套 core 补 `reducedWordCount`（沿字长 DAG 的 DP 计数，暂无）。**现状**：`SceneHoverBubble` 固定显示「元素名 / id / 阶」三行（`group` prop 传入时带阶），本条要做的是把这三行变成字段清单驱动 |
 | 揭示模式 | UI | 标签/答案默认遮住，点击逐个揭示（讲课悬念） |
 | 节点位置覆盖 + 手动布局编辑 | VP / NEW | 拖摆节点位置持久化进预设（CycleView 已有 `getNodePosition` 局部态，扩到全视图） |
 | 阶→色相（阶可视化） | VP | `nodeColorMode` 加 `'order'`：一色相 = 一阶 + 图例（E2）。**不计数、不占外圈**，复用 F1 调色板 `nodeSemantics.conjugacyClassColor` 与已交付的 `showLegend`；典型群的阶集合 ≤ 8，正好落在可辨色相上限内。代价：与 F1 互斥（同字段二选一）、精确值靠图例或 hover 气泡补（`SceneHoverBubble.tsx:37` 已显示阶）。**与下一行「阶→形状映射」同族，建议同批掂量** |
-| 阶→形状映射 | VP | 2 阶方形、3 阶三角…（F2 的徽标已交付，形状映射未做） |
+| 阶→形状映射 | VP | 2 阶方形、3 阶三角…（**徽标路线已于 2026-09-26 撤下**，见 §3.4；形状映射本身未做） |
 | 教学友好生成元集预设 | VP | 一键换"好讲"的生成组（现按形状换生成元已有，缺面板入口） |
 | 聚焦聚光灯 | DEC | 非兴趣区压暗，讲某个陪集时其余退后 |
 | 陪集边界描边 + \|G:H\| 区域标注 | DEC | 面填充已否决，但描边/标注本身可独立存在 |
@@ -128,7 +129,7 @@
 | 图质量读数面板 | UI | 松弛前后最小边距、近距边对计数——复用 core 诊断先例（`countLatticeCrossings`），3D 增 `edgePairClearance` |
 | ~~窗口内导出（SVG/PNG，含 decorations）~~ | FP | ✅ **已交付（W-0，2026-09-24）**：见 §3.1 末行；真机验收导出文件含注释图层 |
 | 应用浮窗与 FGVE 内核的面板收口 | UI | ✅ **已立项为独立方案**：[PLAN_WINDOW_FRAMEWORK.md](PLAN_WINDOW_FRAMEWORK.md)（三壳合一，分刀 W-1~W-6）——老式壳零控件、内核带全套 ⚙ 的鸿沟在那里收 |
-| 导出内联 KaTeX CSS | FP | `exportSVGContent` 目前只内联 CSS 变量，**foreignObject 里的 KaTeX 节点标签在外部工具打开导出文件时会掉排版**（现状即如此）；内联 KaTeX 样式后节点标签与注释一起受益 |
+| 主画布导出的样式内联 | FP | **窗口内通路已解决**（W-0）：`utils/exportSvg.ts` 的 `collectStyleText()` 已全量内联 `document.styleSheets` 并把 KaTeX 字体路径改写 CDN。**本条只剩主画布出口** —— `utils/exportApi.ts` 的 `exportSVGContent()` 至今只内联 **11 个 CSS 变量**、只认 `.canvas-viewport`，所以 `foreignObject` 里的 KaTeX 节点标签在外部工具打开导出文件时会掉排版（`npm run export` 的批量导出走的正是这条）。修法：让它改用同源的 `serializeSvg()`（单一真源），别各写一份 |
 | 分层选择器（字长直方图） | VP | 柱状选层 → 高亮该层节点/边；任何分层（字长/阶/共轭类）都适用的通用范式 |
 | 悬停联动图例 | DEC / UI | 悬停节点 → 高亮其全部邻边（含方向）并同时高亮图例项；悬停边 → 显示生成元 + 两端字长变化 |
 | 3D 布局旋钮 `BAND_RATIO` / `SNAP_RATIO` | VP | 纬度带厚度 / 外圈吸附阈值——直接影响"看起来像不像球" |
@@ -166,6 +167,12 @@
 
 见 §1.3（主画布不接、2D 面填充否决、不按群阶特判、教学逻辑归 GVL）——**不在此重复**。
 
+**撤下的已交付能力**（曾上线、后经用户判断撤除）：
+
+| 能力 | 撤下 | 原因 | 替代 |
+|------|------|------|------|
+| F2 元素阶徽标（2D 节点右上角数字角标 / 3D「阶→球径」） | 2026-09-26 | 用户：「我觉得这个东西……一般般吧」——常驻角标在节点上抢位置，大群还得整片退化成不画；3D 用球径编码阶更是把"大小"这个视觉量污染掉（球径本该是纯视觉参数）。**阶不是需要一眼扫的信息，是需要时读的信息** | 阶统一在**悬停**里读：2D 就地气泡（`SceneHoverBubble`，本轮给应用浮窗补上——此前浮窗悬停只有青色高亮环，角标一撤就再无出口）；3D 悬停/选中标签保留 `ord n` 行。`showOrderBadge` 从两套 ViewParams、zod schema、⚙ 面板、消费页一并移除（**包 API 破坏性变更**）。实施中真机抓到并修掉 hover 锚点的**坐标语义 bug**（Scene 上报 viewBox 坐标、气泡却是像素定位 ⇒ 气泡落框外；`ViewWindow` 同病），新增 `utils/hoverAnchor.ts` 统一为容器内像素坐标——详见 CHANGELOG 2026-09-26 |
+
 ---
 
 ## 4. Phase 0 施工方案（2026-09-24 定稿）
@@ -194,7 +201,7 @@
 | 编辑类控件有同形先例 | `floatingView/CayleyPathEditor.tsx`（109 行：text 输入 + 本地态 + `resetKey` 换群同步） |
 | 2D 导出会自动烘焙 DOM 叠层 | `utils/exportApi.ts` 的 `exportSVGContent()` 直接序列化画布 `<svg>` ⇒ 注释只要渲染进同一棵 SVG 即随图导出，**零额外工作量** |
 | 3D 导出**不**烘焙 DOM 覆盖层 | 3D 走 `exportCanvasDataUrl()`（canvas 栅格）；`Html` 注释层不进图 ⇒ 已知缺口（见 §4.6 第 5 条） |
-| 面板 DOM 形状被测试硬编码断言 | `Cayley3DWindowParams.component.test.tsx`：面板内 `input[type=range]` = 2/4、`checkbox` = 13、`color` = 4、`select` 数量；`CayleyWindowParams` 同类计数（range 4、checkbox 16 = 含 DEC-2 的 Leader line） |
+| 面板 DOM 形状被测试硬编码断言 | `Cayley3DWindowParams.component.test.tsx`：面板内 `input[type=range]` = 2/4、`checkbox` = **12**、`color` = 4、`select` 数量；`CayleyWindowParams` 同类计数（range 4、checkbox **15** = 含 DEC-2 的 Leader line）。两个数都比 2026-09-23 首版少 1——**2026-09-26 撤下阶徽标**（见 §3.4）；改控件数量必须同步这两处 |
 | **⚙ 面板的落点只有 `ViewWindow`，应用的浮窗没有面板**（2026-09-24 实测发现） | 应用自己的浮动视图窗走**老式壳** `floatingView/FloatingViewWindow.tsx` + `lazyViews.renderViewContent`（229 + 500 行）——纯标题栏 + 内容 + 缩放手柄，`grep 'input type'` = **0**、无 `Parameters` 按钮。`ViewParamsPanel`（含 F/E/B 组与 DEC-2 注释编辑器）只挂在 `ViewWindow`（FGVE 受控内核）上，而 `ViewWindow` 在仓内的消费点只有 `TestPage2.tsx`（`?test=2` 博客配图页，7 个窗口）+ 包消费端。⇒ **今天之前所有 VCL 控件在应用里都点不到**；`?test=2` 的凯莱窗口又用 `FIGURE`（`showControls:false`）隐藏控制条，所以博客配图窗口本身也没有 ⚙ |
 | **导出通路只认主画布**（同上发现） | `utils/exportApi.exportSVGContent()` 与 `utils/export.exportView()` 都取 `document.querySelector('.canvas-viewport')` = **主画布**；导出按钮在 `ViewPanel`。⇒ **浮动窗口里的图（含注释）今天导不出来**——而主画布按 §1.3 决策不接 VCL。这是"编排一张插图用于博客"的最后一段缺口 |
 | 协议与门禁 | 新 core 模块须同步 `src/core/index.ts` 门面；`coreBoundary.test` 守 core 零 UI；`GroupDescriptor v1` 的 zod + 幂等模式（`core/descriptor.ts`）是现成模板；schema 必须带 round-trip 测试；改 src props 后须 `npm run build:pkg`，消费页/冒烟才可见 |
@@ -262,6 +269,7 @@ export const figurePresetSchemaV1 = z.object({
 | **W-0 导出** ✅ | 窗口内导出（`ViewWindow` 标题栏 ⤓）：2D → 自包含 SVG、3D/对称性 → PNG；序列化抽零依赖模块 `utils/exportSvg.ts` | **已真机验收**（2026-09-24）：导出 `图-2-凯莱图.svg`（85 KB，含 `<style>` / KaTeX CDN 改写 / **注释图层**），`file://` 独立渲染时 `g²=e` 正常显示 |
 | **UI-1** | `ViewControl` descriptor + 通用 `ControlPanel` 渲染器；迁移 2D/3D 凯莱面板 **31** 个存量控件（2D 18 + 3D 13）+ 通用区 6；DEC 控件改 descriptor 驱动。**其余 8 视图 21 个控件保持手写** | 既有面板外观逐位不变 + **面板 DOM 计数测试保持不变**（零回归证明即本步的可见物） |
 | **FP-1** | `figurePreset.ts` 协议 + 序列化 + `useFigurePreset` + 面板「Save / Load preset」：导出=**复制 JSON 到剪贴板**、导入=**粘贴**（弹窗文本框） | 调好一张插图（含注释）→ 复制 JSON → 清空 → 粘贴导入 → 逐位还原 |
+| **验证入口** ✅ | `?test=1`（`TestPagePkgConsume.tsx`）= **VCL 全量消费矩阵**：**7 卡**覆盖批次一（边几何 / 路径高亮 / 动态力导向）+ 批次二（F/E/B）+ 批次三（Decorations 注释，含失效引用注入与「+ 添加」），`scripts/pkg/browser-smoke.mjs` **32 项**真机断言。**边界**：`ViewWindow` 不向包门面导出 ⇒ 窗口侧能力（⚙ 面板 / 注释编辑器 / ⤓ 导出 / 将来的 FigurePreset）**在 testpage 里验不了**，只能在应用内（多视图模式）或 `?test=2` 验 | 2026-09-28：**32/32 全过 · 0 JS 错误**（含「拖单位元节点 → 注释 y 403→354.4」，即 DEC-2 核心验收点） |
 | 本批之外 | 3D 注释、预设库列表、深链、尺寸预设、caption 烘焙、TikZ | 见 §3.3 池 |
 
 ### 4.6 风险与坑（施工前须知）
@@ -292,6 +300,7 @@ export const figurePresetSchemaV1 = z.object({
 | 2026-09-24 | **主画布不接 VCL 控件**：主画布 = 新视图/新形状的先行试验田，不承担插图编排（原「甲组 A1/A2」取消） |
 | 2026-09-24 | **2D 面/陪集填充否决**：2D 已够乱；陪集语义由商群悬浮窗 + 3D `faceFill` 承载 |
 | 2026-09-24 | **`Decorations` v1 只做 annotations**：`paths` 仅预留 schema 字段，避免与已落地的 `pathHighlight` 形成两份真源（见 §4.3） |
+| 2026-09-26 | **撤下 F2 元素阶徽标**（2D 右上角数字角标 + 3D 阶→球径）：用户「我觉得这个东西……一般般吧」，决定「把元素阶信息放到 hover 里」。阶改为只在悬停时读（2D 就地气泡 / 3D 标签 `ord n` 行）；同批给应用浮窗补上悬停气泡（此前老式壳只有高亮环，无文字气泡）+ `SceneHoverBubble` 加"锚点贴上沿自动下翻"（浮窗内容区是 `overflow:hidden`）。`showOrderBadge` 从两套 `*ViewParams` / zod schema / ⚙ 面板 / 消费页移除。**配套测试**：面板 checkbox 计数 16→15、13→12；浮窗基线新增「悬停出气泡（含阶）→ 离开收起」 |
 | 2026-09-26 | **「节点外圈按阶分段彩环」搁置**（用户：「先不动，再议」）——提案是拿 n 段异色彩环替代 F2 数字徽标。评估三条否决：① **落位冲突**：外圈已被 Z(G) 双实环（+4 / +6.5）· 最小正规子群虚线环（+9.5，`#f97316`）· ⟨g⟩ 实环（+12，`#4ecdc4`）占满，另有 hover 环（+5）；再挤一圈就是 5 道同心环。② **编码精度倒挂**：默认 `nodeRadius=28` ⇒ 外圈周长 2πR ≈ 176px，n=12 每段 ≈ 14.7px、扣 3° 缝后弧长 ≈ 13px，配 7px 环宽只是 13×7 的短块；同时人的可辨色相上限 ≈ 6–8 个。两条约束落在同一量级 ⇒ **只有 n ≤ 4 是净收益，n ≥ 6 变成"数弧段"**，比读数字慢。③ **n=1 退化**：单位元整圈单色与普通节点长得一样（F2 徽标至少写明 1）⇒ 丢掉最该被看见的阶 1。另两条语义层面的：段的色相本身不携带信息（第 i 段涂什么只表示"它是第 i 段"，无序无量），等于用色相 + 边界 + 弧长三个通道编码一个 2 个字形就能无损表达的整数；而**阶是共轭类不变量** ⇒ F1 共轭类着色已隐含部分阶信息（同色必同阶，反之不然）。**替代方案**：`nodeColorMode: 'order'`（一色相 = 一阶 + 图例，见 §3.3 Tier A），从 `viewConfig.ts:210` 的 `z.enum(['none','conjugacy'])` 加一项即可。代码本轮不动 |
 
 ---

@@ -23,6 +23,7 @@ import { removeStoredKey } from '../../../utils/persistence'
 import { VIEWWINDOW_RESET_EVENT } from '../../../utils/resetViewWindows'
 import { emptyDecorations } from '../../../core/types/decorations'
 import { renderViewContent } from './lazyViews'
+import { SceneHoverBubble } from '../SceneHoverBubble'
 import { ViewContent } from './ViewContent'
 import { ViewParamsPanel } from './ViewParamsPanel'
 import { useWindowDragResize } from './useWindowDragResize'
@@ -63,8 +64,14 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
   const handleSelect = useCallback((elId: string, add: boolean) => {
     globalCtx.selectElement(elId, add)
   }, [globalCtx])
-  const handleHover = useCallback((el: GroupElement | null) => {
+  // 悬停：全局 HoverContext 是**单例**（多窗共享同一 hoveredElement，用于跨窗联动高亮），
+  // 所以气泡不能直接读它——否则开两个窗会同时弹两个气泡。本窗自己留一份"是不是我发的悬停"。
+  const [localHover, setLocalHover] = useState<GroupElement | null>(null)
+  const [localHoverAnchor, setLocalHoverAnchor] = useState<{ x: number; y: number } | null>(null)
+  const handleHover = useCallback((el: GroupElement | null, anchor?: { x: number; y: number } | null) => {
     setHoverElement(el)
+    setLocalHover(el)
+    setLocalHoverAnchor(el && anchor ? anchor : null)
   }, [setHoverElement])
 
   // 乘法表窗口最小尺寸：含文字需看清，最小 = viewBox + 标题栏
@@ -359,6 +366,15 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
               appWindowLabels
             />
           ) : renderViewContent(view)}
+
+          {/* 就地气泡：悬停节点显示元素名 + 阶。阶已从常驻角标撤下 —— 这是 2D 视图里读阶的唯一出口。
+              只用本窗自己的悬停态（理由见 handleHover 注释），锚点贴容器上沿时气泡自动下翻 */}
+          <SceneHoverBubble
+            element={localHover}
+            anchor={localHoverAnchor}
+            group={group}
+            theme={viewWindowTheme}
+          />
         </div>
 
         {/* 视图内提示浮条（未迁视图用 lazyViews 自带机制；这里给内核内容留同一条通道） */}

@@ -165,8 +165,6 @@ export interface CayleyViewParams {
   // ── VCL F 组：节点语义装饰（缺省全部 = 不改变现有观感） ──
   /** 节点着色方案；缺省 'none'（主题默认填充）。见 CayleyNodeColorMode */
   nodeColorMode?: CayleyNodeColorMode
-  /** 在节点右上角标出元素阶（讲 Lagrange / 循环结构时一眼可读）；缺省 false */
-  showOrderBadge?: boolean
   /** 高亮**选中元素**生成的循环子群 ⟨g⟩（节点外圈 + 组内边）；缺省 false。
    *  与 selection 联动，无需额外参数——点哪个元素就亮哪条循环 */
   highlightGenerated?: boolean
@@ -208,7 +206,6 @@ export const cayleyViewParamsSchema = z.object({
   forceDirected: z.boolean().optional(),
   force: cayleyForceParamsSchema.optional(),
   nodeColorMode: z.enum(['none', 'conjugacy']).optional(),
-  showOrderBadge: z.boolean().optional(),
   highlightGenerated: z.boolean().optional(),
   markCenter: z.boolean().optional(),
   markNormalSubgroup: z.boolean().optional(),
@@ -240,6 +237,12 @@ export interface Cayley3DViewParams {
   nodeScale?: number
   /** 缺省 false；prop 优先，窗口内 ▶ 按钮本地态兜底 */
   autoRotate?: boolean
+  /** torusHex 专用（其余 3D 布局忽略）：绕大圆（纬向）自转 —— 环面 = S¹×S¹ 的一个因子旋转，
+   *  三维里等价于整块图内容绕环面回转轴刚体旋转（环面壳不变）。缺省 false */
+  spinBigCircle?: boolean
+  /** torusHex 专用：绕管子（经向）自转 —— S¹×S¹ 的另一个因子旋转；图沿每根管的截面绕行。
+   *  缺省 false */
+  spinTube?: boolean
   /** 是否显示 hover/选中 Html 标签；缺省 true */
   showLabels?: boolean
   /** 子群陪集面填充（面 = 某真子群单个陪集在布局中占满的平面凸多边形） */
@@ -259,8 +262,6 @@ export interface Cayley3DViewParams {
   /** 节点着色方案；缺省 'none'（逐元素彩虹配色 / 字长球用字长色阶）。
    *  'conjugacy' 时覆盖上述默认配色（按共轭类分色） */
   nodeColorMode?: CayleyNodeColorMode
-  /** 在节点标签下挂元素阶徽标；缺省 false */
-  showOrderBadge?: boolean
 }
 
 export const cayley3DViewParamsSchema = z.object({
@@ -280,13 +281,14 @@ export const cayley3DViewParamsSchema = z.object({
     .optional(),
   nodeScale: z.number().min(0.5).max(2).optional(),
   autoRotate: z.boolean().optional(),
+  spinBigCircle: z.boolean().optional(),
+  spinTube: z.boolean().optional(),
   showLabels: z.boolean().optional(),
   pathHighlight: cayleyPathHighlightSchema.nullable().optional(),
   shell: z.boolean().optional(),
   layerRings: z.boolean().optional(),
   relayoutNonce: z.number().int().min(0).max(64).optional(),
   nodeColorMode: z.enum(['none', 'conjugacy']).optional(),
-  showOrderBadge: z.boolean().optional(),
   faceFill: z
     .object({
       enabled: z.boolean().optional(),

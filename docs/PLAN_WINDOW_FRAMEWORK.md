@@ -92,7 +92,7 @@ WindowFrame（唯一壳）
 ## 6. 风险
 
 1. **语义变化用户可感知**（§4 的选中/生成元联动）——必须先定，否则会在"融合后发现手感变了"时返工。
-2. **老式壳零测试** ⇒ ✅ **已办（W-1 同步补，W-2/W-3 续加）**：`src/__tests__/FloatingViewWindowBaseline.component.test.tsx`（**17 条**）钉住渲染与视图分发 / 拖动与边界钳制 / resize 与最小尺寸 / 关闭 / 置顶 / 8 向手柄与四边·四角差异 / 几何持久化与重置 / 面板驱动画面（半径、阶徽标）/ 注释 / 选中共享 / 未迁视图不给 ⚙。**这套基线在每一刀改造前后各跑一次，先绿后绿**，并当场抓出 §6.6 那个 hook bug。
+2. **老式壳零测试** ⇒ ✅ **已办（W-1 同步补，W-2/W-3 续加）**：`src/__tests__/FloatingViewWindowBaseline.component.test.tsx`（**19 条**）钉住渲染与视图分发 / 拖动与边界钳制 / resize 与最小尺寸 / 关闭 / 置顶 / 8 向手柄与四边·四角差异 / 几何持久化与重置 / 面板驱动画面（半径、共轭类着色）/ 悬停就地气泡（元素名 + 阶）/ 注释 / 选中共享 / 未迁视图不给 ⚙。**这套基线在每一刀改造前后各跑一次，先绿后绿**，并当场抓出 §6.6 那个 hook bug。
 3. **包边界**：`ViewWindow` 今天不在包门面，融合**不要顺手导出**它。
 4. **i18n**：老式壳内容走 `useTranslation`；`ViewContent` 是 props 化的（文案由宿主传）。迁移时补文案透传，别把中文硬编码带进内核。
 5. **回归网**：14 个窗口面板测试 + `Workspace.integration` / `PanelViewInteractions.integration` / `SvgSnapshot.integration`，一轮一轮跑，别一次大改。

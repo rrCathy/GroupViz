@@ -1,10 +1,11 @@
 import type * as THREE from 'three'
 
 // 3D 凯莱图视图的轨道控制注册桥：导出 GIF 时按「帧序号 × 帧延时」精确驱动相机旋转。
-// Cayley3DView 挂载时注册（仅主视口 .canvas-viewport 内的实例），导出完成后恢复原视角。
-// GIF 相机在独立离屏渲染器上工作：不触碰实时轨道/相机，导出期间展示区照常旋转。
+// Cayley3DView 挂载时注册（仅主视口 .canvas-viewport 内的实例）。
+// GIF 相机在独立离屏渲染器上工作：不触碰实时轨道/相机，导出期间展示区照常旋转，故导出结束无需回灌视角。
 
 export interface Cayley3DOrbitSnapshot {
+  /** 由相机姿态反推（仅描述相机位置方向；滚转不可逆） */
   theta: number
   phi: number
   radius: number

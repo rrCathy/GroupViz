@@ -3,6 +3,7 @@ import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { cycleGraphLayout, circleLayoutRadius } from '../../core/algebra/forceLayout'
 import { INTERACTIVE_LIMIT } from '../../core/guards'
 import { texify, renderTex } from '../../utils/texify'
+import { hoverAnchorFromEvent } from '../../utils/hoverAnchor'
 import type { CanvasTransform, Group, GroupElement, NodePosition } from '../../core/types'
 
 export interface CycleViewProps {
@@ -380,7 +381,7 @@ function CycleViewBody({
                 window.addEventListener('mousemove', handleMove)
                 window.addEventListener('mouseup', handleUp)
               }}
-              onMouseEnter={() => onHover?.(el, { x: pos.x * canvasTransform.scale + canvasTransform.x, y: pos.y * canvasTransform.scale + canvasTransform.y })}
+              onMouseEnter={e => onHover?.(el, hoverAnchorFromEvent(e))}
               onMouseLeave={() => onHover?.(null, null)}
               style={{ cursor: 'grab' }}
             >

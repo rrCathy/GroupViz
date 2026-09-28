@@ -43,9 +43,10 @@ describe('ViewWindow · cayley view', () => {
     expect(select.value).toBe('circular')
     // 滑杆 = 节点半径 + 边曲率 + 逐生成元边长（C₁₂ 默认 1 条作用边）+ 边线宽（VCL E4）→ 4
     expect(panel.querySelectorAll('input[type="range"]')).toHaveLength(4)
-    // 复选框 = 6 窗口配置 + 1 条作用边 + Live force-directed + VCL 新增（箭头/打印/图例/阶徽标/⟨g⟩高亮/中心/正规子群）
-    //          + DEC-2 注释（Leader line）= 16
-    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(16)
+    // 复选框 = 6 窗口配置 + 1 条作用边 + Live force-directed + VCL 新增（箭头/打印/图例/⟨g⟩高亮/中心/正规子群）
+    //          + DEC-2 注释（Leader line）= 15
+    // （「阶徽标」已废弃：元素阶统一只在悬停气泡里读）
+    expect(panel.querySelectorAll('input[type="checkbox"]')).toHaveLength(15)
     expect(screen.getByText('Edge actions')).toBeInTheDocument()
     expect(screen.getByText('All')).toBeInTheDocument()
     expect(screen.getByText('None')).toBeInTheDocument()
@@ -57,7 +58,7 @@ describe('ViewWindow · cayley view', () => {
     expect(screen.getByTestId('cayley-arrows')).toBeInTheDocument()      // VCL E3 箭头开关
     expect(screen.getByTestId('cayley-print-palette')).toBeInTheDocument() // VCL E3 打印/单色
     expect(screen.getByTestId('cayley-legend')).toBeInTheDocument()      // VCL E2 图例
-    expect(screen.getByTestId('cayley-order-badge')).toBeInTheDocument() // VCL F2 阶徽标
+    expect(screen.queryByTestId('cayley-order-badge')).toBeNull() // F2 阶徽标已废弃（阶只在悬停气泡）
     expect(screen.getByTestId('cayley-gen-highlight')).toBeInTheDocument() // VCL F3 ⟨g⟩高亮
     expect(screen.getByTestId('cayley-mark-center')).toBeInTheDocument() // VCL F4 中心 Z(G)
     expect(screen.getByTestId('cayley-mark-normal')).toBeInTheDocument() // VCL F4 正规子群

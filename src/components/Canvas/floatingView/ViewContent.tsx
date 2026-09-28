@@ -126,7 +126,6 @@ export function ViewContent({
             actions: toggleCayleyActionReducer(normalizeCayleyActions(group, cvp.actions), id),
           })}
           nodeColorMode={cvp.nodeColorMode}
-          showOrderBadge={cvp.showOrderBadge}
           highlightGenerated={cvp.highlightGenerated}
           markCenter={cvp.markCenter}
           markNormalSubgroup={cvp.markNormalSubgroup}
@@ -150,6 +149,8 @@ export function ViewContent({
           layout3D={p3.layout3D}
           nodeScale={p3.nodeScale}
           autoRotate={p3.autoRotate}
+          spinBigCircle={p3.spinBigCircle}
+          spinTube={p3.spinTube}
           showLabels={p3.showLabels}
           locked={config.locked}
           faceFill={p3.faceFill}
@@ -159,7 +160,6 @@ export function ViewContent({
           layerRings={p3.layerRings}
           relayoutNonce={p3.relayoutNonce}
           nodeColorMode={p3.nodeColorMode}
-          showOrderBadge={p3.showOrderBadge}
         />
       )
     }

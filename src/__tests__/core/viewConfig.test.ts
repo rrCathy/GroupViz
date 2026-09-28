@@ -52,7 +52,6 @@ describe('cayleyViewParamsSchema · VCL F1–F4 / E2–E4 / dash (round-trip)', 
     shape2D: 'circular',
     actions: [{ elementId: 'e1', enabled: true, dash: true }],
     nodeColorMode: 'conjugacy',
-    showOrderBadge: true,
     highlightGenerated: true,
     markCenter: true,
     markNormalSubgroup: true,
@@ -86,7 +85,6 @@ describe('cayley3DViewParamsSchema · VCL B1–B3 / F (round-trip)', () => {
     layerRings: true,
     relayoutNonce: 2,
     nodeColorMode: 'conjugacy',
-    showOrderBadge: true,
   }
   it('accepts the VCL B/F 3D param set and preserves values (round-trip)', () => {
     const res = cayley3DViewParamsSchema.safeParse(full3D)

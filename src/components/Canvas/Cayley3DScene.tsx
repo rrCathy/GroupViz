@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect, useState, useCallback, memo, type ReactNode } from 'react'
+import { useRef, useMemo, useEffect, useState, useCallback, memo, type ReactNode, type CSSProperties } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Html, Line } from '@react-three/drei'
 import * as THREE from 'three'
@@ -11,7 +11,7 @@ import {
 } from '../../core/algebra/forceLayout'
 import type { Vec3 } from '../../core/algebra/layouts3D/shared'
 import { compute3DPositions, LAYOUT_3D_RADIUS } from '../../core/algebra/layout3D'
-import { torusHexGeometry, torusHexMinDelta } from '../../core/algebra/layouts3D/torusHexLayout3D'
+import { torusHexGeometry, torusHexMinDelta, TORUS_HEX_RING_AXIS } from '../../core/algebra/layouts3D/torusHexLayout3D'
 import type { TorusHexGeometry } from '../../core/algebra/layouts3D/torusHexLayout3D'
 import { wordLengthColor, wordLengthOf } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
 import {
@@ -20,6 +20,10 @@ import {
 import { texify, renderTex } from '../../utils/texify'
 import { registerCayley3DControls, unregisterCayley3DControls } from '../../utils/cayley3dControls'
 import type { Cayley3DControlAPI } from '../../utils/cayley3dControls'
+import {
+  DEFAULT_SPIN_AXIS, FLICK_MIN_PIXELS, cameraDir, dragRotate, flickAxis, orbitFromQuat, quatFromOrbit,
+  spinWorld,
+} from './cayley3dOrbit'
 import { normalizeCayleyActions } from '../../context/cayleyActions'
 import type {
   CayleyActionParam, Cayley3DFaceFillParams, CayleyPathHighlight, CayleyNodeColorMode,
@@ -51,8 +55,33 @@ function getElementColor(idx: number, total: number, isAbelian: boolean): string
 const RELAX_BASE_ITERS = 160
 const RELAX_STEP_ITERS = 160
 const RELAX_MAX_STEPS = 4
-/** VCL F2 阶→球径的最大放大量（对数压缩后叠加在 nodeScale 上） */
-const ORDER_SCALE_SPAN = 0.35
+
+/** 鼠标拖拽灵敏度（弧度/像素）：与旧 theta/phi 实现同一手感，勿随手改 */
+const DRAG_SENSITIVITY = 0.006
+
+/**
+ * 环面自转（torusHex 专用）一周的秒数：环面 = S¹×S¹，两个因子各一种旋转，两者同速。
+ * 周期取 2π 弧度 ⇒ 整数周后相位归零，画面无缝（GIF 循环同理）。
+ */
+const TORUS_SPIN_PERIOD_SEC = 8
+const TORUS_SPIN_RATE = (2 * Math.PI) / TORUS_SPIN_PERIOD_SEC
+
+/** 环面回转轴（世界系）：大圆/纬向自转 = 内容绕它刚体旋转（唯一真源在 core） */
+const RING_AXIS = new THREE.Vector3(...TORUS_HEX_RING_AXIS)
+
+/** 视口浮层按钮（▶ / ⟲ / 两个自转开关共用）；active = 高亮成主题青 */
+const TOOLBAR_BTN: CSSProperties = {
+  background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
+  border: '1px solid var(--border-primary)', borderRadius: 8, padding: '6px 10px',
+  fontSize: 13, cursor: 'pointer', fontFamily: 'monospace',
+}
+const toolbarBtn = (active: boolean): CSSProperties => (active
+  ? { ...TOOLBAR_BTN, color: 'var(--accent-teal)', border: '1px solid var(--accent-teal)' }
+  : TOOLBAR_BTN)
+
+/** 帧循环与 GIF 导出共用的临时对象（避免每帧分配） */
+const _camDir = new THREE.Vector3()
+const _gifQuat = new THREE.Quaternion()
 
 interface NodeSphereProps {
   position: THREE.Vector3
@@ -66,21 +95,18 @@ interface NodeSphereProps {
   showLabel: boolean
   /** 深色主题（label 阴影深浅）。由 Scene 层从 theme prop / ThemeContext 统一解析后传入（FGVE 入包：子组件不再读 context） */
   isDark: boolean
-  /** VCL F2：元素阶编码的球径倍率（1 = 不编码）。3D 里数字角标随距离/旋转不可读，
-   *  故改用**球径**做「阶高者更大」的一眼编码，精确值由悬停标签补充 */
-  orderScale?: number
-  /** VCL F2：悬停/选中标签旁附上的元素阶（仅在标签可见时出现，零常驻开销） */
+  /** 元素阶：悬停/选中标签旁附上一行（仅在标签可见时出现，零常驻开销；元素的阶统一只在悬停时读） */
   orderBadge?: number
   onSelectElement: (id: string, additive: boolean) => void
   onPointerEnter: (el: GroupElement) => void
   onPointerLeave: (el: GroupElement | null) => void
 }
 
-const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected, isHovered, subsetColor, element, nodeScale, showLabel, isDark, orderScale = 1, orderBadge, onSelectElement, onPointerEnter, onPointerLeave }: NodeSphereProps) {
+const NodeSphere = memo(function NodeSphere({ position, label, color, isSelected, isHovered, subsetColor, element, nodeScale, showLabel, isDark, orderBadge, onSelectElement, onPointerEnter, onPointerLeave }: NodeSphereProps) {
   const texLabel = useMemo(() => renderTex(texify(label)), [label])
   const primary = isSelected || isHovered
   const seg = primary ? 24 : 12
-  const scale = nodeScale * orderScale
+  const scale = nodeScale
 
   return (
     <group position={position}>
@@ -447,6 +473,18 @@ export interface Cayley3DSceneProps {
   nodeScale?: number
   /** 自动旋转；缺省 false。prop 优先，未设置时内部 ▶ 按钮本地态兜底 */
   autoRotate?: boolean
+  /**
+   * torusHex 专用（其余 3D 布局忽略）：绕**大圆**（纬向）自转 —— 环面 = S¹×S¹ 的一个因子旋转，
+   * 在三维里等价于整块内容绕环面回转轴（世界 Z）刚体旋转；环面壳对该旋转不变，所以看上去
+   * 只有图在环上转。缺省 false。prop 优先，未设置时视口按钮本地态兜底（同 autoRotate 规则）
+   */
+  spinBigCircle?: boolean
+  /**
+   * torusHex 专用（其余 3D 布局忽略）：绕**管子**（经向）自转 —— S¹×S¹ 的另一个因子旋转。
+   * 它不是空间里的刚体旋转（每根管的转轴不同）⇒ 按相位重算曲面点，图沿每根管的截面绕行。
+   * 缺省 false。prop 优先，未设置时视口按钮本地态兜底
+   */
+  spinTube?: boolean
   /** 是否显示 hover/选中 Html 标签；缺省 true */
   showLabels?: boolean
   /** 锁定相机交互（轨道拖拽/滚轮缩放/右键平移）；保留点击选中与双击复位 */
@@ -475,8 +513,6 @@ export interface Cayley3DSceneProps {
   // ── VCL F 组 ──
   /** 节点着色方案；缺省 'none'（逐元素彩虹 / 字长球字长色阶）；'conjugacy' = 按共轭类分色 */
   nodeColorMode?: CayleyNodeColorMode
-  /** 元素阶编码：球径随阶增大 + 悬停标签附阶数；缺省 false */
-  showOrderBadge?: boolean
 }
 
 function Cayley3DSceneBody({
@@ -488,6 +524,8 @@ function Cayley3DSceneBody({
   layout3D: layout3DProp,
   nodeScale: nodeScaleProp,
   autoRotate: autoRotateProp,
+  spinBigCircle: spinBigCircleProp,
+  spinTube: spinTubeProp,
   showLabels: showLabelsProp,
   locked = false,
   subsetHighlights = [],
@@ -499,7 +537,6 @@ function Cayley3DSceneBody({
   layerRings = false,
   relayoutNonce = 0,
   nodeColorMode = 'none',
-  showOrderBadge = false,
 }: Cayley3DSceneProps & { group: Group }) {
   const { t } = useTranslation()
   const { gl, camera, scene } = useThree()
@@ -513,6 +550,16 @@ function Cayley3DSceneBody({
 
   const [autoRotateState, setAutoRotateState] = useState(false)
   const autoRotate = autoRotateProp ?? autoRotateState
+  // 环面两个自转开关（torusHex）：prop 优先，未设置时视口按钮本地态兜底（同 autoRotate 规则）
+  const [spinBigCircleState, setSpinBigCircleState] = useState(false)
+  const [spinTubeState, setSpinTubeState] = useState(false)
+  const spinBigCircle = spinBigCircleProp ?? spinBigCircleState
+  const spinTube = spinTubeProp ?? spinTubeState
+  // 环面自转相位（弧度，周期 2π）：ring = 绕大圆（纬向，命令式转 group，零 React 重渲染）；
+  // tube = 绕管子（经向，每根管转轴不同 ⇒ 只能把相位送进 React 重算曲面点）
+  const spinPhase = useRef({ ring: 0, tube: 0 })
+  const ringGroupRef = useRef<THREE.Group>(null)
+  const [tubePhase, setTubePhase] = useState(0)
   const [hoverElement, setHoverElement] = useState<GroupElement | null>(null)
   // 受控悬停（外部联动）优先；缺省回落内部指针悬停
   const controlledHover = useMemo(
@@ -530,39 +577,39 @@ function Cayley3DSceneBody({
     () => (nodeColorMode === 'conjugacy' ? conjugacyClassCount(group) : 0),
     [group, nodeColorMode],
   )
-  const orderMap = useMemo(() => (showOrderBadge ? elementOrderMap(group) : null), [group, showOrderBadge])
-  const maxOrder = useMemo(
-    () => (orderMap ? Math.max(1, ...orderMap.values()) : 1),
-    [orderMap],
-  )
+  // 元素的阶：供悬停/选中节点的标签附一行（阶本身不再做常驻的球径编码）
+  const orderMap = useMemo(() => elementOrderMap(group), [group])
 
-  // 自定义轨道状态（替代 drei OrbitControls）：theta/phi 球坐标，phi 无界（可无限翻越上下极点，无 makeSafe 钳制）
+  // 自定义轨道状态（替代 drei OrbitControls）：姿态 = 世界系四元数（相机局部 → 世界）。
+  // 不再用 theta/phi 标量积分，也没有「极点翻转」特例——φ 越过极点时画面连续（见 cayley3dOrbit.ts）
   const orbit = useRef({
-    theta: 0,
-    phi: Math.acos(3 / Math.sqrt(3 ** 2 + 12 ** 2)),
+    q: quatFromOrbit(0, Math.acos(3 / Math.sqrt(3 ** 2 + 12 ** 2))),
     radius: Math.sqrt(3 ** 2 + 12 ** 2),
     target: new THREE.Vector3(0, 0, 0),
     initialized: false,
   })
+  // 释放瞬间冻结的惯性自旋轴（世界系固定轴；null = 尚未拖拽释放 ⇒ 绕竖轴）
+  const inertiaAxis = useRef<THREE.Vector3 | null>(null)
   // 最近一次鼠标拖拽向量:自动旋转时按此方向持续旋转(而非固定方向)
   const dragVec = useRef({ x: 0, y: 0 })
   const dragState = useRef({ active: false, lastX: 0, lastY: 0, x: 0, y: 0, button: 0 })
-  // GIF 导出期间的角度驱动：beginRotation 记录基准角并创建独立离屏渲染器/相机，
-  // frameAt 按帧索引精确求角并渲染到离屏 canvas（每帧角度 = 基准 + radPerSec × 帧延时 × 帧序号，
+  // GIF 导出期间的角度驱动：beginRotation 记录基准姿态并创建独立离屏渲染器/相机，
+  // frameAt 按帧序号精确求角并渲染到离屏 canvas（每帧角度 = 基准姿态绕固定轴 radPerSec × 帧延时 × 帧序号，
   // 与实时渲染耗时无关）；实时轨道/相机全程不被触碰，展示区照常旋转
   const externalRotation = useRef<{
     active: boolean
     radPerSec: number
-    baseTheta: number
-    basePhi: number
+    baseQuat: THREE.Quaternion
+    axis: THREE.Vector3
     radius: number
     target: THREE.Vector3
     renderer: THREE.WebGLRenderer | null
     ecam: THREE.PerspectiveCamera | null
   }>({
-    active: false, radPerSec: 0, baseTheta: 0, basePhi: 0, radius: 1,
-    target: new THREE.Vector3(), renderer: null, ecam: null,
+    active: false, radPerSec: 0, baseQuat: new THREE.Quaternion(), axis: DEFAULT_SPIN_AXIS.clone(),
+    radius: 1, target: new THREE.Vector3(), renderer: null, ecam: null,
   })
+
 
   // 展示区自动旋转角速度（与 ▶ 自动旋转同一公式；拖拽后按拖拽向量长度降速）：
   // GIF 导出用同一值，保证导出动图与展示区转速一致
@@ -610,7 +657,8 @@ function Cayley3DSceneBody({
   const relaxIters = RELAX_BASE_ITERS + Math.min(relayoutNonce, RELAX_MAX_STEPS) * RELAX_STEP_ITERS
 
   const positions = useMemo(() => {
-    const base = compute3DPositions(group, layout3D)
+    // torusHex 的管子（经向）相位：基础布局就带相位（其余布局忽略该选项 ⇒ 逐位不变）
+    const base = compute3DPositions(group, layout3D, { tubePhase })
     // 逐生成元边长（VCL）：在基础布局之上跑长度约束松弛。
     // 触发条件有二：倍率非全 1（长度约束），或「重新优化布局」被按过（无约束均匀化）。
     // 两者都不成立时**原样返回**基础布局（逐位不变）。
@@ -632,7 +680,7 @@ function Cayley3DSceneBody({
           return group.elements.map((el, i) => relaxed.get(el.id) ?? base[i])
         })()
     return scaled.map(p => new THREE.Vector3(p[0], p[1], p[2]))
-  }, [group, layout3D, cayleyEdges, lengthScaleMap, relaxIters, relayoutNonce])
+  }, [group, layout3D, cayleyEdges, lengthScaleMap, relaxIters, relayoutNonce, tubePhase])
 
   // 外接球：节点云质心为球心，最大距离为半径（含节点球/自环余量），复位与初始视角均基于它
   const bounds = useMemo(() => {
@@ -689,8 +737,8 @@ function Cayley3DSceneBody({
     const halfFov = ((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360
     const dist = (bounds.radius * 1.5) / Math.tan(halfFov)
     return {
-      theta: 0,
-      phi: Math.acos(3 / Math.sqrt(3 ** 2 + 12 ** 2)),
+      // 默认朝向 = 球坐标 (0, φ₀)；φ₀ 由旧初始视角沿用（俯角 ≈ 14°）
+      quaternion: quatFromOrbit(0, Math.acos(3 / Math.sqrt(3 ** 2 + 12 ** 2))),
       radius: dist,
       minRadius: Math.max(1.5, bounds.radius + 0.8),
       maxRadius: Math.max(30, dist * 3),
@@ -708,10 +756,11 @@ function Cayley3DSceneBody({
   const resetCamera = useCallback(() => {
     const o = orbit.current
     const fit = latestFit.current
-    o.theta = fit.theta
-    o.phi = fit.phi
+    o.q.copy(fit.quaternion)
     o.radius = fit.radius
     o.target.copy(fit.target)
+    // 复位同时清掉惯性轴：之后再按 ▶ 自动旋转回到默认的绕竖轴方向
+    inertiaAxis.current = null
   }, [])
 
   // 切换群或切换 3D 形状时自动回到默认适配视角
@@ -742,15 +791,19 @@ function Cayley3DSceneBody({
         const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1)
         o.target.addScaledVector(right, -dx * o.radius * 0.0012).addScaledVector(up, dy * o.radius * 0.0012)
       } else {
-        // 左键旋转：与 OrbitControls 同约定（拖右 theta -=；拖下 phi -=），phi 无界可翻越极点
-        o.theta -= dx * 0.006
-        o.phi -= dy * 0.006
+        // 左键旋转：水平拖 = 绕屏幕上方轴、竖直拖 = 绕屏幕右方轴（都取相机局部系）
+        // ⇒ 手势方向与相机姿态无关，物体翻转/滚转后依然跟手（见 cayley3dOrbit.ts）
+        dragRotate(o.q, dx, dy, DRAG_SENSITIVITY)
       }
     }
     const onUp = (e: PointerEvent) => {
       const s = dragState.current
       s.active = false
-      if (Math.hypot(s.x, s.y) >= 8) dragVec.current = { x: s.x, y: s.y }
+      if (Math.hypot(s.x, s.y) >= FLICK_MIN_PIXELS) {
+        dragVec.current = { x: s.x, y: s.y }
+        // 释放瞬间把角速度冻成一根世界系固定轴：此后恒速绕它旋转（不再是 θ̇/φ̇ 双分量漂移）
+        inertiaAxis.current = flickAxis(orbit.current.q, s.x, s.y)
+      }
       el.releasePointerCapture?.(e.pointerId)
     }
     const onWheel = (e: WheelEvent) => {
@@ -772,44 +825,32 @@ function Cayley3DSceneBody({
     }
   }, [gl, camera, fitOrbit, locked])
 
-  // 按最后一次拖拽方向将角速度分解到 theta/phi 两个分量（与手动拖拽同约定：拖右 theta -=，拖下 phi -=），
-  // 未拖拽过则默认绕竖轴（theta）旋转；拖拽含竖直分量时同步带动俯仰旋转——与 ▶ 自动旋转方向完全一致
+  // 惯性自旋：绕**释放瞬间冻结的那根世界系固定轴**恒速旋转（单轴旋转 ⇒ 转轴不漂移、
+  // 可见旋向不反转、整数圈后姿态精确复位）。未拖拽释放过则绕默认竖轴，与 ▶ 自动旋转同向。
+  // 旧实现按最后一次拖拽把角速度拆成 θ̇/φ̇ 两个恒定速率分别积分，竖直分量让俯仰角无界漂移、
+  // 相机反复翻越极点，画面看起来在来回转——即本次修复对象的成因。
   const applyOrbitRotation = (
-    o: { theta: number; phi: number },
+    o: { q: THREE.Quaternion },
     angVel: number,
     delta: number,
   ) => {
-    const d = dragVec.current
-    const len = Math.hypot(d.x, d.y)
-    if (len >= 8) {
-      o.theta -= (d.x / len) * angVel * delta
-      o.phi -= (d.y / len) * angVel * delta
-    } else {
-      o.theta -= angVel * delta
-    }
+    spinWorld(o.q, inertiaAxis.current ?? DEFAULT_SPIN_AXIS, angVel * delta)
   }
 
-  // 由球坐标轨道写入相机（位置/up 极点翻转/lookAt）：帧循环与 GIF 导出 frameAt 共用，保证画面与 GIF 帧一致
-  const applyCameraFromOrbit = useCallback((o: { theta: number; phi: number; radius: number; target: THREE.Vector3 }) => {
-    const sinP = Math.sin(o.phi)
-    camera.position.set(
-      o.target.x + o.radius * sinP * Math.sin(o.theta),
-      o.target.y + o.radius * Math.cos(o.phi),
-      o.target.z + o.radius * sinP * Math.cos(o.theta)
-    )
-    // 越过上下任一极点（sinφ 变号）时翻转 up，保持画面正立连续
-    camera.up.set(0, sinP >= 0 ? 1 : -1, 0)
-    camera.lookAt(o.target)
+  // 由姿态写入相机（位置 + 四元数）：帧循环与 GIF 导出 frameAt 共用，保证画面与 GIF 帧一致。
+  // 姿态直接写 camera.quaternion（含滚转），不再有 up 极点翻转/lookAt 退化分支
+  const applyCameraFromOrbit = useCallback((o: { q: THREE.Quaternion; radius: number; target: THREE.Vector3 }) => {
+    camera.position.copy(o.target).addScaledVector(cameraDir(o.q, _camDir), o.radius)
+    camera.quaternion.copy(o.q)
   }, [camera])
 
-  // 每帧：手动拖拽的 theta/phi 已在 pointer 处理中直接更新；此处应用自动旋转增量并同步相机。
-  // 球坐标 phi 无界（可无限翻越上下极点）；GIF 导出期间角度由 frameAt 精确驱动，此处仅同步相机
+  // 每帧：手动拖拽的姿态已在 pointer 处理中直接更新；此处应用自动旋转增量并同步相机。
+  // GIF 导出期间角度由 frameAt 精确驱动，此处仅同步相机
   useFrame((_, delta) => {
     const o = orbit.current
     if (!o.initialized) {
       // 初始视角 = 复位适配视角（外接球居中、直径占视口高度 2/3、相机在球外）
-      o.theta = fitOrbit.theta
-      o.phi = fitOrbit.phi
+      o.q.copy(fitOrbit.quaternion)
       o.radius = fitOrbit.radius
       o.target.copy(fitOrbit.target)
       o.initialized = true
@@ -819,6 +860,19 @@ function Cayley3DSceneBody({
       applyOrbitRotation(o, displayAngVel(), delta)
     }
     applyCameraFromOrbit(o)
+
+    // 环面自转（torusHex）：大圆相位**命令式**写进 group（零 React 重渲染）；管子相位送 React
+    // 重算曲面点（positions / torusHexArcs / torusHexPatches 都以 tubePhase 为依赖）。
+    // 两个开关都关时相位冻结在原地（关掉不回零 —— 「停转」就是停在当前相位）
+    const sp = spinPhase.current
+    if (spinBigCircle) sp.ring = (sp.ring + TORUS_SPIN_RATE * delta) % (2 * Math.PI)
+    if (spinTube) {
+      sp.tube = (sp.tube + TORUS_SPIN_RATE * delta) % (2 * Math.PI)
+      setTubePhase(sp.tube)
+    }
+    const rg = ringGroupRef.current
+    // 真实 R3F 下 ref 是 THREE.Group（quaternion 必在）；测试 stub 的 DOM 元素无此属性，跳过
+    if (rg?.quaternion) rg.quaternion.setFromAxisAngle(RING_AXIS, sp.ring)
   })
 
   useEffect(() => {
@@ -835,11 +889,12 @@ function Cayley3DSceneBody({
       isReady: () => true,
       snapshotOrbit: () => {
         const o = orbit.current
-        return { theta: o.theta, phi: o.phi, radius: o.radius, target: o.target.clone() }
+        // theta/phi 由姿态反推（旧字段兼容：只描述相机位置方向，滚转不可逆）
+        return { ...orbitFromQuat(o.q), radius: o.radius, target: o.target.clone() }
       },
       displayAngVel: () => displayAngVel(),
       beginRotation: (radPerSec) => {
-        // 记录基准角/半径/目标，并创建独立离屏渲染器 + 相机（与实时轨道/相机完全隔离，
+        // 记录基准姿态/自旋轴/半径/目标，并创建独立离屏渲染器 + 相机（与实时轨道/相机完全隔离，
         // 导出期间展示区照常旋转；offline renderer 的 drawing buffer 与主视口同尺寸）
         const o = orbit.current
         const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true })
@@ -852,46 +907,27 @@ function Cayley3DSceneBody({
         )
         externalRotation.current = {
           active: true, radPerSec,
-          baseTheta: o.theta, basePhi: o.phi,
+          baseQuat: o.q.clone(),
+          // 与展示区同一根固定轴（未拖拽释放过则默认竖轴）⇒ GIF 与画面同轴同向
+          axis: (inertiaAxis.current ?? DEFAULT_SPIN_AXIS).clone(),
           radius: o.radius, target: o.target.clone(),
           renderer, ecam,
         }
-        // 预热渲染一次（编译离屏 GL 着色器并建立绘制流水线），首帧角度与 frameAt(0) 一致
-        const sinP0 = Math.sin(o.phi)
-        ecam.position.set(
-          o.target.x + o.radius * sinP0 * Math.sin(o.theta),
-          o.target.y + o.radius * Math.cos(o.phi),
-          o.target.z + o.radius * sinP0 * Math.cos(o.theta)
-        )
-        ecam.up.set(0, sinP0 >= 0 ? 1 : -1, 0)
-        ecam.lookAt(o.target)
+        // 预热渲染一次（编译离屏 GL 着色器并建立绘制流水线），首帧与 frameAt(0) 一致
+        ecam.position.copy(o.target).addScaledVector(cameraDir(o.q, _camDir), o.radius)
+        ecam.quaternion.copy(o.q)
         renderer.render(scene, ecam)
       },
-      // GIF 导出的第 index 帧：按帧序号与帧延时精确计算角度（与实时渲染耗时无关，
-      // 方向沿用最后一次拖拽分解），渲染到离屏 canvas 并返回供导出循环采集
+      // GIF 导出的第 index 帧：按帧序号与帧延时精确计算转角（与实时渲染耗时无关），
+      // 姿态 = 基准姿态绕固定轴转 total（单轴旋转 ⇒ 总转角为整圈数时首尾帧完全重合，循环无缝回接）
       frameAt: (index, frameDelayMs) => {
         const e = externalRotation.current
         if (!e.active || !e.renderer || !e.ecam) return null
         const total = (e.radPerSec * index * frameDelayMs) / 1000
-        const d = dragVec.current
-        const len = Math.hypot(d.x, d.y)
-        let theta: number
-        let phi: number
-        if (len >= 8) {
-          theta = e.baseTheta - (d.x / len) * total
-          phi = e.basePhi - (d.y / len) * total
-        } else {
-          theta = e.baseTheta - total
-          phi = e.basePhi
-        }
-        const sinP = Math.sin(phi)
-        e.ecam.position.set(
-          e.target.x + e.radius * sinP * Math.sin(theta),
-          e.target.y + e.radius * Math.cos(phi),
-          e.target.z + e.radius * sinP * Math.cos(theta)
-        )
-        e.ecam.up.set(0, sinP >= 0 ? 1 : -1, 0)
-        e.ecam.lookAt(e.target)
+        _gifQuat.copy(e.baseQuat)
+        spinWorld(_gifQuat, e.axis, total)
+        e.ecam.position.copy(e.target).addScaledVector(cameraDir(_gifQuat, _camDir), e.radius)
+        e.ecam.quaternion.copy(_gifQuat)
         e.renderer.render(scene, e.ecam)
         return e.renderer.domElement
       },
@@ -947,8 +983,8 @@ function Cayley3DSceneBody({
       const tri = (a: [number, number], b: [number, number], c: [number, number], depth: number) => {
         if (depth === 0) {
           for (const p of [a, b, c]) {
-            const q = surfacePoint(p[0], p[1], 0.012)
-            const n = surfaceNormal(p[0], p[1])
+            const q = surfacePoint(p[0], p[1], 0.012, tubePhase)
+            const n = surfaceNormal(p[0], p[1], tubePhase)
             pos.push(q[0], q[1], q[2])
             nor.push(n[0], n[1], n[2])
           }
@@ -968,7 +1004,7 @@ function Cayley3DSceneBody({
       out.push({ key: `torushex-face-${hi}`, geometry: geo, color, elementIds: hex })
     })
     return out
-  }, [torusHex])
+  }, [torusHex, tubePhase])
 
   useEffect(() => {
     return () => {
@@ -1089,13 +1125,13 @@ function Cayley3DSceneBody({
       const segs = 12
       const pts: THREE.Vector3[] = []
       for (let t = 0; t <= segs; t++) {
-        const s = torusHex.surfacePoint(p[0] + (d[0] * t) / segs, p[1] + (d[1] * t) / segs, 0)
+        const s = torusHex.surfacePoint(p[0] + (d[0] * t) / segs, p[1] + (d[1] * t) / segs, 0, tubePhase)
         pts.push(new THREE.Vector3(s[0], s[1], s[2]))
       }
       m.set(`${edge.fromId}|${edge.toId}`, pts)
     }
     return m
-  }, [torusHex, edgeDataMap])
+  }, [torusHex, edgeDataMap, tubePhase])
 
   // ── 路径高亮（VCL）：与 2D 同一套解析（resolveCayleyPath）；3D 线段用 drei Line（像素宽）、
   //    节点环用半透明球壳、序号徽标用 Html ──
@@ -1288,25 +1324,38 @@ function Cayley3DSceneBody({
             onClick={() => setAutoRotateState(v => !v)}
             title={t('cayley3d.autoRotate')}
             aria-label={t('cayley3d.autoRotate')}
-            style={{
-              background: 'var(--bg-tooltip)',
-              color: autoRotate ? 'var(--accent-teal)' : 'var(--text-secondary)',
-              border: autoRotate ? '1px solid var(--accent-teal)' : '1px solid var(--border-primary)',
-              borderRadius: 8, padding: '6px 10px', fontSize: 13,
-              cursor: 'pointer', fontFamily: 'monospace'
-            }}
+            style={toolbarBtn(autoRotate)}
           >
             {autoRotate ? '❚❚' : '▶'}
           </button>
+          {/* 环面两个自转（S¹×S¹ 的两个因子）：仅 torusHex 布局出现，与 ▶/⟲ 并列 */}
+          {torusHex && (
+            <>
+              <button
+                data-testid="cayley3d-spin-ring"
+                onClick={() => setSpinBigCircleState(v => !v)}
+                title={t('cayley3d.spinRingTitle')}
+                aria-label={t('cayley3d.spinRingTitle')}
+                style={toolbarBtn(spinBigCircle)}
+              >
+                ◯ {t('cayley3d.spinRing')}
+              </button>
+              <button
+                data-testid="cayley3d-spin-tube"
+                onClick={() => setSpinTubeState(v => !v)}
+                title={t('cayley3d.spinTubeTitle')}
+                aria-label={t('cayley3d.spinTubeTitle')}
+                style={toolbarBtn(spinTube)}
+              >
+                ◎ {t('cayley3d.spinTube')}
+              </button>
+            </>
+          )}
           <button
             onClick={resetCamera}
             title={t('cayley3d.resetView')}
             aria-label={t('cayley3d.resetView')}
-            style={{
-              background: 'var(--bg-tooltip)', color: 'var(--text-secondary)',
-              border: '1px solid var(--border-primary)', borderRadius: 8, padding: '6px 10px',
-              fontSize: 13, cursor: 'pointer', fontFamily: 'monospace'
-            }}
+            style={TOOLBAR_BTN}
           >
             ⟲
           </button>
@@ -1337,6 +1386,10 @@ function Cayley3DSceneBody({
         </Html>
       )}
 
+      {/* 环面「绕大圆（纬向）」自转：整块图内容（面片/边/路径/节点）绕环面回转轴刚体旋转 ——
+          这是 S¹×S¹ 一个因子的旋转在三维里的等价形式。环面壳对该旋转不变，故留在 group 外。
+          旋转由 useFrame 命令式写入 ⇒ 只开大圆自转时零 React 重渲染 */}
+      <group ref={ringGroupRef}>
       {faceMeshes.map(fm => (
         <mesh key={fm.key} geometry={fm.geometry} renderOrder={-2}>
           <meshBasicMaterial color={fm.color} transparent opacity={faceOpacity} side={THREE.DoubleSide} depthWrite={false} />
@@ -1399,12 +1452,7 @@ function Cayley3DSceneBody({
         if (isLargeGroup && !visibleElementIds.has(el.id)) return null
         const isSelected = selectedElements.has(el.id)
         const parentSubset = subsetOf.get(el.id)
-        const ord = orderMap?.get(el.id)
-        // VCL F2：阶 → 球径（对数压缩）。3D 里数字角标随距离/旋转不可读，用球径做一眼编码，
-        // 精确值由悬停标签的 ord 行补上。ord ≤ 1（单位元）不放大。
-        const orderScale = ord !== undefined && ord > 1 && maxOrder > 1
-          ? 1 + ORDER_SCALE_SPAN * (Math.log(ord) / Math.log(maxOrder))
-          : 1
+        const ord = orderMap.get(el.id)
         // VCL F1：共轭类着色优先于默认配色（字长球的字长色阶 / 逐元素彩虹）
         const color = conjClassIdx
           ? conjugacyClassColor(conjClassIdx.get(el.id) ?? 0, conjClassN)
@@ -1420,8 +1468,7 @@ function Cayley3DSceneBody({
             subsetColor={parentSubset ? parentSubset.color : null}
             element={el}
             nodeScale={nodeScale}
-            orderScale={orderScale}
-            orderBadge={orderMap && ord !== undefined ? ord : undefined}
+            orderBadge={ord}
             showLabel={showLabels}
             isDark={theme === 'dark'}
             onSelectElement={selectElement}
@@ -1430,6 +1477,7 @@ function Cayley3DSceneBody({
           />
         )
       })}
+      </group>
 
     </>
   )

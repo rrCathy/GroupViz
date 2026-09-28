@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { SceneThemeRoot, type SceneTheme } from './SceneThemeRoot'
 import { texify, renderTex } from '../../utils/texify'
+import { hoverAnchorFromEvent } from '../../utils/hoverAnchor'
 import type { Group } from '../../core/types'
 import { isQuotientGroup } from '../../core/types'
 import { INTERACTIVE_LIMIT } from '../../core/guards'
@@ -175,7 +176,7 @@ function SetViewBody({
                 e.stopPropagation()
                 onSelect?.(el.id, e.ctrlKey || e.metaKey)
               }}
-              onMouseEnter={() => onHover?.(el, { x: pos.x * canvasTransform.scale + canvasTransform.x, y: pos.y * canvasTransform.scale + canvasTransform.y })}
+              onMouseEnter={e => onHover?.(el, hoverAnchorFromEvent(e))}
               onMouseLeave={() => onHover?.(null, null)}
               style={{ cursor: 'pointer' }}
             >

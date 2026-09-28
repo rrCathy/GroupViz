@@ -248,7 +248,7 @@ describe('W-3 应用浮窗内容与面板对齐内核', () => {
     expect(win.contains(screen.getByText('View Config'))).toBe(false)
   })
 
-  it('面板改参数真的改变画面：调节点半径 → 圆半径变；开阶徽标 → 出徽标文本', async () => {
+  it('面板改参数真的改变画面：调节点半径 → 圆半径变；切共轭类着色 → 节点填充变', async () => {
     setup()
     const win = await openWindow()
     fireEvent.click(screen.getByTestId('float-params-toggle'))
@@ -261,10 +261,45 @@ describe('W-3 应用浮窗内容与面板对齐内核', () => {
     fireEvent.change(range, { target: { value: '45' } })
     await waitFor(() => expect(content.querySelector('circle')!.getAttribute('r')).not.toBe(r0))
 
-    // ② 阶徽标（F2）：打开后节点上多出 order 文本
-    const texts0 = content.querySelectorAll('text').length
-    fireEvent.click(screen.getByTestId('cayley-order-badge'))
-    await waitFor(() => expect(content.querySelectorAll('text').length).toBeGreaterThan(texts0))
+    // ② 共轭类着色（F1）：填充从主题色换成共轭类色（S₃ 有 3 个类）
+    const fill0 = content.querySelector('circle')!.getAttribute('fill')
+    fireEvent.click(screen.getByTestId('cayley-color-conj'))
+    await waitFor(() => expect(content.querySelector('circle')!.getAttribute('fill')).not.toBe(fill0))
+  })
+
+  it('悬停节点 → 就地气泡显示元素名与阶（撤下角标后阶的唯一出口）', async () => {
+    setup()
+    const win = await openWindow()
+    const content = win.querySelector('.floating-view-content') as HTMLElement
+
+    // 节点 <g> 的特征：**直接子元素**里有标签 foreignObject（用 querySelector 会连外层容器 g 一起选中，
+    // 事件打在外层容器上时 React 的 enter/leave 委托认不出节点，onMouseEnter 不触发）
+    const nodeGs = Array.from(content.querySelectorAll('g')).filter(g =>
+      Array.from(g.children).some(c => c.tagName.toLowerCase() === 'foreignobject'),
+    )
+    expect(nodeGs).toHaveLength(6)
+
+    // happy-dom 不做布局：getBoundingClientRect 恒为全 0 ⇒ 锚点换算会返回 null（气泡不渲染）。补一个假容器矩形
+    const svg = content.querySelector('svg') as SVGSVGElement
+    svg.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: 500, height: 400,
+      right: 500, bottom: 400, x: 0, y: 0, toJSON: () => ({}),
+    }) as DOMRect
+
+    // React 的 onMouseEnter 由 mouseover 委托触发，直接派发 mouseenter 不会命中
+    fireEvent.mouseOver(nodeGs[0], { clientX: 120, clientY: 90 })
+    await waitFor(() => {
+      const bubble = win.querySelector('[data-testid="scene-hover-bubble"]')
+      expect(bubble).not.toBeNull()
+      expect(bubble!.textContent).toContain('阶')
+    })
+    // 锚点语义 = **容器内像素坐标**（不是 viewBox 坐标）：气泡 left 直接等于「鼠标 x − 容器 left」
+    const bubbleEl = win.querySelector('[data-testid="scene-hover-bubble"]') as HTMLElement
+    expect(bubbleEl.style.left).toBe('120px')
+
+    // 离开节点 → 气泡收起（不留无主浮窗）
+    fireEvent.mouseOut(nodeGs[0])
+    await waitFor(() => expect(win.querySelector('[data-testid="scene-hover-bubble"]')).toBeNull())
   })
 
   it('注释（DEC-2）在应用浮窗里可用：加一条 → 图上出现注释叠层', async () => {

@@ -256,6 +256,10 @@ const zh: TranslationMap = {
   'cayley3d.multiplyLeft': '左乘',
   'cayley3d.autoRotate': '自动旋转',
   'cayley3d.resetView': '复位视图',
+  'cayley3d.spinRing': '大圆',
+  'cayley3d.spinTube': '管子',
+  'cayley3d.spinRingTitle': '绕大圆（纬向）自转 —— 环面 = S¹×S¹ 的一个因子',
+  'cayley3d.spinTubeTitle': '绕管子（经向）自转 —— 环面 = S¹×S¹ 的另一个因子',
 
   /* Symmetry View */
   'symmetry.reset': '复位中...',
@@ -973,6 +977,10 @@ const en: TranslationMap = {
   'cayley3d.multiplyLeft': 'Left Multiply',
   'cayley3d.autoRotate': 'Auto Rotate',
   'cayley3d.resetView': 'Reset View',
+  'cayley3d.spinRing': 'Ring',
+  'cayley3d.spinTube': 'Tube',
+  'cayley3d.spinRingTitle': 'Spin around the big circle (parallel) — one S¹ factor of the torus',
+  'cayley3d.spinTubeTitle': 'Spin around the tube (meridian) — the other S¹ factor of the torus',
   'cayley.action.enabled': 'Enabled',
   'cayley.action.disabled': 'Disabled',
   'cayley.action.byElement': 'by element',

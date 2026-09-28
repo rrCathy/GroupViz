@@ -26,7 +26,7 @@
 | 引擎化 | 11 个视图 Scene **props 化入包**；另附属 `AutomorphismScene`（自同构作用预览）与附属组件 `QuotientSubgroupInset`（商群 N 悬浮窗）。tree / prestable 与无限群绑定，移交拓展包轨道 |
 | 群族 | Sₙ(2–6)、Cₙ(1–120)、Dₙ(3–15)、Aₙ(3–5)、V₄、Q₈、QD₁₆、GL(2,2)≅S₃、GL(2,3)(48 阶)、直积 G×H、半直积 N⋊_φH、自同构 Aut(G)、商群 G/N、SmallGroup 注册表（66 表群） |
 | 形状模板 | **20** 种 3D + **14** 种 2D，按群性质自动分配 |
-| 测试 | ~95 文件 / ~2000 tests（node+dom 双项目）+ e2e 7 spec；精确数以 `npm run test` 实时输出为准 |
+| 测试 | ~95 文件 / ~2000 tests（node+dom 双项目）+ e2e 9 spec；精确数以 `npm run test` 实时输出为准 |
 | 发布 | 双包 `@groupviz/core` + `@groupviz/react` **v2.4.0 已发布 npm**（发布门禁 9 关 + 发布后 registry 验收 4 关） |
 
 ## 2. 技术栈
@@ -63,7 +63,7 @@ package 产物  dist-pkg/@groupviz/core（纯算法，唯一依赖 zod）+ @grou
 
 - **视图内核 props 化**：`SetView` / `CayleyView` / … / `SylowScene` 等不读应用级 context，
   状态由宿主经 props 注入——主应用用 context 桥（`*FromContext` 壳）喂，消费端用 `useSceneState` 喂。
-- **组件层可脱离主应用**：包消费端（`/?test=1` 的 `TestPagePkgConsume`）吃 `dist-pkg` 产物独立跑。
+- **组件层可脱离主应用**：包消费端（`/?test=1` 的 `TestPagePkgConsume`，2026-09-28 起为 **VCL 全量消费矩阵 7 卡**）吃 `dist-pkg` 产物独立跑。
 
 ## 4. 关键设计决策
 
@@ -131,7 +131,7 @@ GroupViz/
   `prepare` 脚本在 `npm install` 时自动 `git config core.hooksPath .githooks`，零新依赖）。
 
 **测试**（详见 `docs/TESTING.md`）
-- `npm run test` — node + dom 双 project；`npm run test:e2e` — Playwright 7 spec；
+- `npm run test` — node + dom 双 project；`npm run test:e2e` — Playwright 9 spec；
   `npm run test:coverage` — 四层 include（core/utils/context/components）+ **per-glob 分层阈值**
   （core/utils ≥ 85/70 硬线，context/components 为防倒退线）。
 - 阈值不代表质量达标，作用是「删测试或新代码裸奔时直接红」。

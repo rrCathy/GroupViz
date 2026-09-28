@@ -265,11 +265,6 @@ export function ViewParamsPanel({
                   onClick={() => updateViewParams({ nodeColorMode: 'conjugacy' })}>Conjugacy</button>
               </div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              <input type="checkbox" data-testid="cayley-order-badge" checked={!!cayleyVp.showOrderBadge}
-                onChange={e => updateViewParams({ showOrderBadge: e.target.checked })} />
-              Order badge
-            </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
               title="选中元素时高亮它生成的循环子群 ⟨g⟩：成员加外圈、子群内部的边加粗">
               <input type="checkbox" data-testid="cayley-gen-highlight" checked={!!cayleyVp.highlightGenerated}
@@ -514,6 +509,23 @@ export function ViewParamsPanel({
               ⟳ Re-optimize layout{(p3d.relayoutNonce ?? 0) > 0 ? ` (${p3d.relayoutNonce}×)` : ''}
             </button>
           </div>
+          {/* VCL B 组（续）：环面自转 —— 环面 = S¹×S¹，两个因子各一种旋转（大圆/纬向、管子/经向）。
+              仅 torusHex 布局生效；非环面布局下无效，仍列出以便预设复用（与 shell/layerRings 同规则） */}
+          <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Torus spin</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+              title="绕大圆（纬向）自转：图整体绕环面回转轴旋转，环面壳不动（仅 torusHex 布局）">
+              <input type="checkbox" data-testid="cayley3d-spin-ring" checked={!!p3d.spinBigCircle}
+                onChange={e => updateViewParams({ spinBigCircle: e.target.checked })} />
+              Big circle
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              title="绕管子（经向）自转：图沿每根管的截面绕行（仅 torusHex 布局）">
+              <input type="checkbox" data-testid="cayley3d-spin-tube" checked={!!p3d.spinTube}
+                onChange={e => updateViewParams({ spinTube: e.target.checked })} />
+              Tube
+            </label>
+          </div>
           {/* VCL F 组：3D 节点语义装饰 */}
           <div style={{ marginBottom: 6, borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>Node marks</div>
@@ -526,12 +538,6 @@ export function ViewParamsPanel({
                   onClick={() => updateViewParams({ nodeColorMode: 'conjugacy' })}>Conjugacy</button>
               </div>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-              title="阶高者球径更大（对数压缩，最大 +35%），精确阶数显示在悬停标签下">
-              <input type="checkbox" data-testid="cayley3d-order-badge" checked={!!p3d.showOrderBadge}
-                onChange={e => updateViewParams({ showOrderBadge: e.target.checked })} />
-              Order → size
-            </label>
           </div>
           <div style={{ borderTop: '1px solid var(--border-secondary)', paddingTop: 6 }}>
             <CayleyPathEditor

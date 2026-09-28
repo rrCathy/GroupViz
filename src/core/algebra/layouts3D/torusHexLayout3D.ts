@@ -29,6 +29,17 @@ export const TORUS_HEX_B2: readonly [number, number] = [0, 6]
 /** 星形对换生成元（一行记法，与 core 的置换群 id 一致） */
 export const TORUS_HEX_STAR_GENERATORS: readonly string[] = ['2,1,3,4', '3,2,1,4', '4,2,3,1']
 
+/**
+ * 环面回转轴（世界系单位向量）= 参数化里 u 的转轴。
+ *
+ * 环面 = S¹×S¹，两个因子各有一种旋转（纬向 = 沿大圆、经向 = 沿管截面）：
+ * - **大圆/纬向**：(α,β) → (α+A, β)，在三维里恰好等于整块内容绕这根轴（世界 +Z）**刚体旋转** 2πA
+ *   ⇒ 场景不必重算几何，转一个 group 即可（环面壳对该旋转不变，所以看上去只有图在转）。
+ * - **管子/经向**：(α,β) → (α, β+B)，**不是**空间中的刚体旋转（每根管的转轴不同）⇒ 只能按
+ *   `tubePhase` 重算曲面点，见下面 surfacePoint/surfaceNormal 的 tubePhase 参数。
+ */
+export const TORUS_HEX_RING_AXIS: readonly [number, number, number] = [0, 0, 1]
+
 /** GE（Group Explorer）元素顺序：polyhedraVerts.placeS4Elements 用的同一张表 */
 const GE_VALUES: readonly (readonly number[])[] = [
   [0, 1, 2, 3], [0, 3, 1, 2], [0, 2, 3, 1],
@@ -107,12 +118,13 @@ export interface TorusHexGeometry {
   hexagons: string[][]
   /** 元素 id → 所属六边形下标（恰 3 个） */
   hexagonsOf: Map<string, number[]>
-  /** 平面坐标 → 环面曲面点（off = 沿法线抬升量） */
-  surfacePoint: (x: number, y: number, off?: number) => Vec3
-  /** (α,β) 周期格参数 → 曲面点（扫整片环面壳时用，避免自己反解平面坐标） */
-  surfacePointAB: (alpha: number, beta: number, off?: number) => Vec3
-  /** 平面坐标 → 曲面单位外法线（面片着色用，有闭式解不需求导） */
-  surfaceNormal: (x: number, y: number) => Vec3
+  /** 平面坐标 → 环面曲面点（off = 沿法线抬升量）
+   *  tubePhase = 沿管子（经向）相位（弧度）：把 β 平移 tubePhase/2π ⇒ 图沿每根管的截面绕行 */
+  surfacePoint: (x: number, y: number, off?: number, tubePhase?: number) => Vec3
+  /** (α,β) 周期格参数 → 曲面点（扫整片环面壳时用，避免自己反解平面坐标）；tubePhase 同上 */
+  surfacePointAB: (alpha: number, beta: number, off?: number, tubePhase?: number) => Vec3
+  /** 平面坐标 → 曲面单位外法线（面片着色用，有闭式解不需求导）；tubePhase 同上 */
+  surfaceNormal: (x: number, y: number, tubePhase?: number) => Vec3
 }
 
 /**
@@ -199,10 +211,11 @@ export function torusHexGeometry(group: Group, radius: number): TorusHexGeometry
     const len = Math.hypot(nx, ny, nz) || 1
     return [nx / len, ny / len, nz / len]
   }
-  /** (α,β) 参数（周期格坐标）→ 曲面点；画整片环面壳/网格时用它 */
-  const surfacePointAB = (alpha: number, beta: number, off = 0): Vec3 => {
+  /** (α,β) 参数（周期格坐标）→ 曲面点；画整片环面壳/网格时用它。
+   *  tubePhase 只加到 v 上（径向 φ 不变）⇒ 相位变化对 (α,β) 是周期 2π 的平移，首尾自动接上 */
+  const surfacePointAB = (alpha: number, beta: number, off = 0, tubePhase = 0): Vec3 => {
     const u = 2 * Math.PI * alpha
-    const v = 2 * Math.PI * beta
+    const v = 2 * Math.PI * beta + tubePhase
     const w = bigR + tubeRadial * Math.cos(v)
     const [nx, ny, nz] = normalAt(u, v)
     return [
@@ -212,13 +225,13 @@ export function torusHexGeometry(group: Group, radius: number): TorusHexGeometry
     ]
   }
   /** 平面坐标 → 曲面点（节点/弧边/面片用；同一环面点的不同周期代表给出同一点） */
-  const surfacePoint = (x: number, y: number, off = 0): Vec3 => {
+  const surfacePoint = (x: number, y: number, off = 0, tubePhase = 0): Vec3 => {
     const [alpha, beta] = toAlphaBeta(x, y)
-    return surfacePointAB(alpha, beta, off)
+    return surfacePointAB(alpha, beta, off, tubePhase)
   }
-  const surfaceNormal = (x: number, y: number): Vec3 => {
+  const surfaceNormal = (x: number, y: number, tubePhase = 0): Vec3 => {
     const [alpha, beta] = toAlphaBeta(x, y)
-    return normalAt(2 * Math.PI * alpha, 2 * Math.PI * beta)
+    return normalAt(2 * Math.PI * alpha, 2 * Math.PI * beta + tubePhase)
   }
   const hexagonsOf = new Map<string, number[]>()
   hexagons.forEach((hex, hi) => {
@@ -237,8 +250,9 @@ export function torusHexGeometry(group: Group, radius: number): TorusHexGeometry
 /**
  * S₄ 星形对换凯莱图的环面全六边形镶嵌（24 节点落在环面曲面上）。
  * 结构不匹配返回 null。
+ * @param tubePhase 沿管子（经向）相位（弧度），缺省 0；见 TORUS_HEX_RING_AXIS 的说明
  */
-export function torusHexLayout3D(group: Group, radius: number): Vec3[] | null {
+export function torusHexLayout3D(group: Group, radius: number, tubePhase = 0): Vec3[] | null {
   const geom = torusHexGeometry(group, radius)
   if (!geom) return null
   const positions: Vec3[] = []
@@ -248,7 +262,7 @@ export function torusHexLayout3D(group: Group, radius: number): Vec3[] | null {
       positions.push(fibonacciSphere(group.order, radius)[positions.length])
       continue
     }
-    positions.push(geom.surfacePoint(p[0], p[1], 0))
+    positions.push(geom.surfacePoint(p[0], p[1], 0, tubePhase))
   }
   return positions
 }

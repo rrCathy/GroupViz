@@ -137,10 +137,21 @@ describe('ViewWindow params panel (external overlay)', () => {
 
       // 节点 g：circle 的父级即携带 onMouseEnter 的节点容器
       const node = (win.querySelector('circle') as Element).closest('g') as Element
-      fireEvent.mouseEnter(node)
+      // 锚点 = 鼠标坐标 − 容器 rect（`utils/hoverAnchor.ts`；此前是 viewBox 坐标，气泡会落到框外）。
+      // happy-dom 不做布局：getBoundingClientRect 恒为全 0 ⇒ 补一个假矩形，否则锚点为 null、HUD 不渲染
+      const svg = node.closest('svg') as SVGSVGElement
+      svg.getBoundingClientRect = () => ({
+        left: 0, top: 0, width: 400, height: 300,
+        right: 400, bottom: 300, x: 0, y: 0, toJSON: () => ({}),
+      }) as DOMRect
+
+      fireEvent.mouseEnter(node, { clientX: 60, clientY: 50 })
       const hud = win.querySelector('[data-testid="hover-hud"]') as HTMLElement
       expect(hud).not.toBeNull()
       expect(hud.textContent).toContain('order')
+      // 位置也钉住：left/top 直接吃容器内像素坐标
+      expect(hud.style.left).toBe('60px')
+      expect(hud.style.top).toBe('50px')
 
       fireEvent.mouseLeave(node)
       expect(win.querySelector('[data-testid="hover-hud"]')).toBeNull()

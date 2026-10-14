@@ -78,7 +78,7 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 - **交互期冻结节点树**（性价比最高，预期 480 阶缩放 9 fps → 接近 58 fps）：拖拽/滚轮期间用 ref 直接写 `<g transform>`，`canvasTransform` 只在手势结束或节流后才回 React state。涉及 `SetView` / `CycleView` / `CayleyView` 三处。
   - **前置决策（未定，阻塞项）**：`isNodeOnScreen` 裁剪依赖 `canvasTransform`，冻结后拉远不会补出新节点。二选一——手势期间按放大包围盒预裁留余量 / 手势结束再补。影响手感，需先定策略。
-- **`findPermIndex` 改 `Map`**（`SymmetricGroup.ts:35`，约 5 行）：`elements` 的 `id` 本就是 `perm.join(',')`，建 `Map<id, idx>` 即可，Sₙ 单次乘法从 O(n!) 降到 O(1)。预期百倍量级提速，**这是「S₆ 组合视图卡死」的硬伤修复**。
+- **~~`findPermIndex` 改 `Map`~~ ✅ 已完成（2026-10-14）**：WeakMap 数值键索引（`(n+1)` 进制折叠 perm、零字符串分配），multiply/inverse/generator.apply O(order) → O(1)。**实测** S₆ multiply 19.0 → 3.7 ms（×20000，**5.1×**）、inverse 5.7×、S₅ 1.9×——原「百倍」预估不成立（线性扫早退 + JIT 下每乘实测 ~1 µs）；S₆ 子群枚举 >10 min 中的 multiply 份额同比例缩短（≈5×），剩余主导 = pair-join（下一条）。数据见 [PERF.md](PERF.md) §5/§6。
 - **大群阈值改成本模型**：现按群阶一刀切禁止，但实测 120 阶静态 60 fps、交互 49–56 fps 完全可用。改为「可看，但交互会卡顿」的提示语义 + 按视图分档。
 - **`forceLayout` 大群切异步渐进**（`cycleLayouts.ts:116/254`）：`iterations` 封顶 500 是旋钮不是极限；复用已有的 `forceLayoutAsync` + RAF 分块，大群先出粗布局再细化。
 - **子群枚举改 worklist**（`subgroups/enumerate.ts:99`）：pair-join 闭包现每轮重扫全部对（O(S²·n)），改为只把新发现的子群与已有子群求 join。预期 D84(168) 3.45 s → 1 s 内。

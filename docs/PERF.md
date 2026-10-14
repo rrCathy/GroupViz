@@ -132,7 +132,7 @@
 | # | 位置 | 复杂度 | 表现 | 性质 |
 |---|---|---|---|---|
 | 1 | `SetView.tsx:288` / `CycleView.tsx:316` 的 `group.elements.map(...)` 内联、无 memo；`canvasTransform` 是 prop | 每帧 O(节点数) React 协调 | 480 阶缩放 9 fps | 架构 |
-| 2 | `SymmetricGroup.ts:35` `findPermIndex` = O(order) 线性扫描，`multiply` 每次调用它 | Sₙ 单次乘法 **O(n!)** | S₆ 子群枚举 > 10 min | 算法 |
+| 2 | ~~`SymmetricGroup.ts:35` `findPermIndex` = O(order) 线性扫描~~ **✅ 已修（2026-10-14）**：WeakMap 数值键索引（`(n+1)` 进制折叠 perm，零字符串分配），multiply/inverse/generator.apply 全走 O(1) 查表 | Sₙ 单次乘法 O(n!) → O(1) | 实测 S₆ multiply ×20000 = 19.0 → 3.7 ms（**5.1×**）、inverse 26.3 → 4.6 ms（5.7×）、S₅ 1.9×；**S₆ 子群枚举 > 10 min 中的 multiply 份额按同比例缩短（≈5×，>10 min → ~2 min）**——原「百倍」预估不成立（线性扫有早退 + JIT，实测每乘 ~1 µs 而非朴素 O(n·n)），枚举剩余主导是第 3 条 pair-join | 算法 |
 | 3 | `subgroups/enumerate.ts:99` `findAllSubgroups` pair-join 闭包（每轮重扫全部对） | O(S²·n) | D200(400 阶) = 100 s | 算法 |
 | 4 | `cycleLayouts.ts:116` `forceLayout` `iterations = max(150, min(500, n×5))`，每轮 O(n²) 斥力 | O(n² × 500) | C1440 = 22 s | 参数+算法 |
 
@@ -211,7 +211,7 @@ for (let i = 0; i < 5; i++) {
 | 优先级 | 改动 | 预期收益 | 规模 |
 |---|---|---|---|
 | 1 | **交互期冻结节点树**：拖拽/滚轮期间用 ref 直接写 `<g transform>`，`canvasTransform` 只在手势结束（或节流）才回 React state | 480 阶缩放 9 fps → 接近 58 fps | 数十行，改 3 个视图 |
-| 2 | **`findPermIndex` 改 `Map`**：`elements` 的 `id` 本就是 `perm.join(',')`，建 `Map<id, idx>` 即可，每次乘法 O(order) → O(1) | S₆ 建乘法表预期百倍量级提速 | 约 5 行 |
+| 2 | ✅ **已完成（2026-10-14）**——`findPermIndex` 改 WeakMap 数值键索引（`(n+1)` 进制折叠 perm，避免每次乘法 `join(',')` 建串；倒序填表保持 findIndex 首中语义） | **实测** S₆ multiply/inverse **5.1×/5.7×**、S₅ 1.9×（原「百倍」预估不成立——线性扫早退 + JIT 下每乘实测 ~1 µs）；S₆ 子群枚举 >10 min 中的 multiply 份额同比例缩短 | 约 15 行 |
 | 3 | ✅ **已完成（2026-09-14）**——大群警告阈值改成本模型文案：视图阈值对齐三条实测线（图形类 240 / 子群枚举类 144 / 3d 720，常量在 `guards.ts`），警告文案改为「静态浏览与出图通常没问题，拖拽/缩放会卡顿」；子群枚举类魔数 60 全部换成 `ENUMERATION_LIMIT`（144） | 少挡掉本来能用的群（120 阶不再警告；61–144 阶子群枚举本地可算） | 已改常量与文案 |
 | 4 | **`forceLayout` 大群切异步渐进**：复用已有的 `forceLayoutAsync` + RAF 分块（`cycleLayouts.ts:254`，目前基本未用） | cycle 视图大群从「转圈数秒」变成「先出粗图再细化」 | 中 |
 | 5 | **子群枚举改 worklist**：`enumerate.ts:99` 只把新发现的子群与已有子群求 join，而非每轮重扫全部对 | D84(168) 3.45 s 预期压到 1 s 内 | 中 |

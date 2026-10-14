@@ -32,11 +32,33 @@ function permToString(p: number[]): string {
   return parts.length === 1 ? parts[0].slice(1, -1) : parts.join('')
 }
 
+/** perm → 数值键：各位取值 1..n，按 (n+1) 进制折叠成唯一整数——查表路径零字符串分配
+ *  （`perm.join(',')` 每次乘法都要建串，实测占掉 Map 方案大半收益）。 */
+function permKey(perm: number[], base: number): number {
+  let k = 0
+  for (let i = 0; i < perm.length; i++) k = k * base + perm[i]!
+  return k
+}
+
+/** perm 数值键 → elements 下标 的惰性索引缓存。S_n 每次 multiply /
+ *  generator.apply / inverse 都要反查积元素——线性扫 O(order·n) 是大群
+ *  组合视图卡死的硬伤（ROADMAP §2.6；S₆=720 阶每次乘法平均扫一半表）。
+ *  WeakMap 随 elements 数组一起回收；倒序填表 ⇒ 重复键保留下标最小者，
+ *  与旧 findIndex 首中语义逐位一致。 */
+const permIndexCache = new WeakMap<GroupElement[], Map<number, number>>()
+
 function findPermIndex(elements: GroupElement[], perm: number[]): number {
-  const idx = elements.findIndex(el => 
-    el.value.every((v, i) => v === perm[i])
-  )
-  if (idx === -1) {
+  let index = permIndexCache.get(elements)
+  const base = elements[0]!.value.length + 1
+  if (!index) {
+    index = new Map()
+    for (let i = elements.length - 1; i >= 0; i--) {
+      index.set(permKey(elements[i]!.value, base), i)
+    }
+    permIndexCache.set(elements, index)
+  }
+  const idx = index.get(permKey(perm, base))
+  if (idx === undefined) {
     console.warn('findPermIndex: permutation not found, falling back to identity')
     return 0
   }

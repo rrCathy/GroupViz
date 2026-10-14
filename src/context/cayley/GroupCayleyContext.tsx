@@ -18,6 +18,9 @@ interface GroupCayleyState {
   cayleyAvailableShapes3D: Layout3D[]
   cayleyShape2D: CayleyShape2D
   cayleyAvailableShapes2D: CayleyShape2D[]
+  /** 2D 边弯曲度倍率；缺省 1（自适应弧 ≈ min(dist*0.08, 18)）。**0 = 笔直**。
+   *  语义与包侧 `CayleyViewParams.edgeCurvature` 对齐；纯视觉偏好，换群不重置 */
+  cayleyEdgeCurvature: number
 }
 
 interface GroupCayleyActions {
@@ -25,6 +28,7 @@ interface GroupCayleyActions {
   setCayleyActions: (actions: CayleyAction[]) => void
   setCayleyShape3D: (shape: Layout3D) => void
   setCayleyShape2D: (shape: CayleyShape2D) => void
+  setCayleyEdgeCurvature: (curvature: number) => void
   toggleCayleyAction: (elementId: string) => void
   addAllCayleyActions: () => void
   clearCayleyActions: () => void
@@ -47,6 +51,7 @@ export function GroupCayleyProvider({ children }: { children: ReactNode }) {
   const [cayleyAvailableShapes3D, setCayleyAvailableShapes3D] = useState<Layout3D[]>(['cone', 'circular'])
   const [cayleyShape2D, setCayleyShape2DState] = useState<CayleyShape2D>('circular')
   const [cayleyAvailableShapes2D, setCayleyAvailableShapes2D] = useState<CayleyShape2D[]>(['circular', 'grid'])
+  const [cayleyEdgeCurvature, setCayleyEdgeCurvatureState] = useState<number>(1)
   const prevGroupRef = useRef<string | null>(null)
 
   useEffect(() => {
@@ -163,10 +168,15 @@ export function GroupCayleyProvider({ children }: { children: ReactNode }) {
     }
   }, [currentGroup, currentView, forceShowLargeGroupViews, batchSetNodePositions, resetNodePositions])
 
+  const setCayleyEdgeCurvature = useCallback((curvature: number) => {
+    setCayleyEdgeCurvatureState(curvature)
+  }, [])
+
   const value: GroupCayleyContextType = {
     cayleyMultiplyType, cayleyActions, cayleyShape3D, cayleyAvailableShapes3D,
-    cayleyShape2D, cayleyAvailableShapes2D,
+    cayleyShape2D, cayleyAvailableShapes2D, cayleyEdgeCurvature,
     setCayleyMultiplyType, setCayleyActions, setCayleyShape3D, setCayleyShape2D,
+    setCayleyEdgeCurvature,
     toggleCayleyAction, addAllCayleyActions, clearCayleyActions,
   }
 

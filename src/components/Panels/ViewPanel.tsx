@@ -28,16 +28,21 @@ export function ViewPanel() {
     symmetryShowAction,
     symmetryRotateSpeed,
     symmetryVariant,
+    symmetryCompose,
     setSymmetryShowAction,
     setSymmetryRotateSpeed,
     setSymmetryVariant,
+    setSymmetryCompose,
+    bumpSymmetryResetNonce,
     cayleyMultiplyType,
     cayleyShape3D,
     cayleyAvailableShapes3D,
     cayleyShape2D,
     cayleyAvailableShapes2D,
+    cayleyEdgeCurvature,
     cayleyActions,
     setCayleyMultiplyType,
+    setCayleyEdgeCurvature,
     toggleCayleyAction,
     addAllCayleyActions,
     clearCayleyActions,
@@ -153,6 +158,13 @@ export function ViewPanel() {
             <div className="toggle-group">
               <button className={`toggle-btn ${cayleyMultiplyType === 'right' ? 'active' : ''}`} onClick={() => setCayleyMultiplyType('right')}>{t('panel.multiplyRight')}</button>
               <button className={`toggle-btn ${cayleyMultiplyType === 'left' ? 'active' : ''}`} onClick={() => setCayleyMultiplyType('left')}>{t('panel.multiplyLeft')}</button>
+            </div>
+          </div>
+          <div className="cayley-multiply">
+            <span className="settings-label">{t('panel.edgeStyle')}</span>
+            <div className="toggle-group">
+              <button className={`toggle-btn ${cayleyEdgeCurvature !== 0 ? 'active' : ''}`} onClick={() => setCayleyEdgeCurvature(1)}>{t('panel.edgeCurved')}</button>
+              <button className={`toggle-btn ${cayleyEdgeCurvature === 0 ? 'active' : ''}`} onClick={() => setCayleyEdgeCurvature(0)}>{t('panel.edgeStraight')}</button>
             </div>
           </div>
           {cayleyAvailableShapes2D.length > 0 && (
@@ -309,6 +321,25 @@ export function ViewPanel() {
             <input type="checkbox" checked={symmetryShowAction} onChange={(e) => setSymmetryShowAction(e.target.checked)} disabled={!currentGroup} />
             <span>{t('panel.showAction')}</span>
           </label>
+          {/* 叠加模式：A₄（tetrahedron）与 SL(2,3)（binaryTetrahedron，皮带扭转跨元素累积） */}
+          {symmetryShowAction && (symType === 'tetrahedron' || symType === 'binaryTetrahedron') && (
+            <>
+              <label className="panel-checkbox" data-testid="symmetry-compose-toggle">
+                <input type="checkbox" checked={symmetryCompose} onChange={(e) => setSymmetryCompose(e.target.checked)} />
+                <span>{t('panel.composeMode')}</span>
+              </label>
+              {symmetryCompose && (
+                <button
+                  className="panel-btn"
+                  data-testid="symmetry-reset-pose"
+                  onClick={bumpSymmetryResetNonce}
+                  style={{ width: '100%', marginTop: '2px' }}
+                >
+                  {t('panel.resetPose')}
+                </button>
+              )}
+            </>
+          )}
           {symmetryShowAction && (
             <div className="symmetry-speed">
               <div className="param-row">
@@ -329,7 +360,7 @@ export function ViewPanel() {
 function ExportSection({ currentGroup }: { currentGroup: Group | null }) {
   const mountedRef = useRef(true)
   useEffect(() => () => { mountedRef.current = false }, [])
-  const { currentView, symmetryShowAction, symmetryActionElementId, setSymmetryActionElementId } = useGroup()
+  const { currentView, symmetryShowAction, symmetryActionElementId, setSymmetryActionElementId, symmetryCompose, setSymmetryCompose } = useGroup()
   const { t } = useTranslation()
   const [gif3dOption, setGif3dOption] = useState<'3s' | '5c'>('3s')
 
@@ -354,6 +385,26 @@ function ExportSection({ currentGroup }: { currentGroup: Group | null }) {
     const elId = symmetryActionElementId
     if (!currentGroup || !elId) { alert(t('panel.selectElementFirst')); return }
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    if (symmetryCompose) {
+      // 叠加模式：先暂关叠加（原流程经「清元素→恒等」完成复位），从头播一次；
+      // 导出完成（含中途回调重播整轮）后恢复叠加开关
+      setSymmetryCompose(false)
+      const restart = () => {
+        setSymmetryActionElementId(null)
+        setTimeout(() => { if (mountedRef.current) setSymmetryActionElementId(elId) }, 40)
+      }
+      setSymmetryActionElementId(null)
+      setTimeout(() => {
+        if (!mountedRef.current) return
+        setSymmetryActionElementId(elId)
+        setTimeout(() => {
+          if (!mountedRef.current) return
+          exportSymmetryAsGif(`groupviz_symmetry_${ts}.gif`, 1700, 20, restart)
+            .then(() => { if (mountedRef.current) setSymmetryCompose(true) })
+        }, 80)
+      }, 120)
+      return
+    }
     setSymmetryActionElementId(null)
     setTimeout(() => {
       if (!mountedRef.current) return

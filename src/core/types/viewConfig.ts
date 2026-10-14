@@ -375,6 +375,8 @@ export interface SymmetryViewParams {
   variant?: boolean
   /** 元素作用演示开关（对齐主画布 ViewPanel「显示元素操作」）；缺省 false */
   showAction?: boolean
+  /** 叠加模式演示：元素旋转左乘当前姿态持续合成（无回恒等阶段）；缺省 false */
+  compose?: boolean
   /** 动画倍速 0.2–5；缺省 1 */
   rotateSpeed?: number
   /** 演示元素 id（toggle 语义：点活跃元素回到恒等姿态）。换群后失效（非本群元素）由渲染层忽略。
@@ -387,6 +389,7 @@ export interface SymmetryViewParams {
 export const symmetryViewParamsSchema = z.object({
   variant: z.boolean().optional(),
   showAction: z.boolean().optional(),
+  compose: z.boolean().optional(),
   rotateSpeed: z.number().min(0.2).max(5).optional(),
   actionElementId: z.string().min(1).nullable().optional(),
   showFigureTitle: z.boolean().optional(),

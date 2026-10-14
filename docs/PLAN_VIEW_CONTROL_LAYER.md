@@ -103,11 +103,12 @@
 | 边样式细化（E4） | `edgeWidthScale`（与 lengthScale 正交）/ `showArrows` | 2D |
 | 3D 球壳 / 纬度环 / 重新优化布局（B1–B3） | `shell` / `layerRings`（仅字长球；缺省关）/ `relayoutNonce` | 3D |
 | 环面两因子自转（S¹×S¹，2026-09-27） | `spinBigCircle`（绕**大圆**/纬向 = 内容绕环面回转轴刚体旋转，useFrame 命令式转 group ⇒ 零重渲染）+ `spinTube`（绕**管子**/经向 = `compute3DPositions(group, layout, { tubePhase })` 每帧重算曲面点）。仅 `torusHex`；视口 ◯/◎ 按钮 + ⚙ 面板双入口，同速（8s/圈）且周期 2π 无缝 | 3D（torusHex） |
-| **窗口内导出（SVG/PNG）** | `ViewWindow` 标题栏 ⤓：2D → **自包含 SVG**（全量样式内联 + KaTeX 字体改写 CDN，注释与节点标签掉不了排版）；3D/对称性 → canvas PNG。序列化在零依赖模块 `utils/exportSvg.ts`（`export.ts` re-export） | 全部视图（W-0，2026-09-24） |
+| **窗口内导出（SVG/PNG）** | 标题栏 ⤓：2D → **自包含 SVG**（全量样式内联 + KaTeX 字体改写 CDN，注释与节点标签掉不了排版）；3D/对称性 → canvas PNG。序列化在零依赖模块 `utils/exportSvg.ts`（`export.ts` re-export）。入口口径收在 `exportViewHost`（哪些视图走 PNG + 文件名），**两套壳共用一份** | 全部视图（W-0 内核壳 2026-09-24 + **W-0b 应用浮窗 2026-09-28**） |
 
-### 3.2 🔄 本批（Phase 0 三件地基）
+### 3.2 🔄 本批（Phase 0 —— 三件地基里 DEC-1/DEC-2 已交付，余两件）
 
-`Decorations` 协议（注释）· `FigurePreset` + `useFigurePreset` · 注册表驱动 ⚙ 面板——**施工方案见 §4**。
+- ✅ **Decorations 协议（注释）**：DEC-1 协议（`core/types/decorations.ts`）+ DEC-2 2D `CayleyView` 注释叠层 + 面板 `AnnotationEditor` + 随窗持久化 —— 2026-09-24 已真机验收（详见 CHANGELOG 与 §4.5）；**导出侧闭环**见 §3.1（W-0 + W-0b）。
+- 🔄 **`FigurePreset` + `useFigurePreset`** 与 **注册表驱动 ⚙ 面板**：**仍未开工**（全仓 grep `FigurePreset` / `ViewControl` / `ControlPanel` 零命中），**施工方案见 §4**（FP-1 / UI-1 两刀）。
 
 ### 3.3 📋 池中（原「§4 优先级表」与「§8 发散池」合并去重）
 
@@ -202,7 +203,7 @@
 | 2D 导出会自动烘焙 DOM 叠层 | `utils/exportApi.ts` 的 `exportSVGContent()` 直接序列化画布 `<svg>` ⇒ 注释只要渲染进同一棵 SVG 即随图导出，**零额外工作量** |
 | 3D 导出**不**烘焙 DOM 覆盖层 | 3D 走 `exportCanvasDataUrl()`（canvas 栅格）；`Html` 注释层不进图 ⇒ 已知缺口（见 §4.6 第 5 条） |
 | 面板 DOM 形状被测试硬编码断言 | `Cayley3DWindowParams.component.test.tsx`：面板内 `input[type=range]` = 2/4、`checkbox` = **12**、`color` = 4、`select` 数量；`CayleyWindowParams` 同类计数（range 4、checkbox **15** = 含 DEC-2 的 Leader line）。两个数都比 2026-09-23 首版少 1——**2026-09-26 撤下阶徽标**（见 §3.4）；改控件数量必须同步这两处 |
-| **⚙ 面板的落点只有 `ViewWindow`，应用的浮窗没有面板**（2026-09-24 实测发现） | 应用自己的浮动视图窗走**老式壳** `floatingView/FloatingViewWindow.tsx` + `lazyViews.renderViewContent`（229 + 500 行）——纯标题栏 + 内容 + 缩放手柄，`grep 'input type'` = **0**、无 `Parameters` 按钮。`ViewParamsPanel`（含 F/E/B 组与 DEC-2 注释编辑器）只挂在 `ViewWindow`（FGVE 受控内核）上，而 `ViewWindow` 在仓内的消费点只有 `TestPage2.tsx`（`?test=2` 博客配图页，7 个窗口）+ 包消费端。⇒ **今天之前所有 VCL 控件在应用里都点不到**；`?test=2` 的凯莱窗口又用 `FIGURE`（`showControls:false`）隐藏控制条，所以博客配图窗口本身也没有 ⚙ |
+| **⚙ 面板的落点只有 `ViewWindow`，应用的浮窗没有面板**（2026-09-24 实测发现） | 应用自己的浮动视图窗走**老式壳** `floatingView/FloatingViewWindow.tsx` + `lazyViews.renderViewContent`（229 + 500 行）——纯标题栏 + 内容 + 缩放手柄，`grep 'input type'` = **0**、无 `Parameters` 按钮。`ViewParamsPanel`（含 F/E/B 组与 DEC-2 注释编辑器）只挂在 `ViewWindow`（FGVE 受控内核）上，而 `ViewWindow` 在仓内的消费点只有 `TestPage2.tsx`（`?test=2` 博客配图页，7 个窗口）+ 包消费端。⇒ **今天之前所有 VCL 控件在应用里都点不到**；`?test=2` 的凯莱窗口又用 `FIGURE`（`showControls:false`）隐藏控制条，所以博客配图窗口本身也没有 ⚙（**2026-09-28 起已不成立**：W-1~W-5 让老式壳拿到几何/持久化/⚙/注释，W-0b 补上 ⤓ 导出；本条只作当日侦察证据保留） |
 | **导出通路只认主画布**（同上发现） | `utils/exportApi.exportSVGContent()` 与 `utils/export.exportView()` 都取 `document.querySelector('.canvas-viewport')` = **主画布**；导出按钮在 `ViewPanel`。⇒ **浮动窗口里的图（含注释）今天导不出来**——而主画布按 §1.3 决策不接 VCL。这是"编排一张插图用于博客"的最后一段缺口 |
 | 协议与门禁 | 新 core 模块须同步 `src/core/index.ts` 门面；`coreBoundary.test` 守 core 零 UI；`GroupDescriptor v1` 的 zod + 幂等模式（`core/descriptor.ts`）是现成模板；schema 必须带 round-trip 测试；改 src props 后须 `npm run build:pkg`，消费页/冒烟才可见 |
 
@@ -267,6 +268,7 @@ export const figurePresetSchemaV1 = z.object({
 | **DEC-1** | core `decorations.ts` 协议 + schema + round-trip 测试 + 门面导出（零行为变化） | —（全批唯一无可见物的一步：1 新文件 + 1 测试） |
 | **DEC-2** ✅ | 2D `CayleyView` 顶层 `<g>` 注释叠层（位置由锚点实时解析：`node`/`edge` 取当前坐标 ⇒ 拖拽与力导向重排都跟随；`figure` 走视图坐标、文本按锚点左上角排布不裁切）；面板「Annotations」区（锚点类型 + 元素引用 + TeX 文本 + 引导线/颜色 + ✎编辑/✕删除 + 「↑ sel」取窗口选中元素），随窗口持久化（`gv-vw-*` 的 `decorations`，旧存档兼容） | **已真机验收**（2026-09-24 · `?test=2` + 本机 Chromium）：A₄ 凯莱图给 (234) 挂 `g^2=e` → 图上出注释 + 虚线引导线；拖动该节点 120/70px，注释同步位移 (59.5,183) → (180.0,252.5)；整图锚点 `Z(G)=\{e\}` 不裁切；0 JS 错误 |
 | **W-0 导出** ✅ | 窗口内导出（`ViewWindow` 标题栏 ⤓）：2D → 自包含 SVG、3D/对称性 → PNG；序列化抽零依赖模块 `utils/exportSvg.ts` | **已真机验收**（2026-09-24）：导出 `图-2-凯莱图.svg`（85 KB，含 `<style>` / KaTeX CDN 改写 / **注释图层**），`file://` 独立渲染时 `g²=e` 正常显示 |
+| **W-0b 导出入口补齐** ✅ | 应用浮窗（老式壳）标题栏加 ⤓：此前 W-3/W-4 已让应用浮窗能改参数、加注释，**却导不出来**（⤓ 只挂在 FGVE 内核壳上）。口径抽成 `utils/exportSvg.exportViewHost`（canvas 视图集合 + 文件名 + 宿主查询），两套壳共用一份，删掉内核壳里各自的一份。导出**不按视图门控**（只序列化 DOM，与 ⚙ 不同） | **已真机验收**（2026-09-28，应用内多视图模式 + 本机 Chromium，A₄）：18/18 断言全过 · 0 JS 错误 —— 凯莱图窗 ⚙ 加注释 → ⤓ 得 `凯莱图.svg`（94.6 KB，含 `<style>`/KaTeX 样式/注释层）；**导出文件 `file://` 独立渲染**：12 节点 · 20 边 · 13 foreignObject（12 标签 + 1 注释）· style 77.7 KB · `g²=e` 黄底胶囊正常显示；3D 窗按钮切 `Export PNG` → `3D凯莱图.png`（73.3 KB 非空）。固化 `e2e/window-export.spec.ts`（2 例） |
 | **UI-1** | `ViewControl` descriptor + 通用 `ControlPanel` 渲染器；迁移 2D/3D 凯莱面板 **31** 个存量控件（2D 18 + 3D 13）+ 通用区 6；DEC 控件改 descriptor 驱动。**其余 8 视图 21 个控件保持手写** | 既有面板外观逐位不变 + **面板 DOM 计数测试保持不变**（零回归证明即本步的可见物） |
 | **FP-1** | `figurePreset.ts` 协议 + 序列化 + `useFigurePreset` + 面板「Save / Load preset」：导出=**复制 JSON 到剪贴板**、导入=**粘贴**（弹窗文本框） | 调好一张插图（含注释）→ 复制 JSON → 清空 → 粘贴导入 → 逐位还原 |
 | **验证入口** ✅ | `?test=1`（`TestPagePkgConsume.tsx`）= **VCL 全量消费矩阵**：**7 卡**覆盖批次一（边几何 / 路径高亮 / 动态力导向）+ 批次二（F/E/B）+ 批次三（Decorations 注释，含失效引用注入与「+ 添加」），`scripts/pkg/browser-smoke.mjs` **32 项**真机断言。**边界**：`ViewWindow` 不向包门面导出 ⇒ 窗口侧能力（⚙ 面板 / 注释编辑器 / ⤓ 导出 / 将来的 FigurePreset）**在 testpage 里验不了**，只能在应用内（多视图模式）或 `?test=2` 验 | 2026-09-28：**32/32 全过 · 0 JS 错误**（含「拖单位元节点 → 注释 y 403→354.4」，即 DEC-2 核心验收点） |
@@ -278,13 +280,13 @@ export const figurePresetSchemaV1 = z.object({
 2. **标签保持硬编码英文**：descriptor 里直接带英文字面量，与现状一致；不顺手 i18n（属另一类改动，另批）。
 3. **注释文本与节点标签同路**：走 `texify → renderTex`（KaTeX）放进 foreignObject——与既有节点标签完全一致，**导出保真度 = 现状水平**（KaTeX 样式在导出文件里会掉，见 §3.3 池「导出内联 KaTeX CSS」）。若将来做 3D 注释，`Html` 层必须继承 `SceneThemeRoot` 的 `data-theme`，否则深色视图窗里出现白底块。
 4. **元素引用走 `elementRef`**：Sₙ 元素 id 含逗号（`2,1,3,4`）——`pathHighlight` 曾因 `/[\s,]+/` 分词在 TestPage 解析出 0 条边；注释锚点解析禁止重蹈（`core/algebra/elementRef.ts` 是唯一入口）。
-5. **导出的两道门**（2026-09-24 已解一半）：① **窗口内导出已交付**（W-0，2D SVG / 3D PNG，注释随图）⇒ 注释不再"只能看不能出图"；② 主画布导出入口（`exportView` / `exportSVGContent`，取 `.canvas-viewport`）**与此互不干扰**，且按 §1.3 不接 VCL。仍在的缺口：**3D 注释**不做（canvas 栅格不烘焙 HTML 层，v1 明确不交付）；**应用自己的浮窗**要等窗口框架融合（[PLAN_WINDOW_FRAMEWORK.md](PLAN_WINDOW_FRAMEWORK.md)）才能拿到导出按钮与 ⚙ 面板。
+5. **导出的两道门**（2026-09-24 解一半、**2026-09-28 全解**）：① **窗口内导出**（W-0 内核壳 + W-0b 应用浮窗，2D SVG / 3D PNG，注释随图）⇒ 注释不再"只能看不能出图"，且**应用里编排的图现在也导得出来**；② 主画布导出入口（`exportView` / `exportSVGContent`，取 `.canvas-viewport`）**与此互不干扰**，且按 §1.3 不接 VCL。仍在的缺口：**3D 注释**不做（canvas 栅格不烘焙 HTML 层，v1 明确不交付）；主画布出口的样式内联见 §3.3（那是 `npm run export` 批量导出的通路，与本条无关）。
 6. **预设载群**：v1 只存 `symbol`，回放走 `createGroupFromSymbol`——注意其 `C_n` 上限仅 30 阶（TestPage 实测坑）；大群/表群回放需 descriptor 全量，与 ROADMAP §2.1「descriptor 真 round-trip 载群」一起做，不在本批。
 7. **换群后残留注释**：引用解析不出时渲染端静默跳过（设计如此），但面板列表里仍会列出——若嫌脏，可在换群时清空（`ViewWindow` 已有 `resetAll` 清空路径）。
 
 ### 4.7 待定（需一句话确认）
 
-1. ~~导出闭环怎么补~~ → **已定并交付（2026-09-24 W-0）**：按「给 FGVE 窗口加导出按钮」实施，真机验收通过（§4.5）。
+1. ~~导出闭环怎么补~~ → **已定并交付（W-0 内核壳 2026-09-24 + W-0b 应用浮窗 2026-09-28）**：按「给 FGVE 窗口加导出按钮」实施，真机验收通过（§4.5）。
 2. FP-1 只做 schema + hook + JSON 导入导出，**不做**预设库列表 / 深链——建议照此（库留在 Tier B）。
 3. 面板标签保持硬编码英文，不顺手 i18n——建议照此。
 4. ~~应用浮窗与 FGVE 内核的面板鸿沟要不要收口~~ → **已立项为独立方案**：[PLAN_WINDOW_FRAMEWORK.md](PLAN_WINDOW_FRAMEWORK.md)（用户 2026-09-24 定「融合」，三壳合一；待批其 §4 三个语义取舍）。

@@ -94,9 +94,9 @@ Nodes are the group elements; colored edges show multiplication by each generato
 (right multiplication by default; colors follow a fixed 16-color palette).
 
 - In **凯莱图设置 (Cayley settings)** you can flip between 右乘 (right) and 左乘 (left)
-  multiplication, toggle individual acting elements (this is the *generalized* Cayley
-  graph — the acting set need not generate the group!), pick a 2D shape, and control
-  animation speed.
+  multiplication, switch the **edge style (curved / straight)**, toggle individual acting
+  elements (this is the *generalized* Cayley graph — the acting set need not generate the
+  group!), pick a 2D shape, and control animation speed.
 - The shape is chosen automatically (12 layouts: circular, grid, rewiring, concentric,
   cylinder/torus for direct products, …) but you can override it from the dropdown.
 - Drag to pan, wheel to zoom, double-click an empty spot to reset.
@@ -135,6 +135,21 @@ Only meaningful for geometric groups (try D₃, D₄, A₄, A₅, S₄). Picks a
 symmetry group matches, lets you pick an element, and animates its operation
 (rotations/reflections) with marked axes; speed slider included. This view also exports
 GIF animations.
+
+For A₄ and SL(2,3) there is an extra **Compose mode** toggle: instead of returning to
+the identity, each element's rotation is applied on top of the current pose
+(premultiplied), so successive demonstrations stack — try applying two different
+3-cycles and watch the tetrahedron land on their composition. **Reset pose** animates
+back to the identity.
+
+SL(2,3) (≅ the binary tetrahedral group 2T, a double cover of A₄) shows the same
+tetrahedron plus a **Dirac-style open belt** hanging from a fixed anchor. Each element
+twists the belt by twice its half-angle τ = 2ψ: elements q and −q rotate the
+tetrahedron identically but wind the belt differently — that difference is the double
+cover made visible. Try the unique order-2 element: the tetrahedron turns a full 360°
+(looking unchanged) while the belt picks up exactly one full twist. Compose two turns:
+the belt reaches 720°, topologically identical to untwisted. Elements display as 2×2
+mod-3 matrices.
 
 **Controls recap** for 2D views: drag = pan, wheel = zoom, double-click = reset.
 For the 3D view: left-drag = orbit, right-drag = pan, wheel = zoom, ▶ = auto-rotate,

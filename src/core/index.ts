@@ -26,6 +26,7 @@ export * from './groups/GeneralLinearGroup'
 export * from './groups/DirectProduct'
 export * from './groups/SemidirectProduct'
 export * from './groups/SmallGroups'
+export * from './groups/sl23'
 export * from './groups/importGroup'
 export * from './groups/groupFactory'
 

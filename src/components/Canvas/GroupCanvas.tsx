@@ -313,13 +313,31 @@ export function GroupCanvas() {
   )
 }
 
+/** 平行边（同一对节点间多条作用边）排序键：渲染与曲率分摊共用（与包内 CayleyView 同形） */
+function edgeKey(edge: CayleyEdgeData): string {
+  return `${edge.fromId}-${edge.toId}-${edge.actionElementId}`
+}
+
+/**
+ * 2D 边渲染的样式上下文（与包内 CayleyView 的 EdgeRenderCtx 同语义收口）。
+ * 位置参数一多，两处调用点（基础边 + 选中重绘）就难以保持一致，故用 ctx 收口。
+ */
+interface EdgeRenderCtx {
+  nodeRadius: number
+  enabledActionIndexMap: Map<string, number>
+  /** 边弯曲度倍率（0 = 笔直；缺省 1 自适应弧） */
+  curvatureMul: number
+}
+
 function renderEdgePath(
   edge: CayleyEdgeData,
   nodePositionsCache: Map<string, { x: number; y: number }>,
-  nodeRadius: number,
-  enabledActionIndexMap: Map<string, number>,
+  ctx: EdgeRenderCtx,
   isHighlighted: boolean,
+  parallelIndex: number,
+  parallelCount: number,
 ) {
+  const { nodeRadius, enabledActionIndexMap, curvatureMul } = ctx
   const fromPos = nodePositionsCache.get(edge.fromId)
   const toPos = nodePositionsCache.get(edge.toId)
   if (!fromPos || !toPos) return null
@@ -348,9 +366,24 @@ function renderEdgePath(
   const nx = -dy / dist
   const ny = dx / dist
 
-  const curvature = Math.min(dist * 0.08, 18)
-  const ctrlX = midX + nx * curvature
-  const ctrlY = midY + ny * curvature
+  // 平行边分摊序号：0/1 条时 offset=0；多条时按序号左右铺开
+  const offset = parallelCount > 1 ? (parallelIndex - (parallelCount - 1) / 2) : 0
+  let ctrlX: number
+  let ctrlY: number
+  if (curvatureMul === 0) {
+    // 笔直模式：单条边真直；平行边（a/a⁻¹ 对）仍小幅分开，否则完全重叠看不见。
+    // 分摊方向取「规范法向」（按 fromIdx < toIdx 定向）：反向平行边的曲率与法向双双取反，
+    // 若各用自身法向，两条边会叠成同一条曲线（实测：4/4 对控制点完全重合）。
+    const flip = edge.fromIdx < edge.toIdx ? 1 : -1
+    const spread = offset * 16
+    ctrlX = midX + nx * flip * spread
+    ctrlY = midY + ny * flip * spread
+  } else {
+    // 弯曲模式（现状观感）：各边沿自身法向弯，反向平行边天然分列弦两侧
+    const curvature = Math.min(dist * 0.08, 18) * curvatureMul
+    ctrlX = midX + nx * curvature
+    ctrlY = midY + ny * curvature
+  }
 
   const startX = fromPos.x + (dx / dist) * nodeRadius
   const startY = fromPos.y + (dy / dist) * nodeRadius
@@ -374,7 +407,7 @@ function renderEdgePath(
 }
 
 function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }) {
-  const { currentGroup, selectedElements, canvasTransform, selectElement, getNodePosition, setNodePosition, viewBoxSize, cayleyActions, cayleyMultiplyType, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors, cayleyShape2D } = useGroup()
+  const { currentGroup, selectedElements, canvasTransform, selectElement, getNodePosition, setNodePosition, viewBoxSize, cayleyActions, cayleyMultiplyType, cayleyEdgeCurvature, subsets, selfInverseElementId, cosetElementMap, cosetHighlightSet, cosetColors, cayleyShape2D } = useGroup()
   const { setHoverElement } = useHover()
   const { t } = useTranslation()
 
@@ -432,6 +465,27 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
 
   const edges = useMemo(() => currentGroup ? computeCayleyActionEdges(currentGroup, cayleyActions, cayleyMultiplyType) : [], [currentGroup, cayleyActions, cayleyMultiplyType])
 
+  // 平行边索引（同一对节点间多条作用边）：按 actionElementId 稳定排序，供直边模式分摊
+  const parallelInfo = useMemo(() => {
+    const buckets = new Map<string, CayleyEdgeData[]>()
+    for (const e of edges) {
+      const key = e.fromIdx < e.toIdx ? `${e.fromIdx}|${e.toIdx}` : `${e.toIdx}|${e.fromIdx}`
+      const arr = buckets.get(key)
+      if (arr) arr.push(e)
+      else buckets.set(key, [e])
+    }
+    const m = new Map<string, { index: number; count: number }>()
+    for (const arr of buckets.values()) {
+      const sorted = [...arr].sort((a, b) => a.actionElementId.localeCompare(b.actionElementId))
+      sorted.forEach((e, i) => m.set(edgeKey(e), { index: i, count: sorted.length }))
+    }
+    return m
+  }, [edges])
+
+  const edgeCtx = useMemo<EdgeRenderCtx>(() => ({
+    nodeRadius, enabledActionIndexMap, curvatureMul: cayleyEdgeCurvature,
+  }), [nodeRadius, enabledActionIndexMap, cayleyEdgeCurvature])
+
   const isLargeGraph = n > 60
 
   const subsetDetailMap = useMemo(() => {
@@ -483,16 +537,22 @@ function CayleyGraphView({ gRef }: { gRef: React.RefObject<SVGGElement | null> }
 
   const edgeElements = useMemo(() => {
     if (!currentGroup) return null
-    return edges.map(edge => renderEdgePath(edge, nodePositionsCache, nodeRadius, enabledActionIndexMap, false))
-  }, [edges, nodePositionsCache, enabledActionIndexMap, nodeRadius, currentGroup])
+    return edges.map(edge => {
+      const pi = parallelInfo.get(edgeKey(edge))
+      return renderEdgePath(edge, nodePositionsCache, edgeCtx, false, pi?.index ?? 0, pi?.count ?? 1)
+    })
+  }, [edges, nodePositionsCache, edgeCtx, currentGroup, parallelInfo])
 
   // Overlay: edges touching a selected element redrawn full-color + thicker.
   const highlightedEdges = useMemo(() => {
     if (!currentGroup || selectedElements.size === 0) return null
     return edges
       .filter(edge => selectedElements.has(edge.fromId) || selectedElements.has(edge.toId))
-      .map(edge => renderEdgePath(edge, nodePositionsCache, nodeRadius, enabledActionIndexMap, true))
-  }, [edges, selectedElements, nodePositionsCache, enabledActionIndexMap, nodeRadius, currentGroup])
+      .map(edge => {
+        const pi = parallelInfo.get(edgeKey(edge))
+        return renderEdgePath(edge, nodePositionsCache, edgeCtx, true, pi?.index ?? 0, pi?.count ?? 1)
+      })
+  }, [edges, selectedElements, nodePositionsCache, edgeCtx, currentGroup, parallelInfo])
 
   // Node elements are memoized so that hover (which only 3D consumes) and other
   // unrelated context updates do not rebuild the whole graph every frame.

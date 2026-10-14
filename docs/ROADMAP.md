@@ -102,7 +102,7 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 - 边样式与图例 E 组：`showLegend`、`printPalette`+逐生成元虚线、`edgeWidthScale`、`showArrows`。
 - 3D B 组：`shell` 字长球壳、`layerRings` 纬度环、`relayoutNonce` 重新优化布局。
 
-**下一批（Phase 0 三件地基，2026-09-24 用户拍板开工）**：`Decorations` 协议（图上注释）· `FigurePreset` + `useFigurePreset`（插图级预设）· 注册表驱动 ⚙ 面板。分刀顺序与验收见 PLAN §4.5。
+**下一批（Phase 0 三件地基，2026-09-24 用户拍板开工）**：~~`Decorations` 协议（图上注释）~~ ✅ 已交付（DEC-1/DEC-2，2026-09-24）· **`FigurePreset` + `useFigurePreset`（插图级预设，FP-1）** 与 **注册表驱动 ⚙ 面板（UI-1）** 仍未开工。分刀顺序与验收见 PLAN §4.5。
 
 **边界（2026-09-24 定，2026-09-26 增补一条）**：
 
@@ -115,16 +115,17 @@ GroupViz 的演进分三个阶段，逐级沉淀：
 
 > 方案见 [PLAN_WINDOW_FRAMEWORK.md](PLAN_WINDOW_FRAMEWORK.md)。起因（2026-09-24 用户）：「把主画布里的悬浮多窗和 FGVE 里的窗口处理一下，要么切割，要么融合，**我倾向于融合**，弄一个通用框架，两边都能调用。」
 
-- **现状**：三套壳并存——应用老式壳 `FloatingViewWindow`（context 壳，**无 ⚙ 面板、无持久化**）、FGVE 受控内核 `ViewWindow`（全套 ⚙ + 注释 + 持久化，只在 `?test=2` 与包消费端可见）、包消费端壳 `SceneWindow`（caps 裁剪，零 context）。⇒ 今天 VCL 的全部控件在**应用里点不到**（PLAN_VIEW_CONTROL_LAYER §4.2）。
+- **现状**：三套壳并存 —— 应用老式壳 `FloatingViewWindow`（context 壳，W-1~W-5 后**已有 8 向几何、持久化、⚙ 面板、注释、⤓ 导出**；与内核的差异**只剩状态归属**：选中与生成元共享主画布，内核是窗口本地）、FGVE 受控内核 `ViewWindow`（全套 ⚙ + 注释 + 持久化 + 导出，仓内只在 `?test=2` 与包消费端可见）、包消费端壳 `SceneWindow`（caps 裁剪，零 context；视口/导出由宿主自理）。**未迁视图**：`sylow`（`ViewContent` 尚无该分支）、`tree`/`prestable`（交拓展包轨道）、`action`/`homomorphism`（应用多视图入口打不开）—— 其中 `sylow` **有 ⤓ 无 ⚙**（导出只序列化 DOM，⚙ 需要内容消费 viewParams）。
 - **已交付**：
   - **W-0（2026-09-24）窗口内导出**——`ViewWindow` 标题栏 ⤓ 按钮（2D → 自包含 SVG，含注释与 KaTeX 样式；3D/对称性 → PNG）；序列化抽为零依赖模块 `utils/exportSvg.ts`（`export.ts` 改为 re-export）。真机验收：导出 `图-2-凯莱图.svg` 含注释图层，脱离本项目独立渲染正常。
+  - **W-0b（2026-09-28）导出入口补齐到应用浮窗**——⤓ 此前只挂在内核壳上 ⇒ 应用里能编排（W-3/W-4 起可改参数、可加注释）**却导不出来**。口径抽成 `utils/exportSvg.exportViewHost`（canvas 视图集合 + 文件名 + 宿主查询），两套壳共用一份；**不按视图门控**（只序列化 DOM）。真机验收（A₄）：18/18 断言 · 0 JS 错误 —— 凯莱图窗加注释 → `凯莱图.svg`（94.6 KB，含 `<style>`/KaTeX 样式/注释层），`file://` 独立渲染 12 节点 · 20 边 · 13 foreignObject（12 标签 + 1 注释）且 `g²=e` 正常显示；3D 窗 → `3D凯莱图.png`（73.3 KB）。固化 `e2e/window-export.spec.ts`。
   - **W-1（2026-09-25）窗口几何统一**——老式壳改用共享 `useWindowDragResize` + `clampResize` + 同一 z 计数器，拿到 **8 向 resize**；顺带修掉共享 hook「rAF 吞最后一帧 ⇒ 松手不到位」的真 bug；补老式壳行为基线测试 9 条（此前零覆盖）。
   - **W-2（2026-09-25）窗口几何持久化**——老式壳接入 `useViewWindowPersist`（键 `gv-vw-fv-<view>`；不用 `fv-${Date.now()}` 因为每次都变），真机验收「拖到 (350,240)/590×460 → 刷新重开逐位还原」。
   - **W-2b（2026-09-25）重置入口**——`ViewPanel` 多视图区加「重置窗口位置」按钮（此前 `resetAllViewWindows()` 全仓无调用方、用户点不到），真机验收「拖到 (360,250) → 点重置 → 回 (140,110)」。
   - **W-3（2026-09-25）内容与面板统一（set/cayley）**——应用浮窗改走内核 `ViewContent` 并挂上 `ViewParamsPanel`（⚙ 按视图门控，未迁视图不给入口），`ViewContent` 增 `appWindowLabels`（应用浮窗保持常驻标签）；**应用浮窗第一次能改参数、能加注释**。真机验收：调半径 28→40 画面变、阶徽标 0→12 段文本、注释叠层 1 条、与 `?test=2` 内核窗口**归一化节点布局指纹逐字符相同**（节点 12/边 20 一致）。
   - **W-4（2026-09-25）余下 6 个视图迁完**——`KERNEL_VIEWS` 扩到 **8 个**（set/cayley/cycle/table/3d/symmetry/sublattice/cosetstrip）；真机扫场：8 个视图内容与 ⚙ 面板段头全对、`sylow` 按门控无 ⚙、**9 视图 0 JS 错误**；顺带修掉"ne 角手柄吃掉标题栏 ×/⚙ 点击"的交互 bug（两套壳同改）。仍未迁：`sylow`（`ViewContent` 尚无该分支）、`tree`/`prestable`（无限群方向视图，交拓展包轨道）、`action`/`homomorphism`（应用多视图入口打不开）。
   - **W-5（2026-09-25）收口**——删掉 `lazyViews` 里已死的 8 个分支与 `CayleyGraphViewLocal`/`TableZoomable`/`CosetStripWindowView` 三件自绘/包装件（**505 → 136 行**），只留 sylow/tree/prestable/action/homomorphism；真机 9 视图扫场与收口前**逐项相同**，对外消费方零改动。至此"两套壳"只剩**状态归属**差异（应用浮窗共享主画布选中与生成元，内核全窗口本地）。
-- **待批**：三个语义取舍（浮窗**选中 / 生成元**是否继续与主画布联动——现两套壳行为相反）+ 后续分刀（W-3 内容分发与 ⚙ 面板**同时**迁 → W-4 余下视图 → W-5 删旧件 → 可选 W-6 包侧 `SceneWindow`）。
+- **待批**：三个语义取舍（浮窗**选中 / 生成元**是否继续与主画布联动——现两套壳行为相反）；可选 W-6（包侧 `SceneWindow` 补视口）。**W-1~W-5 + W-0b 均已交付**（分刀表见 [PLAN_WINDOW_FRAMEWORK.md](PLAN_WINDOW_FRAMEWORK.md) §5）。
 
 ## 3. 远期：GVL 教学实验室（2027-04 → 2027-12）
 

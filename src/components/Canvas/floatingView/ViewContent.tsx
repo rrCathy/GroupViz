@@ -33,6 +33,8 @@ export interface ViewContentProps {
   vbSize: { width: number; height: number }
   viewWindowTheme: string
   symReplay: number
+  /** 对称性视图复位信号：自增即让 SymmetryViewScene 动画回恒等（叠加模式 ✕ Reset） */
+  symReset: number
   hoverEl: GroupElement | null
   csElementMap: ReturnType<typeof computeCosetElementMap> | null
   csColors: ReturnType<typeof computeCosetColors>
@@ -65,7 +67,7 @@ export interface ViewContentProps {
 
 export function ViewContent({
   view, group, homomorphism, viewParams, config, sel, ct, vbSize,
-  viewWindowTheme, symReplay, hoverEl,
+  viewWindowTheme, symReplay, symReset, hoverEl,
   csElementMap, csColors, csHighlight, csSubgroup, csOpts, cosetStripVp,
   actionComputation, actionKind, actionVp, actionEdit, actionSel, actionHoverId,
   handleSelect, handleHover, setSymHintText, setTableLayoutSize,
@@ -304,11 +306,13 @@ export function ViewContent({
           showAction={symVp.showAction}
           actionElementId={symVp.actionElementId ?? null}
           rotateSpeed={symVp.rotateSpeed}
+          compose={symVp.compose}
           // 窗口标题栏已显示群名，场景内图注默认关闭（避免「标题一个群名、场景又一个群名+几何」重复）
           showFigureTitle={symVp.showFigureTitle ?? false}
           locked={config.locked}
           hintOnIdle={false}
           replaySignal={symReplay}
+          resetSignal={symReset}
           onHint={msg => setSymHintText(msg)}
         />
       )

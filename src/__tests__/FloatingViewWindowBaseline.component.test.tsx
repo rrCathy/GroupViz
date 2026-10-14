@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { useContext } from 'react'
 import { I18nProvider } from '../i18n/I18nContext'
@@ -30,6 +30,7 @@ function Harness({ group = 'S_{3}' }: { group?: string }) {
       <button data-testid="multi" onClick={() => ctx.toggleMultiViewMode()}>multi</button>
       <button data-testid="open-cayley" onClick={() => ctx.openFloatingView('cayley')}>open cayley</button>
       <button data-testid="open-table" onClick={() => ctx.openFloatingView('table')}>open table</button>
+      <button data-testid="open-3d" onClick={() => ctx.openFloatingView('3d')}>open 3d</button>
       <button data-testid="open-sylow" onClick={() => ctx.openFloatingView('sylow')}>open sylow</button>
       <div data-testid="window-count">{ctx.floatingViews.length}</div>
       <div data-testid="sel-count">{ctx.selectedElements.size}</div>
@@ -342,6 +343,68 @@ describe('W-3 应用浮窗内容与面板对齐内核', () => {
     expect(screen.getByTestId('sel-count').textContent).toBe('0')
     fireEvent.click(circle)
     await waitFor(() => expect(screen.getByTestId('sel-count').textContent).toBe('1'))
+  })
+})
+
+describe('W-0b 应用浮窗导出（此前只有 FGVE 内核壳有 ⤓）', () => {
+  // 导出走 triggerDownload（Blob URL + anchor.click），happy-dom 里两者都要 stub
+  let createdUrls: string[] = []
+  const clickSpy = vi.fn()
+
+  beforeEach(() => {
+    createdUrls = []
+    clickSpy.mockClear()
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = vi.fn((b: Blob) => {
+        createdUrls.push(b.type)
+        return 'blob:fake'
+      })
+      static revokeURL = vi.fn()
+      static revokeObjectURL = vi.fn()
+    })
+    HTMLAnchorElement.prototype.click = clickSpy
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('标题栏有 ⤓（Export SVG）：点它导出**本窗自己的** SVG，不是主画布', async () => {
+    setup()
+    const win = await openWindow()
+    const btn = win.querySelector('[data-testid="float-export"]') as HTMLElement
+    expect(btn).not.toBeNull()
+    expect(btn.getAttribute('title')).toBe('Export SVG')
+
+    fireEvent.click(btn)
+    expect(createdUrls).toEqual(['image/svg+xml;charset=utf-8'])
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+    // 导出对象是本窗内容层的 svg（测试里没有主画布，能出 blob 就说明取的是本窗宿主）
+    expect(win.querySelector('.floating-view-content svg')).not.toBeNull()
+  })
+
+  it('3D 视图按钮切到 Export PNG，走 canvas.toBlob 栅格', async () => {
+    setup()
+    const win = await openWindow('open-3d')
+    const btn = win.querySelector('[data-testid="float-export"]') as HTMLElement
+    expect(btn.getAttribute('title')).toBe('Export PNG')
+
+    const canvas = win.querySelector('.floating-view-content canvas') as HTMLCanvasElement
+    expect(canvas).not.toBeNull()
+    Object.defineProperty(canvas, 'toBlob', {
+      value: (cb: BlobCallback) => cb(new Blob(['x'], { type: 'image/png' })),
+    })
+    fireEvent.click(btn)
+    expect(createdUrls).toEqual(['image/png'])
+  })
+
+  it('未迁视图（sylow）也有 ⤓ —— 导出只序列化 DOM，不依赖 viewParams（与 ⚙ 的门控不同）', async () => {
+    setup()
+    const win = await openWindow('open-sylow')
+    expect(win.querySelector('[data-testid="float-params-toggle"]')).toBeNull()
+    const btn = win.querySelector('[data-testid="float-export"]') as HTMLElement
+    expect(btn).not.toBeNull()
+
+    fireEvent.click(btn)
+    expect(createdUrls).toEqual(['image/svg+xml;charset=utf-8'])
   })
 })
 

@@ -77,3 +77,38 @@ export function exportCanvasElement(canvas: HTMLCanvasElement | null, filename: 
   }, 'image/png')
   return true
 }
+
+/**
+ * 走 **canvas 栅格** 的视图：3D / 对称性 —— 主体是 WebGL/canvas，HTML 覆盖层（标签、提示浮条、
+ * 悬停气泡）天然不进栅格（PLAN_VIEW_CONTROL_LAYER §4.6 第 5 条）。其余视图都是内联 SVG，
+ * 走 `serializeSvg` 全量样式内联。
+ *
+ * **口径唯一真源**：两套窗口壳（`ViewWindow` 内核 / `FloatingViewWindow` 应用浮窗）的导出行为与
+ * 按钮文案都读这里，勿各写一份。
+ */
+const CANVAS_EXPORT_VIEWS: readonly string[] = ['3d', 'symmetry']
+
+/** 该视图是否按 canvas 栅格导出（决定扩展名与按钮文案 Export PNG / Export SVG） */
+export function isCanvasExportView(view: string): boolean {
+  return CANVAS_EXPORT_VIEWS.includes(view)
+}
+
+/**
+ * 从窗口**自己的内容宿主**导出当前视图：canvas 视图 → PNG，其余 → SVG（含注释/节点标签样式）。
+ *
+ * `host` 必须是本窗口内容容器的 DOM（`.floating-view-content` / 内核 viewport），**不是**主画布的
+ * `.canvas-viewport` —— 两条出口互不干扰（主画布出口见 `utils/exportApi.ts`，按边界决策不接 VCL）。
+ * 返回是否真的触发了下载：宿主/svg/canvas 缺失时为 false，不抛错。
+ */
+export function exportViewHost(
+  host: HTMLElement | null,
+  title: string | null | undefined,
+  view: string,
+): boolean {
+  if (!host) return false
+  const canvasView = isCanvasExportView(view)
+  const name = exportFileName(title, view, canvasView ? 'png' : 'svg')
+  return canvasView
+    ? exportCanvasElement(host.querySelector('canvas'), name)
+    : exportSvgElement(host.querySelector('svg'), name)
+}

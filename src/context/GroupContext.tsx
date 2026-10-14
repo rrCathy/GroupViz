@@ -50,12 +50,22 @@ interface GroupContextState {
   cayleyAvailableShapes3D: Layout3D[]
   cayleyShape2D: CayleyShape2D
   cayleyAvailableShapes2D: CayleyShape2D[]
+  /** 2D 边弯曲度倍率（0 = 笔直；缺省 1） */
+  cayleyEdgeCurvature: number
   subsets: Subset[]
   multiViewMode: boolean
   floatingViews: FloatingView[]
   symmetryShowAction: boolean
   symmetryRotateSpeed: number
   symmetryVariant: boolean
+  /** 叠加模式演示：元素旋转左乘当前姿态持续合成（主画布入口限 A₄ / SL(2,3)） */
+  symmetryCompose: boolean
+  /** 叠加模式应用/复位信号 nonce 与最新落定姿态 [x,y,z,w] */
+  symmetryApplyNonce: number
+  symmetryResetNonce: number
+  symmetryPose: [number, number, number, number]
+  /** 2T 对称性视图累计皮带扭转 τ（弧度，Σ 2ψ；SU(2) 记忆） */
+  symmetryBelt: number
   symmetryActionElementId: string | null
   selfInverseElementId: string | null
   cosetSubsetId: string | null
@@ -153,6 +163,7 @@ interface GroupContextActions {
   setCayleyActions: (actions: CayleyAction[]) => void
   setCayleyShape3D: (shape: Layout3D) => void
   setCayleyShape2D: (shape: CayleyShape2D) => void
+  setCayleyEdgeCurvature: (curvature: number) => void
   toggleCayleyAction: (elementId: string) => void
   addAllCayleyActions: () => void
   clearCayleyActions: () => void
@@ -165,6 +176,11 @@ interface GroupContextActions {
   setSymmetryShowAction: (show: boolean) => void
   setSymmetryRotateSpeed: (speed: number) => void
   setSymmetryVariant: (variant: boolean) => void
+  setSymmetryCompose: (compose: boolean) => void
+  bumpSymmetryApplyNonce: () => void
+  bumpSymmetryResetNonce: () => void
+  setSymmetryPose: (q: [number, number, number, number]) => void
+  setSymmetryBelt: (tau: number) => void
   setSymmetryActionElementId: (id: string | null) => void
   setSelfInverseElementId: (id: string | null) => void
   showCosetsForSubset: (subsetId: string) => void
@@ -275,6 +291,9 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
   const exportSetCayley3DShapeRef = useRef(cayley.setCayleyShape3D)
   const exportSetSymElementRef = useRef(symmetry.setSymmetryActionElementId)
   const exportSetSymShowRef = useRef(symmetry.setSymmetryShowAction)
+  const exportSetSymComposeRef = useRef(symmetry.setSymmetryCompose)
+  const exportGetSymPoseRef = useRef(symmetry.symmetryPose)
+  const exportGetSymBeltRef = useRef(symmetry.symmetryBelt)
   const exportGetGroupRef = useRef(core.currentGroup)
   const exportGetViewRef = useRef(core.currentView)
 
@@ -287,6 +306,9 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     exportSetCayley3DShapeRef.current = cayley.setCayleyShape3D
     exportSetSymElementRef.current = symmetry.setSymmetryActionElementId
     exportSetSymShowRef.current = symmetry.setSymmetryShowAction
+    exportSetSymComposeRef.current = symmetry.setSymmetryCompose
+    exportGetSymPoseRef.current = symmetry.symmetryPose
+    exportGetSymBeltRef.current = symmetry.symmetryBelt
     exportGetGroupRef.current = core.currentGroup
     exportGetViewRef.current = core.currentView
     if (!registerExportBridgeRef.current) {
@@ -298,6 +320,9 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
       setCayleyShape3D: (s) => exportSetCayley3DShapeRef.current(s as Layout3D),
       setSymmetryElement: (id) => exportSetSymElementRef.current(id),
       setSymmetryShowAction: (show) => exportSetSymShowRef.current(show),
+      setSymmetryCompose: (compose) => exportSetSymComposeRef.current(compose),
+      getSymmetryPose: () => exportGetSymPoseRef.current,
+      getSymmetryBelt: () => exportGetSymBeltRef.current,
       getGroup: () => exportGetGroupRef.current,
       getView: () => exportGetViewRef.current,
       })
@@ -308,7 +333,13 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
 
   const selectElement = useCallback((id: string, additive = false) => {
     if (symmetry.symmetryShowAction) {
-      symmetry.setSymmetryActionElementId(symmetry.symmetryActionElementId === id ? null : id)
+      if (symmetry.symmetryCompose) {
+        // 叠加模式：always set id + bump 应用信号（重复作用再合成，不 toggle）
+        symmetry.setSymmetryActionElementId(id)
+        symmetry.bumpSymmetryApplyNonce()
+      } else {
+        symmetry.setSymmetryActionElementId(symmetry.symmetryActionElementId === id ? null : id)
+      }
       core.selectElement(id, additive)
       if (core.currentGroup) {
         const el = core.currentGroup.elements.find(e => e.id === id)
@@ -563,6 +594,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     cayleyAvailableShapes3D: cayley.cayleyAvailableShapes3D,
     cayleyShape2D: cayley.cayleyShape2D,
     cayleyAvailableShapes2D: cayley.cayleyAvailableShapes2D,
+    cayleyEdgeCurvature: cayley.cayleyEdgeCurvature,
 
     subsets: subset.subsets,
     cosetSubsetId: subset.cosetSubsetId,
@@ -579,6 +611,11 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     symmetryShowAction: symmetry.symmetryShowAction,
     symmetryRotateSpeed: symmetry.symmetryRotateSpeed,
     symmetryVariant: symmetry.symmetryVariant,
+    symmetryCompose: symmetry.symmetryCompose,
+    symmetryApplyNonce: symmetry.symmetryApplyNonce,
+    symmetryResetNonce: symmetry.symmetryResetNonce,
+    symmetryPose: symmetry.symmetryPose,
+    symmetryBelt: symmetry.symmetryBelt,
     symmetryActionElementId: symmetry.symmetryActionElementId,
     selfInverseElementId: symmetry.selfInverseElementId,
 
@@ -674,6 +711,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setCayleyActions: cayley.setCayleyActions,
     setCayleyShape3D: cayley.setCayleyShape3D,
     setCayleyShape2D: cayley.setCayleyShape2D,
+    setCayleyEdgeCurvature: cayley.setCayleyEdgeCurvature,
     toggleCayleyAction: cayley.toggleCayleyAction,
     addAllCayleyActions: cayley.addAllCayleyActions,
     clearCayleyActions: cayley.clearCayleyActions,
@@ -700,6 +738,11 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setSymmetryShowAction: symmetry.setSymmetryShowAction,
     setSymmetryRotateSpeed: symmetry.setSymmetryRotateSpeed,
     setSymmetryVariant: symmetry.setSymmetryVariant,
+    setSymmetryCompose: symmetry.setSymmetryCompose,
+    bumpSymmetryApplyNonce: symmetry.bumpSymmetryApplyNonce,
+    bumpSymmetryResetNonce: symmetry.bumpSymmetryResetNonce,
+    setSymmetryPose: symmetry.setSymmetryPose,
+    setSymmetryBelt: symmetry.setSymmetryBelt,
     setSymmetryActionElementId: symmetry.setSymmetryActionElementId,
     setSelfInverseElementId: symmetry.setSelfInverseElementId,
 

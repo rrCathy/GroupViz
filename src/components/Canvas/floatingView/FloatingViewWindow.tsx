@@ -9,7 +9,11 @@
 //   并挂上 `ViewParamsPanel`；其余视图仍走 `lazyViews.renderViewContent` 自绘件（W-4 逐个迁）。
 //   **只挂面板不算完成**：面板控件写的是 `viewParams`，而自绘件不消费 viewParams ⇒ 必须内容先迁。
 //   与内核的差异仍然保留：选中与生成元**共享主画布**（内核是窗口本地），transform/nodes 本窗独立。
-import { useState, useCallback, useMemo, useEffect } from 'react'
+// W-4：余下 6 视图迁完；W-5 收口。
+// W-0b（2026-09-28）：标题栏补 ⤓ 导出 —— 此前导出只挂在 FGVE 内核壳（W-0），
+//   而应用里能编排（W-3/W-4 起可改参数、可加注释）却**导不出来**；口径走共享
+//   `utils/exportSvg.exportViewHost`（与内核同一份，勿各写）。
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { GroupContext } from '../../../context/GroupContext'
 import type { GroupContextType } from '../../../context/GroupContext'
 import { useGroup } from '../../../context/useGroup'
@@ -20,6 +24,7 @@ import type { SymmetryViewParams, ViewWindowConfig } from '../../../core/types/v
 import { getViewBoxSize } from '../../../core/viewBox'
 import { getSymmetryType } from '../../../core/symmetryType'
 import { removeStoredKey } from '../../../utils/persistence'
+import { exportViewHost, isCanvasExportView } from '../../../utils/exportSvg'
 import { VIEWWINDOW_RESET_EVENT } from '../../../utils/resetViewWindows'
 import { emptyDecorations } from '../../../core/types/decorations'
 import { renderViewContent } from './lazyViews'
@@ -52,8 +57,9 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
   const [actionHoverId, setActionHoverId] = useState<string | null>(null)
   const [actionSel, setActionSel] = useState<number | null>(null)
   const [actionEdit, setActionEdit] = useState<ActionEditState | null>(null)
-  // 对称性视图：重放信号 + 提示浮条文案（非迁移视图用 lazyViews 自带机制，这里只做面板 prop 兜底）
+  // 对称性视图：重放/复位信号 + 提示浮条文案（非迁移视图用 lazyViews 自带机制，这里只做面板 prop 兜底）
   const [symReplay, setSymReplay] = useState(0)
+  const [symReset, setSymReset] = useState(0)
   const [symHintText, setSymHintText] = useState<string | null>(null)
   // 表格窗口按内容撑尺寸（内核用 useTableMinSize；老式壳走 legacyTableMin，W-4 迁 table 时对齐）
   const setTableLayoutSize = useCallback(() => { /* noop：未迁视图用 legacyTableMin */ }, [])
@@ -231,6 +237,16 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
     ? Math.max(0, geometry.position.x - PARAMS_GAP - PARAMS_W)
     : geometry.position.x + geometry.size.width + PARAMS_GAP
 
+  // ── W-0b 窗口内导出 ──
+  // 宿主 = 本窗内容层 `.floating-view-content`（**不是**主画布 `.canvas-viewport`，两条出口互不干扰）；
+  // 2D 视图 → 自包含 SVG（含本窗注释叠层），3D / 对称性 → canvas PNG。
+  // 面板是窗口外的兄弟节点、悬停气泡与提示浮条是内容层里的 HTML —— 都不在导出的 svg/canvas 子树里，天然不参与。
+  const contentRef = useRef<HTMLDivElement>(null)
+  const isCanvasView = isCanvasExportView(view)
+  const handleExport = useCallback(() => {
+    exportViewHost(contentRef.current, title, view)
+  }, [title, view])
+
   const handleDragStart = onDragStart
   const kernelContent = KERNEL_VIEWS.includes(view)
   // 面板只在**已迁内容**的视图出现：自绘件不消费 viewParams，挂了就是一排死控件（方案 §2 的坑）
@@ -299,6 +315,20 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
               >⚙</button>
             )}
             <button
+              title={isCanvasView ? 'Export PNG' : 'Export SVG'}
+              data-testid="float-export"
+              onClick={handleExport}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-dim)',
+                cursor: 'pointer',
+                fontSize: '13px',
+                padding: '0 4px',
+                lineHeight: 1,
+              }}
+            >⤓</button>
+            <button
               title="Close"
               onClick={() => globalCtx.closeFloatingView(id)}
               style={{
@@ -321,6 +351,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
         
         <div
           className="floating-view-content"
+          ref={contentRef}
           onMouseDownCapture={bringFront}
           style={{
             flex: 1,
@@ -341,6 +372,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
               vbSize={localViewBoxSize}
               viewWindowTheme={viewWindowTheme}
               symReplay={symReplay}
+              symReset={symReset}
               hoverEl={hoverElement}
               csElementMap={csElementMap}
               csColors={csColors}
@@ -430,7 +462,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
           tableVp={tableVp} sublatticeParams={sublatticeParams}
           csOpts={csOpts} csSubgroup={csSubgroup} csType={csType} cosetStripVp={cosetStripVp}
           symType={symType} symCanDual={symCanDual} symVp={symVp} symShowAction={symShowAction}
-          symActiveId={symActiveId} setSymReplay={setSymReplay}
+          symActiveId={symActiveId} setSymReplay={setSymReplay} setSymReset={setSymReset}
         />
       )}
     </GroupContext.Provider>

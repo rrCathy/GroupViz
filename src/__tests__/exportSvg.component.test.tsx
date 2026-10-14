@@ -5,6 +5,8 @@ import {
   exportFileName,
   exportSvgElement,
   exportCanvasElement,
+  isCanvasExportView,
+  exportViewHost,
 } from '../utils/exportSvg'
 
 const makeSvg = (viewBox = '0 0 400 300') => {
@@ -120,5 +122,45 @@ describe('exportSvgElement / exportCanvasElement', () => {
     expect(exportCanvasElement(canvas, 'a.png')).toBe(true)
     expect(clickSpy).not.toHaveBeenCalled()
     expect(exportCanvasElement(null, 'a.png')).toBe(false)
+  })
+})
+
+describe('isCanvasExportView（两套壳共用的"哪些视图走 PNG"口径）', () => {
+  it('3D / 对称性是 canvas 视图，其余（含未迁的 sylow）都是 SVG', () => {
+    expect(isCanvasExportView('3d')).toBe(true)
+    expect(isCanvasExportView('symmetry')).toBe(true)
+    for (const v of ['set', 'cayley', 'cycle', 'table', 'sublattice', 'cosetstrip', 'sylow', 'tree']) {
+      expect(isCanvasExportView(v)).toBe(false)
+    }
+  })
+})
+
+describe('exportViewHost（窗口内容宿主导出：两套窗口壳的唯一入口）', () => {
+  it('SVG 宿主：取宿主内的 svg 触发下载，文件名走 title', () => {
+    const host = document.createElement('div')
+    host.appendChild(makeSvg('0 0 320 240'))
+    expect(exportViewHost(host, '图 1', 'cayley')).toBe(true)
+    expect(createdUrls).toEqual(['image/svg+xml;charset=utf-8'])
+  })
+
+  it('canvas 视图取宿主内的 canvas 走 PNG，title 缺失时回退成视图名', () => {
+    const host = document.createElement('div')
+    const canvas = document.createElement('canvas')
+    const toBlob = vi.fn((cb: BlobCallback) => cb(new Blob(['x'], { type: 'image/png' })))
+    Object.defineProperty(canvas, 'toBlob', { value: toBlob })
+    host.appendChild(canvas)
+    expect(exportViewHost(host, null, '3d')).toBe(true)
+    expect(toBlob).toHaveBeenCalled()
+    expect(createdUrls).toEqual(['image/png'])
+  })
+
+  it('找不到宿主 / 宿主里没有目标元素时返回 false，不抛错也不下载', () => {
+    expect(exportViewHost(null, 'x', 'cayley')).toBe(false)
+    expect(exportViewHost(document.createElement('div'), 'x', 'cayley')).toBe(false)
+    // 3D 宿主但只画了 svg（未见 canvas）⇒ 不误抓 svg 当 PNG
+    const svgOnly = document.createElement('div')
+    svgOnly.appendChild(makeSvg())
+    expect(exportViewHost(svgOnly, 'x', '3d')).toBe(false)
+    expect(clickSpy).not.toHaveBeenCalled()
   })
 })

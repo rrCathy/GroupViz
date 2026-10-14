@@ -13,6 +13,7 @@ const SYMMETRY_SHAPES: Record<Exclude<SymmetryType, 'unsupported'>, string[]> = 
   cyclic: ['regular n-gon'],
   dihedral: ['regular n-gon'],
   tetrahedron: ['tetrahedron'],
+  binaryTetrahedron: ['tetrahedron + belt'],
   cube: ['cube', 'octahedron'],
   icosahedron: ['icosahedron', 'dodecahedron'],
   rectangle: ['rectangle'],
@@ -31,6 +32,9 @@ interface ExportBridge {
   _setSymmetryElement: ((id: string | null) => void) | null
   _setSymmetryShowAction: ((show: boolean) => void) | null
   _setSymmetryVariant: ((variant: number) => void) | null
+  _setSymmetryCompose: ((compose: boolean) => void) | null
+  _getSymmetryPose: (() => [number, number, number, number]) | null
+  _getSymmetryBelt: (() => number) | null
   _getGroup: (() => Group | null) | null
   _getView: (() => ViewMode) | null
   _ready: Promise<void>
@@ -39,6 +43,10 @@ interface ExportBridge {
   getAvailableShapes2D(): string[]
   getAvailableShapes3D(): string[]
   getSymmetryInfo(): SymmetryInfo | null
+  getSymmetryPose(): [number, number, number, number] | null
+  /** 2T 对称性视图累计皮带扭转 τ（弧度；Σ 2ψ）。非 2T 群/未演示时为 0 */
+  getSymmetryBelt(): number | null
+  setSymmetryCompose(compose: boolean): void
   getAvailableViewsForExport(): string[]
   hideOverlays(): void
   showOverlays(): void
@@ -81,6 +89,9 @@ const bridge: ExportBridge = {
   _setSymmetryElement: null,
   _setSymmetryShowAction: null,
   _setSymmetryVariant: null,
+  _setSymmetryCompose: null,
+  _getSymmetryPose: null,
+  _getSymmetryBelt: null,
   _getGroup: null,
   _getView: null,
 
@@ -115,6 +126,20 @@ const bridge: ExportBridge = {
     const type = getSymmetryType(group)
     if (type === 'unsupported') return null
     return { type, shapes: symmetryShapesForType(type) }
+  },
+
+  // 叠加模式演示的最新落定姿态（SymmetryViewScene onPoseChange 经 context 同步）
+  getSymmetryPose(): [number, number, number, number] | null {
+    return bridge._getSymmetryPose?.() ?? null
+  },
+
+  // 2T 累计皮带扭转 τ（onBeltChange 经 context 同步）——双覆盖的 SU(2) 记忆
+  getSymmetryBelt(): number | null {
+    return bridge._getSymmetryBelt?.() ?? null
+  },
+
+  setSymmetryCompose(compose: boolean): void {
+    bridge._setSymmetryCompose?.(compose)
   },
 
   getAvailableViewsForExport(): string[] {
@@ -196,6 +221,9 @@ export function registerExportBridge(opts: {
   setSymmetryElement?: (id: string | null) => void
   setSymmetryShowAction?: (show: boolean) => void
   setSymmetryVariant?: (variant: number) => void
+  setSymmetryCompose?: (compose: boolean) => void
+  getSymmetryPose?: () => [number, number, number, number]
+  getSymmetryBelt?: () => number
   getGroup: () => Group | null
   getView: () => ViewMode
 }) {
@@ -206,6 +234,9 @@ export function registerExportBridge(opts: {
   bridge._setSymmetryElement = opts.setSymmetryElement ?? null
   bridge._setSymmetryShowAction = opts.setSymmetryShowAction ?? null
   bridge._setSymmetryVariant = opts.setSymmetryVariant ?? null
+  bridge._setSymmetryCompose = opts.setSymmetryCompose ?? null
+  bridge._getSymmetryPose = opts.getSymmetryPose ?? null
+  bridge._getSymmetryBelt = opts.getSymmetryBelt ?? null
   bridge._getGroup = opts.getGroup
   bridge._getView = opts.getView
   if (_readyResolve) { _readyResolve(); _readyResolve = null }

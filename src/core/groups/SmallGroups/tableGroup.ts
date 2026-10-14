@@ -3,6 +3,7 @@ import type { Group, GroupElement, Generator } from '../../types'
 import { unsupportedError } from '../../result'
 import { SMALL_GROUP_DATA, type SmallGroupRecord } from '../smallGroupData'
 import { assignWordLabels, applyDihedralNormalForm } from './wordLabels'
+import { sl23MatrixLabel } from '../sl23'
 
 // Convert a GAP StructureDescription into a front-end TeX symbol.
 // Rules:
@@ -58,6 +59,15 @@ export function createTableGroup(order: number, gapIndex: number): Group {
   assignWordLabels(elements, generators, mul, n)
   if (/^D(\d+)$/.test(rec.structure)) {
     applyDihedralNormalForm(elements, generators, mul, n)
+  }
+  // SL(2,3)：元素显示改为矩阵形式（矩阵是元素的别名，经 2T 同构现算打表）；
+  // 词标签 stash 进 wordLabel 供树视图等按词拼接的消费者兜底。
+  // 与 GL(2,3)（出厂即矩阵标签）同一显示口径。
+  if (rec.structure === 'SL(2,3)') {
+    for (let k = 0; k < n; k++) {
+      elements[k]!.wordLabel = elements[k]!.label
+      elements[k]!.label = sl23MatrixLabel(k)
+    }
   }
 
   return {

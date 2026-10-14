@@ -70,6 +70,8 @@ export interface ViewParamsPanelProps {
   symShowAction: boolean
   symActiveId: string | null
   setSymReplay: React.Dispatch<React.SetStateAction<number>>
+  /** 对称性视图复位信号 setter（叠加模式 Reset pose 走动画回恒等） */
+  setSymReset: React.Dispatch<React.SetStateAction<number>>
   /** VCL Decorations（DEC-2）：当前窗口的注释集 */
   decorations: Decorations
   onDecorationsChange: (d: Decorations) => void
@@ -85,7 +87,7 @@ export function ViewParamsPanel({
   p3d, shapes3d, layout3dValue, cayley3dActionsList, cayley3dEnabledCount, setCayley3DActionLength,
   faceSubgroupCands, faceSelSubgroup, faceOn, patchFaceFill,
   tableVp, sublatticeParams, csOpts, csSubgroup, csType, cosetStripVp,
-  symType, symCanDual, symVp, symShowAction, symActiveId, setSymReplay,
+  symType, symCanDual, symVp, symShowAction, symActiveId, setSymReplay, setSymReset,
   decorations, onDecorationsChange, selectedIds,
 }: ViewParamsPanelProps) {
   return (
@@ -820,7 +822,7 @@ export function ViewParamsPanel({
           <div style={{ fontWeight: 600, marginBottom: 6, marginTop: 4 }}>Symmetry View</div>
           {symType === 'unsupported' ? (
             <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6, lineHeight: 1.5 }}>
-              This group type does not support the symmetry view (supported: cyclic Cₙ · dihedral Dₙ · A₄ · S₄ · A₅ · V₄).
+              This group type does not support the symmetry view (supported: cyclic Cₙ · dihedral Dₙ · A₄ · SL(2,3) · S₄ · A₅ · V₄).
             </div>
           ) : (
             <>
@@ -845,6 +847,13 @@ export function ViewParamsPanel({
                 Show element actions
               </label>
               {symShowAction && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <input type="checkbox" checked={symVp.compose === true}
+                    onChange={e => updateViewParams({ compose: e.target.checked })} />
+                  Compose mode (stack rotations)
+                </label>
+              )}
+              {symShowAction && (
                 <>
                   <div style={{ marginBottom: 6 }}>
                     <div style={{ marginBottom: 2 }}>Speed</div>
@@ -856,9 +865,13 @@ export function ViewParamsPanel({
                     <span>Action element</span>
                     {!config.actionLocked && symActiveId && (
                       <button
-                        title="Reset pose (identity)"
+                        title={symVp.compose ? 'Reset pose (identity, keep element)' : 'Reset pose (identity)'}
                         data-testid="sym-panel-reset"
-                        onClick={() => updateViewParams({ actionElementId: null })}
+                        onClick={() => {
+                          // 叠加感知：叠加模式回恒等动画（演示元素保留）；非叠加清元素
+                          if (symVp.compose) setSymReset(n => n + 1)
+                          else updateViewParams({ actionElementId: null })
+                        }}
                         style={{
                           background: 'transparent', border: '1px solid var(--border-primary)',
                           color: 'var(--text-dim)', borderRadius: 4, padding: '1px 6px',

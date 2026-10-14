@@ -4,6 +4,9 @@ export interface GroupElement {
   id: string
   label: string
   value: number[]
+  /** 词标签备用名：label 被换成其他形态（如 SL(2,3) 的矩阵 TeX）时 stash 原词标签，
+   *  供树视图/展示系统等按词拼接的消费者兜底 */
+  wordLabel?: string
   cosetMemberLabels?: string[]
   cosetInternalEdges?: InternalEdgeData[]
   // Pre-computed normalized layout for the internal Cayley graph of the normal

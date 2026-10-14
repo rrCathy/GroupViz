@@ -465,6 +465,15 @@ describe('table-driven group element labels are generator words', () => {
   it('every table group: identity = e, generator elements carry generator names, unique labels', () => {
     for (const entry of tableGroups) {
       const g = entry.group
+      // SL(2,3) 例外：元素显示为 2×2 矩阵 TeX（与 GL(2,3) 同口径的显示别名，
+      // 词标签 stash 进 wordLabel）——矩阵标签与唯一性由 sl23.test.ts 专测
+      if (g.symbol === 'SL(2,3)') {
+        expect(g.identity.label.startsWith('\\begin{smallmatrix}')).toBe(true)
+        expect(typeof g.identity.wordLabel).toBe('string')
+        const labels = g.elements.map(e => e.label)
+        expect(new Set(labels).size, `${g.symbol} unique labels`).toBe(g.order)
+        continue
+      }
       expect(g.identity.label, g.symbol).toBe('e')
       const labels = g.elements.map(e => e.label)
       expect(new Set(labels).size, `${g.symbol} unique labels`).toBe(g.order)

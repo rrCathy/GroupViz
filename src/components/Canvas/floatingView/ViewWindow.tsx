@@ -10,7 +10,7 @@ import type { SymmetryViewParams } from '../../../core/types/viewConfig'
 import { getSymmetryType } from '../../../core/symmetryType'
 import { removeStoredKey } from '../../../utils/persistence'
 import { emptyDecorations } from '../../../core/types/decorations'
-import { exportFileName, exportSvgElement, exportCanvasElement } from '../../../utils/exportSvg'
+import { exportViewHost, isCanvasExportView } from '../../../utils/exportSvg'
 import { VIEWWINDOW_RESET_EVENT } from '../../../utils/resetViewWindows'
 import { texify, renderTex } from '../../../utils/texify'
 import { PARAMS_W, PARAMS_GAP, RESIZE_DIRS, resizeHandleStyle } from './geometry'
@@ -113,14 +113,11 @@ export function ViewWindow({
   // 2D 视图 → SVG（复用 exportSvg：全量样式内联 + KaTeX 字体改写 CDN，注释/节点标签掉不了排版）；
   // 3D / 对称性 → canvas 栅格 PNG（HTML 覆盖层天然不参与，见 PLAN §4.6）。
   // 只认**本窗口**自己的 viewport，与主画布导出出口（.canvas-viewport）互不干扰。
-  const isCanvasView = view === '3d' || view === 'symmetry'
+  // 具体口径（哪些视图走 PNG、文件名）统一在 `utils/exportSvg.exportViewHost`，与老式壳共用一份。
+  const isCanvasView = isCanvasExportView(view)
   const handleExport = useCallback(() => {
-    const host = viewportRef.current
-    if (!host) return
-    const name = exportFileName(title ?? group?.symbol ?? view, view, isCanvasView ? 'png' : 'svg')
-    if (isCanvasView) exportCanvasElement(host.querySelector('canvas'), name)
-    else exportSvgElement(host.querySelector('svg'), name)
-  }, [viewportRef, title, group, view, isCanvasView])
+    exportViewHost(viewportRef.current, title ?? group?.symbol ?? view, view)
+  }, [viewportRef, title, group, view])
 
   // selection for set/cayley views（窗口本地会话态，独立于主应用选中）
   const [sel, setSel] = useState<Set<string>>(new Set())
@@ -141,6 +138,8 @@ export function ViewWindow({
   const [symHintText, setSymHintText] = useState<string | null>(null)
   // 对称性视图重放信号：自增即让 SymmetryViewScene 对当前演示元素重播一次（同元素可反复观看）
   const [symReplay, setSymReplay] = useState(0)
+  // 对称性视图复位信号：叠加模式下自增即动画回恒等（演示元素保留，可继续叠加）
+  const [symReset, setSymReset] = useState(0)
   const displayKey = view + (group ? `|${group.symbol}|${group.order}` : (view === 'homomorphism' && homomorphism ? `|${homomorphism.source.symbol}|${homomorphism.target.symbol}` : ''))
   const [curDisplayKey, setCurDisplayKey] = useState(displayKey)
   if (curDisplayKey !== displayKey) {
@@ -281,7 +280,7 @@ export function ViewWindow({
             <ViewContent
               view={view} group={group ?? null} homomorphism={homomorphism ?? null}
               viewParams={viewParams} config={config} sel={sel} ct={ct} vbSize={vbSize}
-              viewWindowTheme={viewWindowTheme} symReplay={symReplay} hoverEl={hoverEl}
+              viewWindowTheme={viewWindowTheme} symReplay={symReplay} symReset={symReset} hoverEl={hoverEl}
               csElementMap={csElementMap} csColors={csColors} csHighlight={csHighlight}
               csSubgroup={csSubgroup} csOpts={csOpts} cosetStripVp={cosetStripVp}
               actionComputation={actionComputation} actionKind={actionKind} actionVp={actionVp}
@@ -404,9 +403,13 @@ export function ViewWindow({
                   </button>
                   {!config.actionLocked && (
                     <button
-                      title="Reset pose (identity)"
+                      title={symVp.compose ? 'Reset pose (identity, keep element)' : 'Reset pose (identity)'}
                       data-testid="sym-demo-reset"
-                      onClick={() => updateViewParams({ actionElementId: null })}
+                      onClick={() => {
+                        // 叠加感知：叠加模式回恒等动画（演示元素保留，可继续叠加）；非叠加清元素
+                        if (symVp.compose) setSymReset(n => n + 1)
+                        else updateViewParams({ actionElementId: null })
+                      }}
                       style={{
                         background: 'rgba(148,163,184,0.12)', border: '1px solid rgba(148,163,184,0.4)',
                         color: '#cbd5e1', borderRadius: 4, padding: '2px 8px', fontSize: 11,
@@ -449,7 +452,7 @@ export function ViewWindow({
           tableVp={tableVp} sublatticeParams={sublatticeParams}
           csOpts={csOpts} csSubgroup={csSubgroup} csType={csType} cosetStripVp={cosetStripVp}
           symType={symType} symCanDual={symCanDual} symVp={symVp} symShowAction={symShowAction}
-          symActiveId={symActiveId} setSymReplay={setSymReplay}
+          symActiveId={symActiveId} setSymReplay={setSymReplay} setSymReset={setSymReset}
         />
       )}
     </>

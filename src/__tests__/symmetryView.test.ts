@@ -32,6 +32,12 @@ describe('getSymmetryType', () => {
     expect(getSymmetryType(groupWithSymbol('V_{4}'))).toBe('rectangle')
   })
 
+  it('classifies SL(2,3) as binary tetrahedron (2T, double cover of A4)', () => {
+    // 二元四面体群：与 A₄ 同几何（四面体），但多出双覆盖/皮带戏法语义；
+    // 必须先于 S/A 前缀截杀命中（'SL(2,3)' 以 S 开头）
+    expect(getSymmetryType(groupWithSymbol('SL(2,3)'))).toBe('binaryTetrahedron')
+  })
+
   it('treats direct products of the cyclic class as unsupported (not cyclic/dihedral)', () => {
     expect(getSymmetryType(groupWithSymbol('C_{4}\\times C_{2}'))).toBe('unsupported')
     expect(getSymmetryType(groupWithSymbol('C_{2}\\times S_{3}'))).toBe('unsupported')

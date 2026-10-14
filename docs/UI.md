@@ -40,10 +40,10 @@ AppWrapper (I18nProvider → ThemeProvider)
 
 ### ViewPanel 上下文设置
 
-- **cayley 视图**：右乘/左乘切换、2D 形状下拉（14 种）、力导向按钮（concentric/dualRing/projection3D/rewiring 时禁用）、元素作用列表（全选/清除、"(by element)" 标注）
+- **cayley 视图**：右乘/左乘切换、边样式（弯曲/笔直）切换、2D 形状下拉（14 种）、力导向按钮（concentric/dualRing/projection3D/rewiring 时禁用）、元素作用列表（全选/清除、"(by element)" 标注）
 - **3d 视图**：乘法类型、3D 形状下拉（20 种）、元素作用列表（canonical3DEdgeIds 判定典型边不标注）
 - **cycle 视图**：显示极大循环子群勾选
-- **symmetry 视图**：显示元素操作勾选 + 旋转速度滑块（0.2–5x）
+- **symmetry 视图**：显示元素操作勾选 + 叠加模式开关（暂仅 A₄）+ 复位姿态按钮（叠加开启时）+ 旋转速度滑块（0.2–5x）
 
 ### OperationsPanel 4 tab
 

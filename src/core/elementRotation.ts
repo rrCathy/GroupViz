@@ -1,9 +1,14 @@
 import type { Group, GroupElement } from './types'
+import { sl23Spin } from './groups/sl23'
 
 export interface RotationInfo {
   axis: [number, number, number]
   angleRad: number
   label: string
+  /** 2T（SL(2,3)）专用：该元素的皮带扭转贡献 τ = 2ψ（弧度，正标量）。其余群不设 */
+  beltTwist?: number
+  /** 2T 专用：−I 纯皮带态（物体转满 360° 外观恒等）——场景据此隐藏轴标记 */
+  fullTurn?: boolean
 }
 
 type Vec3 = [number, number, number]
@@ -434,6 +439,27 @@ export function computeElementRotation(group: Group, element: GroupElement): Rot
     const { axis, angleRad } = rotationAxisAngle(R)
     const ct = getCycleType(val)
     return { axis, angleRad, label: formatLabel(sym, ct, angleRad) }
+  }
+
+  if (sym === 'SL(2,3)' && val.length === 1) {
+    // SL(2,3) ≅ 2T（二元四面体群）：A₄ 旋转群的二重覆盖。表群元素 value=[k]
+    // （GAP (24,3) 表索引）经 sl23Spin 查四元数：规范分解 q = cos ψ + sin ψ·û
+    // ⇒ 物体旋转 (û, 2ψ)、皮带扭转 τ = 2ψ。**钝角形态不归一**——q 与 −q 给出
+    // 同一物体旋转但不同 (轴, Θ)，双覆盖因此在画面上可见（sl23.test.ts 双覆盖用例）。
+    // −I（唯一 2 阶元）= fullTurn：物体转满 360° 外观恒等、皮带拧满一圈（皮带戏法）。
+    // 守卫 val.length === 1：GAP 导入的 SpecialLinearGroup 走别的 symbol/值形态。
+    const spin = sl23Spin(val[0])
+    if (spin.axis === null) {
+      return { axis: [0, 1, 0], angleRad: 0, label: '恒等变换', beltTwist: 0, fullTurn: false }
+    }
+    const deg = Math.round((spin.angleRad * 180) / Math.PI)
+    return {
+      axis: spin.axis,
+      angleRad: spin.angleRad,
+      label: spin.fullTurn ? '旋转 360°（皮带拧满一圈）' : `旋转 ${deg}°（皮带扭转 ${deg}°）`,
+      beltTwist: spin.beltTwist,
+      fullTurn: spin.fullTurn,
+    }
   }
 
   return null

@@ -58,6 +58,7 @@
 | Cₙ | 正n边形 | n | - |
 | Dₙ | 正n边形 | n | - |
 | A₄ | 正四面体 | 4 | 4△ |
+| SL(2,3)（2T） | 正四面体 + Dirac 开口皮带 | 4 | 4△ |
 | S₄ | 正方体 / 正八面体(切换) | 8/6 | 6□/8△ |
 | A₅ | 正二十面体 / 正十二面体(切换) | 12/20 | 20△/12⬠ |
 | V₄ | 长方形 | 4 | - |
@@ -91,13 +92,21 @@ A₅：A₅ ≅ 正二十面体旋转群，(12345)、(12)(34) 的几何像经 BF
 
 **轴-几何体交点标记**：顶点交点（黄）、棱中点交点（青）、面心交点（绿），阈值 0.25。
 
-**动画**：`useAnimatedRotation` 三阶段——复位(t=0→0.5) → 旋转(t=0.5→1.0, slerp) → 静止(t>1.0)；OrbitControls 动画期间禁用。
+**动画**：`useAnimatedRotation` 四阶段——复位(t=0→0.5) → 旋转(t=0.5→1.0, slerp) → 静止(t>1.0)；**叠加模式（compose）**无复位阶段：目标 = 元素旋转左乘当前姿态（`Q_target = Q_el · Q_cur`），从当前姿态直接 slerp，持续合成；**回恒等（homing）** = 叠加模式手动复位动画（resetSignal 触发，t=0→0.5）；OrbitControls 动画期间禁用。
 
-**状态**：`symmetryShowAction`（显示元素操作）、`symmetryRotateSpeed`（0.2~5.0）、`symmetryActionElementId`。
+**状态**：`symmetryShowAction`（显示元素操作）、`symmetryRotateSpeed`（0.2~5.0）、`symmetryActionElementId`、`symmetryCompose`（叠加模式，主画布入口限 A₄ / SL(2,3)）、`symmetryApplyNonce`/`symmetryResetNonce`（应用/复位信号）、`symmetryPose`（最新落定姿态 [x,y,z,w]）、`symmetryBelt`（2T 累计皮带扭转 τ，弧度）。
 
-**导出 GIF**：`exportSymmetryAsGif()`——清除选中 → 重设元素触发新动画 → 20fps 录制 2 秒（gifenc）。
+**导出 GIF**：`exportSymmetryAsGif()`——清除选中 → 重设元素触发新动画 → 20fps 录制 2 秒（gifenc）；叠加模式下先暂关叠加（原流程经「清元素→恒等」完成复位）、从头播一次、导出完成后恢复叠加开关。
 
-**受控内核（v1.23.0，FGVE 阶段 2 批次七）**：`SymmetryView.tsx` 拆 `SymmetryViewScene`（纯 props：group/symmetryType?/dark（场景配色随主题解耦）/variant（dual-solid：cube↔octahedron、icosahedron↔dodecahedron）/showAction/actionElementId/rotateSpeed/showFigureTitle/locked/onHint/hintOnIdle/replaySignal）+ context 壳 `SymmetryView()`（签名不变）。场景内悬浮变体切换按钮移除——主画布改由 ViewPanel 的 Shape 选项喂 `variant`（`GroupSymmetryContext` 新增 `symmetryVariant`，换群复位）。ViewWindow 接入：渲染分支直渲 Scene（dark=窗口主题、`showFigureTitle` 缺省 false——标题栏已显群名避免重复、locked=config.locked、onHint→内容区底部 ⟳ Replay / ✕ Reset 浮条）+ 参数面板 Symmetry View 段（unsupported 群提示 / dual solid 切换（仅 cube|icosahedron 类群）/ Show element actions + Speed slider / Action element 列表点行触发、点已选行重播、✕ Reset pose / `config.actionLocked` 固定演示模式——列表与 Reset 隐藏只读 fixed 元素、只能 ⟳ Replay）；`replaySignal` 显式重放修复「动画播完无入口重看」缺口；视作自管理布局禁用窗口 ct 平移缩放（同 3d）。
+**受控内核（v1.23.0，FGVE 阶段 2 批次七）**：`SymmetryView.tsx` 拆 `SymmetryViewScene`（纯 props：group/symmetryType?/dark（场景配色随主题解耦）/variant（dual-solid：cube↔octahedron、icosahedron↔dodecahedron）/showAction/actionElementId/rotateSpeed/showFigureTitle/locked/onHint/hintOnIdle/replaySignal/**compose/resetSignal/onPoseChange**）+ context 壳 `SymmetryView()`（签名不变）。场景内悬浮变体切换按钮移除——主画布改由 ViewPanel 的 Shape 选项喂 `variant`（`GroupSymmetryContext` 新增 `symmetryVariant`，换群复位）。ViewWindow 接入：渲染分支直渲 Scene（dark=窗口主题、`showFigureTitle` 缺省 false——标题栏已显群名避免重复、locked=config.locked、onHint→内容区底部 ⟳ Replay / ✕ Reset 浮条、compose=viewParams.compose、resetSignal=窗口本地 symReset——✕ Reset 叠加感知：叠加回恒等动画、非叠加清元素）+ 参数面板 Symmetry View 段（unsupported 群提示 / dual solid 切换（仅 cube|icosahedron 类群）/ Show element actions + Compose mode 复选框 / Speed slider / Action element 列表点行触发（叠加模式下点行 = 左乘合成）、点已选行重播、✕ Reset pose 叠加感知 / `config.actionLocked` 固定演示模式——列表与 Reset 隐藏只读 fixed 元素、只能 ⟳ Replay）；`replaySignal` 显式重放修复「动画播完无入口重看」缺口；视作自管理布局禁用窗口 ct 平移缩放（同 3d）。
+
+**叠加模式（compose，2026-10-14）**：`compose` prop / `symmetryCompose` 状态——演示元素旋转**左乘当前姿态**持续合成（`Q_target = Q_el · Q_cur`，无回恒等阶段；重复作用 = replay 信号再合成）；清除演示**不动姿态**；主画布 ViewPanel 对称区加「叠加模式」开关（**A₄ / SL(2,3)** = tetrahedron / binaryTetrahedron 类群）+「复位姿态」按钮（resetSignal → homing 动画回恒等）；导出桥新增 `getSymmetryPose()`（读最新落定姿态 [x,y,z,w]）与 `setSymmetryCompose()`；`GroupContext.selectElement` 叠加模式下 always set id + bump 应用 nonce（不 toggle）。
+
+**SL(2,3) = 二元四面体群 2T + Dirac 开口皮带（2026-10-14）**：SL(2,3) ≅ 2T 是 A₄ 旋转群的**二重覆盖**（24 元素 → 12 个四面体旋转，每个旋转恰 2 个提升）。`symmetryType` 新增 `'binaryTetrahedron'`（与 A₄ 同一套四面体几何）；旋转不走置换反解，改查 `sl23Spin`（`core/groups/sl23.ts`：表群元素 `value=[k]` → 整数四元数 → 规范分解 `q = cos ψ + sin ψ·û` ⇒ 物体旋转 `(û, 2ψ)`）。**钝角形态不归一**（θ ∈ [0, 2π] 保留）——q 与 −q 物体旋转相同、`(轴, Θ)` 不同，双覆盖因此在画面上可见（`sl23.test.ts` 双覆盖 12 像用例守护）。
+- **皮带 = SU(2) 记忆**：每元素扭转贡献 `τ = 2ψ`（正标量）；非叠加 = 复位段先把皮带 unwind 回 0 再扭到本元素 τ；叠加 = 跨元素累计 `Σ 2ψ`；homing = 动画回 0。落定/复位经 `onBeltChange` 上报累计 τ（context `symmetryBelt`，导出桥 `getSymmetryBelt()`），提示行显示「皮带累计 N°」。
+- **−I（唯一 2 阶元）= 皮带戏法核心态**：物体转满 360° 外观恒等（落定姿态 = `(0,0,0,−1)`，与恒等同一 SO(3) 旋转但四元数取反）、皮带拧满一圈（τ = 360°）、轴标记隐藏（`fullTurn`）；叠加两次 −I ⇒ 皮带 720° ≡ 两整扭拓扑复原。**homing no-op 守卫必须同时看皮带**——−I 提升与恒等 `angleTo = 0`，只看旋转会判「已回家」导致复位空转（2026-10-14 修）。
+- **皮带几何**：世界锚点 `(0, 6.3, 0)`（固定端，扭转为 0）→ 物体中心（携带全扭转）；N=64 段 ribbon、截面绕竖轴转 `θ·s`、双色条纹（沿带每 8 站交替明暗）让圈数可读、锚点小横杆固定件；**渲染取 mod 720°**（两整扭 ≅ 无扭）；混合轴链与 `i·(−i)` 为已知近似（用户模型口径，方案见 `~/.commandcode/plans/sl23-belt-symmetry.md`）。
+- **矩阵显示别名**：SL(2,3) 元素 label = 2×2 F₃ smallmatrix TeX（与 GL(2,3) 同口径；`sl23MatrixLabel(k)` 经 2T 同构现算打表），词标签 stash 进 `wordLabel` 供树视图等按词拼接的消费者兜底；代数仍由 GAP 乘法表承担（元素 id/value 不变）。
 
 ## 7. 子群格视图 (SubgroupLatticeView.tsx)
 

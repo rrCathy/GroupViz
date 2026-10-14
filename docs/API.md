@@ -296,7 +296,11 @@ const s = useSceneState(group?, options?)
 | `locked` | `boolean` | `false` | 锁相机交互 |
 | `onHint` | `(msg: string) => void` | — | 演示状态提示 |
 | `hintOnIdle` | `boolean` | `true` | 无演示目标时是否上抛引导文案 |
-| `replaySignal` | `number` | `0` | 自增即重播一次动画 |
+| `replaySignal` | `number` | `0` | 自增即再应用一次：非叠加 = 回恒等重播；叠加 = 元素旋转左乘当前姿态再合成 |
+| `compose` | `boolean` | `false` | **叠加模式**：目标 = 元素旋转左乘当前姿态（`Q_target = Q_el · Q_cur`），从当前姿态直接 slerp（无回恒等阶段）；清除演示不动姿态 |
+| `resetSignal` | `number` | `0` | 自增即动画回恒等（叠加模式手动复位，phase 'homing'；演示元素保留） |
+| `onPoseChange` | `(q: [number, number, number, number]) => void` | — | 姿态落定（动画播完 / 手动复位完成）回调，上报 [x,y,z,w] |
+| `onBeltChange` | `(tau: number) => void` | — | **2T 专用**：皮带扭转落定回调，上报**累计** τ = Σ(2ψ)（弧度；SL(2,3) 对称性视图 Dirac 皮带，双覆盖的 SU(2) 记忆）。非 2T 群不触发 |
 | `lockCameraOnAction` | `boolean` | `false` | 演示期间是否禁用相机旋转/平移 |
 | `onAnimationEnd` | `() => void` | — | 姿态落定（动画播完）回调 |
 

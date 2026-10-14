@@ -6,7 +6,7 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
 import { resolveElementWarn } from '../../utils/elementRef'
 import type { SceneTheme } from './SceneThemeRoot'
-import { computeElementRotation } from '../../core/elementRotation'
+import { computeElementRotation, type RotationInfo } from '../../core/elementRotation'
 import type { Group, GroupElement } from '../../core/types'
 import { getSymmetryType } from '../../core/symmetryType'
 import type { SymmetryType } from '../../core/symmetryType'
@@ -217,8 +217,9 @@ function computeFaceCenters(data: SymmetryData, triangularFaces: [number, number
 }
 
 /** 轴与转角完全由 core 的置换反解给出（几何体与 core 点模型同源），
- *  react 侧不再二次选轴——单一真源，避免两层各算一遍导致语义漂移。 */
-function computeGeometricRotation(group: Group, element: GroupElement): { axis: [number,number,number]; angleRad: number; label: string } | null {
+ *  react 侧不再二次选轴——单一真源，避免两层各算一遍导致语义漂移。
+ *  2T（SL(2,3)）分支额外携带 beltTwist/fullTurn（见 core/elementRotation）。 */
+function computeGeometricRotation(group: Group, element: GroupElement): RotationInfo | null {
   return computeElementRotation(group, element)
 }
 
@@ -247,8 +248,9 @@ export interface SymmetryViewSceneProps {
   /** 演示开启但当前元素无可旋转作用（恒等/未选）时，是否上抛 clickHint 引导；
    *  主画布缺省 true（提示去其它视图点元素）；ViewWindow 传 false（引导文案写在参数面板，浮条只显示真实状态） */
   hintOnIdle?: boolean
-  /** 重放信号：宿主自增该值即对当前演示元素重播一次动画（姿态不改变目标，
-   *  解决同元素动画播完一次后无入口重看的缺口）；缺省 0 */
+  /** 重放信号：宿主自增该值即对当前演示元素重播一次动画
+   *  （非叠加：回恒等再旋转；叠加：把元素旋转左乘到当前姿态上，重复作用再合成）；
+   *  解决同元素动画播完一次后无入口重看的缺口；缺省 0 */
   replaySignal?: number
   /** 显式主题（`'dark' | 'light'`）；与 `dark` 二选一，本项优先。
    *  推荐新代码用 `theme` —— 与其余 Scene 命名统一（`dark` 作为兼容别名保留） */
@@ -259,6 +261,16 @@ export interface SymmetryViewSceneProps {
   lockCameraOnAction?: boolean
   /** 演示动画播放结束（姿态落定）回调；用于宿主编排「看完自动切下一个」等自定义流程 */
   onAnimationEnd?: () => void
+  /** 叠加模式演示：元素旋转左乘当前姿态持续合成（无回恒等阶段）；清除演示不动姿态。缺省 false */
+  compose?: boolean
+  /** 复位信号：宿主自增该值即动画回恒等（叠加模式手动复位，phase 'homing'）；缺省 0 */
+  resetSignal?: number
+  /** 姿态落定回调：动画播完或手动复位完成时上报四元数 [x,y,z,w]。 */
+  onPoseChange?: (q: [number, number, number, number]) => void
+  /** 皮带扭转落定回调（弧度）：2T（SL(2,3)）对称性视图专用——每次演示落定/手动复位时
+   *  上报**累计** τ = Σ(2ψ)（物体旋转角）。q 与 −q 物体旋转相同、τ 不同，
+   *  皮带即 SU(2) 记忆（双覆盖在画面上的可见载体）。非 2T 群不触发。 */
+  onBeltChange?: (tau: number) => void
 }
 
 /** 对称性视图纯渲染核（props 化、主题解耦）：Canvas + 场景 + 顶部标注 + 演示动画。
@@ -279,6 +291,10 @@ export function SymmetryViewScene({
   theme,
   lockCameraOnAction = false,
   onAnimationEnd,
+  compose = false,
+  resetSignal = 0,
+  onPoseChange,
+  onBeltChange,
 }: SymmetryViewSceneProps) {
   const symmetryType = symmetryTypeProp ?? getSymmetryType(group)
   const isDark = theme ? theme === 'dark' : dark
@@ -289,7 +305,9 @@ export function SymmetryViewScene({
     switch (symmetryType) {
       case 'cyclic': return getCyclicFigure(group.order, radius)
       case 'dihedral': { const n = group.order / 2; return getDihedralFigure(Math.round(n), radius) }
-      case 'tetrahedron': return getTetrahedron(radius)
+      // 2T（SL(2,3)）= A₄ 的二重覆盖：同一套四面体几何，差异在旋转语义（sl23Spin）与皮带
+      case 'tetrahedron':
+      case 'binaryTetrahedron': return getTetrahedron(radius)
       case 'cube': return variant ? getOctahedron(radius) : getCube(radius)
       case 'icosahedron': return variant ? getDodecahedron(radius) : getIcosahedron(radius)
       case 'rectangle': return getRectangle(radius)
@@ -319,6 +337,10 @@ export function SymmetryViewScene({
           onHint={onHint}
           hintOnIdle={hintOnIdle}
           replaySignal={replaySignal}
+          compose={compose}
+          resetSignal={resetSignal}
+          onPoseChange={onPoseChange}
+          onBeltChange={onBeltChange}
           lockCameraOnAction={lockCameraOnAction}
           onAnimationEnd={onAnimationEnd}
         />
@@ -328,73 +350,191 @@ export function SymmetryViewScene({
 }
 
 
+type AnimPhase = 'rest' | 'reset' | 'rotating' | 'homing'
+const IDENTITY_QUAT = new THREE.Quaternion()
+
 function useAnimatedRotation(
   targetQuat: THREE.Quaternion | null,
   speed: number,
-  onPhaseChange: (phase: 'rest' | 'reset' | 'rotating') => void,
+  onPhaseChange: (phase: AnimPhase) => void,
   replaySignal?: number,
   onAnimationEnd?: () => void,
+  compose?: boolean,
+  resetSignal?: number,
+  onPoseChange?: (q: [number, number, number, number]) => void,
+  /** 2T 皮带账本（Dirac 开口皮带的扭转记忆）：`twist` = 当前演示元素的扭转贡献
+   *  θ_el = 2ψ（弧度，正标量；非 2T 群不传 ⇒ 皮带恒 0 且不上报）。
+   *  非叠加：reset 段先把皮带 unwind 回 0、rotating 段再扭到 θ_el；
+   *  叠加：从当前累计直接累加（与四元数左乘同节奏）；homing：动画回 0。
+   *  落定/复位完成时经 `onChange` 上报**累计** τ。 */
+  belt?: { twist: number; onChange?: (tau: number) => void },
 ) {
   const stateRef = useRef({
     target: null as THREE.Quaternion | null,
+    base: null as THREE.Quaternion | null,
+    from: new THREE.Quaternion(),
     t: 2,
     speed: 1,
-    phase: 'rest' as 'rest' | 'reset' | 'rotating',
+    phase: 'rest' as AnimPhase,
     settled: false,
     currentQuat: new THREE.Quaternion(),
+    beltTau: 0,
+    beltTarget: 0,
+    beltFrom: 0,
   })
 
   // 结束回调放 ref：避免宿主每帧传新闭包导致 useFrame 里读到过期函数。
   // 用 effect 同步而非渲染期赋值 —— 渲染期写 ref 会触发 react-hooks/refs。
   const endRef = useRef(onAnimationEnd)
   useEffect(() => { endRef.current = onAnimationEnd }, [onAnimationEnd])
+  const poseRefCb = useRef(onPoseChange)
+  useEffect(() => { poseRefCb.current = onPoseChange }, [onPoseChange])
+  // compose 读 ref：开关切换不重触发动画（只有 targetQuat / 信号变化才触发）
+  const composeRef = useRef(compose)
+  useEffect(() => { composeRef.current = compose }, [compose])
+  // 皮带参数读 ref：理由同上（宿主每帧传新对象不重触发动画）
+  const beltRef = useRef(belt)
+  useEffect(() => { beltRef.current = belt }, [belt])
+  // 离开 2T（换群 / 切视图）：账本清零，避免残留扭转在切回时复现
+  useEffect(() => {
+    if (belt) return
+    const st = stateRef.current
+    st.beltTau = 0; st.beltTarget = 0; st.beltFrom = 0
+  }, [belt])
 
   useEffect(() => { stateRef.current.speed = speed }, [speed])
 
   useEffect(() => {
+    const st = stateRef.current
+    const twist = beltRef.current?.twist ?? 0
     if (targetQuat) {
-      stateRef.current.target = targetQuat.clone()
-      stateRef.current.t = 0
-      stateRef.current.phase = 'reset'
-      stateRef.current.settled = false
-      onPhaseChange('reset')
+      st.base = targetQuat.clone()
+      if (composeRef.current) {
+        // 叠加模式：目标 = 元素旋转左乘当前姿态，从当前姿态直接 slerp（无回恒等阶段）
+        st.from.copy(st.currentQuat)
+        st.target = targetQuat.clone().multiply(st.currentQuat)
+        st.t = 0.5
+        st.phase = 'rotating'
+        st.settled = false
+        // 皮带：从当前累计继续累加（同一段旋转里同步插值）
+        st.beltFrom = st.beltTau
+        st.beltTarget = st.beltTau + twist
+        onPhaseChange('rotating')
+      } else {
+        st.target = targetQuat.clone()
+        st.from.identity()
+        st.t = 0
+        st.phase = 'reset'
+        st.settled = false
+        // 皮带：reset 段先 unwind 回 0，rotating 段再扭到本元素贡献 θ_el
+        st.beltFrom = st.beltTau
+        st.beltTarget = twist
+        onPhaseChange('reset')
+      }
     } else {
-      stateRef.current.target = null
-      stateRef.current.t = 2
-      stateRef.current.settled = false
-      stateRef.current.phase = 'rest'
-      stateRef.current.currentQuat.identity()
+      st.target = null
+      st.base = null
+      st.t = 2
+      st.settled = false
+      st.phase = 'rest'
+      // 叠加模式清除演示不动姿态：保持当前姿态，仅停止动画（皮带同步保持）
+      if (!composeRef.current) {
+        st.from.identity()
+        st.currentQuat.identity()
+        st.beltTau = 0
+        st.beltTarget = 0
+      }
       onPhaseChange('rest')
     }
   }, [targetQuat, onPhaseChange])
 
-  // 显式重放：replaySignal 递增即对当前姿态再播一次（不改变目标），
-  // 解决"动画只在元素切换时播一次、同元素无法重看"的交互缺口。
+  // 显式重放：replaySignal 递增即对当前演示元素再应用一次。
+  // 非叠加：回恒等再旋转（不改变目标）；叠加：把元素旋转左乘到当前姿态上（重复作用再合成）。
   useEffect(() => {
     const st = stateRef.current
-    if (!replaySignal || !st.target) return
-    st.t = 0
-    st.phase = 'reset'
-    st.settled = false
-    onPhaseChange('reset')
+    if (!replaySignal || !st.base) return
+    if (composeRef.current) {
+      st.from.copy(st.currentQuat)
+      st.target = st.base.clone().multiply(st.currentQuat)
+      st.t = 0.5
+      st.phase = 'rotating'
+      st.settled = false
+      // 重复作用再合成：皮带同步再累加一份 θ_el
+      st.beltFrom = st.beltTau
+      st.beltTarget = st.beltTau + (beltRef.current?.twist ?? 0)
+      onPhaseChange('rotating')
+    } else {
+      st.t = 0
+      st.phase = 'reset'
+      st.settled = false
+      // 回恒等重播：皮带从当前累计 unwind 回 0 再重扭（与四元数重置同节奏）
+      st.beltFrom = st.beltTau
+      onPhaseChange('reset')
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [replaySignal])
 
+  // 叠加模式手动复位：从当前姿态动画回恒等（新 phase 'homing'）
+  useEffect(() => {
+    const st = stateRef.current
+    if (!resetSignal || !composeRef.current) return
+    // 恒等判定用 angleTo（四元数范数恒为 1，lengthSq 检测的是零四元数）。
+    // **2T 注意**：−I 提升与恒等是同一 SO(3) 旋转（angleTo = 0）但皮带仍拧着
+    // （beltTau = 2π）——no-op 守卫必须同时看皮带，否则「物体已回家」时
+    // 复位信号永远空转，皮带与提升都不复原。
+    if ((st.currentQuat.angleTo(IDENTITY_QUAT) < 1e-6 && st.beltTau < 1e-9) || st.phase === 'homing') return
+    st.from.copy(st.currentQuat)
+    st.t = 0
+    st.phase = 'homing'
+    st.settled = false
+    // 皮带同步 unwind 回 0（物体回家、皮带复原）
+    st.beltFrom = st.beltTau
+    st.beltTarget = 0
+    onPhaseChange('homing')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal])
+
   useFrame((_, dt) => {
     const st = stateRef.current
+    if (st.phase === 'homing') {
+      if (st.t > 1.5) { st.phase = 'rest'; return }
+      st.t += dt * st.speed
+      if (st.t >= 0.5) {
+        st.t = 2; st.settled = true; st.phase = 'rest'; onPhaseChange('rest')
+        st.currentQuat.identity()
+        st.beltTau = 0
+        poseRefCb.current?.([0, 0, 0, 1])
+        beltRef.current?.onChange?.(0)
+      } else {
+        st.currentQuat.slerpQuaternions(st.from, IDENTITY_QUAT, st.t / 0.5)
+        st.beltTau = st.beltFrom * (1 - st.t / 0.5)
+      }
+      return
+    }
     if (!st.target || st.t > 1.5) return
     st.t += dt * st.speed
     if (st.phase === 'reset') {
       if (st.t >= 0.5) { st.phase = 'rotating'; st.t = 0.5; onPhaseChange('rotating') }
-      else { st.currentQuat.identity(); return }
+      else {
+        st.currentQuat.identity()
+        st.beltTau = st.beltFrom * (1 - st.t / 0.5)
+        return
+      }
     }
     if (st.t >= 1) {
       st.t = 2; st.settled = true; st.phase = 'rest'; onPhaseChange('rest')
       st.currentQuat.copy(st.target)
-      // 姿态落定 → 通知宿主「这次演示播完了」（重放会再次触发）
+      st.beltTau = st.beltTarget
+      // 姿态落定 → 上报四元数；并通知宿主「这次演示播完了」（重放会再次触发）
+      poseRefCb.current?.([st.currentQuat.x, st.currentQuat.y, st.currentQuat.z, st.currentQuat.w])
+      beltRef.current?.onChange?.(st.beltTarget)
       endRef.current?.()
     } else {
-      st.currentQuat.slerpQuaternions(new THREE.Quaternion(), st.target, (st.t - 0.5) / 0.5)
+      const k = (st.t - 0.5) / 0.5
+      st.currentQuat.slerpQuaternions(st.from, st.target, k)
+      // 皮带与四元数同段插值：非叠加从 0（已 unwind）扭到 θ_el；叠加从 beltFrom 累加到 beltTarget
+      const beltStart = composeRef.current ? st.beltFrom : 0
+      st.beltTau = beltStart + (st.beltTarget - beltStart) * k
     }
   })
 
@@ -438,8 +578,9 @@ function AnimatedGeo({ data, symmetryType, isDirected, animState }: {
       }
     })
 
-    if (['tetrahedron', 'cube', 'icosahedron'].includes(symmetryType)) {
-      const fc = symmetryType === 'cube' ? '#ff9944' : symmetryType === 'tetrahedron' ? '#44cc88' : '#cc66ff'
+    // 半透明面：tetrahedron / 2T / cube / icosahedron（2T 的面要让皮带下段透出）
+    if (symmetryType === 'tetrahedron' || symmetryType === 'binaryTetrahedron' || symmetryType === 'cube' || symmetryType === 'icosahedron') {
+      const fc = symmetryType === 'cube' ? '#ff9944' : symmetryType === 'icosahedron' ? '#cc66ff' : '#44cc88'
       const faces = computeTriangularFaces(data)
       if (faces.length > 0) {
         const pos: number[] = [], idx: number[] = []
@@ -504,10 +645,108 @@ function AxisMarker({ from, to, intersections }: {
   )
 }
 
+/* ------------------------------------------------------------------ *
+ * Dirac 开口皮带（2T 对称性视图专用）：世界锚点 (0, BELT_ANCHOR_Y, 0)
+ * 为固定端（扭转为 0），物体端在中心 (0,0,0) 携带全扭转 θ。N=64 段
+ * ribbon，截面绕竖轴转 θ·s（s∈[0,1] 沿带参数）；双色条纹（沿带每 8 站
+ * 交替明暗）让扭转圈数可读；锚点小横杆固定件。
+ *
+ * θ = animState.current.beltTau（账本在 useAnimatedRotation：每元素贡献
+ * 2ψ，compose 累计、homing 回 0）。**渲染取 mod 720°（两整扭拓扑复原）**：
+ * 0° 平带 / 360° 一整扭 / 720° ≡ 0°。混合轴链为已知近似（用户模型口径，
+ * 见 ~/.commandcode/plans/sl23-belt-symmetry.md §3）。
+ * ------------------------------------------------------------------ */
+const BELT_ANCHOR_Y = 6.3
+const BELT_SEGMENTS = 64
+const BELT_WIDTH = 0.55
+const BELT_TWO_TURNS = Math.PI * 4
+
+function BeltStrap({ animState }: {
+  animState: { current: { beltTau: number } }
+}) {
+  const [group] = useState(() => new THREE.Group())
+  const ribbonRef = useRef<THREE.Mesh | null>(null)
+
+  // 静态件：锚点小横杆固定件（横杆 + 两端小球）
+  useEffect(() => {
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.07, 1.5, 10),
+      new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.4 }),
+    )
+    bar.rotation.z = Math.PI / 2
+    bar.position.set(0, BELT_ANCHOR_Y, 0)
+    group.add(bar)
+    for (const x of [-0.75, 0.75]) {
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.13, 12, 12),
+        new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.3 }),
+      )
+      cap.position.set(x, BELT_ANCHOR_Y, 0)
+      group.add(cap)
+    }
+  }, [group])
+
+  // ribbon 几何一次性建好（位置逐帧更新；颜色建时写死）
+  useEffect(() => {
+    const stations = BELT_SEGMENTS + 1
+    const pos = new Float32Array(stations * 2 * 3)
+    const col = new Float32Array(stations * 2 * 3)
+    const idx: number[] = []
+    for (let i = 0; i < BELT_SEGMENTS; i++) {
+      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1
+      idx.push(a, b, c, b, d, c)
+    }
+    const geom = new THREE.BufferGeometry()
+    geom.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage))
+    geom.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    geom.setIndex(idx)
+    const c1 = new THREE.Color('#e2e8f0'), c2 = new THREE.Color('#7c8ba1')
+    for (let i = 0; i < stations; i++) {
+      const c = Math.floor(i / 8) % 2 === 0 ? c1 : c2
+      col.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6)
+    }
+    const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+      vertexColors: true, side: THREE.DoubleSide, roughness: 0.55, metalness: 0.05,
+    }))
+    ribbonRef.current = mesh
+    group.add(mesh)
+    return () => {
+      geom.dispose()
+      ;(mesh.material as THREE.Material).dispose()
+      group.remove(mesh)
+      ribbonRef.current = null
+    }
+  }, [group])
+
+  useFrame(() => {
+    const mesh = ribbonRef.current
+    if (!mesh) return
+    const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    const arr = attr.array as Float32Array
+    const tau = animState.current.beltTau
+    const theta = ((tau % BELT_TWO_TURNS) + BELT_TWO_TURNS) % BELT_TWO_TURNS
+    const half = BELT_WIDTH / 2
+    for (let i = 0; i <= BELT_SEGMENTS; i++) {
+      const s = i / BELT_SEGMENTS
+      const y = BELT_ANCHOR_Y * (1 - s)
+      const a = theta * s
+      const ca = Math.cos(a), sa = Math.sin(a)
+      // 截面（沿 X 的 ±half 带）绕竖轴转 a：(x,z) → (x·cos a + z·sin a, −x·sin a + z·cos a)
+      arr[i * 6 + 0] =  half * ca; arr[i * 6 + 1] = y; arr[i * 6 + 2] = -half * sa
+      arr[i * 6 + 3] = -half * ca; arr[i * 6 + 4] = y; arr[i * 6 + 5] =  half * sa
+    }
+    attr.needsUpdate = true
+    mesh.geometry.computeVertexNormals()
+  })
+
+  return <primitive object={group} />
+}
+
 function SymmetryScene({
   group, symmetryType, data, variant,
   showAction, actionElementId, rotateSpeed,
   showFigureTitle, dark, locked, onHint, hintOnIdle, replaySignal,
+  compose, resetSignal, onPoseChange, onBeltChange,
   lockCameraOnAction, onAnimationEnd,
 }: {
   group: Group
@@ -523,11 +762,15 @@ function SymmetryScene({
   onHint?: (msg: string) => void
   hintOnIdle: boolean
   replaySignal: number
+  compose: boolean
+  resetSignal: number
+  onPoseChange?: (q: [number, number, number, number]) => void
+  onBeltChange?: (tau: number) => void
   lockCameraOnAction: boolean
   onAnimationEnd?: () => void
 }) {
   const { t } = useTranslation()
-  const [animPhase, setAnimPhase] = useState<'rest' | 'reset' | 'rotating'>('rest')
+  const [animPhase, setAnimPhase] = useState<AnimPhase>('rest')
 
   const animInfo = useMemo(() => {
     if (!showAction || !actionElementId || !data) return null
@@ -546,7 +789,16 @@ function SymmetryScene({
     return q
   }, [animInfo])
 
-  const animRef = useAnimatedRotation(targetQuat, rotateSpeed, setAnimPhase, replaySignal, onAnimationEnd)
+  // 2T 皮带账本参数：非 2T 群不传（hook 内皮带恒 0、不上报）。
+  // animInfo 变化（换演示元素）即更新 twist——与四元数同一触发节奏。
+  const beltParam = useMemo(
+    () => (symmetryType === 'binaryTetrahedron'
+      ? { twist: animInfo?.beltTwist ?? 0, onChange: onBeltChange }
+      : undefined),
+    [symmetryType, animInfo, onBeltChange],
+  )
+
+  const animRef = useAnimatedRotation(targetQuat, rotateSpeed, setAnimPhase, replaySignal, onAnimationEnd, compose, resetSignal, onPoseChange, beltParam)
 
   // 演示状态反馈：统一经 onHint 上抛（主画布 hint bar / ViewWindow 底部浮条），宿主各自决定单处展示位置
   const activeEl = useMemo(
@@ -558,8 +810,9 @@ function SymmetryScene({
   const statusText = useMemo(() => {
     if (!activeEl || !animInfo) return null
     const phaseSuffix = animPhase === 'reset' ? ` — ${t('symmetry.reset')}`
-      : animPhase === 'rotating' ? ` — ${t('symmetry.rotating')}`
-        : ''
+      : animPhase === 'homing' ? ` — ${t('symmetry.homing')}`
+        : animPhase === 'rotating' ? ` — ${t('symmetry.rotating')}`
+          : ''
     return { label: activeEl.label, action: animInfo.label, suffix: phaseSuffix }
   }, [activeEl, animInfo, animPhase, t])
 
@@ -571,15 +824,23 @@ function SymmetryScene({
       if (hintOnIdle) onHint?.(t('symmetry.clickHint'))
       return
     }
-    onHint?.(`<span class="hint-highlight">${statusText.label}</span>: ${statusText.action}${statusText.suffix}`)
-  }, [showAction, statusText, onHint, hintOnIdle, t])
+    // 2T：附加**累计**皮带扭转（SU(2) 记忆——q 与 −q 物体旋转相同、靠它区分）。
+    // 账本在 ref 里（hook 私有），渲染期不可读——在 effect 里读；本 effect 随
+    // statusText（phase 切换）重跑，触发/落定两个时刻恰好都能拿到最新账本目标值。
+    const beltSuffix = symmetryType === 'binaryTetrahedron' && animRef.current.beltTarget > 1e-9
+      ? ` · 皮带累计 ${Math.round((animRef.current.beltTarget * 180) / Math.PI)}°`
+      : ''
+    onHint?.(`<span class="hint-highlight">${statusText.label}</span>: ${statusText.action}${statusText.suffix}${beltSuffix}`)
+  }, [showAction, statusText, onHint, hintOnIdle, t, symmetryType, animRef])
 
   const hasData = !!data
   const isDirected = data?.directed === true
   const topY = useMemo(() => data ? data.vertices.reduce((max, v) => Math.max(max, v.y), -Infinity) : 0, [data])
   const dataRadius = useMemo(() => data ? data.vertices[0].length() : 4, [data])
 
-  const showAxis = animInfo && Math.abs(animInfo.angleRad) > 1e-10
+  // fullTurn（−I）：物体转满 360° 外观恒等，其轴是 sl23Spin 人为选的 (0,1,0)，
+  // 不构成真实旋转轴——隐藏轴标记（sl23.ts Sl23Spin.fullTurn 注释即此约定）
+  const showAxis = animInfo && Math.abs(animInfo.angleRad) > 1e-10 && !animInfo.fullTurn
   const axisLen = dataRadius * 1.4
   const axisTo = showAxis
     ? new THREE.Vector3(...animInfo!.axis).normalize().multiplyScalar(axisLen)
@@ -675,6 +936,8 @@ function SymmetryScene({
       )}
 
       <AnimatedGeo data={data} symmetryType={symmetryType} isDirected={isDirected} animState={animRef} />
+
+      {symmetryType === 'binaryTetrahedron' && <BeltStrap animState={animRef} />}
 
       {symmetryType === 'dihedral' && data.vertices.length > 2 && (
         <mesh rotation={[-Math.PI / 2, 0, 0]}>

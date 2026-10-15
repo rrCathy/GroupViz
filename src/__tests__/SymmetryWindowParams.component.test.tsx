@@ -86,7 +86,8 @@ describe('ViewWindow · symmetry view', () => {
     const list = panel.querySelector('[data-testid="sym-action-list"]')
     expect(list).not.toBeNull()
     expect(rowsOf(panel)).toHaveLength(4) // C₄ 全部元素
-    expect(screen.getByText('Figure caption (group name + geometry, in-scene)')).toBeInTheDocument()
+    // 「Figure caption」勾选框已随场景内图注一并移除（2026-10-15 图内不放文字）
+    expect(screen.queryByText('Figure caption (group name + geometry, in-scene)')).not.toBeInTheDocument()
     // 循环群无对偶多面体 → 无 Solid shape 选项
     expect(screen.queryByText('Solid shape')).not.toBeInTheDocument()
   })

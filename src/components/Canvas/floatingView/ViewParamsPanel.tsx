@@ -972,11 +972,6 @@ export function ViewParamsPanel({
                   )}
                 </>
               )}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <input type="checkbox" checked={symVp.showFigureTitle === true}
-                  onChange={e => updateViewParams({ showFigureTitle: e.target.checked })} />
-                Figure caption (group name + geometry, in-scene)
-              </label>
             </>
           )}
         </>

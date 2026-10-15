@@ -311,8 +311,6 @@ export function ViewContent({
           actionElementId={symVp.actionElementId ?? null}
           rotateSpeed={symVp.rotateSpeed}
           compose={symVp.compose}
-          // 窗口标题栏已显示群名，场景内图注默认关闭（避免「标题一个群名、场景又一个群名+几何」重复）
-          showFigureTitle={symVp.showFigureTitle ?? false}
           locked={config.locked}
           hintOnIdle={false}
           replaySignal={symReplay}

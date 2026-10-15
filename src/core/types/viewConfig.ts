@@ -382,8 +382,6 @@ export interface SymmetryViewParams {
   /** 演示元素 id（toggle 语义：点活跃元素回到恒等姿态）。换群后失效（非本群元素）由渲染层忽略。
    *  博客插图等静态场景注入该值，mount 即播放一次旋转并静止展示 */
   actionElementId?: string | null
-  /** 顶部群名 + 几何描述标注；缺省 true（小窗可关） */
-  showFigureTitle?: boolean
 }
 
 export const symmetryViewParamsSchema = z.object({
@@ -392,7 +390,6 @@ export const symmetryViewParamsSchema = z.object({
   compose: z.boolean().optional(),
   rotateSpeed: z.number().min(0.2).max(5).optional(),
   actionElementId: z.string().min(1).nullable().optional(),
-  showFigureTitle: z.boolean().optional(),
 })
 
 export interface HomomorphismViewParams {

@@ -143,16 +143,18 @@ the identity, each element's rotation is applied on top of the current pose
 back to the identity.
 
 SL(2,3) (≅ the binary tetrahedral group 2T, a double cover of A₄) shows the same
-tetrahedron plus a **Dirac-style open belt** hanging from a fixed anchor. Each element
-twists the belt around the **same axis the tetrahedron rotates about** by τ = 2ψ:
-elements q and −q rotate the tetrahedron identically but wind the belt differently —
-that difference is the double cover made visible. Try the unique order-2 element: the
-tetrahedron turns a full 360° (looking unchanged) while the belt picks up exactly one
-full twist. **Demo Belt Restore** (enabled once the belt has two full twists): the
-belt's tip lifts off the center and loops **around the fixed anchor** once, and the
-two twists cancel — a single twist cannot be undone this way, which is the whole point
-of the belt trick. Elements display as 2×2 mod-3 matrices. The 3D camera orbits freely
-past the poles (drag up/down to flip under the object).
+tetrahedron plus a **Dirac-style open belt** lying **along the very axis the
+tetrahedron rotates about** (the anchor end re-aims whenever a different element is
+applied; its cross-section stays put as the fixed twist reference). The belt's faces
+are two colors: watching the colors flip tells you how much twist the belt carries —
+each element winds it by τ = 2ψ. Elements q and −q rotate the tetrahedron identically
+but wind the belt differently — that difference is the double cover made visible. Try
+the unique order-2 element: the tetrahedron turns a full 360° (looking unchanged) while
+the belt picks up exactly one full twist. **Demo Belt Restore** (enabled once the belt
+has two full twists): the belt's tip lifts off the center and loops **around the fixed
+anchor** once, and the two twists cancel — a single twist cannot be undone this way,
+which is the whole point of the belt trick. Elements display as 2×2 mod-3 matrices.
+The 3D camera orbits freely past the poles (drag up/down to flip under the object).
 
 **Controls recap** for 2D views: drag = pan, wheel = zoom, double-click = reset.
 For the 3D view: left-drag = orbit, right-drag = pan, wheel = zoom, ▶ = auto-rotate,

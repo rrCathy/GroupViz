@@ -70,7 +70,7 @@ async function loadSl23Symmetry(page: import('@playwright/test').Page): Promise<
   await page.waitForTimeout(500)
 }
 
-test.describe('symmetry SL(2,3)（2T + Dirac 皮带 v2）', () => {
+test.describe('symmetry SL(2,3)（2T + Dirac 皮带 v3：同轴 + 莫比乌斯式扭转 + 正反双色）', () => {
   test('① 相机可越过南北极（竖直拖拽穿过下极点，direction.y 由负转正）', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', err => errors.push(String(err)))
@@ -106,12 +106,13 @@ test.describe('symmetry SL(2,3)（2T + Dirac 皮带 v2）', () => {
     expect(errors).toEqual([])
   })
 
-  test('② 水平轴元素：皮带绕水平轴缠（与物体同轴，截图人工核对）', async ({ page }) => {
+  test('② 水平轴元素：皮带沿旋转轴直躺 + 绕自身轴扭转（截图人工核对）', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', err => errors.push(String(err)))
 
     await loadSl23Symmetry(page)
-    // 应用绕 X 轴 180° 的 4 阶元 i：物体横转，皮带应绕 X 轴缠（非竖轴扭）
+    // 应用绕 X 轴 180° 的 4 阶元 i：皮带应沿 X 轴直躺（锚点挪到 +X 侧），
+    // 带面绕自身中心线翻转 180°（正反双色在半带处翻面）
     await page.evaluate(([id]) => {
       (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__._setSymmetryElement(id)
     }, [i4.id])

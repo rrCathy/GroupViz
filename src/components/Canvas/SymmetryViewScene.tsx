@@ -1,6 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
@@ -11,7 +10,7 @@ import type { Group, GroupElement } from '../../core/types'
 import { getSymmetryType } from '../../core/symmetryType'
 import type { SymmetryType } from '../../core/symmetryType'
 import {
-  BELT_ANCHOR_Y, BELT_SEGMENTS, BELT_RESTORE_AMOUNT,
+  BELT_SEGMENTS, BELT_RESTORE_AMOUNT,
   beltStations, beltRestoreDirections,
 } from './beltGeometry'
 import { SymmetryOrbitControls } from './SymmetryOrbitControls'
@@ -261,7 +260,8 @@ export interface SymmetryViewSceneProps {
   actionElementId?: string | null
   /** 动画倍速 0.2–5；缺省 1 */
   rotateSpeed?: number
-  /** 顶部群名 + 几何描述标注；缺省 true（小窗可关） */
+  /** @deprecated no-op（2026-10-15 起图内不放任何文字——用户要求，标题/副标题已删）。
+   *  字段保留仅为包消费者兼容 */
   showFigureTitle?: boolean
   /** 锁定相机交互（拖拽旋转/平移/缩放）；演示动画期间本就禁用 */
   locked?: boolean
@@ -308,7 +308,6 @@ export function SymmetryViewScene({
   showAction = false,
   actionElementId = null,
   rotateSpeed = 1,
-  showFigureTitle = true,
   locked = false,
   onHint,
   hintOnIdle = true,
@@ -353,12 +352,9 @@ export function SymmetryViewScene({
           group={group}
           symmetryType={symmetryType}
           data={data}
-          variant={variant}
           showAction={showAction}
           actionElementId={actionElementId}
           rotateSpeed={rotateSpeed}
-          showFigureTitle={showFigureTitle}
-          dark={isDark}
           locked={locked}
           onHint={onHint}
           hintOnIdle={hintOnIdle}
@@ -391,7 +387,7 @@ function useAnimatedRotation(
   onPoseChange?: (q: [number, number, number, number]) => void,
   /** 2T 皮带账本（Dirac 开口皮带的扭转记忆）：`twist` = 当前演示元素的扭转贡献
    *  θ_el = 2ψ（弧度，正标量；非 2T 群不传 ⇒ 皮带恒 0 且不上报）；`axis` = 该元素
-   *  的旋转轴（与物体同轴——皮带绕同一根轴缠，2026-10-15 修）。
+   *  的旋转轴——**皮带与旋转轴同轴**（锚点在轴向上，随新轴重新对准，2026-10-15 v3）。
    *  非叠加：reset 段先把皮带 unwind 回 0、rotating 段再扭到 θ_el；
    *  叠加：从当前累计直接累加（与四元数左乘同节奏）；homing：动画回 0。
    *  落定/复位完成时经 `onChange` 上报**累计** τ；`onRestoreChange` 上报
@@ -459,9 +455,11 @@ function useAnimatedRotation(
   useEffect(() => {
     const st = stateRef.current
     const twist = beltRef.current?.twist ?? 0
-    // 换演示元素：记录其旋转轴（皮带与物体同轴缠绕）；取消进行中的复原演练
+    // 换演示元素：皮带重新对准其旋转轴（同轴缠绕）；轴为空（取消选中）→ 回竖直；
+    // 取消进行中的复原演练
     const axis = beltRef.current?.axis
     if (axis) st.beltAxis.set(axis[0], axis[1], axis[2]).normalize()
+    else st.beltAxis.set(0, 1, 0)
     st.beltRestoring = false
     st.beltRestoreT = 0
     if (targetQuat) {
@@ -719,49 +717,36 @@ function AxisMarker({ from, to, intersections }: {
 }
 
 /* ------------------------------------------------------------------ *
- * Dirac 开口皮带（2T 对称性视图专用）：世界锚点 (0, BELT_ANCHOR_Y, 0)
- * 为固定端（扭转为 0），物体端在中心 (0,0,0) 携带全扭转 θ。
- *
- * v2（2026-10-15，用户四条反馈）——几何全部走纯函数 `beltGeometry.ts`：
- * - **扭转轴 = 当前演示元素的旋转轴**（与正四面体同轴）：旧实现钉在世界竖轴，
- *   物体绕水平轴明显横转时皮带却绕竖轴扭，「完全不搭」；
- * - **物体端削尖**：带宽末段收锥到 0，尖端正落在旋转轴（中心）上；
- * - **720° 复原演练**（beltRestoring）：物体端脱离中心、绕锚点公转，带体弓形
- *   外鼓、扭转按 720° 递减——展示两整扭如何在三维里被解开（绕过固定点），
- *   而不是旧实现的 mod 720° 直接跳平。
- * 条纹双色（沿带每 8 站交替明暗）让扭转圈数可读；锚点小横杆固定件。
+ * Dirac 开口皮带（2T 对称性视图专用）v3（2026-10-15，用户第二轮反馈）。
+ * 几何全部走纯函数 beltGeometry.ts（唯一真源）：
+ * - **皮带与旋转轴同轴**：锚点 = 轴向 û·BELT_ANCHOR_DIST 处，皮带直躺在旋转轴上
+ *   （「旋转轴要经过皮带」）；锚点端是扭转的固定参考端（截面朝向恒定），位置随
+ *   当前元素的新轴重新对准；物体端截面随四面体一起转动。
+ * - **扭转 = 带面绕自身中心线的翻转**（莫比乌斯式）：中心线恒为直线，
+ *   宽向量沿带递增转 φ(s) = −τ·s（v2 的螺旋甩线废弃）。
+ * - **正反两面双色**：两个 mesh 共享同一几何（FrontSide/BackSide 各一色）——
+ *   「一端固定」由锚点端不变的基准色承接，扭转多少直接读颜色翻面。
+ * - **720° 复原演练**（beltRestoring）：物体端脱离中心、绕锚点公转一圈、带体
+ *   弓形外鼓；传未扣减的累计 τ，720° 递减只在 beltGeometry 内做一次。
  * ------------------------------------------------------------------ */
+const BELT_FRONT_COLOR = '#e8eef5'
+const BELT_BACK_COLOR = '#4b5b74'
+const _X_AXIS = new THREE.Vector3(1, 0, 0)
+const _beltW = new THREE.Vector3()
+
 function BeltStrap({ animState }: {
   animState: { current: BeltLedgerState }
 }) {
   const [group] = useState(() => new THREE.Group())
-  const ribbonRef = useRef<THREE.Mesh | null>(null)
+  const geomRef = useRef<THREE.BufferGeometry | null>(null)
+  const fixtureRef = useRef<THREE.Group | null>(null)
   const { camera } = useThree()
 
-  // 静态件：锚点小横杆固定件（横杆 + 两端小球）
+  // 几何与固定件一次性建好：ribbon 位置逐帧更新；正反两 mesh 共享同一几何；
+  // 固定件（横杆 + 两端小球）位置/朝向逐帧跟随锚点（皮带随轴重新对准）
   useEffect(() => {
-    const bar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.07, 1.5, 10),
-      new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.4 }),
-    )
-    bar.rotation.z = Math.PI / 2
-    bar.position.set(0, BELT_ANCHOR_Y, 0)
-    group.add(bar)
-    for (const x of [-0.75, 0.75]) {
-      const cap = new THREE.Mesh(
-        new THREE.SphereGeometry(0.13, 12, 12),
-        new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.3 }),
-      )
-      cap.position.set(x, BELT_ANCHOR_Y, 0)
-      group.add(cap)
-    }
-  }, [group])
-
-  // ribbon 几何一次性建好（位置逐帧由 beltGeometry 重算；颜色建时写死）
-  useEffect(() => {
-    const stations = BELT_SEGMENTS + 1
-    const pos = new Float32Array(stations * 2 * 3)
-    const col = new Float32Array(stations * 2 * 3)
+    const count = BELT_SEGMENTS + 1
+    const pos = new Float32Array(count * 2 * 3)
     const idx: number[] = []
     for (let i = 0; i < BELT_SEGMENTS; i++) {
       const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1
@@ -769,37 +754,56 @@ function BeltStrap({ animState }: {
     }
     const geom = new THREE.BufferGeometry()
     geom.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage))
-    geom.setAttribute('color', new THREE.BufferAttribute(col, 3))
     geom.setIndex(idx)
-    const c1 = new THREE.Color('#e2e8f0'), c2 = new THREE.Color('#7c8ba1')
-    for (let i = 0; i < stations; i++) {
-      const c = Math.floor(i / 8) % 2 === 0 ? c1 : c2
-      col.set([c.r, c.g, c.b, c.r, c.g, c.b], i * 6)
-    }
-    const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
-      vertexColors: true, side: THREE.DoubleSide, roughness: 0.55, metalness: 0.05,
+    geomRef.current = geom
+    const front = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+      color: BELT_FRONT_COLOR, side: THREE.FrontSide, roughness: 0.55, metalness: 0.05,
     }))
-    ribbonRef.current = mesh
-    group.add(mesh)
+    const back = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+      color: BELT_BACK_COLOR, side: THREE.BackSide, roughness: 0.55, metalness: 0.05,
+    }))
+    const fixture = new THREE.Group()
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.07, 1.5, 10),
+      new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.4 }),
+    )
+    bar.rotation.z = Math.PI / 2 // 默认（竖直皮带）横杆沿 X；每帧转到锚点端宽向
+    fixture.add(bar)
+    for (const x of [-0.75, 0.75]) {
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.13, 12, 12),
+        new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.3 }),
+      )
+      cap.userData.offset = x
+      fixture.add(cap)
+    }
+    fixtureRef.current = fixture
+    group.add(front, back, fixture)
     return () => {
       geom.dispose()
-      ;(mesh.material as THREE.Material).dispose()
-      group.remove(mesh)
-      ribbonRef.current = null
+      ;(front.material as THREE.Material).dispose()
+      ;(back.material as THREE.Material).dispose()
+      for (const ch of fixture.children) {
+        const m = ch as THREE.Mesh
+        m.geometry.dispose()
+        ;(m.material as THREE.Material).dispose()
+      }
+      group.remove(front, back, fixture)
+      geomRef.current = null
+      fixtureRef.current = null
     }
   }, [group])
 
   useFrame(() => {
-    const mesh = ribbonRef.current
-    if (!mesh) return
-    const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
+    const geom = geomRef.current
+    const fixture = fixtureRef.current
+    if (!geom || !fixture) return
+    const attr = geom.getAttribute('position') as THREE.BufferAttribute
     const arr = attr.array as Float32Array
     const st = animState.current
-    // 复原演练中：扭转按 720° 递减（未演练时用插值中的 beltTau）
+    // 复原演练中传**未扣减**的累计 τ（720° 递减在 beltGeometry 内做一次；v2 曾双重扣减）
     const restoreT = st.beltRestoring ? st.beltRestoreT : 0
-    const tau = st.beltRestoring
-      ? Math.max(0, st.beltTarget - BELT_RESTORE_AMOUNT * restoreT)
-      : st.beltTau
+    const tau = st.beltRestoring ? st.beltTarget : st.beltTau
     const dirs = beltRestoreDirections(camera)
     const stations = beltStations({
       tau,
@@ -814,28 +818,38 @@ function BeltStrap({ animState }: {
       arr[i * 6 + 3] = s.e2[0]; arr[i * 6 + 4] = s.e2[1]; arr[i * 6 + 5] = s.e2[2]
     }
     attr.needsUpdate = true
-    mesh.geometry.computeVertexNormals()
+    geom.computeVertexNormals()
+    // 固定件随锚点走（皮带随轴重新对准）：位置 = 锚点站，横杆沿锚点端宽向
+    const s0 = stations[0]!
+    fixture.position.set(s0.cx, s0.cy, s0.cz)
+    const wx = s0.e1[0] - s0.e2[0], wy = s0.e1[1] - s0.e2[1], wz = s0.e1[2] - s0.e2[2]
+    const wl = Math.hypot(wx, wy, wz) || 1
+    const wDir = _beltW.set(wx / wl, wy / wl, wz / wl)
+    const bar = fixture.children[0] as THREE.Mesh
+    bar.quaternion.setFromUnitVectors(_X_AXIS, wDir)
+    for (let k = 1; k < fixture.children.length; k++) {
+      const cap = fixture.children[k] as THREE.Mesh
+      const off = (cap.userData.offset as number) ?? 0
+      cap.position.set(wDir.x * off, wDir.y * off, wDir.z * off)
+    }
   })
 
   return <primitive object={group} />
 }
 
 function SymmetryScene({
-  group, symmetryType, data, variant,
+  group, symmetryType, data,
   showAction, actionElementId, rotateSpeed,
-  showFigureTitle, dark, locked, onHint, hintOnIdle, replaySignal,
+  locked, onHint, hintOnIdle, replaySignal,
   compose, resetSignal, onPoseChange, onBeltChange, beltRestoreSignal,
   lockCameraOnAction, onAnimationEnd,
 }: {
   group: Group
   symmetryType: SymmetryType
   data: SymmetryData | null
-  variant: boolean
   showAction: boolean
   actionElementId: string | null
   rotateSpeed: number
-  showFigureTitle: boolean
-  dark: boolean
   locked: boolean
   onHint?: (msg: string) => void
   hintOnIdle: boolean
@@ -928,7 +942,6 @@ function SymmetryScene({
 
   const hasData = !!data
   const isDirected = data?.directed === true
-  const topY = useMemo(() => data ? data.vertices.reduce((max, v) => Math.max(max, v.y), -Infinity) : 0, [data])
   const dataRadius = useMemo(() => data ? data.vertices[0].length() : 4, [data])
 
   // fullTurn（−I）：物体转满 360° 外观恒等，其轴是 sl23Spin 人为选的 (0,1,0)，
@@ -998,27 +1011,6 @@ function SymmetryScene({
       <directionalLight position={[5, 8, 5]} intensity={1.2} />
       <directionalLight position={[-5, -2, -3]} intensity={0.6} />
       <pointLight position={[0, 5, 0]} intensity={0.5} />
-
-      {showFigureTitle && (
-        <Html position={[0, topY + 1.5, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
-          <div style={{ color: dark ? '#fff' : '#1a1a2e', fontSize: '20px', fontWeight: 'bold', textShadow: dark ? '0 0 10px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
-            dangerouslySetInnerHTML={{ __html: renderTex(texify(group.name)) }} />
-        </Html>
-      )}
-
-      {showFigureTitle && (
-        <Html position={[0, topY + 2.2, 0]} center zIndexRange={[2, 0]} wrapperClass="gv-html-overlay">
-          <div style={{ color: dark ? '#aaa' : '#555566', fontSize: '13px', textShadow: dark ? '0 0 8px rgba(0,0,0,0.8)' : 'none', whiteSpace: 'nowrap', userSelect: 'none', pointerEvents: 'none' }}
-            dangerouslySetInnerHTML={{ __html: renderTex(
-              // 副标题只描述几何形态（群名已在上方标题行，不再重复符号前缀）
-              symmetryType === 'cyclic' ? t('symmetry.geo.cyclicText', { n: group.order }) :
-              symmetryType === 'dihedral' ? t('symmetry.geo.dihedralText', { n: group.order / 2 }) :
-              symmetryType === 'cube' ? (variant ? t('symmetry.geo.octahedron') : t('symmetry.geo.cube')) :
-              symmetryType === 'icosahedron' ? (variant ? t('symmetry.geo.dodecahedron') : t('symmetry.geo.icosahedron')) :
-              t('symmetry.geo.' + symmetryType)
-            ) }} />
-        </Html>
-      )}
 
       {showAxis && (
         <AxisMarker

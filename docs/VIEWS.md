@@ -102,11 +102,14 @@ A₅：A₅ ≅ 正二十面体旋转群，(12345)、(12)(34) 的几何像经 BF
 
 **叠加模式（compose，2026-10-14）**：`compose` prop / `symmetryCompose` 状态——演示元素旋转**左乘当前姿态**持续合成（`Q_target = Q_el · Q_cur`，无回恒等阶段；重复作用 = replay 信号再合成）；清除演示**不动姿态**；主画布 ViewPanel 对称区加「叠加模式」开关（**A₄ / SL(2,3)** = tetrahedron / binaryTetrahedron 类群）+「复位姿态」按钮（resetSignal → homing 动画回恒等）；导出桥新增 `getSymmetryPose()`（读最新落定姿态 [x,y,z,w]）与 `setSymmetryCompose()`；`GroupContext.selectElement` 叠加模式下 always set id + bump 应用 nonce（不 toggle）。
 
-**SL(2,3) = 二元四面体群 2T + Dirac 开口皮带（2026-10-14）**：SL(2,3) ≅ 2T 是 A₄ 旋转群的**二重覆盖**（24 元素 → 12 个四面体旋转，每个旋转恰 2 个提升）。`symmetryType` 新增 `'binaryTetrahedron'`（与 A₄ 同一套四面体几何）；旋转不走置换反解，改查 `sl23Spin`（`core/groups/sl23.ts`：表群元素 `value=[k]` → 整数四元数 → 规范分解 `q = cos ψ + sin ψ·û` ⇒ 物体旋转 `(û, 2ψ)`）。**钝角形态不归一**（θ ∈ [0, 2π] 保留）——q 与 −q 物体旋转相同、`(轴, Θ)` 不同，双覆盖因此在画面上可见（`sl23.test.ts` 双覆盖 12 像用例守护）。
+**SL(2,3) = 二元四面体群 2T + Dirac 开口皮带（2026-10-14 初版 / 10-15 修正）**：SL(2,3) ≅ 2T 是 A₄ 旋转群的**二重覆盖**（24 元素 → 12 个四面体旋转，每个旋转恰 2 个提升）。`symmetryType` 新增 `'binaryTetrahedron'`（与 A₄ 同一套四面体几何）；旋转不走置换反解，改查 `sl23Spin`（`core/groups/sl23.ts`：表群元素 `value=[k]` → 整数四元数 → 规范分解 `q = cos ψ + sin ψ·û` ⇒ 物体旋转 `(û, 2ψ)`）。**钝角形态不归一**（θ ∈ [0, 2π] 保留）——q 与 −q 物体旋转相同、`(轴, Θ)` 不同，双覆盖因此在画面上可见（`sl23.test.ts` 双覆盖 12 像用例守护）。
 - **皮带 = SU(2) 记忆**：每元素扭转贡献 `τ = 2ψ`（正标量）；非叠加 = 复位段先把皮带 unwind 回 0 再扭到本元素 τ；叠加 = 跨元素累计 `Σ 2ψ`；homing = 动画回 0。落定/复位经 `onBeltChange` 上报累计 τ（context `symmetryBelt`，导出桥 `getSymmetryBelt()`），提示行显示「皮带累计 N°」。
-- **−I（唯一 2 阶元）= 皮带戏法核心态**：物体转满 360° 外观恒等（落定姿态 = `(0,0,0,−1)`，与恒等同一 SO(3) 旋转但四元数取反）、皮带拧满一圈（τ = 360°）、轴标记隐藏（`fullTurn`）；叠加两次 −I ⇒ 皮带 720° ≡ 两整扭拓扑复原。**homing no-op 守卫必须同时看皮带**——−I 提升与恒等 `angleTo = 0`，只看旋转会判「已回家」导致复位空转（2026-10-14 修）。
-- **皮带几何**：世界锚点 `(0, 6.3, 0)`（固定端，扭转为 0）→ 物体中心（携带全扭转）；N=64 段 ribbon、截面绕竖轴转 `θ·s`、双色条纹（沿带每 8 站交替明暗）让圈数可读、锚点小横杆固定件；**渲染取 mod 720°**（两整扭 ≅ 无扭）；混合轴链与 `i·(−i)` 为已知近似（用户模型口径，方案见 `~/.commandcode/plans/sl23-belt-symmetry.md`）。
+- **扭转轴与物体同轴（2026-10-15 修）**：皮带几何纯函数在 `components/Canvas/beltGeometry.ts`（`beltStations` 单测 11 条）——扭转轴 = **当前演示元素的旋转轴**（账本 `beltAxis` 随演示更新），静止位形（世界锚点 `(0, 6.3, 0)` → 物体中心的竖线）按该轴绕原点转 `τ·windProfile(s)`，中心线与带面朝向一起被缠到旋转轴上：竖轴元素（如 4 阶元 j）= 经典理发店柱（中心线不动、带面拧转），水平轴元素（i/k）= 带体绕水平轴缠绕、随物体横转——不再出现「物体横着转、皮带竖着扭」。`windProfile` 把扭转集中到物体端（锚点端不扭）。
+- **物体端削尖（2026-10-15 修）**：带宽末段线性收锥到 0，尖端正落在旋转轴（物体中心）上；锚点端保持满宽 + 小横杆固定件。
+- **−I（唯一 2 阶元）= 皮带戏法核心态**：物体转满 360° 外观恒等（落定姿态 = `(0,0,0,−1)`，与恒等同一 SO(3) 旋转但四元数取反）、皮带拧满一圈（τ = 360°）、轴标记隐藏（`fullTurn`）。
+- **720° 复原演练（2026-10-15 新增，「演示皮带复位」按钮）**：拧满两整扭后按钮才可用（**单整扭拓扑上不可消**——正是皮带戏法的核心，`canDemoBeltRestore` 门控）。触发后物体端脱离中心、**绕世界锚点公转一圈**（公转轴/弓起方向按当前相机右方水平化，默认视角正面可见），带体弓形外鼓、扭转按 720° 递减，2.5s（speed=1）落定 `τ − 720°`；缠态→弓形位形混合保证两端连续无跳变（beltGeometry 单测「restoreT=1 与平直带逐位一致」守护）。入口：主画布 ViewPanel「演示皮带复位」（`data-testid="symmetry-belt-restore"`）+ 两套窗口壳 ⚙ 面板（`sym-panel-belt-restore`）；context `symmetryBeltRestoreNonce`。
 - **矩阵显示别名**：SL(2,3) 元素 label = 2×2 F₃ smallmatrix TeX（与 GL(2,3) 同口径；`sl23MatrixLabel(k)` 经 2T 同构现算打表），词标签 stash 进 `wordLabel` 供树视图等按词拼接的消费者兜底；代数仍由 GAP 乘法表承担（元素 id/value 不变）。
+- **相机：四元数轨道、无经纬极（2026-10-15 修）**：对称性视图相机从 drei `OrbitControls` 换成 `SymmetryOrbitControls`（数学复用 `cayley3dOrbit.ts`）。根因：OrbitControls 球坐标 `phi ∈ [0, π]` 是硬钳，相机到下极点就停住（用户反馈「不能越过南北极」）。新控制器水平拖绕屏幕上方轴、竖直拖绕屏幕右方轴（相机局部系 ⇒ 跟手且过极点画面连续），右键平移 / 滚轮缩放 / 双击复位；演示期间按 `lockCameraOnAction` 门控。位姿经模块级 `symmetryCameraState` 上报，导出桥 `getSymmetryCamera()` 读取（e2e 硬断言越过极点：`direction.y < −0.3`）。
 
 ## 7. 子群格视图 (SubgroupLatticeView.tsx)
 

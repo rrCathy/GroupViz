@@ -140,6 +140,9 @@ export function ViewWindow({
   const [symReplay, setSymReplay] = useState(0)
   // 对称性视图复位信号：叠加模式下自增即动画回恒等（演示元素保留，可继续叠加）
   const [symReset, setSymReset] = useState(0)
+  // 2T 皮带：累计扭转 τ（场景 onBeltChange 回上报，供 ⚙ 面板按钮门控）+ 720° 复原演练信号
+  const [symBelt, setSymBelt] = useState(0)
+  const [symBeltRestore, setSymBeltRestore] = useState(0)
   const displayKey = view + (group ? `|${group.symbol}|${group.order}` : (view === 'homomorphism' && homomorphism ? `|${homomorphism.source.symbol}|${homomorphism.target.symbol}` : ''))
   const [curDisplayKey, setCurDisplayKey] = useState(displayKey)
   if (curDisplayKey !== displayKey) {
@@ -280,7 +283,7 @@ export function ViewWindow({
             <ViewContent
               view={view} group={group ?? null} homomorphism={homomorphism ?? null}
               viewParams={viewParams} config={config} sel={sel} ct={ct} vbSize={vbSize}
-              viewWindowTheme={viewWindowTheme} symReplay={symReplay} symReset={symReset} hoverEl={hoverEl}
+              viewWindowTheme={viewWindowTheme} symReplay={symReplay} symReset={symReset} symBeltRestore={symBeltRestore} onSymBeltChange={setSymBelt} hoverEl={hoverEl}
               csElementMap={csElementMap} csColors={csColors} csHighlight={csHighlight}
               csSubgroup={csSubgroup} csOpts={csOpts} cosetStripVp={cosetStripVp}
               actionComputation={actionComputation} actionKind={actionKind} actionVp={actionVp}
@@ -453,6 +456,7 @@ export function ViewWindow({
           csOpts={csOpts} csSubgroup={csSubgroup} csType={csType} cosetStripVp={cosetStripVp}
           symType={symType} symCanDual={symCanDual} symVp={symVp} symShowAction={symShowAction}
           symActiveId={symActiveId} setSymReplay={setSymReplay} setSymReset={setSymReset}
+          symBelt={symBelt} setSymBeltRestore={setSymBeltRestore}
         />
       )}
     </>

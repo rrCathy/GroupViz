@@ -3,6 +3,7 @@ import { createGroupFromSymbol } from './groupFactory'
 import { getAvailableShapesForView, getAvailableShapes3D } from '../core/types'
 import { getSymmetryType, type SymmetryType } from '../core/symmetryType'
 import { exportSymmetryAsGifBlob } from './export'
+import { readSymmetryCamera } from './symmetryCameraState'
 
 interface SymmetryInfo {
   type: string
@@ -46,6 +47,9 @@ interface ExportBridge {
   getSymmetryPose(): [number, number, number, number] | null
   /** 2T 对称性视图累计皮带扭转 τ（弧度；Σ 2ψ）。非 2T 群/未演示时为 0 */
   getSymmetryBelt(): number | null
+  /** 对称性视图相机位姿（四元数轨道，无经纬极）；e2e 断言越过极点用
+   *  （direction.y > 0.5 ⇒ 相机已到目标下方）。Scene 未挂载时为默认初始视角 */
+  getSymmetryCamera(): { position: [number, number, number]; direction: [number, number, number] } | null
   setSymmetryCompose(compose: boolean): void
   getAvailableViewsForExport(): string[]
   hideOverlays(): void
@@ -136,6 +140,11 @@ const bridge: ExportBridge = {
   // 2T 累计皮带扭转 τ（onBeltChange 经 context 同步）——双覆盖的 SU(2) 记忆
   getSymmetryBelt(): number | null {
     return bridge._getSymmetryBelt?.() ?? null
+  },
+
+  // 对称性视图相机位姿（模块级上报，无 React state）——e2e 断言「越过南北极」
+  getSymmetryCamera() {
+    return readSymmetryCamera()
   },
 
   setSymmetryCompose(compose: boolean): void {

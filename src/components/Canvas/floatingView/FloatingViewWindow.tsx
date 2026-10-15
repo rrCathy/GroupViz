@@ -60,6 +60,9 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
   // 对称性视图：重放/复位信号 + 提示浮条文案（非迁移视图用 lazyViews 自带机制，这里只做面板 prop 兜底）
   const [symReplay, setSymReplay] = useState(0)
   const [symReset, setSymReset] = useState(0)
+  // 2T 皮带：累计扭转 τ + 720° 复原演练信号（窗口本地，与内核壳同口径）
+  const [symBelt, setSymBelt] = useState(0)
+  const [symBeltRestore, setSymBeltRestore] = useState(0)
   const [symHintText, setSymHintText] = useState<string | null>(null)
   // 表格窗口按内容撑尺寸（内核用 useTableMinSize；老式壳走 legacyTableMin，W-4 迁 table 时对齐）
   const setTableLayoutSize = useCallback(() => { /* noop：未迁视图用 legacyTableMin */ }, [])
@@ -373,6 +376,8 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
               viewWindowTheme={viewWindowTheme}
               symReplay={symReplay}
               symReset={symReset}
+              symBeltRestore={symBeltRestore}
+              onSymBeltChange={setSymBelt}
               hoverEl={hoverElement}
               csElementMap={csElementMap}
               csColors={csColors}
@@ -463,6 +468,7 @@ export function FloatingViewWindow({ id, view, title }: { id: string; view: View
           csOpts={csOpts} csSubgroup={csSubgroup} csType={csType} cosetStripVp={cosetStripVp}
           symType={symType} symCanDual={symCanDual} symVp={symVp} symShowAction={symShowAction}
           symActiveId={symActiveId} setSymReplay={setSymReplay} setSymReset={setSymReset}
+          symBelt={symBelt} setSymBeltRestore={setSymBeltRestore}
         />
       )}
     </GroupContext.Provider>

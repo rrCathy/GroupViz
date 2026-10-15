@@ -6,6 +6,7 @@ import type { FaceSubgroupResult } from '../../../core/algebra/faces3D'
 import { FACE_COLOR_PALETTE } from '../../../core/algebra/faces3D'
 import type { CosetStripSubgroupOption } from '../../../core/algebra/cosetStrip'
 import { getSymmetryType } from '../../../core/symmetryType'
+import { canDemoBeltRestore } from '../beltGeometry'
 import { toggleCayleyActionReducer, addAllCayleyActionsHelper } from '../../../context/cayleyActions'
 import { texify, renderTex } from '../../../utils/texify'
 import { PARAMS_W } from './geometry'
@@ -72,6 +73,9 @@ export interface ViewParamsPanelProps {
   setSymReplay: React.Dispatch<React.SetStateAction<number>>
   /** 对称性视图复位信号 setter（叠加模式 Reset pose 走动画回恒等） */
   setSymReset: React.Dispatch<React.SetStateAction<number>>
+  /** 2T 皮带累计扭转 τ（场景 onBeltChange 回上报）+ 720° 复原演练信号 setter */
+  symBelt: number
+  setSymBeltRestore: React.Dispatch<React.SetStateAction<number>>
   /** VCL Decorations（DEC-2）：当前窗口的注释集 */
   decorations: Decorations
   onDecorationsChange: (d: Decorations) => void
@@ -88,6 +92,7 @@ export function ViewParamsPanel({
   faceSubgroupCands, faceSelSubgroup, faceOn, patchFaceFill,
   tableVp, sublatticeParams, csOpts, csSubgroup, csType, cosetStripVp,
   symType, symCanDual, symVp, symShowAction, symActiveId, setSymReplay, setSymReset,
+  symBelt, setSymBeltRestore,
   decorations, onDecorationsChange, selectedIds,
 }: ViewParamsPanelProps) {
   return (
@@ -863,24 +868,45 @@ export function ViewParamsPanel({
                   </div>
                   <div style={{ marginBottom: 3, fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>Action element</span>
-                    {!config.actionLocked && symActiveId && (
-                      <button
-                        title={symVp.compose ? 'Reset pose (identity, keep element)' : 'Reset pose (identity)'}
-                        data-testid="sym-panel-reset"
-                        onClick={() => {
-                          // 叠加感知：叠加模式回恒等动画（演示元素保留）；非叠加清元素
-                          if (symVp.compose) setSymReset(n => n + 1)
-                          else updateViewParams({ actionElementId: null })
-                        }}
-                        style={{
-                          background: 'transparent', border: '1px solid var(--border-primary)',
-                          color: 'var(--text-dim)', borderRadius: 4, padding: '1px 6px',
-                          fontSize: 10, cursor: 'pointer',
-                        }}
-                      >
-                        ✕ Reset pose
-                      </button>
-                    )}
+                    <span style={{ display: 'flex', gap: 4 }}>
+                      {!config.actionLocked && symActiveId && (
+                        <button
+                          title={symVp.compose ? 'Reset pose (identity, keep element)' : 'Reset pose (identity)'}
+                          data-testid="sym-panel-reset"
+                          onClick={() => {
+                            // 叠加感知：叠加模式回恒等动画（演示元素保留）；非叠加清元素
+                            if (symVp.compose) setSymReset(n => n + 1)
+                            else updateViewParams({ actionElementId: null })
+                          }}
+                          style={{
+                            background: 'transparent', border: '1px solid var(--border-primary)',
+                            color: 'var(--text-dim)', borderRadius: 4, padding: '1px 6px',
+                            fontSize: 10, cursor: 'pointer',
+                          }}
+                        >
+                          ✕ Reset pose
+                        </button>
+                      )}
+                      {/* 2T 专属：720° 复原演练（绕过锚点解开两整扭）；按累计扭转门控 */}
+                      {symType === 'binaryTetrahedron' && (
+                        <button
+                          title={canDemoBeltRestore(symBelt)
+                            ? 'Loop the belt around the anchor to undo two full twists (720°)'
+                            : 'Belt needs two full twists (720°) — accumulate twists in Compose mode first'}
+                          data-testid="sym-panel-belt-restore"
+                          disabled={!canDemoBeltRestore(symBelt)}
+                          onClick={() => setSymBeltRestore(n => n + 1)}
+                          style={{
+                            background: 'transparent', border: '1px solid var(--border-primary)',
+                            color: 'var(--text-dim)', borderRadius: 4, padding: '1px 6px',
+                            fontSize: 10, cursor: 'pointer',
+                            opacity: canDemoBeltRestore(symBelt) ? 1 : 0.5,
+                          }}
+                        >
+                          ↺ Belt restore
+                        </button>
+                      )}
+                    </span>
                   </div>
                   {config.actionLocked ? (
                     /* 固定模式（actionLocked）：演示元素由宿主动作参数决定且不可切换 ——

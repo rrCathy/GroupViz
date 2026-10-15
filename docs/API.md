@@ -301,8 +301,11 @@ const s = useSceneState(group?, options?)
 | `resetSignal` | `number` | `0` | 自增即动画回恒等（叠加模式手动复位，phase 'homing'；演示元素保留） |
 | `onPoseChange` | `(q: [number, number, number, number]) => void` | — | 姿态落定（动画播完 / 手动复位完成）回调，上报 [x,y,z,w] |
 | `onBeltChange` | `(tau: number) => void` | — | **2T 专用**：皮带扭转落定回调，上报**累计** τ = Σ(2ψ)（弧度；SL(2,3) 对称性视图 Dirac 皮带，双覆盖的 SU(2) 记忆）。非 2T 群不触发 |
+| `beltRestoreSignal` | `number` | `0` | **2T 专用**：720° 复原演练信号，自增即播放「皮带绕过锚点解开两整扭」（仅累计 τ ≥ 720° 有效，其余 no-op） |
 | `lockCameraOnAction` | `boolean` | `false` | 演示期间是否禁用相机旋转/平移 |
 | `onAnimationEnd` | `() => void` | — | 姿态落定（动画播完）回调 |
+
+> **相机（2026-10-15）**：对称性视图相机为**四元数轨道**（`SymmetryOrbitControls`，数学复用 `cayley3dOrbit.ts`）——无经纬极硬钳，可越过南北极；水平拖绕屏幕上方轴、竖直拖绕屏幕右方轴（相机局部系，抓取语义与旧 OrbitControls 一致），右键平移 / 滚轮缩放 / 双击复位。位姿经模块级 `symmetryCameraState` 上报，导出桥 `getSymmetryCamera()` 可读（`{position, direction}`）。
 
 > **行为变更提示**：`lockCameraOnAction` 缺省 `false`。旧实现等价于恒 `true`
 > （`enableRotate = !showAction && !locked`），会出现「演示元素未命中 → 动画没跑，视角却被锁死」。

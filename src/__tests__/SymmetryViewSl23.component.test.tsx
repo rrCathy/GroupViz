@@ -19,11 +19,15 @@ import { sl23Quat, sl23Spin } from '../core/groups/sl23'
 
 const { frameCbs } = vi.hoisted(() => ({ frameCbs: [] as Array<(state: unknown, delta: number) => void> }))
 
+// 真相机实例（轨道控制器需要 position/quaternion/matrix 全量 API；与 Canvas 默认
+// [0,3,10] 一致）。useThree 在渲染期调用，此时模块级 let 已初始化，无 TDZ 问题。
+let stubCamera: THREE.PerspectiveCamera | null = null
+
 vi.mock('@react-three/fiber', () => ({
   Canvas: (props: { children?: ReactNode }) => <div data-testid="r3f-canvas">{props.children}</div>,
   useThree: () => ({
     gl: { domElement: document.createElement('canvas') },
-    camera: { fov: 50, near: 0.1, far: 100, aspect: 1, position: { set() {} }, up: { set() {} }, lookAt() {} },
+    camera: stubCamera ?? (stubCamera = new THREE.PerspectiveCamera()),
     scene: {},
   }),
   useFrame: (cb: (state: unknown, delta: number) => void) => { frameCbs.push(cb) },
@@ -204,6 +208,34 @@ describe('SymmetryViewScene · SL(2,3) 2T + Dirac 皮带', () => {
     feedFrames()
     expectPoseClose(h.poses.at(-1), IDENTITY)
     expect(h.belts.at(-1)).toBe(0)
+  })
+
+  it('720° 复原演练：τ 不足两整扭时信号 no-op', () => {
+    const h = mountHarness({ compose: true, actionElementId: j4.id })
+    feedFrames()
+    h.rerender({ replaySignal: 1 })
+    feedFrames()
+    expect(h.belts.at(-1)).toBeCloseTo(2 * Math.PI, 9)
+    const settled = h.belts.length
+    // τ = 360°（单整扭拓扑上不可消）⇒ 演练信号无效
+    h.rerender({ beltRestoreSignal: 1 })
+    feedFrames()
+    expect(h.belts.length).toBe(settled)
+  })
+
+  it('720° 复原演练：拧满两整扭后触发 → 落定 τ=0（绕过锚点解开）', () => {
+    const h = mountHarness({ compose: true, actionElementId: j4.id })
+    feedFrames()
+    for (let n = 2; n <= 4; n++) {
+      h.rerender({ replaySignal: n })
+      feedFrames()
+    }
+    expect(h.belts.at(-1)).toBeCloseTo(4 * Math.PI, 9)
+    h.rerender({ beltRestoreSignal: 1 })
+    feedFrames()
+    // 演练（2.5s @ speed 1）走完：τ 一次性解开两整扭回 0
+    expect(h.belts.at(-1)).toBe(0)
+    expectPoseClose(h.poses.at(-1), IDENTITY)
   })
 
   it('非叠加换元素：皮带先 unwind 回 0 再扭到新元素贡献', () => {

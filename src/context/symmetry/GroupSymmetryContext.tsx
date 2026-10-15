@@ -16,6 +16,8 @@ interface GroupSymmetryState {
   symmetryApplyNonce: number
   /** 叠加模式复位信号：自增即动画回恒等（phase 'homing'） */
   symmetryResetNonce: number
+  /** 2T 皮带 720° 复原演练信号：自增即播放「绕过锚点解开两整扭」（τ ≥ 720° 才有效） */
+  symmetryBeltRestoreNonce: number
   /** 最新落定姿态四元数 [x,y,z,w]（导出桥 getSymmetryPose 读取） */
   symmetryPose: [number, number, number, number]
   /** 2T 对称性视图累计皮带扭转 τ（弧度；Σ 2ψ，导出桥 getSymmetryBelt 读取）。
@@ -32,6 +34,7 @@ interface GroupSymmetryActions {
   setSymmetryCompose: (compose: boolean) => void
   bumpSymmetryApplyNonce: () => void
   bumpSymmetryResetNonce: () => void
+  bumpSymmetryBeltRestoreNonce: () => void
   setSymmetryPose: (q: [number, number, number, number]) => void
   setSymmetryBelt: (tau: number) => void
   setSymmetryActionElementId: (id: string | null) => void
@@ -52,6 +55,7 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
   const [symmetryCompose, setSymmetryComposeState] = useState(false)
   const [symmetryApplyNonce, setSymmetryApplyNonce] = useState(0)
   const [symmetryResetNonce, setSymmetryResetNonce] = useState(0)
+  const [symmetryBeltRestoreNonce, setSymmetryBeltRestoreNonce] = useState(0)
   const [symmetryPose, setSymmetryPoseState] = useState<[number, number, number, number]>([0, 0, 0, 1])
   const [symmetryBelt, setSymmetryBeltState] = useState(0)
   const [symmetryActionElementId, setSymmetryActionElementIdState] = useState<string | null>(null)
@@ -72,6 +76,7 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
       setSymmetryComposeState(false)
       setSymmetryApplyNonce(0)
       setSymmetryResetNonce(0)
+      setSymmetryBeltRestoreNonce(0)
       setSymmetryPoseState([0, 0, 0, 1])
       setSymmetryBeltState(0)
     })
@@ -107,6 +112,10 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
     setSymmetryResetNonce(n => n + 1)
   }, [])
 
+  const bumpSymmetryBeltRestoreNonce = useCallback(() => {
+    setSymmetryBeltRestoreNonce(n => n + 1)
+  }, [])
+
   const setSymmetryPose = useCallback((q: [number, number, number, number]) => {
     setSymmetryPoseState(q)
   }, [])
@@ -125,10 +134,10 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
 
   const value: GroupSymmetryContextType = {
     symmetryShowAction, symmetryRotateSpeed, symmetryVariant, symmetryCompose,
-    symmetryApplyNonce, symmetryResetNonce, symmetryPose, symmetryBelt,
+    symmetryApplyNonce, symmetryResetNonce, symmetryBeltRestoreNonce, symmetryPose, symmetryBelt,
     symmetryActionElementId, selfInverseElementId,
     setSymmetryShowAction, setSymmetryRotateSpeed, setSymmetryVariant, setSymmetryCompose,
-    bumpSymmetryApplyNonce, bumpSymmetryResetNonce, setSymmetryPose, setSymmetryBelt,
+    bumpSymmetryApplyNonce, bumpSymmetryResetNonce, bumpSymmetryBeltRestoreNonce, setSymmetryPose, setSymmetryBelt,
     setSymmetryActionElementId, setSelfInverseElementId,
   }
 

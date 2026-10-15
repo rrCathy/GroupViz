@@ -7,7 +7,7 @@ import { SymmetryViewScene } from './SymmetryViewScene'
 export function SymmetryView() {
   const {
     currentGroup, symmetryShowAction, symmetryRotateSpeed, symmetryVariant, symmetryActionElementId, setHintMessage,
-    symmetryCompose, symmetryApplyNonce, symmetryResetNonce, setSymmetryPose, setSymmetryBelt,
+    symmetryCompose, symmetryApplyNonce, symmetryResetNonce, symmetryBeltRestoreNonce, setSymmetryPose, setSymmetryBelt,
   } = useGroup()
   const { t } = useTranslation()
   const { theme } = useTheme()
@@ -27,6 +27,7 @@ export function SymmetryView() {
       onHint={setHintMessage}
       onPoseChange={setSymmetryPose}
       onBeltChange={setSymmetryBelt}
+      beltRestoreSignal={symmetryBeltRestoreNonce}
     />
   )
 }

@@ -11,11 +11,15 @@ import { computeElementRotation } from '../core/elementRotation'
 // （与 Cayley3DWindowParams 同一套 R3F stub，useFrame 从 noop 改为收集）
 const { frameCbs } = vi.hoisted(() => ({ frameCbs: [] as Array<(state: unknown, delta: number) => void> }))
 
+// 真相机实例（对称性视图轨道控制器需要 position/quaternion/matrix 全量 API；
+// 与 Canvas 默认 [0,3,10] 一致）。useThree 在渲染期调用，模块级 let 已初始化。
+let stubCamera: THREE.PerspectiveCamera | null = null
+
 vi.mock('@react-three/fiber', () => ({
   Canvas: (props: { children?: ReactNode }) => <div data-testid="r3f-canvas">{props.children}</div>,
   useThree: () => ({
     gl: { domElement: document.createElement('canvas') },
-    camera: { fov: 50, near: 0.1, far: 100, aspect: 1, position: { set() {} }, up: { set() {} }, lookAt() {} },
+    camera: stubCamera ?? (stubCamera = new THREE.PerspectiveCamera()),
     scene: {},
   }),
   useFrame: (cb: (state: unknown, delta: number) => void) => { frameCbs.push(cb) },

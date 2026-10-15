@@ -8,6 +8,7 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { AccordionSection } from './AccordionSection'
 import type { Layout3D, CayleyShape2D, Group } from '../../core/types'
 import type { SeriesType } from '../../core/algebra/series'
+import { canDemoBeltRestore } from '../Canvas/beltGeometry'
 import { getSymmetryType } from '../../core/symmetryType'
 import { wordLengthSphereActions } from '../../core/algebra/layouts3D/wordLengthSphereLayout3D'
 import { TORUS_HEX_STAR_GENERATORS } from '../../core/algebra/layouts3D/torusHexLayout3D'
@@ -34,6 +35,8 @@ export function ViewPanel() {
     setSymmetryVariant,
     setSymmetryCompose,
     bumpSymmetryResetNonce,
+    bumpSymmetryBeltRestoreNonce,
+    symmetryBelt,
     cayleyMultiplyType,
     cayleyShape3D,
     cayleyAvailableShapes3D,
@@ -336,6 +339,19 @@ export function ViewPanel() {
                   style={{ width: '100%', marginTop: '2px' }}
                 >
                   {t('panel.resetPose')}
+                </button>
+              )}
+              {/* 2T 专属：720° 复原演练（皮带绕过锚点解开两整扭）；单整扭不可消，按扭转量门控 */}
+              {symType === 'binaryTetrahedron' && (
+                <button
+                  className="panel-btn"
+                  data-testid="symmetry-belt-restore"
+                  disabled={!canDemoBeltRestore(symmetryBelt)}
+                  title={canDemoBeltRestore(symmetryBelt) ? t('symmetry.beltRestoreHint') : t('symmetry.beltRestoreNeed720')}
+                  onClick={bumpSymmetryBeltRestoreNonce}
+                  style={{ width: '100%', marginTop: '2px' }}
+                >
+                  {t('panel.beltRestore')}
                 </button>
               )}
             </>

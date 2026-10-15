@@ -35,6 +35,10 @@ export interface ViewContentProps {
   symReplay: number
   /** 对称性视图复位信号：自增即让 SymmetryViewScene 动画回恒等（叠加模式 ✕ Reset） */
   symReset: number
+  /** 2T 皮带 720° 复原演练信号：自增即播放「绕过锚点解开两整扭」（窗口本地 nonce） */
+  symBeltRestore: number
+  /** 2T 皮带累计扭转 τ 回上报（窗口本地 state，供 ⚙ 面板按钮门控） */
+  onSymBeltChange?: (tau: number) => void
   hoverEl: GroupElement | null
   csElementMap: ReturnType<typeof computeCosetElementMap> | null
   csColors: ReturnType<typeof computeCosetColors>
@@ -67,7 +71,7 @@ export interface ViewContentProps {
 
 export function ViewContent({
   view, group, homomorphism, viewParams, config, sel, ct, vbSize,
-  viewWindowTheme, symReplay, symReset, hoverEl,
+  viewWindowTheme, symReplay, symReset, symBeltRestore, onSymBeltChange, hoverEl,
   csElementMap, csColors, csHighlight, csSubgroup, csOpts, cosetStripVp,
   actionComputation, actionKind, actionVp, actionEdit, actionSel, actionHoverId,
   handleSelect, handleHover, setSymHintText, setTableLayoutSize,
@@ -313,6 +317,8 @@ export function ViewContent({
           hintOnIdle={false}
           replaySignal={symReplay}
           resetSignal={symReset}
+          beltRestoreSignal={symBeltRestore}
+          onBeltChange={onSymBeltChange}
           onHint={msg => setSymHintText(msg)}
         />
       )

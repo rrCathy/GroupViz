@@ -4,13 +4,14 @@ import { createTableGroup } from '../src/core/groups/SmallGroups/tableGroup'
 import { sl23Quat, sl23Spin } from '../src/core/groups/sl23'
 
 /**
- * SL(2,3) 对称性视图（2T + Dirac 开口皮带）真机验证：
- *   SL(2,3) → 对称视图 → 叠加 → 应用 −I（唯一 2 阶元）→
- *   桥读姿态 = (0,0,0,−1)（物体外观恒等，SU(2) 提升取反）+ 皮带 τ = 360°；
- *   再作用一次 → 皮带 720°（两整扭拓扑复原）；复位 → 恒等 + 皮带回 0。
+ * SL(2,3) 对称性视图（2T + Dirac 开口皮带 v2）真机验证（2026-10-15 用户四条反馈）：
+ *  ① 相机可越过南北极（四元数轨道替换 OrbitControls 的 phi∈[0,π] 硬钳）；
+ *  ② 皮带扭转轴与物体同轴（水平轴元素的皮带绕水平轴缠，截图人工核对）；
+ *  ③ 720° 复原演练（绕过锚点解开两整扭，而非 mod 跳平）；
+ *  ④ 皮带物体端削尖（截图人工核对）。
  *
  * 主画布对称性视图（3D）无元素可点，演示元素经导出桥注入（与叠加模式 e2e 同一通道）；
- * 叠加开关 / 复位按钮走真实 UI 点击。
+ * 叠加开关 / 复位 / 皮带复位按钮走真实 UI 点击。
  */
 
 const g = createTableGroup(24, 3)
@@ -21,9 +22,16 @@ function rotQuat(el: { value: number[] }): [number, number, number, number] {
   return [b / 2, c / 2, d / 2, a / 2]
 }
 
-/** −I = 唯一 2 阶元；4 阶元（物体旋转 180°） */
+/** −I = 唯一 2 阶元；绕 Y 轴 180° 的 4 阶元；绕 X 轴 180° 的 4 阶元 */
 const negI = g.elements.find((e, i) => i !== 0 && g.multiply(e, e).id === g.identity.id)!
-const j4 = g.elements.find(e => Math.abs(sl23Spin(e.value[0]).angleRad - Math.PI) < 1e-9)!
+const j4 = g.elements.find(e => {
+  const s = sl23Spin(e.value[0])
+  return Math.abs(s.angleRad - Math.PI) < 1e-9 && Math.abs(s.axis![1] - 1) < 1e-9
+})!
+const i4 = g.elements.find(e => {
+  const s = sl23Spin(e.value[0])
+  return Math.abs(s.angleRad - Math.PI) < 1e-9 && Math.abs(s.axis![0] - 1) < 1e-9
+})!
 
 type BridgeApi = {
   createGroupFromSymbol(symbol: string): { symbol: string } | null
@@ -34,12 +42,13 @@ type BridgeApi = {
   setSymmetryCompose(compose: boolean): void
   getSymmetryPose(): [number, number, number, number] | null
   getSymmetryBelt(): number | null
+  getSymmetryCamera(): { position: [number, number, number]; direction: [number, number, number] } | null
 }
 
 async function loadSl23Symmetry(page: import('@playwright/test').Page): Promise<void> {
   await enterWorkspace(page)
   await waitForBridge(page)
-  // 先换群（换群触发 context 重置 microtask），等 symbol 落地再开演示/叠加
+  // 先换群（换群触发 context 重置 microtask），等 symbol 落地再开演示
   await page.evaluate(() => {
     const api = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__
     const gr = api.createGroupFromSymbol('SL(2,3)')
@@ -54,23 +63,79 @@ async function loadSl23Symmetry(page: import('@playwright/test').Page): Promise<
     const api = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__
     api._setView('symmetry')
     api._setSymmetryShowAction(true)
-    api.setSymmetryCompose(true)
   })
+  // 视图切换会重挂载 Canvas（轨道控制器监听器随之重挂）⇒ 等它真就绪再拖，
+  // 否则前几步 pointermove 丢失（实测只转到赤道 y=0 就停）
+  await expect(page.locator('.canvas-viewport canvas').first()).toBeVisible()
+  await page.waitForTimeout(500)
 }
 
-test.describe('symmetry SL(2,3)（2T + Dirac 皮带）', () => {
-  test('−I：物体外观恒等（姿态 (0,0,0,−1)）+ 皮带拧满一圈（τ=360°）', async ({ page }) => {
+test.describe('symmetry SL(2,3)（2T + Dirac 皮带 v2）', () => {
+  test('① 相机可越过南北极（竖直拖拽穿过下极点，direction.y 由负转正）', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', err => errors.push(String(err)))
+
+    await loadSl23Symmetry(page)
+    // 初始：相机在目标上方（direction = 目标→相机 方向，y > 0）
+    const before = await page.evaluate(() =>
+      (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryCamera())
+    expect(before).not.toBeNull()
+    expect(before!.direction[1]).toBeGreaterThan(0)
+
+    const canvas = page.locator('.canvas-viewport canvas').first()
+    const box = (await canvas.boundingBox())!
+    const cx = box.x + box.width / 2
+    const cy = box.y + box.height / 2
+    // 抓取语义（与旧 OrbitControls 一致）：拖**上** = 相机向下降。分多步大幅上拖，
+    // 越过下极点后相机位于目标下方（position.y < 0、direction.y < 0）
+    await page.mouse.move(cx, cy)
+    await page.mouse.down()
+    for (let i = 1; i <= 12; i++) {
+      await page.mouse.move(cx, cy - (300 * i) / 12)
+      await page.waitForTimeout(30)
+    }
+    await page.mouse.up()
+    await page.waitForTimeout(200)
+
+    const after = await page.evaluate(() =>
+      (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryCamera())
+    // 越过极点：相机位置到目标下方（y < 0），direction.y 由正转负
+    expect(after!.position[1]).toBeLessThan(0)
+    expect(after!.direction[1]).toBeLessThan(-0.3)
+
+    expect(errors).toEqual([])
+  })
+
+  test('② 水平轴元素：皮带绕水平轴缠（与物体同轴，截图人工核对）', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', err => errors.push(String(err)))
+
+    await loadSl23Symmetry(page)
+    // 应用绕 X 轴 180° 的 4 阶元 i：物体横转，皮带应绕 X 轴缠（非竖轴扭）
+    await page.evaluate(([id]) => {
+      (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__._setSymmetryElement(id)
+    }, [i4.id])
+    await page.waitForFunction(
+      (exp) => {
+        const p = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryPose()
+        if (!p) return false
+        return [0, 1, 2, 3].every(i => Math.abs(p[i] - exp[i]) < 1e-4)
+      },
+      rotQuat(i4),
+      { timeout: 10_000 },
+    )
+    await page.waitForTimeout(300)
+    await page.screenshot({ path: 'browser-sl23-belt-horizontal.png', fullPage: false })
+
+    expect(errors).toEqual([])
+  })
+
+  test('③ −I 皮带戏法：物体外观恒等（姿态 (0,0,0,−1)）+ 皮带拧满一圈', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', err => errors.push(String(err)))
 
     await loadSl23Symmetry(page)
 
-    // 叠加开关对 SL(2,3) 开放（binaryTetrahedron 与 tetrahedron 同门控）
-    const composeToggle = page.getByTestId('symmetry-compose-toggle')
-    await expect(composeToggle).toBeVisible()
-    await expect(composeToggle.locator('input')).toBeChecked()
-
-    // 应用 −I → 姿态落定 = Q(−I)（与恒等同一旋转，四元数取反）
     await page.evaluate(([id]) => {
       (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__._setSymmetryElement(id)
     }, [negI.id])
@@ -84,7 +149,6 @@ test.describe('symmetry SL(2,3)（2T + Dirac 皮带）', () => {
       expected,
       { timeout: 10_000 },
     )
-    // 皮带 = 一整圈（τ = 360° ⇔ q = −1，皮带戏法核心态）
     await page.waitForFunction(
       () => {
         const tau = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryBelt()
@@ -93,18 +157,28 @@ test.describe('symmetry SL(2,3)（2T + Dirac 皮带）', () => {
       null,
       { timeout: 10_000 },
     )
-    // 截图：人工核对皮带扭转几何（一整圈）与四面体半透明面透出
     await page.screenshot({ path: 'browser-sl23-belt-fullturn.png', fullPage: false })
 
     expect(errors).toEqual([])
   })
 
-  test('叠加 −I 两次 → 皮带 720° 复原；复位 → 恒等 + 皮带回 0', async ({ page }) => {
+  test('③b 720° 复原演练：累到两整扭 → 按钮亮 → 演示绕过锚点 → τ 回 0', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', err => errors.push(String(err)))
 
     await loadSl23Symmetry(page)
+    await page.evaluate(() => {
+      const api = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__
+      api.setSymmetryCompose(true)
+    })
 
+    // 叠加开关可见且已勾（2T 开放）
+    const composeToggle = page.getByTestId('symmetry-compose-toggle')
+    await expect(composeToggle).toBeVisible()
+    await expect(composeToggle.locator('input')).toBeChecked()
+
+    // 累到 720°：−I(2π) + 绕 X 轴 4 阶元(π) + 绕 Y 轴 4 阶元(π)（三个不同元素——
+    // 同一元素连设两次不重触发 compose，重复作用得走 ⟳ Replay 通道）
     await page.evaluate(([id]) => {
       (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__._setSymmetryElement(id)
     }, [negI.id])
@@ -116,11 +190,9 @@ test.describe('symmetry SL(2,3)（2T + Dirac 皮带）', () => {
       null,
       { timeout: 10_000 },
     )
-
-    // 4 阶元 j 也走一遍（物体旋转 180° + 皮带 180°），再叠 −I 到 720° 量级
     await page.evaluate(([id]) => {
       (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__._setSymmetryElement(id)
-    }, [j4.id])
+    }, [i4.id])
     await page.waitForFunction(
       () => {
         const tau = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryBelt()
@@ -129,21 +201,53 @@ test.describe('symmetry SL(2,3)（2T + Dirac 皮带）', () => {
       null,
       { timeout: 10_000 },
     )
-
-    // UI 点复位姿态 → homing：姿态恒等 + 皮带回 0
-    await page.getByTestId('symmetry-reset-pose').click()
+    await page.evaluate(([id]) => {
+      (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__._setSymmetryElement(id)
+    }, [j4.id])
     await page.waitForFunction(
       () => {
-        const api = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__
-        const p = api.getSymmetryPose()
-        const tau = api.getSymmetryBelt()
-        if (!p || tau === null) return false
-        return Math.abs(p[3] - 1) < 1e-4 && [0, 1, 2].every(i => Math.abs(p[i]) < 1e-4) && Math.abs(tau) < 1e-3
+        const tau = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryBelt()
+        return tau !== null && Math.abs(tau - 4 * Math.PI) < 1e-3
       },
       null,
       { timeout: 10_000 },
     )
 
+    // 「演示皮带复位」按钮此时才可用（拧满两圈）
+    const restoreBtn = page.getByTestId('symmetry-belt-restore')
+    await expect(restoreBtn).toBeEnabled()
+    await restoreBtn.click()
+    // 演练中（2.5s）：抓一张中途截图人工核对「绕过锚点」弓形
+    await page.waitForTimeout(900)
+    await page.screenshot({ path: 'browser-sl23-belt-restore-mid.png', fullPage: false })
+    // 演练完成：τ 一次性解开两整扭回 0
+    await page.waitForFunction(
+      () => {
+        const tau = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryBelt()
+        return tau !== null && Math.abs(tau) < 1e-3
+      },
+      null,
+      { timeout: 15_000 },
+    )
+    await page.screenshot({ path: 'browser-sl23-belt-restore-done.png', fullPage: false })
+
     expect(errors).toEqual([])
+  })
+
+  test('③c 单整扭时复位按钮禁用（拓扑上不可消）', async ({ page }) => {
+    await loadSl23Symmetry(page)
+    await page.evaluate(([id]) => {
+      (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__._setSymmetryElement(id)
+    }, [negI.id])
+    await page.waitForFunction(
+      () => {
+        const tau = (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryBelt()
+        return tau !== null && Math.abs(tau - 2 * Math.PI) < 1e-3
+      },
+      null,
+      { timeout: 10_000 },
+    )
+    // τ = 360°（单整扭）：按钮禁用
+    await expect(page.getByTestId('symmetry-belt-restore')).toBeDisabled()
   })
 })

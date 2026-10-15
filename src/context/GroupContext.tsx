@@ -63,6 +63,8 @@ interface GroupContextState {
   /** 叠加模式应用/复位信号 nonce 与最新落定姿态 [x,y,z,w] */
   symmetryApplyNonce: number
   symmetryResetNonce: number
+  /** 2T 皮带 720° 复原演练信号（自增即播放绕过锚点解开两整扭） */
+  symmetryBeltRestoreNonce: number
   symmetryPose: [number, number, number, number]
   /** 2T 对称性视图累计皮带扭转 τ（弧度，Σ 2ψ；SU(2) 记忆） */
   symmetryBelt: number
@@ -179,6 +181,7 @@ interface GroupContextActions {
   setSymmetryCompose: (compose: boolean) => void
   bumpSymmetryApplyNonce: () => void
   bumpSymmetryResetNonce: () => void
+  bumpSymmetryBeltRestoreNonce: () => void
   setSymmetryPose: (q: [number, number, number, number]) => void
   setSymmetryBelt: (tau: number) => void
   setSymmetryActionElementId: (id: string | null) => void
@@ -614,6 +617,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     symmetryCompose: symmetry.symmetryCompose,
     symmetryApplyNonce: symmetry.symmetryApplyNonce,
     symmetryResetNonce: symmetry.symmetryResetNonce,
+    symmetryBeltRestoreNonce: symmetry.symmetryBeltRestoreNonce,
     symmetryPose: symmetry.symmetryPose,
     symmetryBelt: symmetry.symmetryBelt,
     symmetryActionElementId: symmetry.symmetryActionElementId,
@@ -741,6 +745,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     setSymmetryCompose: symmetry.setSymmetryCompose,
     bumpSymmetryApplyNonce: symmetry.bumpSymmetryApplyNonce,
     bumpSymmetryResetNonce: symmetry.bumpSymmetryResetNonce,
+    bumpSymmetryBeltRestoreNonce: symmetry.bumpSymmetryBeltRestoreNonce,
     setSymmetryPose: symmetry.setSymmetryPose,
     setSymmetryBelt: symmetry.setSymmetryBelt,
     setSymmetryActionElementId: symmetry.setSymmetryActionElementId,

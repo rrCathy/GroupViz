@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls, Html } from '@react-three/drei'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useTranslation } from '../../i18n/useTranslation'
 import { texify, renderTex } from '../../utils/texify'
@@ -10,6 +10,28 @@ import { computeElementRotation, type RotationInfo } from '../../core/elementRot
 import type { Group, GroupElement } from '../../core/types'
 import { getSymmetryType } from '../../core/symmetryType'
 import type { SymmetryType } from '../../core/symmetryType'
+import {
+  BELT_ANCHOR_Y, BELT_SEGMENTS, BELT_RESTORE_AMOUNT,
+  beltStations, beltRestoreDirections,
+} from './beltGeometry'
+import { SymmetryOrbitControls } from './SymmetryOrbitControls'
+
+/** 复原演练时长（秒，rotateSpeed=1）：物体端绕锚点公转一圈、解开两整扭 */
+const BELT_RESTORE_SECS = 2.5
+
+/** 皮带账本状态（useAnimatedRotation 私有，BeltStrap 只读消费） */
+interface BeltLedgerState {
+  /** 当前扭转（弧度，帧间插值中） */
+  beltTau: number
+  /** 目标累计扭转（落定值） */
+  beltTarget: number
+  /** 扭转轴（单位向量；当前演示元素的旋转轴，与物体同轴） */
+  beltAxis: THREE.Vector3
+  /** 复原演练中 */
+  beltRestoring: boolean
+  /** 复原演练进度 0..1 */
+  beltRestoreT: number
+}
 
 interface SymmetryData {
   vertices: THREE.Vector3[]
@@ -271,6 +293,9 @@ export interface SymmetryViewSceneProps {
    *  上报**累计** τ = Σ(2ψ)（物体旋转角）。q 与 −q 物体旋转相同、τ 不同，
    *  皮带即 SU(2) 记忆（双覆盖在画面上的可见载体）。非 2T 群不触发。 */
   onBeltChange?: (tau: number) => void
+  /** 720° 复原演练信号：宿主自增即播放「皮带绕过锚点解开两整扭」动画
+   *  （仅 2T 且累计扭转 ≥ 720° 时有效；其余为 no-op） */
+  beltRestoreSignal?: number
 }
 
 /** 对称性视图纯渲染核（props 化、主题解耦）：Canvas + 场景 + 顶部标注 + 演示动画。
@@ -295,6 +320,7 @@ export function SymmetryViewScene({
   resetSignal = 0,
   onPoseChange,
   onBeltChange,
+  beltRestoreSignal = 0,
 }: SymmetryViewSceneProps) {
   const symmetryType = symmetryTypeProp ?? getSymmetryType(group)
   const isDark = theme ? theme === 'dark' : dark
@@ -341,6 +367,7 @@ export function SymmetryViewScene({
           resetSignal={resetSignal}
           onPoseChange={onPoseChange}
           onBeltChange={onBeltChange}
+          beltRestoreSignal={beltRestoreSignal}
           lockCameraOnAction={lockCameraOnAction}
           onAnimationEnd={onAnimationEnd}
         />
@@ -363,11 +390,20 @@ function useAnimatedRotation(
   resetSignal?: number,
   onPoseChange?: (q: [number, number, number, number]) => void,
   /** 2T 皮带账本（Dirac 开口皮带的扭转记忆）：`twist` = 当前演示元素的扭转贡献
-   *  θ_el = 2ψ（弧度，正标量；非 2T 群不传 ⇒ 皮带恒 0 且不上报）。
+   *  θ_el = 2ψ（弧度，正标量；非 2T 群不传 ⇒ 皮带恒 0 且不上报）；`axis` = 该元素
+   *  的旋转轴（与物体同轴——皮带绕同一根轴缠，2026-10-15 修）。
    *  非叠加：reset 段先把皮带 unwind 回 0、rotating 段再扭到 θ_el；
    *  叠加：从当前累计直接累加（与四元数左乘同节奏）；homing：动画回 0。
-   *  落定/复位完成时经 `onChange` 上报**累计** τ。 */
-  belt?: { twist: number; onChange?: (tau: number) => void },
+   *  落定/复位完成时经 `onChange` 上报**累计** τ；`onRestoreChange` 上报
+   *  720° 复原演练的起止（宿主用于提示文案/按钮态）。 */
+  belt?: {
+    twist: number
+    axis: [number, number, number] | null
+    onChange?: (tau: number) => void
+    onRestoreChange?: (restoring: boolean) => void
+  },
+  /** 720° 复原演练信号：宿主自增即播放「绕过锚点解开两整扭」（仅 τ ≥ 720° 有效） */
+  beltRestoreSignal?: number,
 ) {
   const stateRef = useRef({
     target: null as THREE.Quaternion | null,
@@ -381,6 +417,9 @@ function useAnimatedRotation(
     beltTau: 0,
     beltTarget: 0,
     beltFrom: 0,
+    beltAxis: new THREE.Vector3(0, 1, 0),
+    beltRestoring: false,
+    beltRestoreT: 0,
   })
 
   // 结束回调放 ref：避免宿主每帧传新闭包导致 useFrame 里读到过期函数。
@@ -400,13 +439,31 @@ function useAnimatedRotation(
     if (belt) return
     const st = stateRef.current
     st.beltTau = 0; st.beltTarget = 0; st.beltFrom = 0
+    st.beltRestoring = false; st.beltRestoreT = 0
   }, [belt])
 
   useEffect(() => { stateRef.current.speed = speed }, [speed])
 
+  // 720° 复原演练：皮带绕过锚点公转一圈，解开两整扭（τ < 720° 时信号无效——
+  // 单整扭拓扑上不可消，正是皮带戏法的核心）
+  useEffect(() => {
+    const st = stateRef.current
+    if (!beltRestoreSignal || !beltRef.current) return
+    if (st.beltRestoring) return
+    if (st.beltTarget < BELT_RESTORE_AMOUNT - 1e-6) return
+    st.beltRestoring = true
+    st.beltRestoreT = 0
+    beltRef.current.onRestoreChange?.(true)
+  }, [beltRestoreSignal])
+
   useEffect(() => {
     const st = stateRef.current
     const twist = beltRef.current?.twist ?? 0
+    // 换演示元素：记录其旋转轴（皮带与物体同轴缠绕）；取消进行中的复原演练
+    const axis = beltRef.current?.axis
+    if (axis) st.beltAxis.set(axis[0], axis[1], axis[2]).normalize()
+    st.beltRestoring = false
+    st.beltRestoreT = 0
     if (targetQuat) {
       st.base = targetQuat.clone()
       if (composeRef.current) {
@@ -453,6 +510,10 @@ function useAnimatedRotation(
   useEffect(() => {
     const st = stateRef.current
     if (!replaySignal || !st.base) return
+    const axis = beltRef.current?.axis
+    if (axis) st.beltAxis.set(axis[0], axis[1], axis[2]).normalize()
+    st.beltRestoring = false
+    st.beltRestoreT = 0
     if (composeRef.current) {
       st.from.copy(st.currentQuat)
       st.target = st.base.clone().multiply(st.currentQuat)
@@ -496,6 +557,18 @@ function useAnimatedRotation(
 
   useFrame((_, dt) => {
     const st = stateRef.current
+    // 复原演练推进（与四元数动画并行）：绕锚点公转一圈，τ 按 720° 递减，落定上报
+    if (st.beltRestoring) {
+      st.beltRestoreT += (dt * st.speed) / BELT_RESTORE_SECS
+      if (st.beltRestoreT >= 1) {
+        st.beltRestoreT = 0
+        st.beltRestoring = false
+        st.beltTau = Math.max(0, st.beltTarget - BELT_RESTORE_AMOUNT)
+        st.beltTarget = st.beltTau
+        beltRef.current?.onChange?.(st.beltTau)
+        beltRef.current?.onRestoreChange?.(false)
+      }
+    }
     if (st.phase === 'homing') {
       if (st.t > 1.5) { st.phase = 'rest'; return }
       st.t += dt * st.speed
@@ -647,25 +720,23 @@ function AxisMarker({ from, to, intersections }: {
 
 /* ------------------------------------------------------------------ *
  * Dirac 开口皮带（2T 对称性视图专用）：世界锚点 (0, BELT_ANCHOR_Y, 0)
- * 为固定端（扭转为 0），物体端在中心 (0,0,0) 携带全扭转 θ。N=64 段
- * ribbon，截面绕竖轴转 θ·s（s∈[0,1] 沿带参数）；双色条纹（沿带每 8 站
- * 交替明暗）让扭转圈数可读；锚点小横杆固定件。
+ * 为固定端（扭转为 0），物体端在中心 (0,0,0) 携带全扭转 θ。
  *
- * θ = animState.current.beltTau（账本在 useAnimatedRotation：每元素贡献
- * 2ψ，compose 累计、homing 回 0）。**渲染取 mod 720°（两整扭拓扑复原）**：
- * 0° 平带 / 360° 一整扭 / 720° ≡ 0°。混合轴链为已知近似（用户模型口径，
- * 见 ~/.commandcode/plans/sl23-belt-symmetry.md §3）。
+ * v2（2026-10-15，用户四条反馈）——几何全部走纯函数 `beltGeometry.ts`：
+ * - **扭转轴 = 当前演示元素的旋转轴**（与正四面体同轴）：旧实现钉在世界竖轴，
+ *   物体绕水平轴明显横转时皮带却绕竖轴扭，「完全不搭」；
+ * - **物体端削尖**：带宽末段收锥到 0，尖端正落在旋转轴（中心）上；
+ * - **720° 复原演练**（beltRestoring）：物体端脱离中心、绕锚点公转，带体弓形
+ *   外鼓、扭转按 720° 递减——展示两整扭如何在三维里被解开（绕过固定点），
+ *   而不是旧实现的 mod 720° 直接跳平。
+ * 条纹双色（沿带每 8 站交替明暗）让扭转圈数可读；锚点小横杆固定件。
  * ------------------------------------------------------------------ */
-const BELT_ANCHOR_Y = 6.3
-const BELT_SEGMENTS = 64
-const BELT_WIDTH = 0.55
-const BELT_TWO_TURNS = Math.PI * 4
-
 function BeltStrap({ animState }: {
-  animState: { current: { beltTau: number } }
+  animState: { current: BeltLedgerState }
 }) {
   const [group] = useState(() => new THREE.Group())
   const ribbonRef = useRef<THREE.Mesh | null>(null)
+  const { camera } = useThree()
 
   // 静态件：锚点小横杆固定件（横杆 + 两端小球）
   useEffect(() => {
@@ -686,7 +757,7 @@ function BeltStrap({ animState }: {
     }
   }, [group])
 
-  // ribbon 几何一次性建好（位置逐帧更新；颜色建时写死）
+  // ribbon 几何一次性建好（位置逐帧由 beltGeometry 重算；颜色建时写死）
   useEffect(() => {
     const stations = BELT_SEGMENTS + 1
     const pos = new Float32Array(stations * 2 * 3)
@@ -723,17 +794,24 @@ function BeltStrap({ animState }: {
     if (!mesh) return
     const attr = mesh.geometry.getAttribute('position') as THREE.BufferAttribute
     const arr = attr.array as Float32Array
-    const tau = animState.current.beltTau
-    const theta = ((tau % BELT_TWO_TURNS) + BELT_TWO_TURNS) % BELT_TWO_TURNS
-    const half = BELT_WIDTH / 2
-    for (let i = 0; i <= BELT_SEGMENTS; i++) {
-      const s = i / BELT_SEGMENTS
-      const y = BELT_ANCHOR_Y * (1 - s)
-      const a = theta * s
-      const ca = Math.cos(a), sa = Math.sin(a)
-      // 截面（沿 X 的 ±half 带）绕竖轴转 a：(x,z) → (x·cos a + z·sin a, −x·sin a + z·cos a)
-      arr[i * 6 + 0] =  half * ca; arr[i * 6 + 1] = y; arr[i * 6 + 2] = -half * sa
-      arr[i * 6 + 3] = -half * ca; arr[i * 6 + 4] = y; arr[i * 6 + 5] =  half * sa
+    const st = animState.current
+    // 复原演练中：扭转按 720° 递减（未演练时用插值中的 beltTau）
+    const restoreT = st.beltRestoring ? st.beltRestoreT : 0
+    const tau = st.beltRestoring
+      ? Math.max(0, st.beltTarget - BELT_RESTORE_AMOUNT * restoreT)
+      : st.beltTau
+    const dirs = beltRestoreDirections(camera)
+    const stations = beltStations({
+      tau,
+      axis: [st.beltAxis.x, st.beltAxis.y, st.beltAxis.z],
+      restoreT,
+      restoreOrbitAxis: dirs.orbitAxis,
+      restoreBow: dirs.bow,
+    })
+    for (let i = 0; i < stations.length; i++) {
+      const s = stations[i]!
+      arr[i * 6 + 0] = s.e1[0]; arr[i * 6 + 1] = s.e1[1]; arr[i * 6 + 2] = s.e1[2]
+      arr[i * 6 + 3] = s.e2[0]; arr[i * 6 + 4] = s.e2[1]; arr[i * 6 + 5] = s.e2[2]
     }
     attr.needsUpdate = true
     mesh.geometry.computeVertexNormals()
@@ -746,7 +824,7 @@ function SymmetryScene({
   group, symmetryType, data, variant,
   showAction, actionElementId, rotateSpeed,
   showFigureTitle, dark, locked, onHint, hintOnIdle, replaySignal,
-  compose, resetSignal, onPoseChange, onBeltChange,
+  compose, resetSignal, onPoseChange, onBeltChange, beltRestoreSignal,
   lockCameraOnAction, onAnimationEnd,
 }: {
   group: Group
@@ -766,6 +844,7 @@ function SymmetryScene({
   resetSignal: number
   onPoseChange?: (q: [number, number, number, number]) => void
   onBeltChange?: (tau: number) => void
+  beltRestoreSignal: number
   lockCameraOnAction: boolean
   onAnimationEnd?: () => void
 }) {
@@ -791,14 +870,23 @@ function SymmetryScene({
 
   // 2T 皮带账本参数：非 2T 群不传（hook 内皮带恒 0、不上报）。
   // animInfo 变化（换演示元素）即更新 twist——与四元数同一触发节奏。
+  const [beltRestoringUi, setBeltRestoringUi] = useState(false)
   const beltParam = useMemo(
     () => (symmetryType === 'binaryTetrahedron'
-      ? { twist: animInfo?.beltTwist ?? 0, onChange: onBeltChange }
+      ? {
+          twist: animInfo?.beltTwist ?? 0,
+          axis: animInfo?.axis ?? null,
+          onChange: onBeltChange,
+          onRestoreChange: setBeltRestoringUi,
+        }
       : undefined),
     [symmetryType, animInfo, onBeltChange],
   )
 
-  const animRef = useAnimatedRotation(targetQuat, rotateSpeed, setAnimPhase, replaySignal, onAnimationEnd, compose, resetSignal, onPoseChange, beltParam)
+  const animRef = useAnimatedRotation(
+    targetQuat, rotateSpeed, setAnimPhase, replaySignal, onAnimationEnd, compose, resetSignal, onPoseChange,
+    beltParam, beltRestoreSignal,
+  )
 
   // 演示状态反馈：统一经 onHint 上抛（主画布 hint bar / ViewWindow 底部浮条），宿主各自决定单处展示位置
   const activeEl = useMemo(
@@ -818,6 +906,11 @@ function SymmetryScene({
 
   useEffect(() => {
     if (!showAction) return
+    // 2T 复原演练中：提示行让位给演练文案（绕过锚点解开两整扭）
+    if (symmetryType === 'binaryTetrahedron' && beltRestoringUi) {
+      onHint?.(t('symmetry.beltRestoring'))
+      return
+    }
     if (!statusText) {
       // 演示开启但当前元素无可演示的几何旋转（未选 / 恒等）→ 仅主画布需要 clickHint 引导；
       // ViewWindow 的引导文案写在 ⚙ 面板元素列表旁（hintOnIdle=false），浮条只显示真实演示状态
@@ -831,7 +924,7 @@ function SymmetryScene({
       ? ` · 皮带累计 ${Math.round((animRef.current.beltTarget * 180) / Math.PI)}°`
       : ''
     onHint?.(`<span class="hint-highlight">${statusText.label}</span>: ${statusText.action}${statusText.suffix}${beltSuffix}`)
-  }, [showAction, statusText, onHint, hintOnIdle, t, symmetryType, animRef])
+  }, [showAction, statusText, onHint, hintOnIdle, t, symmetryType, animRef, beltRestoringUi])
 
   const hasData = !!data
   const isDirected = data?.directed === true
@@ -953,14 +1046,9 @@ function SymmetryScene({
         </mesh>
       )}
 
-      <OrbitControls
-        enableDamping={false}
-        minDistance={2}
-        maxDistance={20}
-        enableRotate={!locked && !(showAction && lockCameraOnAction)}
-        enablePan={!locked && !(showAction && lockCameraOnAction)}
-        enableZoom={!locked}
-      />
+      {/* 相机轨道：四元数版（无经纬极硬钳——OrbitControls 的 phi∈[0,π] 会停在
+          南极点，用户反馈「不能越过南北极」2026-10-15；数学同 cayley3dOrbit） */}
+      <SymmetryOrbitControls locked={locked} rotateDisabled={showAction && lockCameraOnAction} />
     </>
   )
 }

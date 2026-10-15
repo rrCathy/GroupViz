@@ -28,14 +28,29 @@ import * as THREE from 'three'
 export const BELT_ANCHOR_DIST = 3.4
 /** 段数（stations = segments + 1） */
 export const BELT_SEGMENTS = 64
-/** 锚点端满宽 */
-export const BELT_WIDTH = 0.55
+/** 锚点端满宽（v4 加宽：0.55 与细轴标记重叠难分辨——用户 2026-10-15） */
+export const BELT_WIDTH = 0.72
 /** 一整扭 = 2π（复原演练的公转角度） */
 export const BELT_FULL_TURN = Math.PI * 2
 /** 复原演练一次解开的扭转量 = 两整扭（720°） */
 export const BELT_RESTORE_AMOUNT = BELT_FULL_TURN * 2
 /** 削尖：末段 TAPER_FRAC 内宽度线性收锥到 0 */
 const TAPER_FRAC = 0.35
+/** 固定端平直夹持区占比：扭转从这段之后才开始累（用户：扭转应分布在
+ *  「几何体外」到「固定端前一些距离」之间——锚端留一小段不扭的夹持位） */
+export const BELT_PIN_MARGIN = 0.06
+
+/**
+ * 扭转分布剖面：s ≤ 固定端夹持区 → 0；之后线性升到入体点（皮带进入
+ * 四面体表面处，sEnter = 1 − bodyRadius/anchorDist）达 1；入体后恒 1
+ * （物体端截面必须携带全扭转 τ——皮带粘在物体上）。
+ */
+export function beltTwistProfile(s: number, bodyRadius: number, anchorDist: number): number {
+  const sEnter = bodyRadius > 0 ? Math.max(0.15, 1 - bodyRadius / anchorDist) : 1
+  const denom = sEnter - BELT_PIN_MARGIN
+  if (denom <= 1e-6) return s >= sEnter ? 1 : 0
+  return Math.min(1, Math.max(0, (s - BELT_PIN_MARGIN) / denom))
+}
 
 export interface BeltStation {
   /** 带中心线 */
@@ -52,6 +67,9 @@ export interface BeltGeometryInput {
   axis: [number, number, number] | null
   anchorDist?: number
   segments?: number
+  /** 所附几何（四面体）的外接圆半径：扭转分布收进「几何体外 → 固定端前」的
+   *  可见段（入体点之后不再累扭）；0/缺省 = 不做入体收口（纯线性到尖端） */
+  bodyRadius?: number
   /** 复原演练进度 0..1；> 0 时物体端绕锚点公转、带体弓形外鼓、扭转按 720° 递减 */
   restoreT?: number
   /** 复原演练：公转轴（世界系；调用方按当前相机可视方向给出） */
@@ -144,6 +162,8 @@ export function beltStations(input: BeltGeometryInput): BeltStation[] {
   const c = new THREE.Vector3()
   const Ti = new THREE.Vector3()
   const Tprev = new THREE.Vector3()
+  const bodyRadius = input.bodyRadius ?? 0
+  let wPrev = 0
   for (let i = 0; i <= segments; i++) {
     const s = i / segments
     if (restoreT > 0) {
@@ -155,14 +175,17 @@ export function beltStations(input: BeltGeometryInput): BeltStation[] {
       c.copy(A).addScaledVector(T, anchorDist * s)
       Ti.copy(T)
     }
+    // 扭转分布：固定端夹持区 0 → 线性升 → 入体点即满扭（增量 = 剖面差分）
+    const w = beltTwistProfile(s, bodyRadius, anchorDist)
     if (i > 0) {
       // 平行输运：宽向量按切线最短弧转到新切线（直线态 = 恒等，无翻转问题）
       _q.setFromUnitVectors(Tprev, Ti)
       W.applyQuaternion(_q)
-      // 增量扭转：φ(s) = −τ_eff·s（物体端截面随物体转动 ⇒ 绕带轴的扭转）
-      _q.setFromAxisAngle(Ti, -tauEff / segments)
+      // 增量扭转：物体端截面随物体转动 ⇒ 绕带轴 T 的累计扭转 −τ_eff·w(s)
+      _q.setFromAxisAngle(Ti, -tauEff * (w - wPrev))
       W.applyQuaternion(_q)
     }
+    wPrev = w
     Tprev.copy(Ti)
     const halfW = (BELT_WIDTH * beltTaper(s)) / 2
     stations.push({

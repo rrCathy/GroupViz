@@ -343,7 +343,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
       } else {
         symmetry.setSymmetryActionElementId(symmetry.symmetryActionElementId === id ? null : id)
       }
-      core.selectElement(id, additive)
+      // 演示模式只驱动演示，**不动选中状态**——元素不应处于任何状态（用户 2026-10-15）
       if (core.currentGroup) {
         const el = core.currentGroup.elements.find(e => e.id === id)
         if (el) core.setHintMessage(t('hint.symmetryAction', { label: el.label }).replace(el.label, `<span class="hint-highlight">${el.label}</span>`))

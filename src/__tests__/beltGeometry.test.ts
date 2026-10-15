@@ -1,35 +1,42 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import {
-  BELT_ANCHOR_DIST, BELT_SEGMENTS, BELT_WIDTH, BELT_RESTORE_AMOUNT,
-  beltStations, beltTaper, beltRestoreDirections, beltStationsFlat,
+  BELT_ANCHOR_DIST, BELT_SEGMENTS, BELT_WIDTH, BELT_RESTORE_AMOUNT, BELT_PIN_MARGIN,
+  beltStations, beltTaper, beltTwistProfile, beltRestoreDirections, beltStationsFlat,
 } from '../components/Canvas/beltGeometry'
 
 /**
- * Dirac 开口皮带几何（beltGeometry.ts 纯函数直测，2026-10-15 v3）：
+ * Dirac 开口皮带几何（beltGeometry.ts 纯函数直测，2026-10-15 v4）：
  * - **皮带与旋转轴同轴**：锚点 = û·L，中心线恒为直线（锚点→物体中心）；
  * - **扭转 = 带面绕自身中心线的翻转**（莫比乌斯式）：宽向量绕带轴 T = −û
- *   递增转 φ(s) = −τ·s，中心线不卷（v2 螺旋甩线的反例直接入测）；
- * - **锚点端 = 固定参考端**：截面朝向恒为 W₀（不随 τ 变）；
- * - **带面几何 4π 周期**：τ=720° 与 τ=0 逐位同形（拓扑复原的几何表现）；
- * - **720° 复原演练**：restoreT=0/1 与缠态/平直态两端连续，中段物体端离中心。
+ *   按 φ(s) = −τ·w(s) 递增（w = beltTwistProfile：固定端夹持区 0 → 线性 →
+ *   入体点满扭），中心线不卷；
+ * - **扭转分布收进可见段**（bodyRadius）：四面体内不堆扭、固定端留夹持平直区；
+ * - **正反双色**由 FrontSide/BackSide 渲染（几何只提供带面，不在此测）。
  *
- * 断言口径：宽向 = e1−e2 归一化（只在 taper > 0 的站上量，尖端带宽 0 退化不断）。
+ * 断言口径：宽向 = e1−e2 归一化（只在 taper > 0 的站上量）；期望值用
+ * beltTwistProfile 同源 oracle 计算（不硬编码站值）。
  */
 
 const SEG = BELT_SEGMENTS
 const MID = Math.round(SEG * 0.5)
-const S075 = Math.round(SEG * 0.75) // taper(0.75) = 0.71，带宽仍饱满
+const S075 = Math.round(SEG * 0.75)
 
-const centers = (stations: ReturnType<typeof beltStations>) =>
-  stations.map(s => new THREE.Vector3(s.cx, s.cy, s.cz))
-/** 宽向（e1−e2 归一化） */
+/** 同源 oracle：期望宽向 W(s) = R(T, −τ·w(s))·W₀（T = −û；W₀ 由 ref 规则决定） */
+function expectedWidthDir(tau: number, axis: [number, number, number], s: number, bodyRadius = 0): THREE.Vector3 {
+  const u = new THREE.Vector3(...axis).normalize()
+  const T = u.clone().negate()
+  const ref = Math.abs(T.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0)
+  const W0 = new THREE.Vector3().crossVectors(ref, T).normalize()
+  return W0.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(T, -tau * beltTwistProfile(s, bodyRadius, BELT_ANCHOR_DIST)))
+}
+
 const widthDirOf = (s: { e1: number[]; e2: number[] }) =>
   new THREE.Vector3(...s.e1).sub(new THREE.Vector3(...s.e2)).normalize()
 const widthOf = (s: { e1: number[]; e2: number[] }) =>
   new THREE.Vector3(...s.e1).distanceTo(new THREE.Vector3(...s.e2))
-/** 逐值容差比较（真 bug ≥1e-3 量级，1e-9 容差只放过浮点末位噪声；
- *  不用 toFixed+toEqual——0.9625 这类恰在舍入边界的值会随算术路径翻面） */
+/** 逐值容差比较（真 bug ≥1e-3 量级，1e-9 容差只放浮点噪声；toFixed+toEqual 会被
+ *  0.9625 类舍入边界值随算术路径翻面） */
 const expectCloseStations = (a: ReturnType<typeof beltStations>, b: ReturnType<typeof beltStations>) => {
   const fa = beltStationsFlat(a)
   const fb = beltStationsFlat(b)
@@ -45,13 +52,12 @@ describe('beltGeometry · 常态（无演练）', () => {
     expect(st[0]!.cy).toBeCloseTo(BELT_ANCHOR_DIST, 9)
     expect(st[SEG]!.cx).toBeCloseTo(0, 9)
     expect(st[SEG]!.cy).toBeCloseTo(0, 9)
-    for (const c of centers(st)) {
-      expect(c.x).toBeCloseTo(0, 9)
-      expect(c.z).toBeCloseTo(0, 9)
+    for (const s of st) {
+      expect(s.cx).toBeCloseTo(0, 9)
+      expect(s.cz).toBeCloseTo(0, 9)
     }
     expect(widthOf(st[0]!)).toBeCloseTo(BELT_WIDTH, 6)
     expect(widthOf(st[SEG]!)).toBeCloseTo(0, 9)
-    // 锚端宽向 = (1,0,0)（带面法向 T×W₀ = +Z，默认相机可见）
     expect(widthDirOf(st[0]!).x).toBeCloseTo(1, 9)
   })
 
@@ -59,57 +65,68 @@ describe('beltGeometry · 常态（无演练）', () => {
     const st = beltStations({ tau: 0, axis: [1, 0, 0] })
     expect(st[0]!.cx).toBeCloseTo(BELT_ANCHOR_DIST, 9)
     expect(st[0]!.cy).toBeCloseTo(0, 9)
-    for (const c of centers(st)) {
-      expect(c.y).toBeCloseTo(0, 9)
-      expect(c.z).toBeCloseTo(0, 9)
+    for (const s of st) {
+      expect(s.cy).toBeCloseTo(0, 9)
+      expect(s.cz).toBeCloseTo(0, 9)
     }
-    // 锚端宽向 (0,−1,0)，带面法向 T×W₀ = +Z 仍朝默认相机
     const wd = widthDirOf(st[0]!)
     expect(wd.y).toBeCloseTo(-1, 9)
   })
 
-  it('扭转绕带自身轴（理发店柱）：中心线不动，宽向沿带递增旋转', () => {
+  it('扭转绕带自身轴（理发店柱）：中心线不动，宽向按剖面递增旋转', () => {
     const st = beltStations({ tau: Math.PI, axis: [0, 1, 0] })
     // 中心线仍在竖直线上（v2 的螺旋甩线在这里必然失败）
-    for (const c of centers(st)) {
-      expect(Math.hypot(c.x, c.z)).toBeCloseTo(0, 9)
+    for (const s of st) {
+      expect(Math.hypot(s.cx, s.cz)).toBeCloseTo(0, 9)
     }
-    // W(s) = R(T=(0,−1,0), −πs)·(1,0,0)：s=0.5 ⇒ 转了 π/2 ⇒ 宽向 (0,0,−1)
-    const mid = widthDirOf(st[MID]!)
-    expect(mid.z).toBeCloseTo(-1, 6)
-    expect(mid.x).toBeCloseTo(0, 6)
+    // 中段宽向 = 同源 oracle
+    const wd = widthDirOf(st[MID]!)
+    const exp = expectedWidthDir(Math.PI, [0, 1, 0], MID / SEG)
+    expect(wd.distanceTo(exp)).toBeLessThan(1e-9)
   })
 
   it('水平轴同样绕自身轴扭（中心线仍直线）——v2 螺旋 bug 的反例', () => {
     const st = beltStations({ tau: Math.PI, axis: [1, 0, 0] })
-    for (const c of centers(st)) {
-      expect(c.y).toBeCloseTo(0, 9)
-      expect(c.z).toBeCloseTo(0, 9)
+    for (const s of st) {
+      expect(s.cy).toBeCloseTo(0, 9)
+      expect(s.cz).toBeCloseTo(0, 9)
     }
-    // W(0.5) = R(T=(−1,0,0), −π/2)·(0,−1,0) = (0,0,−1)
-    const mid = widthDirOf(st[MID]!)
-    expect(mid.z).toBeCloseTo(-1, 6)
-    expect(mid.y).toBeCloseTo(0, 6)
+    const wd = widthDirOf(st[MID]!)
+    const exp = expectedWidthDir(Math.PI, [1, 0, 0], MID / SEG)
+    expect(wd.distanceTo(exp)).toBeLessThan(1e-9)
   })
 
-  it('锚点端 = 固定参考端：截面朝向不随 τ 变', () => {
+  it('锚点端 = 固定参考端：截面朝向不随 τ 变（夹持区语义）', () => {
     const a = beltStations({ tau: 0, axis: [0, 1, 0] })
     const b = beltStations({ tau: 3.7 * Math.PI, axis: [0, 1, 0] })
-    const wa = widthDirOf(a[0]!)
-    const wb = widthDirOf(b[0]!)
-    expect(wa.distanceTo(wb)).toBeLessThan(1e-9)
-    // 锚点位置也不动
+    expect(widthDirOf(a[0]!).distanceTo(widthDirOf(b[0]!))).toBeLessThan(1e-9)
+    // 夹持区内（s < BELT_PIN_MARGIN）整段都不扭（floor：station 恰在边界之外的略过）
+    const sMargin = Math.floor(SEG * BELT_PIN_MARGIN)
+    for (let i = 1; i <= sMargin; i++) {
+      expect(widthDirOf(a[i]!).distanceTo(widthDirOf(b[i]!))).toBeLessThan(1e-9)
+    }
     expect(b[0]!.cy).toBeCloseTo(BELT_ANCHOR_DIST, 9)
   })
 
-  it('180° 莫比乌斯式翻面：s=0.75 处宽向转了 135°（z 分量变号前夜）', () => {
-    // W(0.75) = R((0,−1,0), −0.75π)·(1,0,0)：绕 +Y 转 +0.75π ⇒ (cos135°,0,−sin135°)
-    const st = beltStations({ tau: Math.PI, axis: [0, 1, 0] })
-    const wd = widthDirOf(st[S075]!)
-    const c = Math.cos(0.75 * Math.PI)
-    const s = Math.sin(0.75 * Math.PI)
-    expect(wd.x).toBeCloseTo(c, 6)
-    expect(wd.z).toBeCloseTo(-s, 6)
+  it('扭转分布收进可见段（bodyRadius=1.7, L=3.4 ⇒ 入体点 s=0.5）：入体后不再累扭、夹持区不扭', () => {
+    const br = 1.7
+    const st = beltStations({ tau: 2 * Math.PI, axis: [0, 1, 0], bodyRadius: br })
+    const sEnter = 1 - br / BELT_ANCHOR_DIST
+    expect(sEnter).toBeCloseTo(0.5, 9)
+    const at = (f: number) => st[Math.round(SEG * f)]!
+    // 入体点之后：宽向恒定（= 满扭姿态）
+    const after = widthDirOf(at(0.6))
+    for (const f of [0.7, 0.8, 0.9]) {
+      expect(widthDirOf(at(f)).distanceTo(after)).toBeLessThan(1e-9)
+    }
+    expect(after.distanceTo(expectedWidthDir(2 * Math.PI, [0, 1, 0], sEnter + 0.01, br))).toBeLessThan(1e-9)
+    // 夹持区：宽向 = W₀
+    expect(widthDirOf(at(0.03)).x).toBeCloseTo(1, 9)
+    // 剖面端点
+    expect(beltTwistProfile(0, br, BELT_ANCHOR_DIST)).toBe(0)
+    expect(beltTwistProfile(BELT_PIN_MARGIN - 1e-9, br, BELT_ANCHOR_DIST)).toBe(0)
+    expect(beltTwistProfile(sEnter, br, BELT_ANCHOR_DIST)).toBe(1)
+    expect(beltTwistProfile(1, br, BELT_ANCHOR_DIST)).toBe(1)
   })
 
   it('带约束：宽向 ⊥ 切线在每一站严格成立（τ 与轴任意）', () => {
@@ -123,13 +140,11 @@ describe('beltGeometry · 常态（无演练）', () => {
     }
   })
 
-  it('扭转线性分布：中段恰转 τ/2（竖轴与水平轴同规律）', () => {
-    // 竖轴 τ=2π：W(0.5) = R(T,−π)·W₀ = −W₀
-    const v = beltStations({ tau: 2 * Math.PI, axis: [0, 1, 0] })
-    expect(widthDirOf(v[MID]!).x).toBeCloseTo(-1, 6)
-    // 水平轴 τ=2π：锚端宽向 (0,−1,0)，中段 = −(0,−1,0) = (0,1,0)
-    const h = beltStations({ tau: 2 * Math.PI, axis: [1, 0, 0] })
-    expect(widthDirOf(h[MID]!).y).toBeCloseTo(1, 6)
+  it('180° 莫比乌斯式翻面：s=0.75 宽向与同源 oracle 一致（带面翻转可见）', () => {
+    const st = beltStations({ tau: Math.PI, axis: [0, 1, 0] })
+    const wd = widthDirOf(st[S075]!)
+    const exp = expectedWidthDir(Math.PI, [0, 1, 0], S075 / SEG)
+    expect(wd.distanceTo(exp)).toBeLessThan(1e-9)
   })
 
   it('削尖：末段线性收锥到 0，尖端正落旋转轴（物体中心）', () => {
@@ -151,8 +166,8 @@ describe('beltGeometry · 720° 复原演练', () => {
   const dirs = { restoreOrbitAxis: [0, 0, 1] as [number, number, number], restoreBow: [1, 0, 0] as [number, number, number] }
 
   it('restoreT→0 连续：位形趋近缠态（无跳变）', () => {
-    const wound = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0] })
-    const start = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], restoreT: 1e-6, ...dirs })
+    const wound = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], bodyRadius: 1.7 })
+    const start = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], bodyRadius: 1.7, restoreT: 1e-6, ...dirs })
     expect(start[SEG]!.cy).toBeCloseTo(wound[SEG]!.cy, 4)
     expect(start[S075]!.cx).toBeCloseTo(wound[S075]!.cx, 4)
     expect(start[S075]!.cz).toBeCloseTo(wound[S075]!.cz, 4)
@@ -166,7 +181,7 @@ describe('beltGeometry · 720° 复原演练', () => {
 
   it('restoreT=0.5：物体端在公转轨道上（离中心），带约束仍成立', () => {
     const mid = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], restoreT: 0.5, ...dirs })
-    // 物体端绕锚点公转半圈：锚点 (0,6.3,0)，端点 = 锚点 + R(Z,π)·(0,−6.3,0) = (0,12.6,0)
+    // 物体端绕锚点公转半圈：锚点 (0,L,0)，端点 = 锚点 + R(Z,π)·(0,−L,0) = (0,2L,0)
     expect(mid[SEG]!.cy).toBeCloseTo(2 * BELT_ANCHOR_DIST, 5)
     expect(mid[SEG]!.cx).toBeCloseTo(0, 5)
     // 弓形曲线上宽向 ⊥ 切线仍然严格成立（平行输运保持垂直性）
@@ -181,9 +196,10 @@ describe('beltGeometry · 720° 复原演练', () => {
 
   it('τ > 720° 演练后残留扭转（τ=5π，restoreT=1 ⇒ τ_eff=π）', () => {
     const st = beltStations({ tau: 5 * Math.PI, axis: [0, 1, 0], restoreT: 1, ...dirs })
-    // τ_eff = π ⇒ 中心线回直线、中段宽向 = R(T,−π/2)·W₀ = (0,0,−1)
-    for (const c of centers(st)) expect(Math.hypot(c.x, c.z)).toBeCloseTo(0, 6)
-    expect(widthDirOf(st[MID]!).z).toBeCloseTo(-1, 6)
+    for (const s of st) expect(Math.hypot(s.cx, s.cz)).toBeCloseTo(0, 6)
+    const wd = widthDirOf(st[MID]!)
+    const exp = expectedWidthDir(Math.PI, [0, 1, 0], MID / SEG)
+    expect(wd.distanceTo(exp)).toBeLessThan(1e-9)
   })
 })
 

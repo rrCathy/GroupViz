@@ -10,7 +10,7 @@ import type { Group, GroupElement } from '../../core/types'
 import { getSymmetryType } from '../../core/symmetryType'
 import type { SymmetryType } from '../../core/symmetryType'
 import {
-  BELT_SEGMENTS, BELT_RESTORE_AMOUNT,
+  BELT_ANCHOR_DIST, BELT_FULL_TURN, BELT_SEGMENTS, BELT_RESTORE_AMOUNT, BELT_WIDTH,
   beltStations, beltRestoreDirections,
 } from './beltGeometry'
 import { SymmetryOrbitControls } from './SymmetryOrbitControls'
@@ -694,16 +694,16 @@ function AxisMarker({ from, to, intersections }: {
   return (
     <group>
       <mesh position={mid} quaternion={quat}>
-        <cylinderGeometry args={[0.12, 0.12, len, 8]} />
+        <cylinderGeometry args={[0.045, 0.045, len, 8]} />
         <meshStandardMaterial color="#ff3333" emissive="#ff0000" emissiveIntensity={1.0} roughness={0.1} />
       </mesh>
       <mesh position={to} quaternion={quat}>
-        <coneGeometry args={[0.28, 0.7, 8, 1]} />
+        <coneGeometry args={[0.14, 0.5, 8, 1]} />
         <meshStandardMaterial color="#ff3333" emissive="#ff0000" emissiveIntensity={1.0} roughness={0.1} />
       </mesh>
       {intersections.map((intr, i) => (
         <mesh key={i} position={intr.pos}>
-          <sphereGeometry args={[intr.kind === 'vertex' ? 0.24 : intr.kind === 'face-center' ? 0.22 : 0.16, 12, 12]} />
+          <sphereGeometry args={[intr.kind === 'vertex' ? 0.14 : intr.kind === 'face-center' ? 0.13 : 0.09, 12, 12]} />
           <meshStandardMaterial
             color={intr.kind === 'vertex' ? '#ffd93d' : intr.kind === 'face-center' ? '#84cc16' : '#4ecdc4'}
             emissive={intr.kind === 'vertex' ? '#ffd93d' : intr.kind === 'face-center' ? '#84cc16' : '#4ecdc4'}
@@ -734,8 +734,10 @@ const BELT_BACK_COLOR = '#4b5b74'
 const _X_AXIS = new THREE.Vector3(1, 0, 0)
 const _beltW = new THREE.Vector3()
 
-function BeltStrap({ animState }: {
+function BeltStrap({ animState, bodyRadius }: {
   animState: { current: BeltLedgerState }
+  /** 所附几何（四面体）外接半径：扭转分布收进可见段 */
+  bodyRadius: number
 }) {
   const [group] = useState(() => new THREE.Group())
   const geomRef = useRef<THREE.BufferGeometry | null>(null)
@@ -743,7 +745,8 @@ function BeltStrap({ animState }: {
   const { camera } = useThree()
 
   // 几何与固定件一次性建好：ribbon 位置逐帧更新；正反两 mesh 共享同一几何；
-  // 固定件（横杆 + 两端小球）位置/朝向逐帧跟随锚点（皮带随轴重新对准）
+  // 固定件 = **琥珀色细销钉**穿过锚端带体（沿锚端横截面方向）——语义即「皮带
+  // 在此钉住，销钉方向 = 固定端初始方向参考」（旧棒+球语义不明，用户 2026-10-15）
   useEffect(() => {
     const count = BELT_SEGMENTS + 1
     const pos = new Float32Array(count * 2 * 3)
@@ -763,18 +766,15 @@ function BeltStrap({ animState }: {
       color: BELT_BACK_COLOR, side: THREE.BackSide, roughness: 0.55, metalness: 0.05,
     }))
     const fixture = new THREE.Group()
-    const bar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.07, 1.5, 10),
-      new THREE.MeshStandardMaterial({ color: '#94a3b8', roughness: 0.4 }),
-    )
-    bar.rotation.z = Math.PI / 2 // 默认（竖直皮带）横杆沿 X；每帧转到锚点端宽向
-    fixture.add(bar)
-    for (const x of [-0.75, 0.75]) {
-      const cap = new THREE.Mesh(
-        new THREE.SphereGeometry(0.13, 12, 12),
-        new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.3 }),
-      )
-      cap.userData.offset = x
+    const pinMat = new THREE.MeshStandardMaterial({ color: '#f0a832', roughness: 0.35, metalness: 0.3 })
+    // 销钉本体：沿 X 建模（每帧 quaternion 对齐锚端宽向 W₀）；长 ≈ 1.9×带宽，
+    // 两端各露出带边 ~0.33，一眼读出「横截面方向被钉住」
+    const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, BELT_WIDTH * 1.9, 8), pinMat)
+    pin.rotation.z = Math.PI / 2
+    fixture.add(pin)
+    for (const x of [-1, 1]) {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), pinMat)
+      cap.userData.offset = x * BELT_WIDTH * 0.95
       fixture.add(cap)
     }
     fixtureRef.current = fixture
@@ -783,11 +783,12 @@ function BeltStrap({ animState }: {
       geom.dispose()
       ;(front.material as THREE.Material).dispose()
       ;(back.material as THREE.Material).dispose()
+      pin.geometry.dispose()
       for (const ch of fixture.children) {
         const m = ch as THREE.Mesh
         m.geometry.dispose()
-        ;(m.material as THREE.Material).dispose()
       }
+      pinMat.dispose()
       group.remove(front, back, fixture)
       geomRef.current = null
       fixtureRef.current = null
@@ -808,6 +809,7 @@ function BeltStrap({ animState }: {
     const stations = beltStations({
       tau,
       axis: [st.beltAxis.x, st.beltAxis.y, st.beltAxis.z],
+      bodyRadius,
       restoreT,
       restoreOrbitAxis: dirs.orbitAxis,
       restoreBow: dirs.bow,
@@ -819,14 +821,15 @@ function BeltStrap({ animState }: {
     }
     attr.needsUpdate = true
     geom.computeVertexNormals()
-    // 固定件随锚点走（皮带随轴重新对准）：位置 = 锚点站，横杆沿锚点端宽向
+    // 固定件随锚点走（皮带随轴重新对准）：位置 = 锚点站，销钉沿锚点端宽向
+    // （= 固定端横截面初始方向——扭转的参考基准）
     const s0 = stations[0]!
     fixture.position.set(s0.cx, s0.cy, s0.cz)
     const wx = s0.e1[0] - s0.e2[0], wy = s0.e1[1] - s0.e2[1], wz = s0.e1[2] - s0.e2[2]
     const wl = Math.hypot(wx, wy, wz) || 1
     const wDir = _beltW.set(wx / wl, wy / wl, wz / wl)
-    const bar = fixture.children[0] as THREE.Mesh
-    bar.quaternion.setFromUnitVectors(_X_AXIS, wDir)
+    const pin = fixture.children[0] as THREE.Mesh
+    pin.quaternion.setFromUnitVectors(_X_AXIS, wDir)
     for (let k = 1; k < fixture.children.length; k++) {
       const cap = fixture.children[k] as THREE.Mesh
       const off = (cap.userData.offset as number) ?? 0
@@ -863,7 +866,14 @@ function SymmetryScene({
   onAnimationEnd?: () => void
 }) {
   const { t } = useTranslation()
+  const { camera } = useThree()
   const [animPhase, setAnimPhase] = useState<AnimPhase>('rest')
+
+  // 皮带所附几何（四面体）的外接半径：扭转分布收进「几何体外 → 固定端前」可见段
+  const bodyRadius = useMemo(
+    () => (data ? Math.max(...data.vertices.map(v => v.length())) : 0),
+    [data],
+  )
 
   const animInfo = useMemo(() => {
     if (!showAction || !actionElementId || !data) return null
@@ -901,6 +911,27 @@ function SymmetryScene({
     targetQuat, rotateSpeed, setAnimPhase, replaySignal, onAnimationEnd, compose, resetSignal, onPoseChange,
     beltParam, beltRestoreSignal,
   )
+
+  // 720° 复原演练：皮带端（= 物体中心）绕锚点公转时，四面体**一起平移**
+  // （姿态冻结——纯平移解两整扭才是皮带戏法的原始动作；用户 2026-10-15）。
+  // 轨道公式与 beltGeometry 的 endPos 完全一致，保证带端与物体逐帧贴合。
+  // group 走 imperative 构建（本文件惯例：JSX intrinsic 在 R3F mock 下不可用）
+  const [restoreGroup] = useState(() => new THREE.Group())
+  const _restoreQ = useMemo(() => new THREE.Quaternion(), [])
+  const _restoreA = useMemo(() => new THREE.Vector3(), [])
+  const _restoreV = useMemo(() => new THREE.Vector3(), [])
+  useFrame(() => {
+    const g = restoreGroup
+    const st = animRef.current
+    if (st.beltRestoring) {
+      const dirs = beltRestoreDirections(camera)
+      const A = _restoreA.set(st.beltAxis.x, st.beltAxis.y, st.beltAxis.z).normalize().multiplyScalar(BELT_ANCHOR_DIST)
+      _restoreQ.setFromAxisAngle(_restoreV.set(dirs.orbitAxis[0], dirs.orbitAxis[1], dirs.orbitAxis[2]), BELT_FULL_TURN * st.beltRestoreT)
+      g.position.copy(A).negate().applyQuaternion(_restoreQ).add(A)
+    } else {
+      g.position.set(0, 0, 0)
+    }
+  })
 
   // 演示状态反馈：统一经 onHint 上抛（主画布 hint bar / ViewWindow 底部浮条），宿主各自决定单处展示位置
   const activeEl = useMemo(
@@ -1012,17 +1043,20 @@ function SymmetryScene({
       <directionalLight position={[-5, -2, -3]} intensity={0.6} />
       <pointLight position={[0, 5, 0]} intensity={0.5} />
 
-      {showAxis && (
-        <AxisMarker
-          from={axisNeg}
-          to={axisTo}
-          intersections={axisIntersections}
-        />
-      )}
+      {/* 复原演练时四面体+轴标记随皮带端一起绕锚点公转（位置由 useFrame 驱动） */}
+      <primitive object={restoreGroup}>
+        {showAxis && (
+          <AxisMarker
+            from={axisNeg}
+            to={axisTo}
+            intersections={axisIntersections}
+          />
+        )}
 
-      <AnimatedGeo data={data} symmetryType={symmetryType} isDirected={isDirected} animState={animRef} />
+        <AnimatedGeo data={data} symmetryType={symmetryType} isDirected={isDirected} animState={animRef} />
+      </primitive>
 
-      {symmetryType === 'binaryTetrahedron' && <BeltStrap animState={animRef} />}
+      {symmetryType === 'binaryTetrahedron' && <BeltStrap animState={animRef} bodyRadius={bodyRadius} />}
 
       {symmetryType === 'dihedral' && data.vertices.length > 2 && (
         <mesh rotation={[-Math.PI / 2, 0, 0]}>

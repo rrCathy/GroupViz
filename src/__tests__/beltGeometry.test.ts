@@ -2,8 +2,14 @@ import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import {
   BELT_ANCHOR_DIST, BELT_SEGMENTS, BELT_WIDTH, BELT_RESTORE_AMOUNT, BELT_PIN_MARGIN,
-  beltStations, beltTaper, beltTwistProfile, beltRestoreDirections, beltStationsFlat,
+  beltStations, beltTaper, beltTwistProfile, beltExitRadius, beltRestoreDirections, beltStationsFlat,
 } from '../components/Canvas/beltGeometry'
+
+/** 标准四面体（外接半径 R）：(±1,±1,±1)·R/√3，与场景 getTetrahedron 同构 */
+const TETRA = (R: number): Array<[number, number, number]> => {
+  const s = R / Math.sqrt(3)
+  return [[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]].map(v => [v[0] * s, v[1] * s, v[2] * s] as [number, number, number])
+}
 
 /**
  * Dirac 开口皮带几何（beltGeometry.ts 纯函数直测，2026-10-15 v4）：
@@ -23,12 +29,12 @@ const MID = Math.round(SEG * 0.5)
 const S075 = Math.round(SEG * 0.75)
 
 /** 同源 oracle：期望宽向 W(s) = R(T, −τ·w(s))·W₀（T = −û；W₀ 由 ref 规则决定） */
-function expectedWidthDir(tau: number, axis: [number, number, number], s: number, bodyRadius = 0): THREE.Vector3 {
+function expectedWidthDir(tau: number, axis: [number, number, number], s: number): THREE.Vector3 {
   const u = new THREE.Vector3(...axis).normalize()
   const T = u.clone().negate()
   const ref = Math.abs(T.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0)
   const W0 = new THREE.Vector3().crossVectors(ref, T).normalize()
-  return W0.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(T, -tau * beltTwistProfile(s, bodyRadius, BELT_ANCHOR_DIST)))
+  return W0.applyQuaternion(new THREE.Quaternion().setFromAxisAngle(T, -tau * beltTwistProfile(s)))
 }
 
 const widthDirOf = (s: { e1: number[]; e2: number[] }) =>
@@ -108,25 +114,53 @@ describe('beltGeometry · 常态（无演练）', () => {
     expect(b[0]!.cy).toBeCloseTo(BELT_ANCHOR_DIST, 9)
   })
 
-  it('扭转分布收进可见段（bodyRadius=1.7, L=3.4 ⇒ 入体点 s=0.5）：入体后不再累扭、夹持区不扭', () => {
-    const br = 1.7
-    const st = beltStations({ tau: 2 * Math.PI, axis: [0, 1, 0], bodyRadius: br })
-    const sEnter = 1 - br / BELT_ANCHOR_DIST
-    expect(sEnter).toBeCloseTo(0.5, 9)
-    const at = (f: number) => st[Math.round(SEG * f)]!
-    // 入体点之后：宽向恒定（= 满扭姿态）
-    const after = widthDirOf(at(0.6))
-    for (const f of [0.7, 0.8, 0.9]) {
-      expect(widthDirOf(at(f)).distanceTo(after)).toBeLessThan(1e-9)
+  it('尖端停在几何表面（û·attachRadius）：可见段与四面体直径相称', () => {
+    // **场景真实半径 R=4**（SymmetryViewScene getTetrahedron(4)）——v5 首版测试
+    // 误用 R=1.7，让「可见段太短」漏网（用户 2026-10-16「太短了」）
+    const R = 4
+    const attachR = beltExitRadius([0, 1, 0], TETRA(R))
+    const st = beltStations({ tau: 2 * Math.PI, axis: [0, 1, 0], attachRadius: attachR })
+    // 锚点在 û·L、尖端在 û·attachR（表面）——中心线全程在轴上
+    expect(st[0]!.cy).toBeCloseTo(BELT_ANCHOR_DIST, 9)
+    expect(st[SEG]!.cy).toBeCloseTo(attachR, 9)
+    for (const s of st) {
+      expect(s.cx).toBeCloseTo(0, 9)
+      expect(s.cz).toBeCloseTo(0, 9)
     }
-    expect(after.distanceTo(expectedWidthDir(2 * Math.PI, [0, 1, 0], sEnter + 0.01, br))).toBeLessThan(1e-9)
-    // 夹持区：宽向 = W₀
+    // 可见段 ≥ 3.5 且 ≥ 四面体直径的 40%——「太短」的量纲守卫
+    const visible = BELT_ANCHOR_DIST - attachR
+    expect(visible).toBeGreaterThan(3.5)
+    expect(visible / (2 * R)).toBeGreaterThan(0.4)
+  })
+
+  it('beltExitRadius：顶点方向 = R（顶出顶点）、面方向 = R/√3、±轴对称', () => {
+    const R = 1.7
+    const verts = TETRA(R)
+    const vdir = [1, 1, 1].map(v => v / Math.sqrt(3)) as [number, number, number]
+    expect(beltExitRadius(vdir, verts)).toBeCloseTo(R, 6) // 顶点方向穿出顶点
+    // +Y 从面中心穿出：t = 内半径/(n·ŷ) = (R/3)/(1/√3) = R/√3
+    expect(beltExitRadius([0, 1, 0], verts)).toBeCloseTo(R / Math.sqrt(3), 6)
+    expect(beltExitRadius([0, -1, 0], verts)).toBeCloseTo(R / Math.sqrt(3), 6) // 对称
+    for (const axis of [[1, 0, 0], [0, 0, 1], [0.3, 0.8, -0.52]] as [number, number, number][]) {
+      const t = beltExitRadius(axis, verts)
+      // 下界 = 内半径 R/3（轴指向面心时），上界 = 外接半径 R（轴穿过顶点时）
+      expect(t).toBeGreaterThan(R / 3 - 1e-6)
+      expect(t).toBeLessThanOrEqual(R + 1e-6)
+    }
+  })
+
+  it('扭转布满可见段：夹持区不扭、中段/尖端按剖面（同源 oracle）', () => {
+    const st = beltStations({ tau: 2 * Math.PI, axis: [0, 1, 0], attachRadius: 0.98 })
+    const at = (f: number) => st[Math.round(SEG * f)]!
+    // 夹持区 = W₀
     expect(widthDirOf(at(0.03)).x).toBeCloseTo(1, 9)
+    // 中段与 3/4 处 = oracle
+    expect(widthDirOf(at(0.5)).distanceTo(expectedWidthDir(2 * Math.PI, [0, 1, 0], 0.5))).toBeLessThan(1e-9)
+    expect(widthDirOf(at(0.75)).distanceTo(expectedWidthDir(2 * Math.PI, [0, 1, 0], 0.75))).toBeLessThan(1e-9)
     // 剖面端点
-    expect(beltTwistProfile(0, br, BELT_ANCHOR_DIST)).toBe(0)
-    expect(beltTwistProfile(BELT_PIN_MARGIN - 1e-9, br, BELT_ANCHOR_DIST)).toBe(0)
-    expect(beltTwistProfile(sEnter, br, BELT_ANCHOR_DIST)).toBe(1)
-    expect(beltTwistProfile(1, br, BELT_ANCHOR_DIST)).toBe(1)
+    expect(beltTwistProfile(0)).toBe(0)
+    expect(beltTwistProfile(BELT_PIN_MARGIN - 1e-9)).toBe(0)
+    expect(beltTwistProfile(1)).toBe(1)
   })
 
   it('带约束：宽向 ⊥ 切线在每一站严格成立（τ 与轴任意）', () => {
@@ -148,9 +182,9 @@ describe('beltGeometry · 常态（无演练）', () => {
   })
 
   it('削尖：末段线性收锥到 0，尖端正落旋转轴（物体中心）', () => {
-    const st = beltStations({ tau: 2, axis: [0, 1, 0] })
+    const st = beltStations({ tau: 2, axis: [0, 1, 0], attachRadius: 0.98 })
     expect(widthOf(st[SEG]!)).toBeCloseTo(0, 9)
-    expect(st[SEG]!.cy).toBeCloseTo(0, 9)
+    expect(st[SEG]!.cy).toBeCloseTo(0.98, 9)
     let prev = Infinity
     for (const s of st) {
       const w = widthOf(s)
@@ -166,23 +200,24 @@ describe('beltGeometry · 720° 复原演练', () => {
   const dirs = { restoreOrbitAxis: [0, 0, 1] as [number, number, number], restoreBow: [1, 0, 0] as [number, number, number] }
 
   it('restoreT→0 连续：位形趋近缠态（无跳变）', () => {
-    const wound = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], bodyRadius: 1.7 })
-    const start = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], bodyRadius: 1.7, restoreT: 1e-6, ...dirs })
+    const wound = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], attachRadius: 0.98 })
+    const start = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], attachRadius: 0.98, restoreT: 1e-6, ...dirs })
     expect(start[SEG]!.cy).toBeCloseTo(wound[SEG]!.cy, 4)
     expect(start[S075]!.cx).toBeCloseTo(wound[S075]!.cx, 4)
     expect(start[S075]!.cz).toBeCloseTo(wound[S075]!.cz, 4)
   })
 
   it('restoreT=1（τ=4π 全解）：与平直带逐位一致（容差 1e-9）', () => {
-    const done = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], restoreT: 1, ...dirs })
-    const plain = beltStations({ tau: 0, axis: [0, 1, 0] })
+    const done = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], attachRadius: 0.98, restoreT: 1, ...dirs })
+    const plain = beltStations({ tau: 0, axis: [0, 1, 0], attachRadius: 0.98 })
     expectCloseStations(done, plain)
   })
 
   it('restoreT=0.5：物体端在公转轨道上（离中心），带约束仍成立', () => {
-    const mid = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], restoreT: 0.5, ...dirs })
-    // 物体端绕锚点公转半圈：锚点 (0,L,0)，端点 = 锚点 + R(Z,π)·(0,−L,0) = (0,2L,0)
-    expect(mid[SEG]!.cy).toBeCloseTo(2 * BELT_ANCHOR_DIST, 5)
+    const attachR = 0.98
+    const mid = beltStations({ tau: BELT_RESTORE_AMOUNT, axis: [0, 1, 0], attachRadius: attachR, restoreT: 0.5, ...dirs })
+    // 尖端（停靠点）绕锚点公转半圈：端点 = 锚点 + R(Z,π)·(停靠点−锚点) = (0, 2L−attachR, 0)
+    expect(mid[SEG]!.cy).toBeCloseTo(2 * BELT_ANCHOR_DIST - attachR, 5)
     expect(mid[SEG]!.cx).toBeCloseTo(0, 5)
     // 弓形曲线上宽向 ⊥ 切线仍然严格成立（平行输运保持垂直性）
     for (let i = 1; i < SEG; i++) {
@@ -195,7 +230,7 @@ describe('beltGeometry · 720° 复原演练', () => {
   })
 
   it('τ > 720° 演练后残留扭转（τ=5π，restoreT=1 ⇒ τ_eff=π）', () => {
-    const st = beltStations({ tau: 5 * Math.PI, axis: [0, 1, 0], restoreT: 1, ...dirs })
+    const st = beltStations({ tau: 5 * Math.PI, axis: [0, 1, 0], attachRadius: 0.98, restoreT: 1, ...dirs })
     for (const s of st) expect(Math.hypot(s.cx, s.cz)).toBeCloseTo(0, 6)
     const wd = widthDirOf(st[MID]!)
     const exp = expectedWidthDir(Math.PI, [0, 1, 0], MID / SEG)

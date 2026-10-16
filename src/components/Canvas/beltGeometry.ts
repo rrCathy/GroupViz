@@ -22,34 +22,60 @@ import * as THREE from 'three'
  */
 
 /** 锚距：锚点 = 当前旋转轴方向 û 上距物体中心这么远（皮带与轴同轴）。
- *  取 3.4：默认相机（位置 [0,3,10]、fov 50）下锚点固定件完整入画（4.4 时顶端
- *  小球贴边裁切），且 720° 复原演练的公转轨道（半径 = 锚距，顶点 2×锚距）
- *  ~85% 在画面内（v2 的 6.3 让整个编舞发生在画面外，中段皮带完全不可见）。 */
-export const BELT_ANCHOR_DIST = 3.4
+ *  6.0：场景四面体外接半径是 4（直径 8）——可见段 = 6.0 − 轴出口半径 ≈ 3.7，
+ *  与四面体直径相比不再是「一截」（v5 的 4.6 ⇒ 可见 2.3 = 直径的 29%，用户
+ *  2026-10-16「皮带太短了」）。默认相机已退到 [0,4.5,15]（半高 ≈7.3）容纳之。
+ *  复原公转轨道半径 = 带长，顶点略出画顶，可用滚轮缩放观看。 */
+export const BELT_ANCHOR_DIST = 6.0
 /** 段数（stations = segments + 1） */
 export const BELT_SEGMENTS = 64
-/** 锚点端满宽（v4 加宽：0.55 与细轴标记重叠难分辨——用户 2026-10-15） */
+/** 锚点端满宽 */
 export const BELT_WIDTH = 0.72
 /** 一整扭 = 2π（复原演练的公转角度） */
 export const BELT_FULL_TURN = Math.PI * 2
 /** 复原演练一次解开的扭转量 = 两整扭（720°） */
 export const BELT_RESTORE_AMOUNT = BELT_FULL_TURN * 2
-/** 削尖：末段 TAPER_FRAC 内宽度线性收锥到 0 */
-const TAPER_FRAC = 0.35
-/** 固定端平直夹持区占比：扭转从这段之后才开始累（用户：扭转应分布在
- *  「几何体外」到「固定端前一些距离」之间——锚端留一小段不扭的夹持位） */
+/** 削尖：末段 TAPER_FRAC 内宽度线性收锥到 0（尖端整个可见，长锥显得刻意） */
+const TAPER_FRAC = 0.22
+/** 固定端平直夹持区占比：扭转从这段之后才开始累（销钉所在的「夹持位」） */
 export const BELT_PIN_MARGIN = 0.06
 
 /**
- * 扭转分布剖面：s ≤ 固定端夹持区 → 0；之后线性升到入体点（皮带进入
- * 四面体表面处，sEnter = 1 − bodyRadius/anchorDist）达 1；入体后恒 1
- * （物体端截面必须携带全扭转 τ——皮带粘在物体上）。
+ * 扭转分布剖面：s ≤ 固定端夹持区 → 0；之后线性升到尖端（皮带整体在几何体外，
+ *  扭转布满整条可见段）达 1。物体端截面必须携带全扭转 τ（皮带粘在物体上）。
  */
-export function beltTwistProfile(s: number, bodyRadius: number, anchorDist: number): number {
-  const sEnter = bodyRadius > 0 ? Math.max(0.15, 1 - bodyRadius / anchorDist) : 1
-  const denom = sEnter - BELT_PIN_MARGIN
-  if (denom <= 1e-6) return s >= sEnter ? 1 : 0
-  return Math.min(1, Math.max(0, (s - BELT_PIN_MARGIN) / denom))
+export function beltTwistProfile(s: number): number {
+  return Math.min(1, Math.max(0, (s - BELT_PIN_MARGIN) / (1 - BELT_PIN_MARGIN)))
+}
+
+/**
+ * 旋转轴 û 从几何中心到**表面**的出口距离（4 面平面求交，取沿 +û 最近的正交点）。
+ * 皮带尖端应停在表面而不是中心——v4 尖端在中心，大半长度插在四面体内部，
+ * 外面只露一截（用户 2026-10-16「皮带太短」）。vertices = 四面体 4 顶点。
+ */
+export function beltExitRadius(axis: [number, number, number], vertices: Array<[number, number, number]>): number {
+  const u = new THREE.Vector3(...axis)
+  if (u.lengthSq() < 1e-12) u.set(0, 1, 0)
+  u.normalize()
+  const fallback = vertices.length > 0
+    ? Math.max(...vertices.map(v => new THREE.Vector3(...v).length()))
+    : 0
+  if (vertices.length !== 4) return fallback
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3()
+  const n = new THREE.Vector3(), ab = new THREE.Vector3(), ac = new THREE.Vector3()
+  let best = Infinity
+  for (const [i, j, k] of [[1, 2, 3], [0, 2, 3], [0, 1, 3], [0, 1, 2]] as [number, number, number][]) {
+    a.set(...vertices[i]!); b.set(...vertices[j]!); c.set(...vertices[k]!)
+    ab.copy(b).sub(a); ac.copy(c).sub(a)
+    n.copy(ab).cross(ac) // 法向朝内/朝外无所谓：t = d/(n·û) 两侧同号相消
+    if (n.lengthSq() < 1e-12) continue
+    n.normalize()
+    const nu = n.dot(u)
+    if (Math.abs(nu) < 1e-9) continue
+    const t = n.dot(a) / nu
+    if (t > 1e-6 && t < best) best = t
+  }
+  return Number.isFinite(best) ? best : fallback
 }
 
 export interface BeltStation {
@@ -67,9 +93,10 @@ export interface BeltGeometryInput {
   axis: [number, number, number] | null
   anchorDist?: number
   segments?: number
-  /** 所附几何（四面体）的外接圆半径：扭转分布收进「几何体外 → 固定端前」的
-   *  可见段（入体点之后不再累扭）；0/缺省 = 不做入体收口（纯线性到尖端） */
-  bodyRadius?: number
+  /** 尖端停靠半径：几何表面沿轴的出口距离（beltExitRadius 算）——皮带尖端
+   *  停在物体表面而不是中心（v4 尖端在中心 ⇒ 大半长度插在体内，2026-10-16 修）。
+   *  0/缺省 = 尖端在物体中心（legacy） */
+  attachRadius?: number
   /** 复原演练进度 0..1；> 0 时物体端绕锚点公转、带体弓形外鼓、扭转按 720° 递减 */
   restoreT?: number
   /** 复原演练：公转轴（世界系；调用方按当前相机可视方向给出） */
@@ -126,6 +153,11 @@ export function beltStations(input: BeltGeometryInput): BeltStation[] {
   }
   const T = axis.clone().negate() // 锚点→物体方向
   const A = axis.clone().multiplyScalar(anchorDist)
+  // 尖端停靠点 = 轴上几何表面（û·attachRadius）——皮带端点贴在物体表面，
+  // 不再插进几何体内（v4 尖端在中心 ⇒ 可见段只剩一截，2026-10-16 修）
+  const attachR = Math.min(input.attachRadius ?? 0, anchorDist - 0.05)
+  const attach = axis.clone().multiplyScalar(attachR)
+  const beltLen = anchorDist - attachR
 
   // 复原演练的弓形参数（restoreT = 0 时不构造，常态路径零开销）
   const endPos = new THREE.Vector3()
@@ -135,9 +167,9 @@ export function beltStations(input: BeltGeometryInput): BeltStation[] {
     if (orbitAxis.lengthSq() < 1e-12) orbitAxis.set(0, 0, 1)
     orbitAxis.normalize()
     const bowDir = new THREE.Vector3(...(input.restoreBow ?? [0, 0, 1]))
-    // 物体端绕锚点公转一整圈（起点/终点都在物体中心）
-    endPos.copy(A).negate().applyQuaternion(_q.setFromAxisAngle(orbitAxis, BELT_FULL_TURN * restoreT)).add(A)
-    const bowMag = anchorDist * 0.38 * Math.sin(Math.PI * restoreT)
+    // 物体端（= 尖端停靠点）绕锚点公转一整圈（起点/终点都在停靠点）
+    endPos.copy(attach).sub(A).applyQuaternion(_q.setFromAxisAngle(orbitAxis, BELT_FULL_TURN * restoreT)).add(A)
+    const bowMag = beltLen * 0.38 * Math.sin(Math.PI * restoreT)
     ctrl.copy(A).add(endPos).multiplyScalar(0.5).addScaledVector(bowDir, bowMag)
   }
 
@@ -162,7 +194,6 @@ export function beltStations(input: BeltGeometryInput): BeltStation[] {
   const c = new THREE.Vector3()
   const Ti = new THREE.Vector3()
   const Tprev = new THREE.Vector3()
-  const bodyRadius = input.bodyRadius ?? 0
   let wPrev = 0
   for (let i = 0; i <= segments; i++) {
     const s = i / segments
@@ -172,11 +203,11 @@ export function beltStations(input: BeltGeometryInput): BeltStation[] {
       if (Ti.lengthSq() < 1e-12) Ti.copy(T)
       Ti.normalize()
     } else {
-      c.copy(A).addScaledVector(T, anchorDist * s)
+      c.copy(A).addScaledVector(T, beltLen * s)
       Ti.copy(T)
     }
-    // 扭转分布：固定端夹持区 0 → 线性升 → 入体点即满扭（增量 = 剖面差分）
-    const w = beltTwistProfile(s, bodyRadius, anchorDist)
+    // 扭转分布：固定端夹持区 0 → 线性升 → 尖端满扭（增量 = 剖面差分）
+    const w = beltTwistProfile(s)
     if (i > 0) {
       // 平行输运：宽向量按切线最短弧转到新切线（直线态 = 恒等，无翻转问题）
       _q.setFromUnitVectors(Tprev, Ti)

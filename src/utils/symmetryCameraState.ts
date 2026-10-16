@@ -10,7 +10,7 @@
 
 // 默认值 = Canvas 初始相机 [0,3,10] 看向原位的真实方向（Scene 首帧上报前的占位）
 const L0 = Math.sqrt(3 ** 2 + 10 ** 2)
-let posX = 0, posY = 3, posZ = 10
+let posX = 0, posY = 4.5, posZ = 15
 let dirX = 0, dirY = 3 / L0, dirZ = 10 / L0
 
 /** 相机位置 + 朝向（由目标指向相机的单位方向）上报 */

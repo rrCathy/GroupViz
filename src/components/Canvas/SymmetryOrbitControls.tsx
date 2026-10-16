@@ -25,10 +25,12 @@ const MIN_RADIUS = 2.5
 const MAX_RADIUS = 20
 const ORIGIN = new THREE.Vector3()
 const Y_UP = new THREE.Vector3(0, 1, 0)
-/** 默认初始视角 = Canvas camera prop [0,3,10]（姿态在 ref 初值里就算好——
+/** 默认初始视角 = Canvas camera prop [0,4.5,15]（姿态在 ref 初值里就算好——
  *  不能等 effect：R3F 的相机 prop 在异步 configure 里应用，慢加载时首帧可能
- *  早于 init effect 跑，用恒等四元数把相机钉在赤道（实测偶发复现）） */
-const INIT_DIR = new THREE.Vector3(0, 3, 10)
+ *  早于 init effect 跑，用恒等四元数把相机钉在赤道（实测偶发复现）。
+ *  [0,4.5,15] 与旧 [0,3,10] **同向**（归一化都是 (0,0.287,0.958)），只是更远：
+ *  容纳锚距 6.0 的长皮带（可见段 ≈3.7）与复原公转轨道） */
+const INIT_DIR = new THREE.Vector3(0, 4.5, 15)
 const INIT_QUAT = (() => {
   const m = new THREE.Matrix4().lookAt(INIT_DIR, ORIGIN, Y_UP)
   return new THREE.Quaternion().setFromRotationMatrix(m)

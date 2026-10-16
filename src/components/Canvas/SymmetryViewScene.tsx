@@ -10,7 +10,7 @@ import type { Group, GroupElement } from '../../core/types'
 import { getSymmetryType } from '../../core/symmetryType'
 import type { SymmetryType } from '../../core/symmetryType'
 import {
-  BELT_ANCHOR_DIST, BELT_FULL_TURN, BELT_SEGMENTS, BELT_RESTORE_AMOUNT, BELT_WIDTH,
+  BELT_ANCHOR_DIST, BELT_FULL_TURN, BELT_SEGMENTS, BELT_RESTORE_AMOUNT, BELT_WIDTH, beltExitRadius,
   beltStations, beltRestoreDirections,
 } from './beltGeometry'
 import { SymmetryOrbitControls } from './SymmetryOrbitControls'
@@ -346,7 +346,9 @@ export function SymmetryViewScene({
 
   return (
     <div style={{ width: '100%', height: '100%', background: bgColor }}>
-      <Canvas camera={{ position: [0, 3, 10], fov: 50, near: 0.1, far: 100 }} gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}>
+      {/* 相机退远到 [0,4.5,15]（半高 ≈7.3）：容纳锚距 6.0 的长皮带（可见段 ≈3.7，
+          与直径 8 的四面体相称）+ 固定件入画 + 复原公转轨道大部分可见 */}
+      <Canvas camera={{ position: [0, 4.5, 15], fov: 50, near: 0.1, far: 100 }} gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}>
         <color attach="background" args={[bgColor]} />
         <SymmetryScene
           group={group}
@@ -734,10 +736,10 @@ const BELT_BACK_COLOR = '#4b5b74'
 const _X_AXIS = new THREE.Vector3(1, 0, 0)
 const _beltW = new THREE.Vector3()
 
-function BeltStrap({ animState, bodyRadius }: {
+function BeltStrap({ animState, vertices }: {
   animState: { current: BeltLedgerState }
-  /** 所附几何（四面体）外接半径：扭转分布收进可见段 */
-  bodyRadius: number
+  /** 四面体顶点（算轴出口半径 = 皮带尖端停靠点） */
+  vertices: Array<[number, number, number]>
 }) {
   const [group] = useState(() => new THREE.Group())
   const geomRef = useRef<THREE.BufferGeometry | null>(null)
@@ -809,7 +811,7 @@ function BeltStrap({ animState, bodyRadius }: {
     const stations = beltStations({
       tau,
       axis: [st.beltAxis.x, st.beltAxis.y, st.beltAxis.z],
-      bodyRadius,
+      attachRadius: beltExitRadius([st.beltAxis.x, st.beltAxis.y, st.beltAxis.z], vertices),
       restoreT,
       restoreOrbitAxis: dirs.orbitAxis,
       restoreBow: dirs.bow,
@@ -869,9 +871,9 @@ function SymmetryScene({
   const { camera } = useThree()
   const [animPhase, setAnimPhase] = useState<AnimPhase>('rest')
 
-  // 皮带所附几何（四面体）的外接半径：扭转分布收进「几何体外 → 固定端前」可见段
-  const bodyRadius = useMemo(
-    () => (data ? Math.max(...data.vertices.map(v => v.length())) : 0),
+  // 四面体顶点（传给 BeltStrap 算「轴出口半径」= 皮带尖端停靠点）
+  const beltVertices = useMemo(
+    () => (data ? data.vertices.map(v => [v.x, v.y, v.z] as [number, number, number]) : []),
     [data],
   )
 
@@ -920,14 +922,18 @@ function SymmetryScene({
   const _restoreQ = useMemo(() => new THREE.Quaternion(), [])
   const _restoreA = useMemo(() => new THREE.Vector3(), [])
   const _restoreV = useMemo(() => new THREE.Vector3(), [])
+  const _restoreAttach = useMemo(() => new THREE.Vector3(), [])
   useFrame(() => {
     const g = restoreGroup
     const st = animRef.current
     if (st.beltRestoring) {
       const dirs = beltRestoreDirections(camera)
+      const attachR = beltExitRadius([st.beltAxis.x, st.beltAxis.y, st.beltAxis.z], beltVertices)
       const A = _restoreA.set(st.beltAxis.x, st.beltAxis.y, st.beltAxis.z).normalize().multiplyScalar(BELT_ANCHOR_DIST)
+      const attach = _restoreAttach.set(st.beltAxis.x, st.beltAxis.y, st.beltAxis.z).normalize().multiplyScalar(attachR)
       _restoreQ.setFromAxisAngle(_restoreV.set(dirs.orbitAxis[0], dirs.orbitAxis[1], dirs.orbitAxis[2]), BELT_FULL_TURN * st.beltRestoreT)
-      g.position.copy(A).negate().applyQuaternion(_restoreQ).add(A)
+      // 四面体中心 = 停靠点（绕锚点公转）− 停靠点（静止时）＝ 纯平移量
+      g.position.copy(attach).sub(A).applyQuaternion(_restoreQ).add(A).sub(attach)
     } else {
       g.position.set(0, 0, 0)
     }
@@ -1056,7 +1062,7 @@ function SymmetryScene({
         <AnimatedGeo data={data} symmetryType={symmetryType} isDirected={isDirected} animState={animRef} />
       </primitive>
 
-      {symmetryType === 'binaryTetrahedron' && <BeltStrap animState={animRef} bodyRadius={bodyRadius} />}
+      {symmetryType === 'binaryTetrahedron' && <BeltStrap animState={animRef} vertices={beltVertices} />}
 
       {symmetryType === 'dihedral' && data.vertices.length > 2 && (
         <mesh rotation={[-Math.PI / 2, 0, 0]}>

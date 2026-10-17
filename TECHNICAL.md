@@ -24,10 +24,10 @@
 |---|---|
 | 视图模式 | **13 种** — set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow / tree / prestable |
 | 引擎化 | 11 个视图 Scene **props 化入包**；另附属 `AutomorphismScene`（自同构作用预览）与附属组件 `QuotientSubgroupInset`（商群 N 悬浮窗）。tree / prestable 与无限群绑定，移交拓展包轨道 |
-| 群族 | Sₙ(2–6)、Cₙ(1–120)、Dₙ(3–15)、Aₙ(3–5)、V₄、Q₈、QD₁₆、GL(2,2)≅S₃、GL(2,3)(48 阶)、直积 G×H、半直积 N⋊_φH、自同构 Aut(G)、商群 G/N、SmallGroup 注册表（66 表群） |
+| 群族 | Sₙ(2–6)、Cₙ(1–120)、Dₙ(3–15)、Aₙ(3–6)、V₄、Q₈、QD₁₆、GL(2,2)≅S₃、GL(2,3)(48 阶)、直积 G×H、半直积 N⋊_φH、自同构 Aut(G)、商群 G/N、SmallGroup 注册表（66 表群） |
 | 形状模板 | **20** 种 3D + **14** 种 2D，按群性质自动分配 |
 | 测试 | ~100 文件 / ~2100 tests（node+dom 双项目）+ e2e 12 spec；精确数以 `npm run test` 实时输出为准 |
-| 发布 | 双包 `@groupviz/core` + `@groupviz/react` **v2.4.0 已发布 npm**（发布门禁 9 关 + 发布后 registry 验收 4 关） |
+| 发布 | 双包 `@groupviz/core` + `@groupviz/react` **v2.5.0 已发布 npm**（发布门禁 9 关 + 发布后 registry 验收 4 关） |
 
 ## 2. 技术栈
 

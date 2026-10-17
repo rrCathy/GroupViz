@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.4.2",
   "type": "module",
-  "pkgVersion": "2.4.0",
+  "pkgVersion": "2.5.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

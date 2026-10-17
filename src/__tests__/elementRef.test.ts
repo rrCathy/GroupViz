@@ -147,11 +147,24 @@ describe('resolveElement：循环记号语义档（跨群 / 跨约定）', () =>
     expect(resolveElement(s4, '(2 3 4)')!.id).toBe(canonical.id)
   })
 
-  it('跨群互写：A₄ 的 `(234)` 与 S₄ 的 `234` 是同一置换，各自都能命中', () => {
-    const inA4 = resolveElement(a4, '234')! // A₄ 只认带括号，靠语义档命中
-    const inS4 = resolveElement(s4, '(234)')! // S₄ 只认无括号，靠语义档命中
+  it('跨群互写：A₄ 的 `234` 与 S₄ 的 `(234)` 是同一置换，各自都能命中', () => {
+    const inA4 = resolveElement(a4, '234')! // 标签层直接命中（记法已与 Sₙ 统一）
+    const inS4 = resolveElement(s4, '(234)')! // S₄ 标签是无括号 `234`，带括号靠语义档命中
     expect(inA4.id).toBe('1,3,4,2')
     expect(inS4.id).toBe('1,3,4,2')
+  })
+
+  it('标签记法统一：Aₙ 与 Sₙ 同口径（单循环剥括号、多循环保留）', () => {
+    const byValue = (g: typeof a4, v: string) => g.elements.find(el => el.value.join(',') === v)!
+    // (234)：A₄ 旧实现是 '(234)'，现与 S₄ 一致为 '234'
+    expect(byValue(a4, '1,3,4,2').label).toBe('234')
+    expect(byValue(s4, '1,3,4,2').label).toBe('234')
+    // 多循环保留括号（两群一致）
+    expect(byValue(a4, '2,1,4,3').label).toBe('(12)(34)')
+    expect(byValue(s4, '2,1,4,3').label).toBe('(12)(34)')
+    // 统一后两种写法都仍能解析（语义档兜底不依赖标签层）
+    expect(resolveElement(a4, '(234)')!.id).toBe('1,3,4,2')
+    expect(resolveElement(s4, '(12)(34)')!.id).toBe('2,1,4,3')
   })
 
   it('多环：`(12)(34)` / `12)(34` / `(1 2)(3 4)` 在 S₄ 与 A₄ 都命中', () => {

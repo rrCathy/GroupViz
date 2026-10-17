@@ -23,10 +23,11 @@ function permToString(p: number[]): string {
   }
 
   if (cycles.length === 0) return 'e'
-  return cycles.map(c => {
-    if (c.length === 2) return `(${c[0]}${c[1]})`
-    return `(${c.join('')})`
-  }).join('') || 'e'
+  const parts = cycles.map(c => `(${c.join('')})`)
+  // 与 SymmetricGroup 同口径：单循环括号冗余，去掉以保持紧凑（`(234)` → `234`）；
+  // 多循环必须保留括号，否则 `(12)(34)` 会被剥成有歧义的 `12)(34`。
+  // （旧实现单循环一律带括号，A_n 与 S_n 两套记法；反馈单 2.4.0 附带发现 2 要求统一。）
+  return parts.length === 1 ? parts[0].slice(1, -1) : parts.join('')
 }
 
 function permutationParity(p: number[]): number {
@@ -50,9 +51,21 @@ function findPermIndex(elements: GroupElement[], perm: number[]): number {
   return idx
 }
 
+/**
+ * A_n 本地构造上限（门与构造器共用的**同一常量**）。
+ *
+ * 为什么是 6：A₆ = 360 元素（枚举 6! = 720 个置换再筛偶），与 S₆ 同一份枚举规模；
+ * n ≥ 7 的 A_n 元素数 ≥ 2520，远超静态线（STATIC_LIMIT=240），符号层一律走后端 GAP。
+ * 此前 groupFactory 的 `A_{n}` 门写 `<= 6` 而本构造器 `n > 5` 抛错——门比构造器宽，
+ * `A_6` 过门后死在构造器（feedback/BUGREPORT-groupviz-2.4.0-alternating-cap.md）。
+ */
+export const ALTERNATING_GROUP_MAX_DEGREE = 6
+
 export function createAlternatingGroup(n: number): Group {
   if (n < 3) throw guardError('n must be at least 3')
-  if (n > 5) throw guardError('A_{n} for n > 5 is too large', 'overflow')
+  if (n > ALTERNATING_GROUP_MAX_DEGREE) {
+    throw guardError(`A_{n} for n > ${ALTERNATING_GROUP_MAX_DEGREE} is too large`, 'overflow')
+  }
 
   const allPerms: number[][] = []
 
@@ -126,6 +139,17 @@ export function createAlternatingGroup(n: number): Group {
     const b = Array.from({ length: n }, (_, j) => j + 1); [b[0], b[1], b[2], b[3]] = [b[1], b[0], b[3], b[2]]
     generators.push(getGenerator('a', '(12345)', '#ff6b6b', a))
     generators.push(getGenerator('b', '(12)(34)', '#4ecdc4', b))
+  } else {
+    // n ≥ 6（当前上限 6）：相邻 3-循环生成集 σ_i = (i, i+1, i+2)，i = 1..n−2
+    // （定理：A_n = ⟨σ_1, …, σ_{n−2}⟩）。生成对不能随便挑——闭包不足时界面会给出
+    // 「生成元生成不出这个群」的假象（反馈实测反例：(123) + (12345) 闭包只有 60 阶）；
+    // 本集闭包 = 全群由 groups.test 逐条锁定。
+    const palette = ['#ff6b6b', '#4ecdc4', '#ffd93d', '#a78bfa']
+    for (let i = 0; i + 2 < n; i++) {
+      const perm = Array.from({ length: n }, (_, j) => j + 1)
+      const tmp = perm[i]; perm[i] = perm[i + 1]; perm[i + 1] = perm[i + 2]; perm[i + 2] = tmp
+      generators.push(getGenerator(`c${i + 1}`, `(${i + 1}${i + 2}${i + 3})`, palette[i % palette.length], perm))
+    }
   }
 
   function multiply(a: GroupElement, b: GroupElement): GroupElement {

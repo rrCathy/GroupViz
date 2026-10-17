@@ -67,7 +67,7 @@ interface Group {
 | 自同构群 Aut(G) | \operatorname{Aut}(G) | \|Aut(G)\| | greedy 闭包扩张 | `automorphisms.ts` |
 | 商群 G/N | G/N | [G:N] | 陪集 | `subgroups.ts` 的 `computeQuotientGroup` |
 
-范围：C₁–C₃₀、D₃–D₁₂、S₂–S₆、A₃–A₅（UI 下拉上限 S₅，S₆ 仅工厂/会话可用）、V₄、Q₈、GL(2,2)、GL(2,3)（GL(2,5)=480 超本地兜底上限，可经「记号导入群」面板走后端 GAP 导入）。
+范围：C₁–C₁₂₀、D₃–D₁₅、S₂–S₆、A₃–A₆（UI 按阶创建下拉上限 S₅/A₅，S₆/A₆ 走记号/工厂/会话；A₆ 本地可建——门与构造器共用 `ALTERNATING_GROUP_MAX_DEGREE=6`）、V₄、Q₈、GL(2,2)、GL(2,3)（GL(2,5)=480 超本地兜底上限，可经「记号导入群」面板走后端 GAP 导入）。
 
 ## 3. 直积群 G×H
 
@@ -151,7 +151,7 @@ interface Automorphism { id: string; map: Map<string,string>; label: string; app
 
 - 精确匹配特例：`Z_{4}\times Z_{2}`、`Z_{2}^{3}`、`Z_{3}^{2}`、`Z_{6}\times Z_{2}`、`V_{4}`、`Q_{8}`、`GL(2, 2)`/`GL(2,2)`、`GL(2, 3)`/`GL(2,3)`（+旧 Unicode 形式）
 - 递归解析：`\times`/`×` 直积、`^{n}` 幂（n≥2）
-- 范围：C₁–C₃₀ / Zₙ / D₃–D₁₂ / S₂–S₆ / A₃–A₅，含 `_{n}` 与裸 `n` 两种形式
+- 范围：C₁–C₁₂₀ / Zₙ / D₃–D₁₅ / S₂–S₆ / A₃–A₆，含 `_{n}` 与裸 `n` 两种形式
 - 便捷工厂：`createS3()`、`createZ6xZ2()`
 
 > 注意：`createGroupFromSymbol` 不解析 `\rtimes` 与 `\operatorname{Aut}` 符号——半直积与自同构群的会话恢复走各自的 spec 重建路径。

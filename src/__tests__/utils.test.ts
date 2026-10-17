@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { texify, renderTex } from '../utils/texify'
 import { createGroupFromSymbol } from '../utils/groupFactory'
 import { createDihedralGroup } from '../core/groups/DihedralGroup'
+import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
+import { createAlternatingGroup, ALTERNATING_GROUP_MAX_DEGREE } from '../core/groups/AlternatingGroup'
+import { DIHEDRAL_GROUP_MAX_N, SYMMETRIC_GROUP_MAX_DEGREE } from '../core/groups/groupFactory'
 
 describe('texify', () => {
   it('converts unicode subscripts', () => {
@@ -74,6 +77,7 @@ describe('createGroupFromSymbol', () => {
     ['S_{4}', 24],
     ['A_{4}', 12],
     ['A_{5}', 60],
+    ['A_{6}', 360],
     ['V_{4}', 4],
     ['Q_{8}', 8],
     ['Z_{4}\\times Z_{2}', 8],
@@ -207,5 +211,38 @@ describe('createGroupFromSymbol', () => {
     expect(createGroupFromSymbol('Z₃²')!.order).toBe(9)
     expect(createGroupFromSymbol('V₄')!.order).toBe(4)
     expect(createGroupFromSymbol('Q₈')!.order).toBe(8)
+  })
+})
+
+// 群族门 vs 构造器宽度对齐（feedback/BUGREPORT-groupviz-2.4.0-alternating-cap.md）：
+// 门的上界必须构造得出（防「A₆ 过门死在构造器」的矛盾复现）；A 族两边同界。
+describe('群族门 vs 构造器宽度对齐', () => {
+  it('gate upper bounds are constructible — the gate must never promise more than its constructor delivers', () => {
+    const s6 = createGroupFromSymbol('S_{6}')
+    expect(s6!.order).toBe(720)
+    expect(createSymmetricGroup(SYMMETRIC_GROUP_MAX_DEGREE).order).toBe(s6!.order)
+
+    const d15 = createGroupFromSymbol('D_{15}')
+    expect(d15!.order).toBe(30)
+    expect(createDihedralGroup(DIHEDRAL_GROUP_MAX_N).order).toBe(d15!.order)
+
+    // A₆：本次修复的主角（门 3..6 与构造器上界现共用一个常量）
+    const a6 = createGroupFromSymbol('A_{6}')
+    expect(a6!.order).toBe(360)
+    expect(createAlternatingGroup(ALTERNATING_GROUP_MAX_DEGREE).order).toBe(a6!.order)
+  })
+
+  it('one above the upper bound: the gate rejects; only A has a real constructor cap (S/D are unbounded by design)', () => {
+    expect(createGroupFromSymbol('S_{7}')).toBeNull()
+    expect(createGroupFromSymbol('D_{16}')).toBeNull()
+    expect(createGroupFromSymbol('A_{7}')).toBeNull()
+
+    // A 族构造器有真实上限，与门双向一致（消息如实反映常量值）
+    expect(() => createAlternatingGroup(ALTERNATING_GROUP_MAX_DEGREE + 1)).toThrow('n > 6')
+
+    // S/D 构造器有意不设上限（与 createCyclicGroup 同模式；内部识别需构造超门宽度的群，
+    // 如 subgroups/detection.ts 的 D_{order/2} 候选）——门拒绝是符号路由策略，非「建不了」。
+    expect(createSymmetricGroup(7).order).toBe(5040)
+    expect(createDihedralGroup(16).order).toBe(32)
   })
 })

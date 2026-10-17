@@ -2,7 +2,7 @@ import type { Group } from '../types'
 import { createSymmetricGroup } from './SymmetricGroup'
 import { createCyclicGroup } from './CyclicGroup'
 import { createDihedralGroup } from './DihedralGroup'
-import { createAlternatingGroup } from './AlternatingGroup'
+import { createAlternatingGroup, ALTERNATING_GROUP_MAX_DEGREE } from './AlternatingGroup'
 import { createKleinFour, createQuaternion } from './SpecialGroup'
 import { createZ4xZ2, createZ2xZ2xZ2, createZ3xZ3, createZ6xZ2, getSmallGroupBySymbol } from './SmallGroups'
 import { createDirectProduct } from './DirectProduct'
@@ -19,6 +19,24 @@ import { SMALL_GROUP_DATA } from './smallGroupData'
  * 直接返回 null（见 feedback 观察项 7：博客要展示 coil 需 C₃₆ 起）。
  */
 export const CYCLIC_GROUP_MAX_ORDER = 120
+
+/**
+ * 群族符号门的宽度常量（单一定义点，门与构造器的对齐约定见下）：
+ *
+ * - **不变量（回归锁定在 utils.test 的「门 vs 构造器」组）**：门的上界必须构造得出
+ *   ——`createGroupFromSymbol` 能进的宽度，对应构造器不得抛错（防「A₆ 过门死在构造器」
+ *   那类矛盾复现，feedback/BUGREPORT-groupviz-2.4.0-alternating-cap.md）。
+ * - `A_{n}` 的门**直接引用构造器常量** `ALTERNATING_GROUP_MAX_DEGREE`（构造器自身有上限，
+ *   两边同界、双向一致）。
+ * - `S_{n}` / `D_{n}` 的构造器**有意不设上限**（与 `createCyclicGroup` 同模式）：
+ *   内部识别需要构造超出门的群——`subgroups/detection.ts` 的 D_{order/2} 候选对
+ *   任意偶阶都要建 D_n（如 S₆ 的 360 阶子群要比对 D₁₈₀）。门是符号路由策略：
+ *   超宽度的记号本地不建、走后端 GAP，而不是「构造器建不了」。
+ */
+export const SYMMETRIC_GROUP_MAX_DEGREE = 6
+
+/** D_{n} 门上限；构造器不设上限（见上注释的不变量）。 */
+export const DIHEDRAL_GROUP_MAX_N = 15
 
 function parseTexSubscript(symbol: string, prefix: string): number | null {
   const re = new RegExp(`^${prefix}_\\{(\\d+)\\}$`, '')
@@ -190,13 +208,13 @@ export function createGroupFromSymbol(symbol: string): Group | null {
 
   // Dihedral groups: D_{n}
   const dN = parseTexSubscript(symbol, 'D')
-  if (dN !== null && dN >= 3 && dN <= 15) {
+  if (dN !== null && dN >= 3 && dN <= DIHEDRAL_GROUP_MAX_N) {
     return createDihedralGroup(dN)
   }
   const dMatch = /^D(\d+)$/.exec(symbol)
   if (dMatch) {
     const n = parseInt(dMatch[1], 10)
-    if (n >= 3 && n <= 15) return createDihedralGroup(n)
+    if (n >= 3 && n <= DIHEDRAL_GROUP_MAX_N) return createDihedralGroup(n)
   }
 
   // 命名半直积的无下标写法：QD16（规范符号是 'QD_{16}'）。registry 命中失败
@@ -208,24 +226,24 @@ export function createGroupFromSymbol(symbol: string): Group | null {
 
   // Symmetric groups: S_{n}
   const sN = parseTexSubscript(symbol, 'S')
-  if (sN !== null && sN >= 2 && sN <= 6) {
+  if (sN !== null && sN >= 2 && sN <= SYMMETRIC_GROUP_MAX_DEGREE) {
     return createSymmetricGroup(sN)
   }
   const sMatch = /^S(\d+)$/.exec(symbol)
   if (sMatch) {
     const n = parseInt(sMatch[1], 10)
-    if (n >= 2 && n <= 6) return createSymmetricGroup(n)
+    if (n >= 2 && n <= SYMMETRIC_GROUP_MAX_DEGREE) return createSymmetricGroup(n)
   }
 
-  // Alternating groups: A_{n}
+  // Alternating groups: A_{n}（门与构造器共用 ALTERNATING_GROUP_MAX_DEGREE，见文件头注释）
   const aN = parseTexSubscript(symbol, 'A')
-  if (aN !== null && aN >= 3 && aN <= 6) {
+  if (aN !== null && aN >= 3 && aN <= ALTERNATING_GROUP_MAX_DEGREE) {
     return createAlternatingGroup(aN)
   }
   const aMatch = /^A(\d+)$/.exec(symbol)
   if (aMatch) {
     const n = parseInt(aMatch[1], 10)
-    if (n >= 3 && n <= 6) return createAlternatingGroup(n)
+    if (n >= 3 && n <= ALTERNATING_GROUP_MAX_DEGREE) return createAlternatingGroup(n)
   }
 
   // SmallGroup(n,i) identifier (GAP convention, i is 1-based).

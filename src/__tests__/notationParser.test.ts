@@ -91,12 +91,19 @@ describe('parseNotation — GAP family expressions with order formulas', () => {
     expect(parseNotation('PSL(2,5)').order).toBe(60)
   })
 
-  it('A_6 → AlternatingGroup(6), order 360 (local creator throws for n>5, must not crash)', () => {
-    const r = parseNotation('A_6')
-    expect(r.ok).toBe(true)
-    expect(r.gapExpr).toBe('AlternatingGroup(6)')
-    expect(r.order).toBe(360)
-    expect(r.localSymbol).toBeNull()
+  it('A_6 → 本地可建（order 360，门与构造器同宽修复）；A_7 仍走后端 GAP', () => {
+    const r6 = parseNotation('A_6')
+    expect(r6.ok).toBe(true)
+    expect(r6.order).toBe(360)
+    expect(r6.localSymbol).toBe('A_{6}')
+    expect(r6.source).toBe('local')
+    expect(r6.gapExpr).toBeNull()
+
+    const r7 = parseNotation('A_7')
+    expect(r7.ok).toBe(true)
+    expect(r7.order).toBe(2520)
+    expect(r7.localSymbol).toBeNull()
+    expect(r7.gapExpr).toBe('AlternatingGroup(7)')
   })
 
   it('C_3×D_16 → DirectProduct(CyclicGroup(3), DihedralGroup(32)), order 96', () => {

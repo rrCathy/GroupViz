@@ -121,7 +121,7 @@ export function parseGroupNotation(input: string): GroupNotation {
   try {
     localGroup = createGroupFromSymbol(symbol)
   } catch {
-    // 本地构造器对超范围参数会抛（如 A_6），视作本地不可建、继续走后端
+    // 本地构造器对超范围参数会抛（如 A_7），视作本地不可建、继续走后端
     localGroup = null
   }
 

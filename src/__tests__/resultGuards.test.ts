@@ -126,11 +126,13 @@ describe('typed throws preserve messages', () => {
     expect(() => createDihedralGroup(2)).toThrow('Order must be at least 3')
     expect(() => createAlternatingGroup(2)).toThrow('n must be at least 3')
     try {
-      createAlternatingGroup(6)
+      createAlternatingGroup(7)
       expect.unreachable()
     } catch (e) {
       expect((e as { kind?: string; reason?: string }).kind).toBe('guard')
       expect((e as { reason?: string }).reason).toBe('overflow')
+      // 上界与门共用同一常量（6）——消息如实反映，勿回退到 n > 5
+      expect((e as Error).message).toBe('A_{n} for n > 6 is too large')
     }
   })
 

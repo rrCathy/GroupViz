@@ -342,6 +342,57 @@ for (const [name, fn] of [['useSceneState', useSceneState], ['SceneWindow', Scen
   console.log('  react ok  CayleyView 900×360 SSR 节点全在画布内 → y=[' + minY.toFixed(1) + ', ' + maxY.toFixed(1) + ']')
 }
 
+// 回归门禁：CayleyView 笔直模式（edgeCurvature=0）的平行边（a/a⁻¹ 对）必须分列弦两侧。
+// 旧实现 curvature = offset × 16 与各边自身法向双双取反 → 一对边控制点完全重合
+// （实测 4/4 对重叠；主画布 2026-10-09 已修，包侧 2026-10-17 修复）。
+// 判据与两处单测同口径：规范法向（按端点坐标定向）投影的去符号偏移，一对边 ±8 且异号。
+{
+  const c4 = createGroupFromSymbol('C_{4}')
+  const straightHtml = renderToStaticMarkup(
+    React.createElement(CayleyView, {
+      group: c4,
+      selectedElements: new Set(),
+      canvasTransform: { x: 0, y: 0, scale: 1 },
+      viewBoxSize: { width: 600, height: 400 },
+      edgeCurvature: 0,
+      actions: [{ elementId: 'e1' }, { elementId: 'e2' }, { elementId: 'e3' }],
+    }),
+  )
+  const parseEdge = (d) => {
+    const m = /^M ([-.\\deE+]+) ([-.\\deE+]+) Q ([-.\\deE+]+) ([-.\\deE+]+) ([-.\\deE+]+) ([-.\\deE+]+)$/.exec(d.trim())
+    return m ? { s: [+m[1], +m[2]], c: [+m[3], +m[4]], e: [+m[5], +m[6]] } : null
+  }
+  const geoms = [...straightHtml.matchAll(/<path[^>]*?\\sd="([^"]+)"/g)]
+    .map((m) => parseEdge(m[1])).filter(Boolean)
+  const pairs = []
+  for (let i = 0; i < geoms.length; i++) {
+    for (let j = i + 1; j < geoms.length; j++) {
+      const a = geoms[i]
+      const b = geoms[j]
+      if (Math.hypot(a.s[0] - b.e[0], a.s[1] - b.e[1]) < 0.5 &&
+        Math.hypot(a.e[0] - b.s[0], a.e[1] - b.s[1]) < 0.5) pairs.push([a, b])
+    }
+  }
+  const perpOffset = (g) => {
+    const [ax, ay] = g.s
+    const [bx, by] = g.e
+    const [fx, fy] = (ax < bx || (ax === bx && ay < by)) ? [bx - ax, by - ay] : [ax - bx, ay - by]
+    const dist = Math.hypot(fx, fy)
+    const [nx, ny] = [-fy / dist, fx / dist]
+    return (g.c[0] - (ax + bx) / 2) * nx + (g.c[1] - (ay + by) / 2) * ny
+  }
+  if (pairs.length !== 4) throw new Error('CayleyView 平行边对数异常: ' + pairs.length + ' ≠ 4（e1/e3 互逆应为 4 对）')
+  for (const [a, b] of pairs) {
+    const oa = perpOffset(a)
+    const ob = perpOffset(b)
+    if (Math.sign(oa) !== -Math.sign(ob) ||
+      Math.abs(Math.abs(oa) - 8) > 1.5 || Math.abs(Math.abs(ob) - 8) > 1.5) {
+      throw new Error('CayleyView 笔直模式平行边未分列 ±8: ' + oa.toFixed(2) + ' vs ' + ob.toFixed(2))
+    }
+  }
+  console.log('  react ok  CayleyView 笔直模式平行边分列 ±8 → ' + pairs.length + ' 对')
+}
+
 // 自同构预览（第 12 个 Scene）：SSR 必须零 window 依赖（尺寸自测只在客户端跑，服务端走兜底尺寸）
 {
   const s3 = createGroupFromSymbol('S_{3}')

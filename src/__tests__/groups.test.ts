@@ -108,6 +108,7 @@ describe('Group Axioms Verification', () => {
   
   testGroupAxioms(createAlternatingGroup(4), 'A_4')
   testGroupAxioms(createAlternatingGroup(5), 'A_5')
+  testGroupAxioms(createAlternatingGroup(6), 'A_6')
   
   testGroupAxioms(createKleinFour(), 'V_4')
   testGroupAxioms(createQuaternion(), 'Q_8')
@@ -169,11 +170,24 @@ describe('Specific Group Properties', () => {
       
       const a5 = createAlternatingGroup(5)
       expect(a5.order).toBe(60)
+
+      const a6 = createAlternatingGroup(6)
+      expect(a6.order).toBe(360)
     })
 
     it('A_n should not be abelian for n >= 4', () => {
       const group = createAlternatingGroup(4)
       expect(group.isAbelian).toBe(false)
+    })
+
+    it('A_n element labels follow the S_n notation (single cycle loses its parens)', () => {
+      const a4 = createAlternatingGroup(4)
+      const threeCycle = a4.elements.find(el => el.value.join(',') === '1,3,4,2')!
+      expect(threeCycle.label).toBe('234')            // 旧实现为 '(234)'，与 S₄ 两套记法
+      const doubleTransposition = a4.elements.find(el => el.value.join(',') === '2,1,4,3')!
+      expect(doubleTransposition.label).toBe('(12)(34)')
+      const s4 = createSymmetricGroup(4)
+      expect(s4.elements.find(el => el.value.join(',') === '1,3,4,2')!.label).toBe('234')
     })
   })
 
@@ -189,5 +203,35 @@ describe('Specific Group Properties', () => {
       expect(group.isAbelian).toBe(false)
       expect(group.order).toBe(8)
     })
+  })
+})
+
+// 生成元闭包 = 全群（A_n 的生成对不能随便挑：闭包不足时界面会显示
+// 「生成元生成不出这个群」的假象——反馈实测反例 (123)+(12345) 闭包只有 60 阶）。
+// 本次为 A₆ 新增相邻 3-循环生成集，本组测试同时锁定既有 A₃–A₅ 不回退。
+describe('Alternating group generators span the whole group', () => {
+  for (const n of [3, 4, 5, 6]) {
+    it(`A_${n}: closure of the generator set = all ${n}! / 2 elements`, () => {
+      const group = createAlternatingGroup(n)
+      expect(group.generators.length).toBeGreaterThan(0)
+      const seen = new Set([group.identity.id])
+      const queue: GroupElement[] = [group.identity]
+      while (queue.length > 0) {
+        const el = queue.pop()!
+        for (const gen of group.generators) {
+          const next = gen.apply(el)
+          if (!seen.has(next.id)) {
+            seen.add(next.id)
+            queue.push(next)
+          }
+        }
+      }
+      expect(seen.size).toBe(group.order)
+    })
+  }
+
+  it('A_6 generators are the consecutive 3-cycles (1 2 3)(2 3 4)(3 4 5)(4 5 6)', () => {
+    const a6 = createAlternatingGroup(6)
+    expect(a6.generators.map(g => g.symbol)).toEqual(['(123)', '(234)', '(345)', '(456)'])
   })
 })

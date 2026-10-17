@@ -107,7 +107,7 @@ GroupViz/
 
 - ✅ **群记号别名系统（v2.2.2，`src/core/algebra/notation/`）**：统一入口 `parseGroupNotation`（规范化 → 专名展开 → **本地优先** → 后端 GAP → 定向报错），宿主 `symbol` 可直接写人类记法——`C4`/`c4`/`Z_4`/`Z/4Z`、`S3xS3`/`S_3^2`/`S_3×S_3`、`C7:C3`/`C7⋊C3`/**`F21`**/`Frobenius(21)`、`QD16`、`Klein`/`K4`/`K_4`、`Sym(3)`/`Alt(5)`、`Dic_3`、`gl(2,3)` 等。**两条硬规则**：只收 TeX 形态、**拒绝 Unicode 上下标**（`C₄`/`C_2²` 报错并给等价写法——曾静默把 `C_2²` 解成 22 阶的 `C_{22}`）；`D_n` 保持 **2n 阶**约定（D_8 = 16 阶）。多义专名（F₁₆ 两候选）或无解一律拒绝并列候选，不猜。反向 `getGroupAliases(群)` 给出别名列表（含 `C_{7}:C_{3}` → `F_{21}`）。详见 docs/API.md §8
 - ✅ 13 种视图模式：set / cayley / cycle / table / 3d / symmetry / sublattice / homomorphism / cosetstrip / action / sylow / tree / prestable。**其中 11 个已完成 props 化入包**（`@groupviz/react` 收录 11 个视图 Scene，2026-09-16 sylow 收尾）；tree / prestable 两个群展示专用视图（入口在左侧「群展示」面板底部，不在视图面板卡片中）与**无限群**方向绑定、当前无消费需求，**不再 props 化**，移交拓展包轨道（见 [docs/PLAN_EXTENSION_PACKS.md](docs/PLAN_EXTENSION_PACKS.md) §9）。**视图之外另有一个附属窗口功能入包**：自同构作用预览 `AutomorphismScene`（2026-09-19，第 12 个 Scene）——形态为「内容内核 + 宿主 `SceneWindow` 嵌套预览窗」，主应用浮层与包消费端共用同一份实现（见 [docs/API.md](docs/API.md) §4.12）。**附属组件再添一个**：商群悬浮窗 `QuotientSubgroupInset`（2026-09-21）——`SetView`/`CayleyView` 内置出窗（`quotientInsetTitle` prop），门面亦可直用；core 侧 `computeQuotientGroup` / `quotientInsetGeometry` 同步公开（见 [docs/API.md](docs/API.md) §4.13）
-- ✅ 群族（记号构造范围，2026-09-14 与代码对齐）：Sₙ(2-6)、Cₙ(1-120)、Dₙ(3-15)、Aₙ(3-5，A₆ 本地构造即拒、走后端)、V₄、Q₈、QD₁₆、**GL(2,2) ≅ S₃ / GL(2,3)（48 阶，矩阵群）**、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（S₆=720 可构造但超出子群枚举线，相关视图自动走后端 GAP / 大群警告）
+- ✅ 群族（记号构造范围，2026-09-14 与代码对齐；2026-10-17 门/构造器宽度对齐）：Sₙ(2-6)、Cₙ(1-120)、Dₙ(3-15)、Aₙ(3-6，A₆=360 本地可建——`groupFactory` 的门与 `createAlternatingGroup` 共用 `ALTERNATING_GROUP_MAX_DEGREE=6`，n≥6 用相邻 3-循环生成集)、V₄、Q₈、QD₁₆、**GL(2,2) ≅ S₃ / GL(2,3)（48 阶，矩阵群）**、直积 G×H、**半直积 N⋊_φ H**、**自同构群 Aut(G)**、商群 G/N（S₆=720 可构造但超出子群枚举线，相关视图自动走后端 GAP / 大群警告）
 - ✅ 广义 Cayley 图：右乘/左乘切换、任意元素作用边、14 种 2D 形状（含 rewiring、直积 cylinder/torus）、20 种 3D 形状模板（按群性质自动分配；含 S₄ 星形对换 (12)(13)(14) 的**环面全六边形镶嵌** `torusHex`——24 顶点 36 边 12 六边形、周期格 60° 菱形，见 docs/CAYLEY.md §6）
 - ✅ 2D 凯莱图布局策略：**循环群默认 circular**（cayleyCircleLayout 兜底，注册表/基本群数字感知环序，spiral 仅作手动可选）、**注册表 Dₙ 双环**（splitDihedralElements 元素阶分类：m=|G|/2 找阶 m 元素 r → 旋转=⟨r⟩ 幂闭包、反射=其余、配对 sᵢ=rⁱ·s₀，dualRingLayout/cayleyCircleLayout 的 value 分类失败自动回退，覆盖按阶创建 16-30 阶二面体；对 C₂ₘ/Cₘ×C₂/Q₈/C₈:C₂ 也匹配，A₄/C₂³ 返回 null 走原 fallback）、**注册表生成元标准化**（createTableGroup 的 buildGenerators：D_m 结构按乘法表重建标准 (r,s) 生成对——r=阶 m 元素、s=阶 2 反射，⟨r,s⟩ 闭包=全群验证，替代 GAP 任意生成对如两个反射；其他结构保持 rec.gens）、**半直积盘内蛇形环序**（dihedralSnakeOrder：rotations 幂序正排 + reflections 配对角反排摊平单环，C₄×C₂ 盘内 a 边外环相邻 b 边径向；失败回退 powerRingOrder）、**cylinder 各层同相位**（循环因子生成元边成径向直线母线，俯视圆柱感；Cₘ×C₂ 盘内环序 powerRingOrder 特判：外圈 t0 行升序 + 内圈 t1 行降序）
 - ✅ 直积 2D 形状分类（`classifyDirectProduct2D`）：全循环因子→grid 网格、恰一个循环因子→**cylinder 圆柱**（循环因子沿径向同心多层环，每层=非循环因子副本，Dₙ 因子保留双环内外层）、全非循环因子→**torus 甜甜圈**（嵌套环：主轴环 + 每点挂剩余因子乘积副本，**任意因子数**）；紧凑符号因子识别（`factorPipeGroupsOrTokens`：C₂²×S₃ = 2 因子分组、S₃² 幂合并自动按 pipe 段拆分为 2 因子），`buildFactorSubgroup` 因子临时群重建 + `factorCopyRingLayout` 副本环（Dₙ 双环 r=1/0.55）；**相邻同底循环因子归组**（`analyzeDPFactorsGrouped2D`/`factorPipeGroupsGrouped`：C₂×C₂×S₃ → [C₂², S₃]，C₂×C₂×C₂ 三连合并 C₂³ 单因子退回网格）；相邻层 stagger 错位防遮挡；形状下拉自动可用（cylinder/torus + grid）；**注册表群（16-31 阶非 pipe 直积）网格兜底**：`tableGroupGridFactors` union-find 聚类（生成元不可交换聚类→因子划分 + 混合进制枚举），C₄×C₄/Z₄×Z₂×Z₂/C₂⁴ 等 4×4 满网格；**注册表非 pipe 直积 cylinder 聚类支持（多因子）**：`clusterFactorGroups`/`tableGroupFactorSplit`/`clusterIsCyclic` 按生成元交换性聚类因子 + 循环性判定（Z₂×D₄/Z₂×Q₈ 显示 2 层同心环；C₂×C₂×S₃ 注册表聚类 3 簇 → 3 环嵌套甜甜圈）；**半直积不误判直积**：`hasTopLevelTimes` 顶层 \\times 检测——'(Z₄×Z₂):Z₂' 不误判直积（走半直积重布线）；**环网格 ringGrid**（C₄×C₂×C₂ 类直积，仅 ≥3 个循环因子）：`isRingGridGroup`/`findRingGridDecomposition` 纯群论探测（阶≤2 元素生成 V₄ 网格 + 环生成元 x 幂覆盖全群唯一分解 + 交换性检查拒绝 C₂×D₄ 伪分解）+ `ringGridLayout2D` n 边形环 × 2×2 网格每格挂完整环（C₁₀×C₂ 等 2 因子直积排除，回 grid）；**cylinder 更名「交错同心圆」**：相邻层半格交错（offset = layerIdx·π/copyN，Cₙ 生成元边为层间斜线）；**注册表 C₃×S₃ 生成元标准化**（18,3 GAP gens [g3,g4] 缺 2 阶反射 → (c,r,s) 标准三元 [2,3,4]，层内呈现完整 S₃ 凯莱图而非两个 C₃ 三角）
@@ -194,7 +194,7 @@ uvicorn main:app --reload --port 8000
    - **BOM 检查**：Windows 下 write 工具可能写入 UTF-8 BOM，使 vite/postcss（JSON.parse package.json）崩溃。改动文件首字节应为 `7B`（`{`），package.json 必须无 BOM。
    - **硬编码版本**：欢迎页 `welcome.version`（translations.ts zh/en 两处）须与 package.json 版本一致。
    - **i18n 缺失键**：`i18n.test.ts` 自动断言 zh/en 键集合一致；新增 `t()` 调用必须 zh/en 成对补键。
-   - **文档一致性**：grep 全仓 `.md` 的测试计数（560）、群族范围（Sₙ 2-5 / Cₙ 2-120 / Dₙ 3-8 / Aₙ 3-5）、版本号，与代码事实对齐。
+   - **文档一致性**：grep 全仓 `.md` 的测试计数（560）、群族范围（Sₙ 2-6 / Cₙ 2-120 / Dₙ 3-15 / Aₙ 3-6）、版本号，与代码事实对齐。
 
 ### 阶段 2：修（Fix）— 修复并验证
 
@@ -249,5 +249,5 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-*文档版本: 2.2.2*
+*文档版本: 2.4.2*
 *最后更新: 2026-10-17*

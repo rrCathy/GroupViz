@@ -233,6 +233,55 @@ const ctrlOffsetFromChord = (d: string) => {
   return Math.hypot(g.cx - (g.sx + g.ex) / 2, g.cy - (g.sy + g.ey) / 2)
 }
 
+// ── 直边平行边分摊判据（与主画布 MainCanvasEdgeStyle 测试同口径）──
+
+type EdgeGeom = { s: [number, number]; c: [number, number]; e: [number, number] }
+
+/** 全部边 path（`M … Q …`）；skip marker 内部 path 与 KaTeX 等非边路径 */
+const edgeGeoms = (container: HTMLElement): EdgeGeom[] =>
+  Array.from(container.querySelectorAll('path'))
+    .filter(p => !p.closest('marker'))
+    .map(p => parseEdgeGeometry(p.getAttribute('d') ?? ''))
+    .filter((g): g is NonNullable<typeof g> => g !== null)
+    .map(g => ({ s: [g.sx, g.sy], c: [g.cx, g.cy], e: [g.ex, g.ey] }))
+
+/** 规范法向：同一对节点的两条反向边必须共享同一基准（各自法向会互相抵消，掩盖重叠） */
+const canonicalNormal = (g: EdgeGeom): [number, number] => {
+  const [ax, ay] = g.s
+  const [bx, by] = g.e
+  const [fx, fy] = (ax < bx || (ax === bx && ay < by)) ? [bx - ax, by - ay] : [ax - bx, ay - by]
+  const dist = Math.hypot(fx, fy)
+  return [-fy / dist, fx / dist]
+}
+
+/** 控制点相对弦中点的偏移，沿规范法向投影（带符号；真直 = 0，分列两侧 = 一正一负） */
+const perpOffset = (g: EdgeGeom): number => {
+  const [nx, ny] = canonicalNormal(g)
+  const midX = (g.s[0] + g.e[0]) / 2
+  const midY = (g.s[1] + g.e[1]) / 2
+  return (g.c[0] - midX) * nx + (g.c[1] - midY) * ny
+}
+
+/** 控制点落弦中点（真直判据：x/y 两分量都为 0） */
+const ctrlOnMid = (g: EdgeGeom): boolean =>
+  Math.abs(g.c[0] - (g.s[0] + g.e[0]) / 2) < 0.5 && Math.abs(g.c[1] - (g.s[1] + g.e[1]) / 2) < 0.5
+
+/** 平行边配对：起点 ≈ 对方终点（方向相反、同一对节点） */
+const parallelPairs = (geoms: EdgeGeom[]): [EdgeGeom, EdgeGeom][] => {
+  const pairs: [EdgeGeom, EdgeGeom][] = []
+  for (let i = 0; i < geoms.length; i++) {
+    for (let j = i + 1; j < geoms.length; j++) {
+      const a = geoms[i]
+      const b = geoms[j]
+      if (Math.hypot(a.s[0] - b.e[0], a.s[1] - b.e[1]) < 0.5 &&
+        Math.hypot(a.e[0] - b.s[0], a.e[1] - b.s[1]) < 0.5) {
+        pairs.push([a, b])
+      }
+    }
+  }
+  return pairs
+}
+
 describe('CayleyView · VCL controls', () => {
   it('edgeCurvature=0 makes single-generator edges perfectly straight (ctrl on the chord midpoint)', () => {
     const { container } = render(
@@ -256,19 +305,48 @@ describe('CayleyView · VCL controls', () => {
     expect(ctrlOffsetFromChord(p.getAttribute('d')!)).toBeGreaterThan(1)
   })
 
-  it('parallel edges (two actions on one node pair) fan apart even in straight mode', () => {
-    // C₄ 用 e1 / e3 两条作用 → 同一节点对出现两条方向相反的平行边
+  it('straight mode: parallel edges (a/a⁻¹ pair) fan to both sides — control points must not coincide', () => {
+    // C₄ 同时启用 e1/e2/e3：e1 与 e3=a⁻¹ 互逆成 4 对平行边；e2=a² 自逆 → 2 条单边
     const { container } = render(
       <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
-        edgeCurvature={0} actions={[{ elementId: 'e1' }, { elementId: 'e3' }]} />,
+        edgeCurvature={0}
+        actions={[{ elementId: 'e1' }, { elementId: 'e2' }, { elementId: 'e3' }]} />,
     )
-    const signed = Array.from(container.querySelectorAll('path[marker-end]')).map(p => {
-      const g = parseEdgeGeometry(p.getAttribute('d')!)!
-      return g.cx - (g.sx + g.ex) / 2
-    })
-    // 平行边不得双双落在弦上（否则完全重叠看不见），应左右分列
-    expect(signed.some(v => v > 1)).toBe(true)
-    expect(signed.some(v => v < -1)).toBe(true)
+    const geoms = edgeGeoms(container)
+    expect(geoms).toHaveLength(10)
+    const pairs = parallelPairs(geoms)
+    expect(pairs).toHaveLength(4)
+    for (const [a, b] of pairs) {
+      const oa = perpOffset(a)
+      const ob = perpOffset(b)
+      // 一正一负：反向平行边不得叠成同一条曲线（曾各用自身法向导致 4/4 对控制点完全重合）
+      expect(Math.sign(oa)).toBe(-Math.sign(ob))
+      // 各偏 8px（offset ±0.5 × 16）
+      expect(Math.abs(Math.abs(oa) - 8)).toBeLessThan(1.5)
+      expect(Math.abs(Math.abs(ob) - 8)).toBeLessThan(1.5)
+    }
+    // 非平行边（e2 双向边两条）不得被分摊带偏：仍真直
+    const inPair = new Set<EdgeGeom>()
+    pairs.forEach(([a, b]) => { inPair.add(a); inPair.add(b) })
+    const singles = geoms.filter(g => !inPair.has(g))
+    expect(singles).toHaveLength(2)
+    for (const g of singles) expect(ctrlOnMid(g)).toBe(true)
+  })
+
+  it('curved (default) mode: parallel pair still splits to both sides of the chord', () => {
+    const { container } = render(
+      <CayleyView group={c4} selectedElements={noSel} canvasTransform={ct} viewBoxSize={vb}
+        actions={[{ elementId: 'e1' }, { elementId: 'e3' }]} />,
+    )
+    const pairs = parallelPairs(edgeGeoms(container))
+    expect(pairs).toHaveLength(4)
+    for (const [a, b] of pairs) {
+      const oa = perpOffset(a)
+      const ob = perpOffset(b)
+      expect(Math.sign(oa)).toBe(-Math.sign(ob))
+      expect(Math.abs(oa)).toBeGreaterThan(0.5)
+      expect(Math.abs(ob)).toBeGreaterThan(0.5)
+    }
   })
 
   it('path highlight (word) draws one segment per step', () => {

@@ -210,16 +210,22 @@ function renderEdgePath(
   // 平行边分摊：0/1 条时 offset=0；多条时按序号左右铺开
   const offset = parallelCount > 1 ? (parallelIndex - (parallelCount - 1) / 2) : 0
   const baseCurvature = Math.min(dist * 0.08, 18)
-  let curvature: number
+  let ctrlX: number
+  let ctrlY: number
   if (curvatureMul === 0) {
-    // 笔直模式：单条边真直；平行边仍小幅分开，否则完全重叠看不见
-    curvature = parallelCount > 1 ? offset * 16 : 0
+    // 笔直模式：单条边真直；平行边（a/a⁻¹ 对）仍小幅分开，否则完全重叠看不见。
+    // 分摊方向取「规范法向」（按 fromIdx < toIdx 定向）：反向平行边的曲率与法向
+    // 双双取反，若各用自身法向，两条边会叠成同一条曲线（曾实测 4/4 对控制点完全重合）。
+    const spread = offset * 16
+    const flip = edge.fromIdx < edge.toIdx ? 1 : -1
+    ctrlX = midX + nx * flip * spread
+    ctrlY = midY + ny * flip * spread
   } else {
-    curvature = baseCurvature * curvatureMul * (parallelCount > 1 ? 1 + offset * 0.7 : 1)
+    // 弯曲模式（现状观感）：各边沿自身法向弯，反向平行边天然分列弦两侧
+    const curvature = baseCurvature * curvatureMul * (parallelCount > 1 ? 1 + offset * 0.7 : 1)
+    ctrlX = midX + nx * curvature
+    ctrlY = midY + ny * curvature
   }
-
-  const ctrlX = midX + nx * curvature
-  const ctrlY = midY + ny * curvature
 
   const startX = fromPos.x + (dx / dist) * nodeRadius
   const startY = fromPos.y + (dy / dist) * nodeRadius

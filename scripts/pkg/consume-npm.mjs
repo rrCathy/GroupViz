@@ -20,9 +20,11 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os'
 import path from 'node:path'
 
-// 版本号：显式参数优先，否则读 package.json（避免发版后忘记改默认值、误测旧版本）
+// 版本号：显式参数优先，否则读 package.json 的 pkgVersion（双包发布版本独立于
+// 主应用 version——pkgVersion ?? version，与 finalize-pkg / compare-registry 同源；
+// 避免发版后忘记改默认值、误测旧版本）
 const VERSION = process.argv.slice(2).find((a) => /^\d+\.\d+\.\d+/.test(a))
-  ?? JSON.parse(readFileSync('package.json', 'utf8')).version
+  ?? (() => { const p = JSON.parse(readFileSync('package.json', 'utf8')); return p.pkgVersion ?? p.version })()
 const KEEP = process.argv.includes('--keep')
 
 const run = (cmd, opts = {}) =>

@@ -5,7 +5,8 @@
  * （单测 / publish:smoke / consume:registry / consume:browser）对线上包同样成立。
  *
  * 用法：npm run consume:compare [-- 2.2.0]
- *   需**非沙箱**运行（curl 走网络）。默认取 package.json 的 version。
+ *   需**非沙箱**运行（curl 走网络）。默认取 package.json 的 pkgVersion
+ *   （双包发布版本独立于主应用 version——pkgVersion ?? version，与 finalize-pkg 同源）。
  */
 import { execSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -14,7 +15,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
-const VERSION = process.argv[2] ?? pkg.version
+const VERSION = process.argv[2] ?? pkg.pkgVersion ?? pkg.version
 
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'gv-cmp-'))
 const sh = (cmd, opts = {}) => execSync(cmd, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', ...opts })

@@ -22,9 +22,10 @@ const REPORT = path.join(ROOT, 'viewconfig-verify.txt')
 writeFileSync(REPORT, '')
 const say = (...a) => appendFileSync(REPORT, a.join(' ') + '\n')
 
-// 版本号：显式参数优先（npm run consume:types -- 2.2.1），否则读 package.json
+// 版本号：显式参数优先（npm run consume:types -- 2.2.1），否则读 package.json 的
+// pkgVersion（双包发布版本独立于主应用 version——pkgVersion ?? version，同源 finalize-pkg）
 const VERSION = process.argv.slice(2).find((a) => /^\d+\.\d+\.\d+/.test(a))
-  ?? JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version
+  ?? (() => { const p = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')); return p.pkgVersion ?? p.version })()
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'gv-vcver-'))
 say('版本:', VERSION)
 say('临时消费端:', tmp)

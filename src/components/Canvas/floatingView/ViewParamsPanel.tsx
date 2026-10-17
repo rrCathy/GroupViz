@@ -846,6 +846,23 @@ export function ViewParamsPanel({
                   </div>
                 </div>
               )}
+              {/* 2T 专属：画面中心（体心 / 皮带固定端）。皮带戏法演示时固定端是动作中心，
+                  切到锚点可直接看清「中段成环套过物体端」；v8 起两端都不动，演练不切中心 */}
+              {symType === 'binaryTetrahedron' && (
+                <div style={{ marginBottom: 8 }} data-testid="sym-center-group">
+                  <div style={{ marginBottom: 2, fontSize: 11, color: 'var(--text-secondary)' }}>View center</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button title="Center on the tetrahedron (solid center)" style={segBtn((symVp.centerOn ?? 'solid') !== 'beltAnchor')}
+                      onClick={() => updateViewParams({ centerOn: 'solid' })}>
+                      Solid center
+                    </button>
+                    <button title="Center on the belt anchor (fixed end)" style={segBtn(symVp.centerOn === 'beltAnchor')}
+                      onClick={() => updateViewParams({ centerOn: 'beltAnchor' })}>
+                      Belt anchor
+                    </button>
+                  </div>
+                </div>
+              )}
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                 <input type="checkbox" checked={symShowAction}
                   onChange={e => updateViewParams({ showAction: e.target.checked, actionElementId: e.target.checked ? symActiveId : null })} />
@@ -887,11 +904,11 @@ export function ViewParamsPanel({
                           ✕ Reset pose
                         </button>
                       )}
-                      {/* 2T 专属：720° 复原演练（绕过锚点解开两整扭）；按累计扭转门控 */}
+                      {/* 2T 专属：720° 复原演练（中段成环套过物体端）；按累计扭转门控 */}
                       {symType === 'binaryTetrahedron' && (
                         <button
                           title={canDemoBeltRestore(symBelt)
-                            ? 'Loop the belt around the anchor to undo two full twists (720°)'
+                            ? 'Both ends stay fixed: the twist is carried into kinks that slide off the ends (720°)'
                             : 'Belt needs two full twists (720°) — accumulate twists in Compose mode first'}
                           data-testid="sym-panel-belt-restore"
                           disabled={!canDemoBeltRestore(symBelt)}

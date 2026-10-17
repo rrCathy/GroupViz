@@ -7,6 +7,7 @@ import type { ViewParams } from '../components/Canvas/FloatingViewWindow'
 import { createCyclicGroup } from '../core/groups/CyclicGroup'
 import { createSymmetricGroup } from '../core/groups/SymmetricGroup'
 import { createQuaternion } from '../core/groups/SpecialGroup'
+import { createTableGroup } from '../core/groups/SmallGroups/tableGroup'
 import type { SymmetryViewParams } from '../core/types/viewConfig'
 
 // 与 Cayley3DWindowParams.component.test.tsx 同一套 R3F/i18n/theme stub（happy-dom 无 WebGL）。
@@ -101,6 +102,39 @@ describe('ViewWindow · symmetry view', () => {
     expect(screen.getByText('Solid shape')).toBeInTheDocument()
     expect(screen.getByText('Cube')).toBeInTheDocument()
     expect(screen.getByText('Octahedron')).toBeInTheDocument()
+  })
+
+  it('2T (SL(2,3)) panel: View center control (Solid center / Belt anchor), absent for other groups', () => {
+    // 2T 专属画面中心切换（v6）：非 2T 群没有皮带 ⇒ 不出现该控件
+    const first = render(
+      <ViewWindow view="symmetry" group={c4} title="C₄ Sym" storageKey="sym-center-none"
+        defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 320 }} />,
+    )
+    openPanel()
+    expect(screen.queryByText('View center')).not.toBeInTheDocument()
+    first.unmount() // 先卸载再渲染第二个窗，避免 screen 查询撞上两个 ⚙ 按钮
+
+    const received: Array<Record<string, unknown>> = []
+    function Controlled() {
+      const [p, setP] = useState<SymmetryViewParams>({ showAction: true })
+      const handleChange = (next: ViewParams) => {
+        received.push({ ...next })
+        setP(next as SymmetryViewParams)
+      }
+      return (
+        <ViewWindow view="symmetry" group={createTableGroup(24, 3)} title="SL23 Sym" storageKey="sym-center-2t"
+          defaultPosition={{ x: 20, y: 20 }} defaultSize={{ width: 400, height: 320 }}
+          viewParams={p} onViewParamsChange={handleChange} />
+      )
+    }
+    render(<Controlled />)
+    openPanel()
+    expect(screen.getByText('View center')).toBeInTheDocument()
+    // 缺省 = Solid center；点 Belt anchor 上报 centerOn
+    fireEvent.click(screen.getByText('Belt anchor'))
+    expect(received.at(-1)).toEqual({ showAction: true, centerOn: 'beltAnchor' })
+    fireEvent.click(screen.getByText('Solid center'))
+    expect(received.at(-1)).toEqual({ showAction: true, centerOn: 'solid' })
   })
 
   it('lists all elements; row click starts demo → re-click replays (no toggle-off) → Reset clears (controlled)', async () => {

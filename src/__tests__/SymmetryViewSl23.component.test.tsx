@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import { render } from '@testing-library/react'
+import { render, fireEvent } from '@testing-library/react'
 import * as THREE from 'three'
 import { SymmetryViewScene } from '../components/Canvas/SymmetryViewScene'
 import type { SymmetryViewSceneProps } from '../components/Canvas/SymmetryViewScene'
 import { createTableGroup } from '../core/groups/SmallGroups/tableGroup'
-import { sl23Quat, sl23Spin } from '../core/groups/sl23'
+import { sl23Quat, sl23Spin, sl23Matrix, sl23QuatFromMatrix } from '../core/groups/sl23'
+import { readSymmetryCamera } from '../utils/symmetryCameraState'
+import { BELT_ANCHOR_DIST } from '../components/Canvas/beltGeometry'
+import { translations } from '../i18n/translations'
 
 /**
  * SL(2,3) 对称性视图（2T + Dirac 开口皮带）：
@@ -39,7 +42,18 @@ vi.mock('@react-three/drei', () => ({
   OrbitControls: () => null,
 }))
 vi.mock('../i18n/useTranslation', () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  // 查真实 zh 表 + 插值的 mock：无 params 的键仍返回 key（既有断言口径不变），
+  // 带 {axis}/{deg} 占位的读数返回真实中文文案（说明框旋转读数要可断言）
+  useTranslation: () => ({
+    t: (k: string, params?: Record<string, string | number>) => {
+      const table = (translations as Record<string, Record<string, string>>).zh
+      let text = table[k] ?? k
+      if (params) {
+        for (const [pk, pv] of Object.entries(params)) text = text.split(`{${pk}}`).join(String(pv))
+      }
+      return text
+    },
+  }),
 }))
 
 const g = createTableGroup(24, 3)
@@ -256,5 +270,93 @@ describe('SymmetryViewScene · SL(2,3) 2T + Dirac 皮带', () => {
     h.rerender({ replaySignal: 1 })
     feedFrames()
     expect(h.hints.some(m => m.includes('皮带累计 360°'))).toBe(true)
+  })
+})
+
+describe('SymmetryViewScene · 2T 说明框（v6 点5：矩阵 → 四元数 → 旋转）', () => {
+  beforeEach(() => { frameCbs.length = 0 })
+
+  it('嵌入可收起说明框：默认收起，点标题栏展开 → 两步算式 + KaTeX 公式', () => {
+    const { container } = render(
+      <SymmetryViewScene group={g} showAction onHint={() => {}} />,
+    )
+    const box = container.querySelector('[data-testid="sym-belt-info"]')
+    expect(box).not.toBeNull()
+    // 默认收起：只有标题栏（不挡画布）
+    expect(box!.textContent).toContain('SL(2,3)：矩阵怎样算出旋转')
+    expect(box!.textContent).not.toContain('反解四元数')
+    fireEvent.click(container.querySelector('[data-testid="sym-belt-info-toggle"]')!)
+    // 展开后是真实中文文案（i18n mock 查 zh 表）：标题 + 两步算式
+    expect(box!.textContent).toContain('SL(2,3)：矩阵怎样算出旋转')
+    expect(box!.textContent).toContain('F₃ 上行列式为 1 的 2×2 矩阵')
+    expect(box!.textContent).toContain('① 反解四元数')
+    expect(box!.textContent).toContain('② 半角余弦')
+    // KaTeX 公式：M、反解四元数、cos ψ = a₀/2 都渲染出 katex HTML
+    expect(box!.querySelectorAll('.katex').length).toBeGreaterThanOrEqual(3)
+    expect(box!.innerHTML).toContain('det')
+    // 未选元素：显示「点一个元素」提示而不是当前元素实例
+    expect(box!.textContent).toContain('点一个元素')
+    expect(box!.textContent).not.toContain('当前元素')
+  })
+
+  it('说明框可收起：再点标题栏正文消失', () => {
+    const { container } = render(
+      <SymmetryViewScene group={g} showAction onHint={() => {}} />,
+    )
+    const box = container.querySelector('[data-testid="sym-belt-info"]')!
+    const toggle = container.querySelector('[data-testid="sym-belt-info-toggle"]')!
+    fireEvent.click(toggle)
+    expect(box.textContent).toContain('F₃ 上行列式为 1 的 2×2 矩阵')
+    fireEvent.click(toggle)
+    expect(box.textContent).not.toContain('F₃ 上行列式为 1 的 2×2 矩阵')
+    expect(box.textContent).toContain('SL(2,3)：矩阵怎样算出旋转') // 标题栏仍在
+  })
+
+  it('有演示元素时把实际数字代进去：M → q 坐标 → 角度/轴/皮带', () => {
+    const { container } = render(
+      <SymmetryViewScene group={g} showAction actionElementId={j4.id} onHint={() => {}} />,
+    )
+    const box = container.querySelector('[data-testid="sym-belt-info"]')!
+    fireEvent.click(container.querySelector('[data-testid="sym-belt-info-toggle"]')!)
+    expect(box.textContent).toContain('当前元素')
+    // 反解出的四元数坐标（q = (a₀+b₀i+c₀j+d₀k)/2）出现在 KaTeX 里
+    const quat = sl23QuatFromMatrix(sl23Matrix(j4.value[0]))!
+    expect(quat).not.toBeNull()
+    expect(box.innerHTML).toContain(`\\tfrac{${quat[0]} + ${quat[1]}i + ${quat[2]}j + ${quat[3]}k}{2}`)
+    // 旋转读数（4 阶元：180°，皮带 180°；轴取该元素自旋同源）
+    const spin = sl23Spin(j4.value[0])
+    const axisTxt = `(${spin.axis!.map(v => v.toFixed(2)).join(', ')})`
+    expect(box.textContent).toContain(axisTxt)
+    expect(box.textContent).toContain('皮带 180°')
+    // 矩阵标签经 KaTeX 渲染（smallmatrix）
+    expect(box.innerHTML).toContain('smallmatrix')
+  })
+})
+
+describe('SymmetryViewScene · 画面中心 centerOn（v6 点3/点4）', () => {
+  beforeEach(() => { frameCbs.length = 0 })
+
+  it('centerOn=solid（缺省）：轨道目标 = 原点，相机保持默认姿态', () => {
+    render(<SymmetryViewScene group={g} showAction actionElementId={j4.id} onHint={() => {}} />)
+    feedFrames()
+    const cam = readSymmetryCamera()
+    // 默认相机 [0,9.2,31.8] 看原点
+    expect(cam.position[0]).toBeCloseTo(0, 3)
+    expect(cam.position[1]).toBeCloseTo(9.2, 3)
+    expect(cam.position[2]).toBeCloseTo(31.8, 3)
+  })
+
+  it('centerOn=beltAnchor：目标平滑移到皮带固定端（锚点 = û·11.25）', () => {
+    render(<SymmetryViewScene group={g} showAction actionElementId={j4.id} centerOn="beltAnchor" onHint={() => {}} />)
+    feedFrames()
+    const cam = readSymmetryCamera()
+    // 期望相机位姿 = 锚点(û·11.25) + 默认方向·半径——轴取该元素自旋（j4 是首个 π 角
+    // 元素，轴不一定是 Y；与 e2e spec 的 j4/i4 选法不同，别想当然）
+    const axis = sl23Spin(j4.value[0]).axis!
+    expect(cam.position[0]).toBeCloseTo(axis[0] * BELT_ANCHOR_DIST, 2)
+    expect(cam.position[1]).toBeCloseTo(axis[1] * BELT_ANCHOR_DIST + 9.2, 2)
+    expect(cam.position[2]).toBeCloseTo(axis[2] * BELT_ANCHOR_DIST + 31.8, 2)
+    // 与 solid 中心的默认姿态明显不同（确实移到了固定端）
+    expect(Math.abs(cam.position[0]) + Math.abs(cam.position[1] - 9.2) + Math.abs(cam.position[2] - 31.8)).toBeGreaterThan(1)
   })
 })

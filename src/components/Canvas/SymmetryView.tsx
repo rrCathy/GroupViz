@@ -8,6 +8,7 @@ export function SymmetryView() {
   const {
     currentGroup, symmetryShowAction, symmetryRotateSpeed, symmetryVariant, symmetryActionElementId, setHintMessage,
     symmetryCompose, symmetryApplyNonce, symmetryResetNonce, symmetryBeltRestoreNonce, setSymmetryPose, setSymmetryBelt,
+    symmetryCenterOn,
   } = useGroup()
   const { t } = useTranslation()
   const { theme } = useTheme()
@@ -28,6 +29,7 @@ export function SymmetryView() {
       onPoseChange={setSymmetryPose}
       onBeltChange={setSymmetryBelt}
       beltRestoreSignal={symmetryBeltRestoreNonce}
+      centerOn={symmetryCenterOn}
     />
   )
 }

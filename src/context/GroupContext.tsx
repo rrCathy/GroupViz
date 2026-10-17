@@ -68,6 +68,8 @@ interface GroupContextState {
   symmetryPose: [number, number, number, number]
   /** 2T 对称性视图累计皮带扭转 τ（弧度，Σ 2ψ；SU(2) 记忆） */
   symmetryBelt: number
+  /** 2T 画面中心：'solid' 几何体中心 / 'beltAnchor' 皮带固定端（v6；复原演练不再强制锚点） */
+  symmetryCenterOn: 'solid' | 'beltAnchor'
   symmetryActionElementId: string | null
   selfInverseElementId: string | null
   cosetSubsetId: string | null
@@ -184,6 +186,7 @@ interface GroupContextActions {
   bumpSymmetryBeltRestoreNonce: () => void
   setSymmetryPose: (q: [number, number, number, number]) => void
   setSymmetryBelt: (tau: number) => void
+  setSymmetryCenterOn: (mode: 'solid' | 'beltAnchor') => void
   setSymmetryActionElementId: (id: string | null) => void
   setSelfInverseElementId: (id: string | null) => void
   showCosetsForSubset: (subsetId: string) => void
@@ -620,6 +623,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     symmetryBeltRestoreNonce: symmetry.symmetryBeltRestoreNonce,
     symmetryPose: symmetry.symmetryPose,
     symmetryBelt: symmetry.symmetryBelt,
+    symmetryCenterOn: symmetry.symmetryCenterOn,
     symmetryActionElementId: symmetry.symmetryActionElementId,
     selfInverseElementId: symmetry.selfInverseElementId,
 
@@ -748,6 +752,7 @@ function GroupContextCombiner({ children }: { children: ReactNode }) {
     bumpSymmetryBeltRestoreNonce: symmetry.bumpSymmetryBeltRestoreNonce,
     setSymmetryPose: symmetry.setSymmetryPose,
     setSymmetryBelt: symmetry.setSymmetryBelt,
+    setSymmetryCenterOn: symmetry.setSymmetryCenterOn,
     setSymmetryActionElementId: symmetry.setSymmetryActionElementId,
     setSelfInverseElementId: symmetry.setSelfInverseElementId,
 

@@ -301,11 +301,14 @@ const s = useSceneState(group?, options?)
 | `resetSignal` | `number` | `0` | 自增即动画回恒等（叠加模式手动复位，phase 'homing'；演示元素保留） |
 | `onPoseChange` | `(q: [number, number, number, number]) => void` | — | 姿态落定（动画播完 / 手动复位完成）回调，上报 [x,y,z,w] |
 | `onBeltChange` | `(tau: number) => void` | — | **2T 专用**：皮带扭转落定回调，上报**累计** τ = Σ(2ψ)（弧度；SL(2,3) 对称性视图 Dirac 皮带，双覆盖的 SU(2) 记忆）。非 2T 群不触发 |
-| `beltRestoreSignal` | `number` | `0` | **2T 专用**：720° 复原演练信号，自增即播放「皮带绕过锚点解开两整扭」（仅累计 τ ≥ 720° 有效，其余 no-op） |
+| `beltRestoreSignal` | `number` | `0` | **2T 专用**：720° 复原演练信号，自增即播放「Egan 皮带戏法」（**两端固定**：中段沿轴鼓环越过物体端，同时截面旋转轴对跖摆动消掉两整扭；**四面体在演练期间自动缩小脉冲避让并原样长回**）。仅累计 τ ≥ 720° 有效，其余 no-op |
+| `centerOn` | `'solid' \| 'beltAnchor'` | `'solid'` | **2T 专用**：画面中心（轨道目标点）——`'solid'` = 几何体中心；`'beltAnchor'` = 皮带固定端（锚点 = 旋转轴 û·BELT_ANCHOR_DIST = 11.25，随演示元素换轴平滑移动）。其余群忽略。**v7 起复原演练不再强制切中心**（两端都不动，无需跟随） |
 | `lockCameraOnAction` | `boolean` | `false` | 演示期间是否禁用相机旋转/平移 |
 | `onAnimationEnd` | `() => void` | — | 姿态落定（动画播完）回调 |
 
-> **相机（2026-10-15）**：对称性视图相机为**四元数轨道**（`SymmetryOrbitControls`，数学复用 `cayley3dOrbit.ts`）——无经纬极硬钳，可越过南北极；水平拖绕屏幕上方轴、竖直拖绕屏幕右方轴（相机局部系，抓取语义与旧 OrbitControls 一致），右键平移 / 滚轮缩放 / 双击复位。位姿经模块级 `symmetryCameraState` 上报，导出桥 `getSymmetryCamera()` 可读（`{position, direction}`）。
+> **相机（2026-10-15 / v7 2026-10-17）**：对称性视图相机为**四元数轨道**（`SymmetryOrbitControls`，数学复用 `cayley3dOrbit.ts`）——无经纬极硬钳，可越过南北极；水平拖绕屏幕上方轴、竖直拖绕屏幕右方轴（相机局部系，抓取语义与旧 OrbitControls 一致），右键平移 / 滚轮缩放 / 双击复位。位姿经模块级 `symmetryCameraState` 上报，导出桥 `getSymmetryCamera()` 可读（`{position, direction}`）。默认视角 `[0,8.3,28.8]`（半径 30：主画布视口 680×666 时水平半宽 ≈14.3，容纳锚距 11.25 + 三棒架）；`centerRef` 期望目标**值变化时**指数平滑靠拢，用户右键平移后挂起跟随。
+
+> **2T 说明框（v7）**：`symmetryType === 'binaryTetrahedron'` 时场景左上角嵌入**可收起** HTML 浮层（`data-testid="sym-belt-info"`，默认收起）——给出**闭式算式**：① 四元数反解 `a₀≡a+d、b₀≡2(c−b)、c₀≡d−a−b−c、d₀≡b+c−a+d`（mod 3，含 0 ⇒ 轴型 ±2，否则全 ±1）；② `cos ψ = a₀/2 ⇒ 绕 û 转 2ψ`（a₀=+2→0°、+1→120°、0→180°、−1→240°、−2→360°）。展开时把当前元素实际数字代进去（i18n `symmetry.beltInfo.*`）。**对应 core 门面新增**：`sl23QuatFromMatrix(M)` / `sl23SpinFromMatrix(M)`（24 元素逐个对照同构表验证）。**皮带几何（v7/v9）**：锚距 11.25、带宽 0.72 × 厚 0.12、梯形尖端 `BELT_TIP_WIDTH_RATIO=0.62` + 正面朝外箭头、固定端三垂直棒（方向棒背离端半根 / 法向棒正面半根）、两端平直区 30%+12%、复原演练两端全程冻结（v9 Egan 编舞逐项对齐 Dirac.js + `beltTetraShrink` 四面体缩小脉冲避让，beltGeometry 导出面新增该函数）。
 
 > **行为变更提示**：`lockCameraOnAction` 缺省 `false`。旧实现等价于恒 `true`
 > （`enableRotate = !showAction && !locked`），会出现「演示元素未命中 → 动画没跑，视角却被锁死」。

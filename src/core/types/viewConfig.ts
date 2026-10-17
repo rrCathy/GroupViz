@@ -382,6 +382,10 @@ export interface SymmetryViewParams {
   /** 演示元素 id（toggle 语义：点活跃元素回到恒等姿态）。换群后失效（非本群元素）由渲染层忽略。
    *  博客插图等静态场景注入该值，mount 即播放一次旋转并静止展示 */
   actionElementId?: string | null
+  /** 画面中心（轨道目标点）：'solid' = 几何体中心（缺省）；'beltAnchor' = 皮带固定端
+   *  （锚点随演示元素旋转轴移动）。仅 2T（SL(2,3)）有意义，其余群忽略；
+   *  720° 复原演练期间场景强制 beltAnchor，结束自动还原 */
+  centerOn?: 'solid' | 'beltAnchor'
 }
 
 export const symmetryViewParamsSchema = z.object({
@@ -390,6 +394,7 @@ export const symmetryViewParamsSchema = z.object({
   compose: z.boolean().optional(),
   rotateSpeed: z.number().min(0.2).max(5).optional(),
   actionElementId: z.string().min(1).nullable().optional(),
+  centerOn: z.enum(['solid', 'beltAnchor']).optional(),
 })
 
 export interface HomomorphismViewParams {

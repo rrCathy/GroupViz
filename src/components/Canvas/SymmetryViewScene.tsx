@@ -6,12 +6,13 @@ import { texify, renderTex } from '../../utils/texify'
 import { resolveElementWarn } from '../../utils/elementRef'
 import type { SceneTheme } from './SceneThemeRoot'
 import { computeElementRotation, type RotationInfo } from '../../core/elementRotation'
+import { sl23Spin, sl23MatrixLabel, sl23Matrix, sl23QuatFromMatrix } from '../../core/groups/sl23'
 import type { Group, GroupElement } from '../../core/types'
 import { getSymmetryType } from '../../core/symmetryType'
 import type { SymmetryType } from '../../core/symmetryType'
 import {
-  BELT_ANCHOR_DIST, BELT_FULL_TURN, BELT_SEGMENTS, BELT_RESTORE_AMOUNT, BELT_WIDTH, beltExitRadius,
-  beltStations, beltRestoreDirections,
+  BELT_ANCHOR_DIST, BELT_SEGMENTS, BELT_RESTORE_AMOUNT, BELT_THICKNESS,
+  beltExitRadius, beltStations, beltRestoreFlipDir, beltTetraShrink,
 } from './beltGeometry'
 import { SymmetryOrbitControls } from './SymmetryOrbitControls'
 
@@ -294,8 +295,13 @@ export interface SymmetryViewSceneProps {
    *  皮带即 SU(2) 记忆（双覆盖在画面上的可见载体）。非 2T 群不触发。 */
   onBeltChange?: (tau: number) => void
   /** 720° 复原演练信号：宿主自增即播放「皮带绕过锚点解开两整扭」动画
-   *  （仅 2T 且累计扭转 ≥ 720° 时有效；其余为 no-op） */
+   *  （仅 2T 且累计扭转 ≥ 720° 时有效；其余为 no-op）。
+   *  **演练期间画面中心自动切换到皮带固定端**（锚点），结束后切回（v6） */
   beltRestoreSignal?: number
+  /** 画面中心（轨道目标点）：'solid' = 几何体中心（缺省）；'beltAnchor' = 皮带固定端
+   *  （锚点 = 旋转轴 û·BELT_ANCHOR_DIST，随演示元素换轴）。仅 2T（SL(2,3)）有意义，
+   *  其余群忽略。720° 复原演练期间强制 beltAnchor（演练结束自动还原） */
+  centerOn?: 'solid' | 'beltAnchor'
 }
 
 /** 对称性视图纯渲染核（props 化、主题解耦）：Canvas + 场景 + 顶部标注 + 演示动画。
@@ -320,6 +326,7 @@ export function SymmetryViewScene({
   onPoseChange,
   onBeltChange,
   beltRestoreSignal = 0,
+  centerOn = 'solid',
 }: SymmetryViewSceneProps) {
   const symmetryType = symmetryTypeProp ?? getSymmetryType(group)
   const isDark = theme ? theme === 'dark' : dark
@@ -340,15 +347,30 @@ export function SymmetryViewScene({
     }
   }, [group, symmetryType, variant])
 
+  // 2T 说明框数据（可收起）：当前演示元素的矩阵 + 反解出的四元数坐标 + 旋转（点5）。
+  const beltInfo = useMemo(() => {
+    if (symmetryType !== 'binaryTetrahedron' || !showAction || !actionElementId) return null
+    const el = resolveElementWarn(group, actionElementId, 'SymmetryViewScene.beltInfo')
+    if (!el || el.value.length !== 1) return null
+    const k = el.value[0]!
+    const spin = sl23Spin(k)
+    const matrixLabel = sl23MatrixLabel(k)
+    // 反解坐标（与说明框公式同源）：直接用矩阵反解，证明算式真的能算
+    const quat = sl23QuatFromMatrix(sl23Matrix(k))
+    if (!quat) return null
+    return { el, spin, matrixLabel, quat }
+  }, [symmetryType, showAction, actionElementId, group])
+
   if (symmetryType === 'unsupported') return <UnsupportedOverlay group={group} />
 
   const bgColor = isDark ? '#0a0a1a' : '#f4f4f7'
 
   return (
-    <div style={{ width: '100%', height: '100%', background: bgColor }}>
-      {/* 相机退远到 [0,4.5,15]（半高 ≈7.3）：容纳锚距 6.0 的长皮带（可见段 ≈3.7，
-          与直径 8 的四面体相称）+ 固定件入画 + 复原公转轨道大部分可见 */}
-      <Canvas camera={{ position: [0, 4.5, 15], fov: 50, near: 0.1, far: 100 }} gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}>
+    <div style={{ width: '100%', height: '100%', background: bgColor, position: 'relative', overflow: 'hidden' }}>
+      {/* 相机退远到 [0,9.2,31.8]（半径 33）：真机量得主画布视口 680×666（宽高比 ≈1.02）。
+          竖半高 ≈15.4 > 锚距 11.25 + 三棒架 1.2（半径 30 时竖轴元素的三棒架上半根贴上沿被裁）；
+          水平半宽 ≈15.7 同样够 */}
+      <Canvas camera={{ position: [0, 9.2, 31.8], fov: 50, near: 0.1, far: 150 }} gl={{ antialias: true, alpha: false, preserveDrawingBuffer: true }}>
         <color attach="background" args={[bgColor]} />
         <SymmetryScene
           group={group}
@@ -368,8 +390,113 @@ export function SymmetryViewScene({
           beltRestoreSignal={beltRestoreSignal}
           lockCameraOnAction={lockCameraOnAction}
           onAnimationEnd={onAnimationEnd}
+          centerOn={centerOn}
         />
       </Canvas>
+      {/* 2T 说明框（可收起）：SL(2,3) 的矩阵元素如何对应/计算出物体的旋转 */}
+      {symmetryType === 'binaryTetrahedron' && <BeltInfoBox info={beltInfo} isDark={isDark} />}
+    </div>
+  )
+}
+
+/**
+ * 2T 说明框（v7，用户 2026-10-17 重写：「说半天也没说出矩阵 abcd 怎么转换成旋转多少度」）。
+ * 现在给的是**可执行的算式**，两步：
+ *   ① 反解四元数（mod 3 闭式公式；24 元素坐标互异 ⇒ 唯一）
+ *   ② cos ψ = a₀/2（半角余弦 = 标量部分）⇒ 旋转角 2ψ（附 a₀ → 角度对照表）
+ * 展开时把当前演示元素的实际数字代进去（M → q 的四个坐标 → 角度/轴/皮带）。
+ * 公式与 `sl23QuatFromMatrix` / `sl23SpinFromMatrix` 逐字同源（24 元素单测对照）。
+ * **默认收起**（v7.1）：主画布只有 ~440px 宽，322px 的框会把皮带压在底下——
+ * 标题栏一行常驻可见，点开即读，读完备上，不挡图。
+ */
+function BeltInfoBox({ info, isDark }: {
+  info: {
+    el: GroupElement
+    spin: ReturnType<typeof sl23Spin>
+    matrixLabel: string
+    quat: [number, number, number, number]
+  } | null
+  isDark: boolean
+}) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const boxBg = isDark ? 'rgba(10,12,24,0.9)' : 'rgba(255,255,255,0.94)'
+  const boxBorder = isDark ? '1px solid rgba(120,150,200,0.35)' : '1px solid rgba(30,50,90,0.25)'
+  const textColor = isDark ? '#c9d4e4' : '#2a3442'
+  const dimColor = isDark ? '#8b98ad' : '#5b6779'
+  const deg = (rad: number) => Math.round((rad * 180) / Math.PI)
+
+  // 当前元素：M → q 坐标 → 角度/轴/皮带（代入实际数字）
+  let currentMatrixTex: string | null = null
+  let currentQTex: string | null = null
+  let currentLine: string | null = null
+  if (info) {
+    const { spin, matrixLabel, quat } = info
+    currentMatrixTex = matrixLabel
+    currentQTex = `q = \\tfrac{${quat[0]} + ${quat[1]}i + ${quat[2]}j + ${quat[3]}k}{2}`
+    const axisTxt = spin.axis ? `(${spin.axis.map(v => v.toFixed(2)).join(', ')})` : '(0, 1, 0)'
+    const rotTxt = spin.fullTurn
+      ? t('symmetry.beltInfo.fullTurn')
+      : t('symmetry.beltInfo.result', { axis: axisTxt, deg: String(deg(spin.angleRad)) })
+    currentLine = `${rotTxt} · ${t('symmetry.beltInfo.tau', { deg: String(deg(spin.beltTwist)) })}`
+  }
+
+  return (
+    <div
+      data-testid="sym-belt-info"
+      style={{
+        position: 'absolute', top: 8, left: 8, maxWidth: 322,
+        background: boxBg, border: boxBorder, borderRadius: 8,
+        color: textColor, fontSize: 11, lineHeight: 1.55,
+        boxShadow: '0 2px 10px rgba(0,0,0,0.25)', zIndex: 10,
+        backdropFilter: 'blur(2px)',
+      }}
+    >
+      <button
+        data-testid="sym-belt-info-toggle"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+          background: 'transparent', border: 'none', color: textColor,
+          fontSize: 11, fontWeight: 600, padding: '6px 8px', cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ color: dimColor }}>{open ? '▾' : '▸'}</span>
+        {t('symmetry.beltInfo.title')}
+      </button>
+      {open && (
+        <div style={{ padding: '0 8px 8px 8px' }}>
+          <div style={{ marginBottom: 2 }}>{t('symmetry.beltInfo.intro')}</div>
+          <div style={{ textAlign: 'center', margin: '2px 0' }}>
+            <span dangerouslySetInnerHTML={{ __html: renderTex('M = \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix},\\ \\det M = 1 \\pmod 3') }} />
+          </div>
+          {/* ① 反解四元数（闭式） */}
+          <div style={{ marginBottom: 2, marginTop: 2 }}>{t('symmetry.beltInfo.s1')}</div>
+          <div style={{ textAlign: 'center', margin: '2px 0', fontSize: 10 }}>
+            <span dangerouslySetInnerHTML={{ __html: renderTex('a_0 \\equiv a{+}d,\\;\\; b_0 \\equiv 2(c{-}b),\\;\\; c_0 \\equiv d{-}a{-}b{-}c,\\;\\; d_0 \\equiv b{+}c{-}a{+}d') }} />
+          </div>
+          {/* ② 半角余弦 → 旋转角 */}
+          <div style={{ marginBottom: 2, marginTop: 2 }}>{t('symmetry.beltInfo.s2')}</div>
+          <div style={{ textAlign: 'center', margin: '2px 0' }}>
+            <span dangerouslySetInnerHTML={{ __html: renderTex('\\cos\\psi = \\frac{a_0}{2}\\;\\Rightarrow\\; \\text{rot} = 2\\psi\\ \\text{about}\\ \\hat u \\parallel (b_0,c_0,d_0)') }} />
+          </div>
+          <div style={{ color: dimColor }}>{t('symmetry.beltInfo.angles')}</div>
+          {currentMatrixTex && currentQTex && currentLine ? (
+            <div style={{ borderTop: boxBorder, paddingTop: 4, marginTop: 4 }}>
+              <div style={{ color: dimColor, marginBottom: 2 }}>{t('symmetry.beltInfo.current')}</div>
+              <div style={{ textAlign: 'center', margin: '2px 0' }}>
+                <span dangerouslySetInnerHTML={{ __html: renderTex(texify(currentMatrixTex)) }} />
+                <span style={{ margin: '0 6px', color: dimColor }}>→</span>
+                <span dangerouslySetInnerHTML={{ __html: renderTex(currentQTex) }} />
+              </div>
+              <div style={{ color: textColor }}>{currentLine}</div>
+            </div>
+          ) : (
+            <div style={{ color: dimColor, marginTop: 2 }}>{t('symmetry.beltInfo.pick')}</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -618,7 +745,7 @@ function AnimatedGeo({ data, symmetryType, isDirected, animState }: {
   data: SymmetryData
   symmetryType: SymmetryType
   isDirected: boolean
-  animState: { current: { currentQuat: THREE.Quaternion } }
+  animState: { current: { currentQuat: THREE.Quaternion; beltRestoring?: boolean; beltRestoreT?: number } }
 }) {
   const [group] = useState(() => new THREE.Group())
 
@@ -674,6 +801,13 @@ function AnimatedGeo({ data, symmetryType, isDirected, animState }: {
 
   useFrame(() => {
     group.quaternion.copy(animState.current.currentQuat)
+    // 复原演练中的**全息缩小脉冲**（v9）：Egan 编舞按「环境里没有障碍物」原样移植，
+    // 四面体改由这里缩放避让——k(λ) = beltTetraShrink（1→0.12→1，两端逐位原大）。
+    // 仅 2T 的演练会打开该字段；其余类型恒原大。缩完立刻解锁（值不同才写，减少逐帧开销）。
+    const st = animState.current
+    const scale = st.beltRestoring ? beltTetraShrink(st.beltRestoreT ?? 0) : 1
+    const s = group.scale.x
+    if (Math.abs(s - scale) > 1e-4) group.scale.setScalar(scale)
   })
 
   return <primitive object={group} />
@@ -719,22 +853,67 @@ function AxisMarker({ from, to, intersections }: {
 }
 
 /* ------------------------------------------------------------------ *
- * Dirac 开口皮带（2T 对称性视图专用）v3（2026-10-15，用户第二轮反馈）。
+ * Dirac 开口皮带（2T 对称性视图专用）v6（2026-10-16，用户第三轮反馈）。
  * 几何全部走纯函数 beltGeometry.ts（唯一真源）：
  * - **皮带与旋转轴同轴**：锚点 = 轴向 û·BELT_ANCHOR_DIST 处，皮带直躺在旋转轴上
  *   （「旋转轴要经过皮带」）；锚点端是扭转的固定参考端（截面朝向恒定），位置随
  *   当前元素的新轴重新对准；物体端截面随四面体一起转动。
  * - **扭转 = 带面绕自身中心线的翻转**（莫比乌斯式）：中心线恒为直线，
- *   宽向量沿带递增转 φ(s) = −τ·s（v2 的螺旋甩线废弃）。
- * - **正反两面双色**：两个 mesh 共享同一几何（FrontSide/BackSide 各一色）——
- *   「一端固定」由锚点端不变的基准色承接，扭转多少直接读颜色翻面。
- * - **720° 复原演练**（beltRestoring）：物体端脱离中心、绕锚点公转一圈、带体
- *   弓形外鼓；传未扣减的累计 τ，720° 递减只在 beltGeometry 内做一次。
+ *   宽向量沿带递增转 φ(s) = −τ·s。
+ * - **厚板渲染（v6 点2「稍微弄点厚度」）**：每站 4 顶点 = 两边缘 × 上下两厚度层
+ *   （±n·BELT_THICKNESS/2，n = 站点法向）；单一 geometry + 三个材质组
+ *   （front 浅 / back 深 / edge 边色）——正反双色承接「扭转多少读颜色翻面」，
+ *   边色让厚度可读。零厚度带面（v5 及以前）侧看即「一根棒」。
+ * - **固定端 = 三垂直棒正交架（v6 点6，替换琥珀销钉）**：锚点处三根互成直角的
+ *   细棒沿锚端帧 (T, W₀, N) 摆——沿皮带轴的棒**只保留背离物体端的半根**
+ *   （+û；朝物体端那半根会埋进皮带体内——首版即如此，真机截图发现方向棒整根
+ *   不可见；竖轴静息态皮带下垂，背离半根即「上半」），另两根满棒（截面朝向
+ *   参考）。侧看皮带也不再是「两个球一根棒」，3D 朝向直接可读。锚端帧全程
+ *   冻结（beltGeometry v6：复原演练中也不动）。
+ * - **720° 复原演练（v8 Egan 编舞）**：两端固定，皮带中段拉伸成环套过物体端解扣
+ *   （截面轴对跖摆动 + 中心线鼓环，见 beltGeometry 文件头时间轴注释）；
+ *   传未扣减的累计 τ，720° 扣减只在 beltGeometry 内做一次。
  * ------------------------------------------------------------------ */
 const BELT_FRONT_COLOR = '#e8eef5'
 const BELT_BACK_COLOR = '#4b5b74'
-const _X_AXIS = new THREE.Vector3(1, 0, 0)
+const BELT_EDGE_COLOR = '#93a1b5'
+const BELT_FIXTURE_COLOR = '#f0a832'
+const BELT_DIR_COLOR = '#ffc558'
+const _Y_UP = new THREE.Vector3(0, 1, 0)
 const _beltW = new THREE.Vector3()
+const _beltT = new THREE.Vector3()
+const _beltN = new THREE.Vector3()
+const _arrowM = new THREE.Matrix4()
+
+/** 固定端三棒架尺寸（相对带宽 0.72） */
+const ROD_R = 0.038
+/** 方向棒半长（只保留背离物体端的半根 = 竖轴静息态的「上半」） */
+const ROD_DIR_LEN = 1.0
+/** 宽向满棒总长 */
+const ROD_FRAME_LEN = 1.15
+/** 法向棒半长（v7：只保留**皮带正面**那半根——法向棒穿过带面，背面半根不画；
+ *  与尖端箭头同侧，用户 2026-10-17「法向量那个意思」「保留正面那一半」） */
+const ROD_NORMAL_HALF = 0.62
+/** 尖端箭头：贴正面（+N）沿皮带方向朝外，长度 / 半宽（世界单位） */
+const ARROW_LEN = 0.9
+const ARROW_HALF_W = 0.19
+
+/** 尖端箭头形状（局部 XY 平面，+X = 皮带朝外方向，+Y = 带宽方向） */
+function makeArrowShape(): THREE.Shape {
+  const s = new THREE.Shape()
+  const tail = -ARROW_LEN / 2
+  const neck = ARROW_LEN / 2 - 0.3
+  const head = ARROW_LEN / 2
+  s.moveTo(tail, -0.052)
+  s.lineTo(neck, -0.052)
+  s.lineTo(neck, -ARROW_HALF_W)
+  s.lineTo(head, 0)
+  s.lineTo(neck, ARROW_HALF_W)
+  s.lineTo(neck, 0.052)
+  s.lineTo(tail, 0.052)
+  s.closePath()
+  return s
+}
 
 function BeltStrap({ animState, vertices }: {
   animState: { current: BeltLedgerState }
@@ -744,99 +923,166 @@ function BeltStrap({ animState, vertices }: {
   const [group] = useState(() => new THREE.Group())
   const geomRef = useRef<THREE.BufferGeometry | null>(null)
   const fixtureRef = useRef<THREE.Group | null>(null)
+  const arrowRef = useRef<THREE.Mesh | null>(null)
   const { camera } = useThree()
 
-  // 几何与固定件一次性建好：ribbon 位置逐帧更新；正反两 mesh 共享同一几何；
-  // 固定件 = **琥珀色细销钉**穿过锚端带体（沿锚端横截面方向）——语义即「皮带
-  // 在此钉住，销钉方向 = 固定端初始方向参考」（旧棒+球语义不明，用户 2026-10-15）
+  // 几何与固定件一次性建好：厚板位置逐帧更新；三根细棒每帧对准锚端帧。
   useEffect(() => {
     const count = BELT_SEGMENTS + 1
-    const pos = new Float32Array(count * 2 * 3)
-    const idx: number[] = []
+    const pos = new Float32Array(count * 4 * 3)
+    // 索引分四组（单 geometry + 材质数组 + addGroup）：
+    // front（+n 面，浅）/ back（−n 面，深）/ 两侧边缘 / 锚端盖
+    const frontIdx: number[] = []
+    const backIdx: number[] = []
+    const sideIdx: number[] = []
+    const capIdx: number[] = []
     for (let i = 0; i < BELT_SEGMENTS; i++) {
-      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1
-      idx.push(a, b, c, b, d, c)
+      const a = i * 4, b = i * 4 + 1, c = i * 4 + 2, d = i * 4 + 3
+      const a2 = (i + 1) * 4, b2 = (i + 1) * 4 + 1, c2 = (i + 1) * 4 + 2, d2 = (i + 1) * 4 + 3
+      frontIdx.push(a, b, b2, a, b2, a2)
+      backIdx.push(d, c2, c, d, d2, c2)
+      // 两侧边缘（+W 边 = a/d，−W 边 = b/c）
+      sideIdx.push(a, d, d2, a, d2, a2, b, c, c2, b, c2, b2)
     }
+    // 锚端盖（station 0 截面四边形 a-b-c-d）
+    capIdx.push(0, 3, 2, 0, 2, 1)
+    const idx = [...frontIdx, ...backIdx, ...sideIdx, ...capIdx]
     const geom = new THREE.BufferGeometry()
     geom.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage))
     geom.setIndex(idx)
+    geom.addGroup(0, frontIdx.length, 0)
+    geom.addGroup(frontIdx.length, backIdx.length, 1)
+    geom.addGroup(frontIdx.length + backIdx.length, sideIdx.length, 2)
+    geom.addGroup(frontIdx.length + backIdx.length + sideIdx.length, capIdx.length, 2)
     geomRef.current = geom
-    const front = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
-      color: BELT_FRONT_COLOR, side: THREE.FrontSide, roughness: 0.55, metalness: 0.05,
-    }))
-    const back = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
-      color: BELT_BACK_COLOR, side: THREE.BackSide, roughness: 0.55, metalness: 0.05,
-    }))
+    const mkMat = (color: string) => new THREE.MeshStandardMaterial({
+      color, side: THREE.DoubleSide, roughness: 0.55, metalness: 0.05,
+    })
+    const front = new THREE.Mesh(geom, [
+      mkMat(BELT_FRONT_COLOR),
+      mkMat(BELT_BACK_COLOR),
+      mkMat(BELT_EDGE_COLOR),
+    ])
+    // 固定件：三垂直棒正交架（v6）+ 尖端箭头（v7）。棒沿 Y 建模（每帧 quaternion 对齐）
     const fixture = new THREE.Group()
-    const pinMat = new THREE.MeshStandardMaterial({ color: '#f0a832', roughness: 0.35, metalness: 0.3 })
-    // 销钉本体：沿 X 建模（每帧 quaternion 对齐锚端宽向 W₀）；长 ≈ 1.9×带宽，
-    // 两端各露出带边 ~0.33，一眼读出「横截面方向被钉住」
-    const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, BELT_WIDTH * 1.9, 8), pinMat)
-    pin.rotation.z = Math.PI / 2
-    fixture.add(pin)
-    for (const x of [-1, 1]) {
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 10), pinMat)
-      cap.userData.offset = x * BELT_WIDTH * 0.95
-      fixture.add(cap)
-    }
+    const fixtureMat = new THREE.MeshStandardMaterial({ color: BELT_FIXTURE_COLOR, roughness: 0.35, metalness: 0.3 })
+    const dirMat = new THREE.MeshStandardMaterial({ color: BELT_DIR_COLOR, roughness: 0.3, metalness: 0.25, emissive: '#7a5200', emissiveIntensity: 0.35 })
+    const rodGeom = new THREE.CylinderGeometry(ROD_R, ROD_R, 1, 10)
+    const dirRod = new THREE.Mesh(rodGeom, dirMat)
+    dirRod.userData.role = 'dir'
+    const wRod = new THREE.Mesh(rodGeom, fixtureMat)
+    wRod.userData.role = 'w'
+    const nRod = new THREE.Mesh(rodGeom, fixtureMat)
+    nRod.userData.role = 'n'
+    // 缩放：dir 棒长 = ROD_DIR_LEN（半根），w 满根，n 只保留正面半根（v7）
+    dirRod.scale.set(1, ROD_DIR_LEN, 1)
+    wRod.scale.set(1, ROD_FRAME_LEN, 1)
+    nRod.scale.set(1, ROD_NORMAL_HALF, 1)
+    fixture.add(dirRod, wRod, nRod)
     fixtureRef.current = fixture
-    group.add(front, back, fixture)
+    // 尖端箭头（v7 点3）：正面（+N）上的扁平箭头，指向皮带朝外方向（+T）
+    const arrowGeom = new THREE.ShapeGeometry(makeArrowShape())
+    const arrowMat = new THREE.MeshStandardMaterial({
+      color: BELT_DIR_COLOR, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.2,
+      emissive: '#7a5200', emissiveIntensity: 0.45,
+    })
+    const arrow = new THREE.Mesh(arrowGeom, arrowMat)
+    arrowRef.current = arrow
+    group.add(front, fixture, arrow)
     return () => {
       geom.dispose()
-      ;(front.material as THREE.Material).dispose()
-      ;(back.material as THREE.Material).dispose()
-      pin.geometry.dispose()
-      for (const ch of fixture.children) {
-        const m = ch as THREE.Mesh
-        m.geometry.dispose()
-      }
-      pinMat.dispose()
-      group.remove(front, back, fixture)
+      for (const m of front.material as THREE.Material[]) m.dispose()
+      rodGeom.dispose()
+      fixtureMat.dispose()
+      dirMat.dispose()
+      arrowGeom.dispose()
+      arrowMat.dispose()
+      group.remove(front, fixture, arrow)
       geomRef.current = null
       fixtureRef.current = null
+      arrowRef.current = null
     }
   }, [group])
 
   useFrame(() => {
     const geom = geomRef.current
     const fixture = fixtureRef.current
-    if (!geom || !fixture) return
+    const arrow = arrowRef.current
+    if (!geom || !fixture || !arrow) return
     const attr = geom.getAttribute('position') as THREE.BufferAttribute
     const arr = attr.array as Float32Array
     const st = animState.current
     // 复原演练中传**未扣减**的累计 τ（720° 递减在 beltGeometry 内做一次；v2 曾双重扣减）
     const restoreT = st.beltRestoring ? st.beltRestoreT : 0
     const tau = st.beltRestoring ? st.beltTarget : st.beltTau
-    const dirs = beltRestoreDirections(camera)
+    const axisArr: [number, number, number] = [st.beltAxis.x, st.beltAxis.y, st.beltAxis.z]
+    const flipDir = beltRestoreFlipDir(camera, axisArr)
     const stations = beltStations({
       tau,
-      axis: [st.beltAxis.x, st.beltAxis.y, st.beltAxis.z],
-      attachRadius: beltExitRadius([st.beltAxis.x, st.beltAxis.y, st.beltAxis.z], vertices),
+      axis: axisArr,
+      attachRadius: beltExitRadius(axisArr, vertices),
       restoreT,
-      restoreOrbitAxis: dirs.orbitAxis,
-      restoreBow: dirs.bow,
+      restoreFlipDir: flipDir,
     })
+    // 厚板顶点：每站 4 个 = (e1±n·h, e2±n·h)，h = 半厚
+    const h = BELT_THICKNESS / 2
     for (let i = 0; i < stations.length; i++) {
       const s = stations[i]!
-      arr[i * 6 + 0] = s.e1[0]; arr[i * 6 + 1] = s.e1[1]; arr[i * 6 + 2] = s.e1[2]
-      arr[i * 6 + 3] = s.e2[0]; arr[i * 6 + 4] = s.e2[1]; arr[i * 6 + 5] = s.e2[2]
+      const [ex1, ey1, ez1] = s.e1
+      const [ex2, ey2, ez2] = s.e2
+      const [nx, ny, nz] = s.n
+      const o = i * 12
+      arr[o + 0] = ex1 + nx * h; arr[o + 1] = ey1 + ny * h; arr[o + 2] = ez1 + nz * h
+      arr[o + 3] = ex2 + nx * h; arr[o + 4] = ey2 + ny * h; arr[o + 5] = ez2 + nz * h
+      arr[o + 6] = ex2 - nx * h; arr[o + 7] = ey2 - ny * h; arr[o + 8] = ez2 - nz * h
+      arr[o + 9] = ex1 - nx * h; arr[o + 10] = ey1 - ny * h; arr[o + 11] = ez1 - nz * h
     }
     attr.needsUpdate = true
     geom.computeVertexNormals()
-    // 固定件随锚点走（皮带随轴重新对准）：位置 = 锚点站，销钉沿锚点端宽向
-    // （= 固定端横截面初始方向——扭转的参考基准）
+    // 三棒架随锚点走（皮带随轴重新对准）：位置 = 锚点站，三棒沿锚端帧 (T, W₀, N)。
+    // 锚端帧全程冻结（v7：两端都不动，见 beltGeometry）。
     const s0 = stations[0]!
     fixture.position.set(s0.cx, s0.cy, s0.cz)
     const wx = s0.e1[0] - s0.e2[0], wy = s0.e1[1] - s0.e2[1], wz = s0.e1[2] - s0.e2[2]
     const wl = Math.hypot(wx, wy, wz) || 1
     const wDir = _beltW.set(wx / wl, wy / wl, wz / wl)
-    const pin = fixture.children[0] as THREE.Mesh
-    pin.quaternion.setFromUnitVectors(_X_AXIS, wDir)
-    for (let k = 1; k < fixture.children.length; k++) {
-      const cap = fixture.children[k] as THREE.Mesh
-      const off = (cap.userData.offset as number) ?? 0
-      cap.position.set(wDir.x * off, wDir.y * off, wDir.z * off)
+    const nDir = _beltN.set(s0.n[0], s0.n[1], s0.n[2])
+    // 方向棒只保留**背离物体端的半根**（+û；朝物体端那半根会埋进皮带体内看不见）——
+    // 竖轴静息态（锚点上、皮带下垂）即用户说的「上半」，与 W 满棒 / N 正面半棒区分
+    const tDir = _beltT.set(st.beltAxis.x, st.beltAxis.y, st.beltAxis.z).normalize()
+    for (const rod of fixture.children) {
+      const m = rod as THREE.Mesh
+      const role = m.userData.role as string
+      const dir = role === 'dir' ? tDir : role === 'w' ? wDir : nDir
+      m.quaternion.setFromUnitVectors(_Y_UP, dir)
+      if (role === 'dir') {
+        // 方向棒：从锚点沿 +û（背离皮带）伸出的半根
+        m.position.copy(tDir).multiplyScalar(ROD_DIR_LEN / 2)
+      } else if (role === 'n') {
+        // 法向棒：只保留**正面（+N）**半根——法向棒穿过带面，背面半根不画（v7 点4）
+        m.position.copy(nDir).multiplyScalar(ROD_NORMAL_HALF / 2)
+      } else {
+        m.position.set(0, 0, 0)
+      }
     }
+    // 尖端箭头：贴正面（+N 偏移半厚 + 微抬），指向朝外（+T）。箭头的**头**落在尖端上：
+    // 中心 = 尖端 − T·半长 ⇒ 覆盖皮带最后 ARROW_LEN 段（不可用 +T，会推进物体内部被面片盖住）；
+    // 正面偏移 = 半厚 + 0.02（0.008 时与带面共面，被深度冲突吞掉——真机截图实测）
+    // 尖端 12% 不扭（BELT_TIP_MARGIN）⇒ 箭头朝向静态可读。
+    // 基矩阵列 (X=T, Y=W, Z=N) 为右手系（det = T·(W×N) = +1）
+    const tip = stations[stations.length - 1]!
+    const tipWx = tip.e1[0] - tip.e2[0], tipWy = tip.e1[1] - tip.e2[1], tipWz = tip.e1[2] - tip.e2[2]
+    const tipWl = Math.hypot(tipWx, tipWy, tipWz) || 1
+    const tipW = _beltW.set(tipWx / tipWl, tipWy / tipWl, tipWz / tipWl)
+    const tipN = _beltN.set(tip.n[0], tip.n[1], tip.n[2])
+    const tipT = _beltT.set(tip.cx - s0.cx, tip.cy - s0.cy, tip.cz - s0.cz).normalize() // 朝外（锚点→尖端）
+    arrow.position.set(
+      tip.cx - tipT.x * (ARROW_LEN / 2) + tipN.x * (BELT_THICKNESS / 2 + 0.02),
+      tip.cy - tipT.y * (ARROW_LEN / 2) + tipN.y * (BELT_THICKNESS / 2 + 0.02),
+      tip.cz - tipT.z * (ARROW_LEN / 2) + tipN.z * (BELT_THICKNESS / 2 + 0.02),
+    )
+    _arrowM.makeBasis(tipT, tipW, tipN)
+    arrow.quaternion.setFromRotationMatrix(_arrowM)
   })
 
   return <primitive object={group} />
@@ -847,7 +1093,7 @@ function SymmetryScene({
   showAction, actionElementId, rotateSpeed,
   locked, onHint, hintOnIdle, replaySignal,
   compose, resetSignal, onPoseChange, onBeltChange, beltRestoreSignal,
-  lockCameraOnAction, onAnimationEnd,
+  lockCameraOnAction, onAnimationEnd, centerOn,
 }: {
   group: Group
   symmetryType: SymmetryType
@@ -866,9 +1112,10 @@ function SymmetryScene({
   beltRestoreSignal: number
   lockCameraOnAction: boolean
   onAnimationEnd?: () => void
+  /** 画面中心：'solid' = 几何体中心（缺省）；'beltAnchor' = 皮带固定端（仅 2T 有意义） */
+  centerOn: 'solid' | 'beltAnchor'
 }) {
   const { t } = useTranslation()
-  const { camera } = useThree()
   const [animPhase, setAnimPhase] = useState<AnimPhase>('rest')
 
   // 四面体顶点（传给 BeltStrap 算「轴出口半径」= 皮带尖端停靠点）
@@ -914,28 +1161,23 @@ function SymmetryScene({
     beltParam, beltRestoreSignal,
   )
 
-  // 720° 复原演练：皮带端（= 物体中心）绕锚点公转时，四面体**一起平移**
-  // （姿态冻结——纯平移解两整扭才是皮带戏法的原始动作；用户 2026-10-15）。
-  // 轨道公式与 beltGeometry 的 endPos 完全一致，保证带端与物体逐帧贴合。
-  // group 走 imperative 构建（本文件惯例：JSX intrinsic 在 R3F mock 下不可用）
-  const [restoreGroup] = useState(() => new THREE.Group())
-  const _restoreQ = useMemo(() => new THREE.Quaternion(), [])
-  const _restoreA = useMemo(() => new THREE.Vector3(), [])
-  const _restoreV = useMemo(() => new THREE.Vector3(), [])
-  const _restoreAttach = useMemo(() => new THREE.Vector3(), [])
+  // 720° 复原演练（v8）：**两端固定**——四面体与锚点全程不动，皮带中段拉伸成环
+  // 套过物体端解扣（Egan 编舞，见 beltGeometry 文件头时间轴注释 / DiracAnimation.gif）。
+  // v6 的「物体端绕锚点公转」与 v7.2 的「原地翻面」都已删除（用户两轮反馈）。
+
+  // 画面中心：'solid' = 几何体中心（原点）；'beltAnchor' = 皮带固定端
+  // （锚点 = 旋转轴 û·BELT_ANCHOR_DIST，随演示元素换轴而移动）。
+  // v7 起复原演练不再强制切换（两端都不动，没有需要跟随的物体——保持用户设定）。
+  // 期望值每帧写给 centerRef，轨道控制器只在期望值变化时平滑动画 target
+  // （用户右键平移后挂起，见 SymmetryOrbitControls）。
+  const centerRef = useRef(new THREE.Vector3())
   useFrame(() => {
-    const g = restoreGroup
     const st = animRef.current
-    if (st.beltRestoring) {
-      const dirs = beltRestoreDirections(camera)
-      const attachR = beltExitRadius([st.beltAxis.x, st.beltAxis.y, st.beltAxis.z], beltVertices)
-      const A = _restoreA.set(st.beltAxis.x, st.beltAxis.y, st.beltAxis.z).normalize().multiplyScalar(BELT_ANCHOR_DIST)
-      const attach = _restoreAttach.set(st.beltAxis.x, st.beltAxis.y, st.beltAxis.z).normalize().multiplyScalar(attachR)
-      _restoreQ.setFromAxisAngle(_restoreV.set(dirs.orbitAxis[0], dirs.orbitAxis[1], dirs.orbitAxis[2]), BELT_FULL_TURN * st.beltRestoreT)
-      // 四面体中心 = 停靠点（绕锚点公转）− 停靠点（静止时）＝ 纯平移量
-      g.position.copy(attach).sub(A).applyQuaternion(_restoreQ).add(A).sub(attach)
+    const anchorMode = centerOn === 'beltAnchor' && symmetryType === 'binaryTetrahedron'
+    if (anchorMode) {
+      centerRef.current.copy(st.beltAxis).multiplyScalar(BELT_ANCHOR_DIST)
     } else {
-      g.position.set(0, 0, 0)
+      centerRef.current.set(0, 0, 0)
     }
   })
 
@@ -1049,18 +1291,16 @@ function SymmetryScene({
       <directionalLight position={[-5, -2, -3]} intensity={0.6} />
       <pointLight position={[0, 5, 0]} intensity={0.5} />
 
-      {/* 复原演练时四面体+轴标记随皮带端一起绕锚点公转（位置由 useFrame 驱动） */}
-      <primitive object={restoreGroup}>
-        {showAxis && (
-          <AxisMarker
-            from={axisNeg}
-            to={axisTo}
-            intersections={axisIntersections}
-          />
-        )}
+      {/* 几何体 + 轴标记：常态静止（v7 复原演练两端固定，四面体不参与任何平移） */}
+      {showAxis && (
+        <AxisMarker
+          from={axisNeg}
+          to={axisTo}
+          intersections={axisIntersections}
+        />
+      )}
 
-        <AnimatedGeo data={data} symmetryType={symmetryType} isDirected={isDirected} animState={animRef} />
-      </primitive>
+      <AnimatedGeo data={data} symmetryType={symmetryType} isDirected={isDirected} animState={animRef} />
 
       {symmetryType === 'binaryTetrahedron' && <BeltStrap animState={animRef} vertices={beltVertices} />}
 
@@ -1079,8 +1319,9 @@ function SymmetryScene({
       )}
 
       {/* 相机轨道：四元数版（无经纬极硬钳——OrbitControls 的 phi∈[0,π] 会停在
-          南极点，用户反馈「不能越过南北极」2026-10-15；数学同 cayley3dOrbit） */}
-      <SymmetryOrbitControls locked={locked} rotateDisabled={showAction && lockCameraOnAction} />
+          南极点，用户反馈「不能越过南北极」2026-10-15；数学同 cayley3dOrbit）。
+          centerRef = 期望画面中心（体心 / 皮带固定端；v7 起演练期间不再强制切换） */}
+      <SymmetryOrbitControls locked={locked} rotateDisabled={showAction && lockCameraOnAction} centerRef={centerRef} />
     </>
   )
 }

@@ -8,10 +8,10 @@
  * 抖动（每帧上报只写两个数组）。
  */
 
-// 默认值 = Canvas 初始相机 [0,3,10] 看向原位的真实方向（Scene 首帧上报前的占位）
-const L0 = Math.sqrt(3 ** 2 + 10 ** 2)
-let posX = 0, posY = 4.5, posZ = 15
-let dirX = 0, dirY = 3 / L0, dirZ = 10 / L0
+// 默认值 = Canvas 初始相机 [0,9.2,31.8] 看向原位的真实方向（Scene 首帧上报前的占位）
+const L0 = Math.sqrt(9.2 ** 2 + 31.8 ** 2)
+let posX = 0, posY = 9.2, posZ = 31.8
+let dirX = 0, dirY = 9.2 / L0, dirZ = 31.8 / L0
 
 /** 相机位置 + 朝向（由目标指向相机的单位方向）上报 */
 export function reportSymmetryCamera(
@@ -22,7 +22,7 @@ export function reportSymmetryCamera(
   dirX = dx; dirY = dy; dirZ = dz
 }
 
-/** 读最新上报（Scene 未挂载前为默认初始视角 [0,3,10] 看向原点） */
+/** 读最新上报（Scene 未挂载前为默认初始视角 [0,9.2,31.8] 看向原点） */
 export function readSymmetryCamera(): {
   position: [number, number, number]
   direction: [number, number, number]

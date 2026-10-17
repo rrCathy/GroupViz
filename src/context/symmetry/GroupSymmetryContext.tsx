@@ -18,6 +18,9 @@ interface GroupSymmetryState {
   symmetryResetNonce: number
   /** 2T 皮带 720° 复原演练信号：自增即播放「绕过锚点解开两整扭」（τ ≥ 720° 才有效） */
   symmetryBeltRestoreNonce: number
+  /** 画面中心（2T 皮带视图）：'solid' = 几何体中心（缺省）；'beltAnchor' = 皮带固定端。
+   *  主画布 ViewPanel 对称区切换；720° 复原演练期间场景强制锚点中心、结束还原 */
+  symmetryCenterOn: 'solid' | 'beltAnchor'
   /** 最新落定姿态四元数 [x,y,z,w]（导出桥 getSymmetryPose 读取） */
   symmetryPose: [number, number, number, number]
   /** 2T 对称性视图累计皮带扭转 τ（弧度；Σ 2ψ，导出桥 getSymmetryBelt 读取）。
@@ -35,6 +38,7 @@ interface GroupSymmetryActions {
   bumpSymmetryApplyNonce: () => void
   bumpSymmetryResetNonce: () => void
   bumpSymmetryBeltRestoreNonce: () => void
+  setSymmetryCenterOn: (mode: 'solid' | 'beltAnchor') => void
   setSymmetryPose: (q: [number, number, number, number]) => void
   setSymmetryBelt: (tau: number) => void
   setSymmetryActionElementId: (id: string | null) => void
@@ -56,6 +60,7 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
   const [symmetryApplyNonce, setSymmetryApplyNonce] = useState(0)
   const [symmetryResetNonce, setSymmetryResetNonce] = useState(0)
   const [symmetryBeltRestoreNonce, setSymmetryBeltRestoreNonce] = useState(0)
+  const [symmetryCenterOn, setSymmetryCenterOnState] = useState<'solid' | 'beltAnchor'>('solid')
   const [symmetryPose, setSymmetryPoseState] = useState<[number, number, number, number]>([0, 0, 0, 1])
   const [symmetryBelt, setSymmetryBeltState] = useState(0)
   const [symmetryActionElementId, setSymmetryActionElementIdState] = useState<string | null>(null)
@@ -77,6 +82,7 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
       setSymmetryApplyNonce(0)
       setSymmetryResetNonce(0)
       setSymmetryBeltRestoreNonce(0)
+      setSymmetryCenterOnState('solid')
       setSymmetryPoseState([0, 0, 0, 1])
       setSymmetryBeltState(0)
     })
@@ -116,6 +122,10 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
     setSymmetryBeltRestoreNonce(n => n + 1)
   }, [])
 
+  const setSymmetryCenterOn = useCallback((mode: 'solid' | 'beltAnchor') => {
+    setSymmetryCenterOnState(mode)
+  }, [])
+
   const setSymmetryPose = useCallback((q: [number, number, number, number]) => {
     setSymmetryPoseState(q)
   }, [])
@@ -135,10 +145,10 @@ export function GroupSymmetryProvider({ children }: { children: ReactNode }) {
   const value: GroupSymmetryContextType = {
     symmetryShowAction, symmetryRotateSpeed, symmetryVariant, symmetryCompose,
     symmetryApplyNonce, symmetryResetNonce, symmetryBeltRestoreNonce, symmetryPose, symmetryBelt,
-    symmetryActionElementId, selfInverseElementId,
+    symmetryActionElementId, selfInverseElementId, symmetryCenterOn,
     setSymmetryShowAction, setSymmetryRotateSpeed, setSymmetryVariant, setSymmetryCompose,
     bumpSymmetryApplyNonce, bumpSymmetryResetNonce, bumpSymmetryBeltRestoreNonce, setSymmetryPose, setSymmetryBelt,
-    setSymmetryActionElementId, setSelfInverseElementId,
+    setSymmetryActionElementId, setSelfInverseElementId, setSymmetryCenterOn,
   }
 
   return (

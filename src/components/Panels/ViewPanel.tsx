@@ -37,6 +37,8 @@ export function ViewPanel() {
     bumpSymmetryResetNonce,
     bumpSymmetryBeltRestoreNonce,
     symmetryBelt,
+    symmetryCenterOn,
+    setSymmetryCenterOn,
     cayleyMultiplyType,
     cayleyShape3D,
     cayleyAvailableShapes3D,
@@ -324,6 +326,33 @@ export function ViewPanel() {
             <input type="checkbox" checked={symmetryShowAction} onChange={(e) => setSymmetryShowAction(e.target.checked)} disabled={!currentGroup} />
             <span>{t('panel.showAction')}</span>
           </label>
+          {/* 2T 专属：画面中心（体心 / 皮带固定端）——皮带戏法演示时切到固定端可直接
+              看清「绕过锚点解开两整扭」；复原演练期间场景强制锚点中心、结束自动还原 */}
+          {symType === 'binaryTetrahedron' && (
+            <div className="symmetry-shape" style={{ marginBottom: '8px' }}>
+              <div className="param-row">
+                <span className="settings-label">{t('panel.viewCenter')}</span>
+              </div>
+              <div className="toggle-group" style={{ flexWrap: 'nowrap' }}>
+                <button
+                  className={`toggle-btn ${symmetryCenterOn !== 'beltAnchor' ? 'active' : ''}`}
+                  onClick={() => setSymmetryCenterOn('solid')}
+                  disabled={!currentGroup}
+                  data-testid="symmetry-center-solid"
+                >
+                  {t('panel.centerSolid')}
+                </button>
+                <button
+                  className={`toggle-btn ${symmetryCenterOn === 'beltAnchor' ? 'active' : ''}`}
+                  onClick={() => setSymmetryCenterOn('beltAnchor')}
+                  disabled={!currentGroup}
+                  data-testid="symmetry-center-belt"
+                >
+                  {t('panel.centerBeltAnchor')}
+                </button>
+              </div>
+            </div>
+          )}
           {/* 叠加模式：A₄（tetrahedron）与 SL(2,3)（binaryTetrahedron，皮带扭转跨元素累积） */}
           {symmetryShowAction && (symType === 'tetrahedron' || symType === 'binaryTetrahedron') && (
             <>

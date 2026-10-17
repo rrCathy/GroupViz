@@ -4,11 +4,11 @@ import { createTableGroup } from '../src/core/groups/SmallGroups/tableGroup'
 import { sl23Quat, sl23Spin } from '../src/core/groups/sl23'
 
 /**
- * SL(2,3) 对称性视图（2T + Dirac 开口皮带 v2）真机验证（2026-10-15 用户四条反馈）：
+ * SL(2,3) 对称性视图（2T + Dirac 开口皮带 v7）真机验证：
  *  ① 相机可越过南北极（四元数轨道替换 OrbitControls 的 phi∈[0,π] 硬钳）；
  *  ② 皮带扭转轴与物体同轴（水平轴元素的皮带绕水平轴缠，截图人工核对）；
- *  ③ 720° 复原演练（绕过锚点解开两整扭，而非 mod 跳平）；
- *  ④ 皮带物体端削尖（截图人工核对）。
+ *  ③ 720° 复原演练（Egan 皮带戏法：**两端固定**，扭转搬运成折角并滑出两端）；
+ *  ④ 厚皮带 + 梯形尖端 + 尖端箭头 + 固定端三棒架 + 说明框（截图人工核对）。
  *
  * 主画布对称性视图（3D）无元素可点，演示元素经导出桥注入（与叠加模式 e2e 同一通道）；
  * 叠加开关 / 复位 / 皮带复位按钮走真实 UI 点击。
@@ -217,9 +217,16 @@ test.describe('symmetry SL(2,3)（2T + Dirac 皮带 v3：同轴 + 莫比乌斯�
     // 「演示皮带复位」按钮此时才可用（拧满两圈）
     const restoreBtn = page.getByTestId('symmetry-belt-restore')
     await expect(restoreBtn).toBeEnabled()
+    const camBefore = await page.evaluate(() =>
+      (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryCamera())
     await restoreBtn.click()
-    // 演练中（2.5s）：抓一张中途截图人工核对「绕过锚点」弓形
+    // v7：两端固定（Egan 皮带戏法）——整个场景静止，相机不该被任何「自动切中心」带偏
+    // （v6 的演练期强制锚点中心已删除，见 CHANGELOG）。900ms 时抓中途截图人工核对：
+    // 应该看到**两个折角**（扭转集中处），两端平直、四面体与锚点纹丝不动。
     await page.waitForTimeout(900)
+    const camMid = await page.evaluate(() =>
+      (window as unknown as { __groupVizExport__: BridgeApi }).__groupVizExport__.getSymmetryCamera())
+    for (let i = 0; i < 3; i++) expect(Math.abs(camMid!.position[i] - camBefore!.position[i])).toBeLessThan(0.01)
     await page.screenshot({ path: 'browser-sl23-belt-restore-mid.png', fullPage: false })
     // 演练完成：τ 一次性解开两整扭回 0
     await page.waitForFunction(

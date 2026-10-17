@@ -318,6 +318,7 @@ export function ViewContent({
           beltRestoreSignal={symBeltRestore}
           onBeltChange={onSymBeltChange}
           onHint={msg => setSymHintText(msg)}
+          centerOn={symVp.centerOn}
         />
       )
     }

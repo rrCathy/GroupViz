@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { multiplyGL2, detGL2, inverseGL2, type GL2Matrix } from '../core/groups/GeneralLinearGroup'
 import { createTableGroup } from '../core/groups/SmallGroups/tableGroup'
-import { sl23Quat, sl23Matrix, sl23MatrixLabel, sl23Spin } from '../core/groups/sl23'
+import { sl23Quat, sl23Matrix, sl23MatrixLabel, sl23Spin, sl23QuatFromMatrix, sl23SpinFromMatrix } from '../core/groups/sl23'
 import { SMALL_GROUP_DATA } from '../core/groups/smallGroupData'
 
 const F3 = 3
@@ -139,6 +139,31 @@ describe('sl23 同构（SmallGroup(24,3) ↔ 2T ↔ SL(2,3) 矩阵）', () => {
     }
     expect(labels.size).toBe(N)
     expect(sl23MatrixLabel(0)).toBe('\\begin{smallmatrix}1&0\\\\0&1\\end{smallmatrix}')
+  })
+
+  it('矩阵闭式反解（v7）：24 个元素的 sl23Matrix → sl23SpinFromMatrix 与查表逐元素一致', () => {
+    // 用户 2026-10-17「矩阵 abcd 怎么转换成旋转多少度」——反解公式必须真能算，
+    // 这里用 24 个元素逐一对照：四元数坐标 + 轴 + 角 + 皮带全部一致。
+    for (let k = 0; k < N; k++) {
+      const m = sl23Matrix(k)
+      const qFromMatrix = sl23QuatFromMatrix(m)
+      expect(qFromMatrix).not.toBeNull()
+      expect(qFromMatrix).toEqual(sl23Quat(k))
+      const fromMatrix = sl23SpinFromMatrix(m)
+      const fromTable = sl23Spin(k)
+      expect(fromMatrix).not.toBeNull()
+      expect(fromMatrix!.fullTurn).toBe(fromTable.fullTurn)
+      expect(fromMatrix!.angleRad).toBeCloseTo(fromTable.angleRad, 12)
+      expect(fromMatrix!.beltTwist).toBeCloseTo(fromTable.beltTwist, 12)
+      if (fromTable.axis === null) {
+        expect(fromMatrix!.axis).toBeNull()
+      } else {
+        for (let i = 0; i < 3; i++) expect(fromMatrix!.axis![i]).toBeCloseTo(fromTable.axis[i], 12)
+      }
+    }
+    // 非 SL(2,3) 矩阵（det ≠ 1 / 不在 24 元内）返回 null
+    expect(sl23QuatFromMatrix([0, 0, 0, 0])).toBeNull()
+    expect(sl23SpinFromMatrix([0, 1, 1, 0])).toBeNull()
   })
 
   it('tableGroup(24,3)：label 已是矩阵、词标签 stash 进 wordLabel', () => {

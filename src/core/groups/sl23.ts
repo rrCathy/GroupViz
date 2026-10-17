@@ -196,7 +196,12 @@ export interface Sl23Spin {
 
 /** 表索引 k → 自旋分解（axis/angleRad/beltTwist/fullTurn）。 */
 export function sl23Spin(k: number): Sl23Spin {
-  const [a, b, c, d] = iso()[k]
+  return spinOfQuat(iso()[k])
+}
+
+/** 四元数整数坐标 → 自旋分解（sl23Spin / sl23SpinFromMatrix 共用）。 */
+function spinOfQuat(q: Quat): Sl23Spin {
+  const [a, b, c, d] = q
   const w = a / 2
   const vx = b / 2, vy = c / 2, vz = d / 2
   const vlen = Math.hypot(vx, vy, vz)
@@ -209,6 +214,49 @@ export function sl23Spin(k: number): Sl23Spin {
   const axis: [number, number, number] = [vx / vlen, vy / vlen, vz / vlen]
   const angleRad = 2 * psi
   return { axis, angleRad, beltTwist: angleRad, fullTurn: false }
+}
+
+/* ------------------------------------------------------------------ *
+ * 矩阵 → 旋转的**闭式反解**（2026-10-17，用户「矩阵 abcd 怎么转换成旋转度数」）。
+ *
+ * 正问题是 M = 2·(a₀·I + b₀·Mᵢ + c₀·Mⱼ + d₀·Mₖ) mod 3（1/2 ≡ 2），
+ * 其中 Mᵢ = [[0,1],[2,0]]、Mⱼ = [[1,1],[1,2]]、Mₖ = MᵢMⱼ = [[1,2],[2,2]]。
+ * 展开四个分量后解 4×4 线性方程组，得反解（全部按 mod 3）：
+ *
+ *   a₀ ≡ a + d            （= tr M，迹决定旋转角）
+ *   b₀ ≡ 2(c − b)
+ *   c₀ ≡ d − a − b − c
+ *   d₀ ≡ b + c − a + d
+ *
+ * 坐标从 {0,1,2} 提升回 2T 的整数 (±2,0,0,0) / (±1,±1,±1,±1)：模 3 坐标含 0
+ * ⇒ 轴型（非零位取 ±2：2→+2、1→−2），否则全非零 ⇒ 全 ±1（2→−1、1→+1）。
+ * 24 个元素的 mod-3 坐标组两两互异 ⇒ 反解唯一（sl23.test.ts 逐元素对照验证）。
+ *
+ * 旋转角：q = (a₀+b₀i+c₀j+d₀k)/2 = cos ψ + sin ψ·û ⇒ **物体绕 û 转 2ψ**，
+ * 即 cos(角/2) = a₀/2 —— a₀ = +2 → 0°、+1 → 120°、0 → 180°、−1 → 240°、
+ * −2 → 360°（−I，物体外观恒等、皮带拧满一圈：皮带戏法核心态）。
+ * ------------------------------------------------------------------ */
+
+/** 矩阵（F₃ 行主序）→ 2T 四元数整数坐标 (a₀,b₀,c₀,d₀)；非 SL(2,3) 矩阵返回 null */
+export function sl23QuatFromMatrix(m: GL2Matrix): Quat | null {
+  const [a, b, c, d] = m
+  const mod3 = (v: number): number => { const r = v % 3; return r < 0 ? r + 3 : r }
+  const raw = [mod3(a + d), mod3(2 * (c - b)), mod3(d - a - b - c), mod3(b + c - a + d)]
+  const isAxis = raw.some(v => v === 0)
+  const coords: Quat = [
+    raw[0] === 0 ? 0 : isAxis ? (raw[0] === 2 ? 2 : -2) : (raw[0] === 2 ? -1 : 1),
+    raw[1] === 0 ? 0 : isAxis ? (raw[1] === 2 ? 2 : -2) : (raw[1] === 2 ? -1 : 1),
+    raw[2] === 0 ? 0 : isAxis ? (raw[2] === 2 ? 2 : -2) : (raw[2] === 2 ? -1 : 1),
+    raw[3] === 0 ? 0 : isAxis ? (raw[3] === 2 ? 2 : -2) : (raw[3] === 2 ? -1 : 1),
+  ]
+  const key = coords.join(',')
+  return QUATS.some(q => q.join(',') === key) ? coords : null
+}
+
+/** 矩阵（F₃）→ 自旋分解（闭式反解；非 SL(2,3) 矩阵返回 null）。 */
+export function sl23SpinFromMatrix(m: GL2Matrix): Sl23Spin | null {
+  const q = sl23QuatFromMatrix(m)
+  return q ? spinOfQuat(q) : null
 }
 
 // 模块自检（构造即失败快）：嵌入矩阵都落在 SL(2,3)、MAT_K 满足四元数关系

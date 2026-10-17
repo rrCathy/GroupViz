@@ -4,6 +4,7 @@
  *   批次一 边几何（edgeCurvature 笔直/弧、lengthScale 重排）· 路径高亮 · 动态力导向
  *   批次二 共轭类着色节点 fill、F4 标记环、F3 ⟨g⟩ 高亮、E3 单色边、E4 箭头、E2 图例、3D 画布
  *   批次三 Decorations 注释（三锚点渲染 / 开关 / 失效引用静默 / 拖拽跟随）
+ *   批次四（10-17）SymmetryViewScene SL(2,3) 2T + Dirac 皮带（演示/叠加/720° 复原/centerOn）
  *
  * 前置：npm run dev（5173）。用 playwright-core + 本机 ms-playwright Chromium。
  * 用法：node scripts/pkg/browser-smoke.mjs
@@ -410,6 +411,73 @@ try {
     check('「+ 添加」把注释挂到选中元素', decAdded === decAll + 1, `${decAll} → ${decAdded}`)
   }
   await page.screenshot({ path: 'browser-vcl-decorations.png' })
+
+  // ---------- 5.7 批次四（10-17）：SymmetryViewScene SL(2,3) 2T + Dirac 皮带 ----------
+  /**
+   * 皮带卡验证流（与主画布 e2e/symmetry-sl23-belt.spec.ts 同源，但这里吃的是 dist-pkg 产物）：
+   *   ① 卡片 + canvas 在位，symmetryType=binaryTetrahedron；
+   *   ② −I 演示 → 累计 τ=360°（物体外观恒等、皮带拧满一圈）；
+   *   ③ 叠加模式连用三个不同元素 −I(360°)+i(180°)+j(180°) → τ=720°；
+   *   ④ τ≥720° 时「720° 皮带复原」可用 → 演练后 τ 回 0（Egan 戏法：两端固定）；
+   *   ⑤ centerOn 切「皮带锚点」不报错。
+   */
+  const cardBelt = page.locator('[data-testid="pkg-sl23-belt"]')
+  check('批次四卡片存在 pkg-sl23-belt', await cardBelt.count() === 1)
+  const beltTag = await cardBelt.innerText()
+  check('SL(2,3) 对称型识别 binaryTetrahedron', /binaryTetrahedron/.test(beltTag),
+    (beltTag.match(/symmetryType=\S+/) || [''])[0])
+  await cardBelt.locator('canvas').first().scrollIntoViewIfNeeded()
+  check('SL(2,3) 对称性视图 canvas 存在', await cardBelt.locator('canvas').count() > 0)
+
+  // 本脚本用 playwright-core（无 test runner 的 expect）⇒ 文本等待用轮询助手
+  const waitText = async (loc, re, timeout = 25_000, label = '') => {
+    const t0 = Date.now()
+    for (;;) {
+      const txt = await loc.innerText().catch(() => '')
+      if (re.test(txt)) return txt
+      if (Date.now() - t0 > timeout) {
+        throw new Error(`等待文本超时 ${label || re}（当前："${txt.trim().slice(0, 60)}"）`)
+      }
+      await page.waitForTimeout(200)
+    }
+  }
+
+  const tauText = cardBelt.locator('[data-testid="pkg-sl23-tau"]')
+  check('初始累计 τ=0°', /τ = 0°/.test(await tauText.innerText()))
+
+  // ② −I：物体转满 360° 外观恒等，皮带拧一整圈
+  await cardBelt.locator('[data-testid="pkg-sl23-el-negI"]').click()
+  await waitText(tauText, /τ = 360°/, 25_000, '−I 演示后 τ=360°')
+  const poseAfterNegI = await cardBelt.locator('[data-testid="pkg-sl23-pose"]').innerText()
+  check('−I 演示后 pose 上报（四元数）', /-?\d\.\d\d/.test(poseAfterNegI), poseAfterNegI.trim().slice(0, 48))
+  await page.screenshot({ path: 'browser-vcl-sl23-belt-fullturn.png' })
+
+  // ③ 叠加模式：−I(360°) + i(180°) + j(180°) = 720°（三个不同元素——同元素连点不累加）
+  await cardBelt.locator('[data-testid="pkg-sl23-compose"] input').click()
+  await cardBelt.locator('[data-testid="pkg-sl23-el-i4"]').click()
+  await waitText(tauText, /τ = 540°/, 25_000, '叠加 i 后 τ=540°')
+  await cardBelt.locator('[data-testid="pkg-sl23-el-j4"]').click()
+  await waitText(tauText, /τ = 720°/, 25_000, '叠加 j 后 τ=720°')
+
+  // ④ 720° 复原演练：按钮此时可用 → 演练后 τ 一次性回 0
+  const restoreBtn = cardBelt.locator('[data-testid="pkg-sl23-restore"]')
+  check('τ=720° 时「720° 皮带复原」按钮可用', (await restoreBtn.getAttribute('disabled')) === null)
+  await restoreBtn.click()
+  await page.waitForTimeout(900)   // 演练中程：两端固定、中段成环
+  const hintMid = await cardBelt.locator('[data-testid="pkg-sl23-hint"]').innerText()
+  check('复原演练中场景提示在位', /复原|皮带/.test(hintMid), hintMid.trim().slice(0, 40))
+  await page.screenshot({ path: 'browser-vcl-sl23-belt-restore-mid.png' })
+  await waitText(tauText, /τ = 0°/, 25_000, '复原演练后 τ=0°')
+  await page.screenshot({ path: 'browser-vcl-sl23-belt-restore-done.png' })
+
+  // ⑤ centerOn 切「皮带锚点」+ Replay/复位不报错
+  await cardBelt.locator('[data-testid="pkg-sl23-center"] button', { hasText: '皮带锚点' }).click()
+  await cardBelt.locator('[data-testid="pkg-sl23-el-negI"]').click()
+  await waitText(tauText, /τ = 360°/, 25_000, '锚点中心下 −I 演示 τ=360°')
+  await cardBelt.locator('[data-testid="pkg-sl23-replay"]').click()
+  await cardBelt.locator('[data-testid="pkg-sl23-reset"]').click()
+  await page.waitForTimeout(1500)
+  check('批次四（SL23 皮带）交互全程无 error', errors.length === 0, errors.slice(0, 2).join(' | ') || 'clean')
 
   // ---------- 6. 页面自检 ----------
   const errPanel = await page.locator('[data-testid="pkg-errors"]').innerText()

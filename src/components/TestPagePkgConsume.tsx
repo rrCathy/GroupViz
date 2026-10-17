@@ -6,6 +6,7 @@
  *                          路径高亮 pathHighlight · 动态力导向 forceDirected
  *   批次二（09-23）        F1/F3/F4 节点语义 · E2–E4 边样式与图例 · B1–B3 3D 开关
  *   批次三（09-24，Phase 0）Decorations 注释（node / edge / figure 三锚点）
+ *   批次四（10-17，SL(2,3)）对称性视图 2T + Dirac 开口皮带（双覆盖可视化）
  * 批次一的三张卡在 09-23 重写时曾被整页替换掉，本次补回 —— 否则这几项
  * 在包消费端（dist-pkg 产物）长期没有验证入口。
  *
@@ -15,10 +16,10 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  createGroupFromSymbol, getAvailableShapes3D, wordLengthSphereActions, TORUS_HEX_STAR_GENERATORS,
+  createGroupFromSymbol, getAvailableShapes3D, getSymmetryType, sl23Spin, wordLengthSphereActions, TORUS_HEX_STAR_GENERATORS,
   type Annotation, type Decorations, type Group, type Layout3D,
 } from '@groupviz/core'
-import { CayleyView, Cayley3DScene, I18nProvider } from '@groupviz/react'
+import { CayleyView, Cayley3DScene, I18nProvider, SymmetryViewScene } from '@groupviz/react'
 
 const VB = { width: 860, height: 520 }
 const CT = { x: 40, y: 40, scale: 1 }
@@ -578,6 +579,130 @@ function Cayley3DVclCard({ group }: { group: Group | null }) {
   )
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// 批次四（10-17 · SL(2,3)）：对称性视图 2T + Dirac 开口皮带
+// ══════════════════════════════════════════════════════════════════════════
+
+/** 累计扭转 ≥ 720°（两整扭）才可演练「皮带复位」——与场景内部门控同源
+ *  （beltGeometry BELT_RESTORE_AMOUNT = 2·BELT_FULL_TURN = 4π） */
+const BELT_RESTORE_MIN_TAU = 4 * Math.PI - 1e-6
+
+/**
+ * 卡 8：SymmetryViewScene · SL(2,3) 2T + Dirac 开口皮带。
+ *
+ * 2T（SL(2,3)）= A₄ 旋转群的**二重覆盖**：同一套四面体几何，旋转语义走 core 的
+ * `sl23Spin`（q 与 −q 同一物体旋转、不同 (轴, 角)），画面上的可见载体 = 开口皮带
+ * （τ = 2ψ 累计扭转，即 SU(2) 记忆）。皮带仅 2T 对称型存在 ⇒ 本卡群固定
+ * SL(2,3)，独立于页头群选择器。
+ *
+ * 覆盖 props：showAction / actionElementId / compose / replaySignal /
+ * resetSignal / beltRestoreSignal / centerOn / rotateSpeed / onBeltChange /
+ * onPoseChange / onHint。
+ */
+function Sl23BeltCard() {
+  // 本卡群固定 SL(2,3)——经 dist-pkg core 的记号解析落到 tableGroup(24,3)
+  const group = useMemo(() => createGroupFromSymbol('SL(2,3)'), [])
+  const symType = useMemo(() => (group ? getSymmetryType(group) : '—'), [group])
+
+  /** 预设演示元素（core 同源 oracle：阶判定 + sl23Spin 自旋分解） */
+  const presets = useMemo(() => {
+    if (!group) return []
+    const out: { key: string; label: string; id: string; note: string }[] = [
+      { key: 'e', label: 'e', id: group.identity.id, note: '恒等 · no-op' },
+    ]
+    // −I = 唯一 2 阶元：物体转满 360° 外观恒等，皮带拧一整圈（纯皮带态）
+    const negI = group.elements.find(el =>
+      el.id !== group.identity.id && group.multiply(el, el).id === group.identity.id)
+    if (negI) out.push({ key: 'negI', label: '−I', id: negI.id, note: '2 阶 · τ=360°' })
+    const bySpin = (pred: (axis: [number, number, number], angleRad: number) => boolean) =>
+      group.elements.find(el => {
+        const s = sl23Spin(el.value[0] ?? 0)
+        return s.axis !== null && pred(s.axis, s.angleRad)
+      })
+    const i4 = bySpin((ax, ang) => Math.abs(ang - Math.PI) < 1e-9 && Math.abs(ax[0] - 1) < 1e-9)
+    if (i4) out.push({ key: 'i4', label: 'i', id: i4.id, note: '4 阶 · 绕 X · τ=180°' })
+    const j4 = bySpin((ax, ang) => Math.abs(ang - Math.PI) < 1e-9 && Math.abs(ax[1] - 1) < 1e-9)
+    if (j4) out.push({ key: 'j4', label: 'j', id: j4.id, note: '4 阶 · 绕 Y · τ=180°' })
+    const w3 = bySpin((_ax, ang) => Math.abs(ang - (2 * Math.PI) / 3) < 1e-9)
+    if (w3) out.push({ key: 'w3', label: 'ω', id: w3.id, note: '3 阶 · 120° · τ=120°' })
+    return out
+  }, [group])
+
+  const [showAction, setShowAction] = useState(true)
+  const [actionElementId, setActionElementId] = useState<string | null>(null)
+  const [compose, setCompose] = useState(false)
+  const [speed, setSpeed] = useState(1)
+  const [replaySignal, setReplaySignal] = useState(0)
+  const [resetSignal, setResetSignal] = useState(0)
+  const [beltRestoreSignal, setBeltRestoreSignal] = useState(0)
+  const [centerOn, setCenterOn] = useState<'solid' | 'beltAnchor'>('solid')
+  const [tau, setTau] = useState(0)          // 弧度（累计 τ = Σ2ψ）
+  const [pose, setPose] = useState<[number, number, number, number] | null>(null)
+  const [hint, setHint] = useState('')
+
+  const activePreset = presets.find(p => p.id === actionElementId) ?? null
+  // 点活跃预设 = 回到恒等姿态（与场景 toggle 语义一致）
+  const applyElement = (id: string) => setActionElementId(prev => (prev === id ? null : id))
+  const restoreReady = tau >= BELT_RESTORE_MIN_TAU
+
+  const tauDeg = Math.round((tau * 180) / Math.PI)
+  const poseText = pose ? pose.map(v => v.toFixed(2)).join(', ') : '—'
+
+  return (
+    <Card testid="pkg-sl23-belt" title="SymmetryViewScene · SL(2,3) 2T + Dirac 开口皮带"
+      batch="批次四 · 10-17"
+      tag={`symmetryType=${symType} · 演示元素=${activePreset ? activePreset.label : '无'} · 累计 τ=${tauDeg}° · 中心=${centerOn === 'solid' ? '几何体' : '皮带锚点'}`}
+      controls={<>
+        <Chk checked={showAction} onChange={setShowAction} testid="pkg-sl23-action">演示开关</Chk>
+        <Chk checked={compose} onChange={setCompose} testid="pkg-sl23-compose">叠加模式</Chk>
+        <Rng label="rotateSpeed" value={speed} min={0.2} max={5} step={0.2} onChange={setSpeed} testid="pkg-sl23-speed" width={70} />
+        <button style={MINI} data-testid="pkg-sl23-replay" onClick={() => setReplaySignal(n => n + 1)}
+          title="对当前演示元素重播一次（叠加模式 = 把元素旋转左乘到当前姿态）">⟳ Replay</button>
+        <button style={MINI} data-testid="pkg-sl23-reset" onClick={() => setResetSignal(n => n + 1)}
+          title="从当前姿态动画回恒等">复位姿态</button>
+        <button style={MINI} data-testid="pkg-sl23-restore"
+          onClick={() => setBeltRestoreSignal(n => n + 1)} disabled={!restoreReady}
+          title={restoreReady ? '皮带绕过锚点解开两整扭（720°）' : '累计扭转需 ≥ 720°（叠加模式连用不同元素）'}>
+          720° 皮带复原{restoreReady ? '' : '（τ 不足）'}
+        </button>
+        <Ctl label="centerOn"><Seg value={centerOn} onChange={setCenterOn} testid="pkg-sl23-center"
+          options={[{ value: 'solid', label: '几何体' }, { value: 'beltAnchor', label: '皮带锚点' }]} /></Ctl>
+      </>}>
+      <div style={HINT}>
+        <b>2T = SL(2,3) = A₄ 旋转群的二重覆盖</b>：同一套四面体几何，差异在旋转语义（core <code>sl23Spin</code>）与皮带——
+        q 与 −q 是同一物体旋转但不同 (轴, 角)，<b>皮带即双覆盖在画面上的可见载体</b>（累计 τ = Σ2ψ）。
+        点预设元素演示；<b>叠加模式</b>下元素旋转左乘当前姿态（同一元素连点不累加，走 ⟳ Replay）。
+        累到 <b>720°</b>（如 −I 360° + i 180° + j 180°）后「720° 皮带复原」亮起——Egan 皮带戏法：
+        <b>两端固定</b>，皮带中段成环绕过物体端解扣，演练期间四面体缩小避让、结束长回。
+        <b>centerOn=皮带锚点</b>把轨道目标挪到固定端（锚点随演示元素换轴）。
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 10, color: '#64748b' }}>预设元素：</span>
+        {presets.map(p => (
+          <button key={p.key} data-testid={`pkg-sl23-el-${p.key}`} onClick={() => applyElement(p.id)}
+            title={p.note}
+            style={{ ...MINI, color: actionElementId === p.id ? '#4ecdc4' : '#94a3b8', borderColor: actionElementId === p.id ? '#4ecdc4' : undefined }}>
+            {p.label}
+          </button>
+        ))}
+        <span data-testid="pkg-sl23-tau" style={{ fontSize: 11, color: '#fbbf24', marginLeft: 8 }}>τ = {tauDeg}°</span>
+        <span data-testid="pkg-sl23-pose" style={{ fontSize: 10, color: '#64748b' }}>pose = [{poseText}]</span>
+        <span data-testid="pkg-sl23-hint" style={{ fontSize: 10, color: '#475569' }}>
+          {hint.replace(/<[^>]*>/g, '') || '（场景提示）'}
+        </span>
+      </div>
+      {group
+        ? <Frame h={460}><SymmetryViewScene group={group} theme="dark"
+            showAction={showAction} actionElementId={actionElementId}
+            rotateSpeed={speed} compose={compose}
+            replaySignal={replaySignal} resetSignal={resetSignal}
+            beltRestoreSignal={beltRestoreSignal} centerOn={centerOn}
+            onBeltChange={setTau} onPoseChange={setPose} onHint={setHint} /></Frame>
+        : <EmptyHint />}
+    </Card>
+  )
+}
+
 // 页面级 runtime 哨兵：任何未捕获 pageerror/rejection 红字上抛（Playwright 亦可断言）
 function usePageErrors() {
   const [errs, setErrs] = useState<string[]>([])
@@ -642,6 +767,7 @@ export default function TestPagePkgConsume() {
           <CayleySemanticCard key={`f-${symbol}`} group={group} />
           <CayleyEdgeCard key={`e-${symbol}`} group={group} />
           <Cayley3DVclCard key={`3d-${symbol}`} group={group} />
+          <Sl23BeltCard />
         </div>
 
         <p style={{ fontSize: 11, color: '#64748b', marginTop: 16, maxWidth: 1100, lineHeight: 1.8 }}>
@@ -659,7 +785,12 @@ export default function TestPagePkgConsume() {
           <b>B1/B2/B3</b> <code>shell</code> / <code>layerRings</code> / <code>relayoutNonce</code>（仅字长球布局；S₄ 默认字长球）。<br />
           <b style={{ color: '#94a3b8' }}>批次三（09-24 · Phase 0）</b>：
           <code>Decorations</code> 注释叠层 —— 锚点三类 <code>node</code> / <code>edge</code> / <code>figure</code>（相对位置，
-          节点/边锚点跟随拖拽与力导向重排）+ 引导线 + KaTeX 文本；引用失效静默跳过。
+          节点/边锚点跟随拖拽与力导向重排）+ 引导线 + KaTeX 文本；引用失效静默跳过。<br />
+          <b style={{ color: '#94a3b8' }}>批次四（10-17 · SL(2,3)）</b>：
+          <code>SymmetryViewScene</code> 2T（SL(2,3) = A₄ 旋转群二重覆盖）+ <b>Dirac 开口皮带</b>——
+          <code>showAction</code> / <code>actionElementId</code> 演示、<code>compose</code> 叠加、<code>replaySignal</code> 重播、
+          <code>resetSignal</code> 复位、<code>beltRestoreSignal</code> 720° 复原演练（τ≥720° 门控）、
+          <code>centerOn</code> 轨道目标（几何体 / 皮带锚点）、<code>onBeltChange</code> 累计扭转上报。<br />
           <b style={{ color: '#f59e0b' }}>窗口侧</b>（⚙ 面板 / 注释编辑器 / 窗口内导出 ⤓）不在本页 ——
           <code>ViewWindow</code> 不向包门面导出，需在应用内「多视图模式 → + 凯莱图」或 <code>?test=2</code> 验证。
           改动包源码后先 <code>npm run build:pkg</code>。

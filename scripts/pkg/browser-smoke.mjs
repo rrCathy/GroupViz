@@ -470,16 +470,30 @@ try {
   await waitText(tauText, /τ = 0°/, 25_000, '复原演练后 τ=0°')
   await page.screenshot({ path: 'browser-vcl-sl23-belt-restore-done.png' })
 
-  // ⑤ centerOn 切「皮带锚点」+ Replay/复位不报错
+  // ⑤ centerOn 切「皮带锚点」+ Replay/复位
   await cardBelt.locator('[data-testid="pkg-sl23-center"] button', { hasText: '皮带锚点' }).click()
   await cardBelt.locator('[data-testid="pkg-sl23-el-negI"]').click()
   await waitText(tauText, /τ = 360°/, 25_000, '锚点中心下 −I 演示 τ=360°')
   await cardBelt.locator('[data-testid="pkg-sl23-replay"]').click()
   await cardBelt.locator('[data-testid="pkg-sl23-reset"]').click()
   await page.waitForTimeout(1500)
+
+  // ⑥ 全部 24 个元素条（用户要求「展出全部元素供点击查看」）：按旋转角排序
+  // （恒等 → 120°×8 → 180°×6 → 240°×8 → −I），点任意元素即演示。
+  // 先关叠加（③ 开后一直是开的）——非叠加下每个元素把 τ 重置为该元素自身的 2ψ。
+  await cardBelt.locator('[data-testid="pkg-sl23-compose"] input').click()
+  const stripCount = await cardBelt.locator('[data-testid^="pkg-sl23-all-"]').count()
+  check('全部 24 个元素条（按旋转角排序）', stripCount === 24, `${stripCount} 个按钮`)
+  await cardBelt.locator('[data-testid="pkg-sl23-all"]').scrollIntoViewIfNeeded()
+  await page.screenshot({ path: 'browser-vcl-sl23-belt-all-elements.png' })
+  await cardBelt.locator('[data-testid="pkg-sl23-all-1"]').click()    // 120° 元素（q 形态）
+  await waitText(tauText, /τ = 120°/, 25_000, '元素条 120° 元素')
+  await cardBelt.locator('[data-testid="pkg-sl23-all-23"]').click()   // −I（360° 纯皮带态）
+  await waitText(tauText, /τ = 360°/, 25_000, '元素条 −I')
+
   check('批次四（SL23 皮带）交互全程无 error', errors.length === 0, errors.slice(0, 2).join(' | ') || 'clean')
 
-  // ---------- 6. 页面自检 ----------
+  // ---------- 6. 页面自检 ----------  // ---------- 6. 页面自检 ----------
   const errPanel = await page.locator('[data-testid="pkg-errors"]').innerText()
   check('页面 runtime error 面板 ✓', /无未捕获/.test(errPanel), errPanel.trim().slice(0, 60))
   check('全程无 JS 错误', errors.length === 0, errors.slice(0, 3).join(' | ') || 'clean')

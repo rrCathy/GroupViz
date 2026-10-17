@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   createGroupFromSymbol, getAvailableShapes3D, getSymmetryType, sl23Spin, wordLengthSphereActions, TORUS_HEX_STAR_GENERATORS,
-  type Annotation, type Decorations, type Group, type Layout3D,
+  type Annotation, type Decorations, type Group, type GroupElement, type Layout3D,
 } from '@groupviz/core'
 import { CayleyView, Cayley3DScene, I18nProvider, SymmetryViewScene } from '@groupviz/react'
 
@@ -640,10 +640,36 @@ function Sl23BeltCard() {
   const [pose, setPose] = useState<[number, number, number, number] | null>(null)
   const [hint, setHint] = useState('')
 
-  const activePreset = presets.find(p => p.id === actionElementId) ?? null
-  // 点活跃预设 = 回到恒等姿态（与场景 toggle 语义一致）
+  // 点活跃元素 = 回到恒等姿态（与场景 toggle 语义一致）
   const applyElement = (id: string) => setActionElementId(prev => (prev === id ? null : id))
   const restoreReady = tau >= BELT_RESTORE_MIN_TAU
+
+  /**
+   * 全部 24 个元素（用户要求「展出全部元素供点击查看」）——按旋转角排序：
+   * 恒等(0°) → 120°×8 → 180°×6 → 240°×8 → −I(360°)。120°/240° 互为 q/−q 对
+   * （同一物体旋转、相反轴——双覆盖在皮带上的差异正是看点）；阶由群运算实测。
+   * 按钮显示 wordLabel（BFS 最短词），title 给矩阵 + 阶 + 轴 + τ 全信息。
+   */
+  const allElements = useMemo(() => {
+    if (!group) return []
+    const orderOf = (el: GroupElement): number => {
+      let cur = el, n = 1
+      while (cur.id !== group.identity.id && n <= 12) { cur = group.multiply(cur, el); n++ }
+      return cur.id === group.identity.id ? n : 0
+    }
+    return group.elements.map(el => {
+      const s = sl23Spin(el.value[0] ?? 0)
+      return {
+        el,
+        order: orderOf(el),
+        angleDeg: Math.round((s.angleRad * 180) / Math.PI),
+        tauDeg: Math.round(((s.beltTwist ?? 0) * 180) / Math.PI),
+        axis: s.axis,
+        fullTurn: !!s.fullTurn,
+      }
+    }).sort((a, b) => a.angleDeg - b.angleDeg)
+  }, [group])
+  const activeEl = allElements.find(x => x.el.id === actionElementId) ?? null
 
   const tauDeg = Math.round((tau * 180) / Math.PI)
   const poseText = pose ? pose.map(v => v.toFixed(2)).join(', ') : '—'
@@ -651,7 +677,7 @@ function Sl23BeltCard() {
   return (
     <Card testid="pkg-sl23-belt" title="SymmetryViewScene · SL(2,3) 2T + Dirac 开口皮带"
       batch="批次四 · 10-17"
-      tag={`symmetryType=${symType} · 演示元素=${activePreset ? activePreset.label : '无'} · 累计 τ=${tauDeg}° · 中心=${centerOn === 'solid' ? '几何体' : '皮带锚点'}`}
+      tag={`symmetryType=${symType} · 演示元素=${activeEl ? `${activeEl.el.wordLabel ?? activeEl.el.label}（${activeEl.angleDeg}°）` : '无'} · 累计 τ=${tauDeg}° · 中心=${centerOn === 'solid' ? '几何体' : '皮带锚点'}`}
       controls={<>
         <Chk checked={showAction} onChange={setShowAction} testid="pkg-sl23-action">演示开关</Chk>
         <Chk checked={compose} onChange={setCompose} testid="pkg-sl23-compose">叠加模式</Chk>
@@ -675,6 +701,8 @@ function Sl23BeltCard() {
         累到 <b>720°</b>（如 −I 360° + i 180° + j 180°）后「720° 皮带复原」亮起——Egan 皮带戏法：
         <b>两端固定</b>，皮带中段成环绕过物体端解扣，演练期间四面体缩小避让、结束长回。
         <b>centerOn=皮带锚点</b>把轨道目标挪到固定端（锚点随演示元素换轴）。
+        <b>下方元素条列出全部 24 个元素</b>（按旋转角排序，点任意元素即演示；悬停按钮看矩阵 / 阶 / 轴 / τ 全信息）——
+        120° 与 240° 互为 q / −q 对（同一物体旋转、相反轴），差别只在皮带记忆，正是双覆盖的可见之处。
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
         <span style={{ fontSize: 10, color: '#64748b' }}>预设元素：</span>
@@ -690,6 +718,20 @@ function Sl23BeltCard() {
         <span data-testid="pkg-sl23-hint" style={{ fontSize: 10, color: '#475569' }}>
           {hint.replace(/<[^>]*>/g, '') || '（场景提示）'}
         </span>
+      </div>
+      <div data-testid="pkg-sl23-all" style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 10, color: '#64748b', minWidth: 64 }}>全部元素（{allElements.length}）</span>
+        {allElements.map((x, i) => (
+          <button key={x.el.id} data-testid={`pkg-sl23-all-${i}`} onClick={() => applyElement(x.el.id)}
+            title={`${x.el.wordLabel ?? x.el.label} · ${x.el.label} · 阶 ${x.order} · 转 ${x.angleDeg}° · τ=${x.tauDeg}°${x.fullTurn ? ' · 纯皮带态（物体恒等）' : ''}${x.axis ? ` · 轴 (${x.axis.map(v => v.toFixed(2)).join(', ')})` : ''}`}
+            style={{
+              ...MINI, fontSize: 10, padding: '1px 5px',
+              color: actionElementId === x.el.id ? '#4ecdc4' : '#94a3b8',
+              borderColor: actionElementId === x.el.id ? '#4ecdc4' : undefined,
+            }}>
+            {x.el.wordLabel ?? x.el.label}
+          </button>
+        ))}
       </div>
       {group
         ? <Frame h={460}><SymmetryViewScene group={group} theme="dark"
